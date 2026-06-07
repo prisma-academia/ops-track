@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find *)",
+      "Bash(xargs grep -l \"middleware\")",
+      "Bash(xargs grep -l \"^title.*[Mm]iddle\")",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsx *)",
+      "PowerShell(Move-Item *)",
+      "Bash(xargs grep -l \"ReservedSlug\")",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\(p.dependencies['@upstash/ratelimit'],p.dependencies['@upstash/redis']\\)\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\(p.dependencies['@aws-sdk/client-s3'],p.dependencies['@aws-sdk/s3-request-presigner']\\)\")",
+      "Bash(node -e \"console.log\\(require\\('./package.json'\\).dependencies['next-intl']\\)\")",
+      "Bash(node -e \"const p=require\\('next-intl/package.json'\\);console.log\\('next-intl',p.version\\);console.log\\(Object.keys\\(p.exports||{}\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(node -e \"const e=require\\('next-intl/package.json '.trim\\(\\)\\);\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\umarj\\\\node\\\\multi-tenant-template\" -Directory)",
+      "Bash(Select-Object -ExpandProperty Name)",
+      "Bash(xargs grep -l \"tenantId\\\\|TenantUser\")",
+      "Bash(ls *)",
+      "Bash(xargs grep -l \"proxy\")",
+      "Bash(xargs head -10)",
+      "Bash(node -p \"require\\('C:/Users/umarj/node/multi-tenant-template/node_modules/next/package.json'\\).version\")",
+      "Bash(node *)",
+      "Bash(mkdir -p \"app/\\(platform\\)/auth/\\(auth\\)\" \"app/admin/auth/\\(auth\\)\" \"app/c/auth/\\(auth\\)\")",
+      "Bash(git mv *)",
+      "Bash(mkdir -p \"app/c/auth/\\(auth\\)/register/complete\")",
+      "Bash(find \"app/c/auth/register\" -type f)",
+      "Bash(rm -rf \"app/c/auth/register\" \"app/c/auth/login\" \"app/c/auth/forgot-password\" \"app/c/auth/reset-password\" \"app/\\(platform\\)/auth/login\" \"app/\\(platform\\)/auth/register\" \"app/\\(platform\\)/auth/forgot-password\" \"app/\\(platform\\)/auth/reset-password\" \"app/admin/auth/login\" \"app/admin/auth/forgot-password\" \"app/admin/auth/reset-password\")",
+      "Bash(echo \"exit=$?\")",
+      "Bash(git add *)"
+    ]
+  }
+}

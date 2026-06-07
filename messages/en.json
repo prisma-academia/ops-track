@@ -1,0 +1,48 @@
+{
+  "common": {
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel"
+  },
+  "nav": {
+    "overview": "Overview",
+    "analytics": "Analytics",
+    "commercial": "Commercial Performance",
+    "inventory": "Inventory & Supply Chain",
+    "operations": "Operations",
+    "users": "Users",
+    "clients": "Clients",
+    "roles": "Roles",
+    "templates": "Templates",
+    "activity": "Activity",
+    "stations": "Stations",
+    "waybills": "Dispatches",
+    "expenses": "Expenses",
+    "customers": "B2B Customers",
+    "prices": "Price Controls",
+    "settings": "Settings"
+  },
+  "auth": {
+    "loginTitle": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "forgotPassword": "Forgot password?"
+  },
+  "settings": {
+    "title": "Settings",
+    "tenantName": "Tenant name",
+    "primaryColor": "Primary color",
+    "timezone": "Timezone",
+    "locale": "Locale",
+    "currency": "Default currency",
+    "enabledModules": "Enabled modules",
+    "logo": "Logo",
+    "storageUnconfigured": "Object storage is not configured."
+  },
+  "maintenance": {
+    "title": "Service unavailable",
+    "body": "This workspace is temporarily unavailable. Please contact your administrator."
+  }
+}

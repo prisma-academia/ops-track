@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sidebar, SidebarContent, SidebarHeader } from "@/components/ui/sidebar";
 import { Building2 } from "lucide-react";
 import { NavItem, NavMain } from "./main-nav";
+import Image from 'next/image';
 
 interface AppSidebarProps {
   items: NavItem[];
@@ -21,7 +22,12 @@ export function AppSidebar({ items, title, roleLabel, userLabel }: AppSidebarPro
           <div className="w-full p-2 border rounded-xl bg-muted/20">
             <div className="flex items-center gap-3 overflow-hidden">
               <div className="flex items-center justify-center size-8 rounded-lg bg-primary/10 text-primary shrink-0">
-                <Building2 className="size-4" />
+                <Image
+                  src="/assets/icons/asa-oil-logo.png"
+                  alt="ASA Oil Logo"
+                  width={500}
+                  height={300}
+                />
               </div>
               <div className="flex flex-col items-start truncate min-w-0">
                 <span className="text-sm font-semibold font-heading truncate w-full text-left">{title}</span>

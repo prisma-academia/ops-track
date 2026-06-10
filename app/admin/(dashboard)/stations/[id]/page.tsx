@@ -87,26 +87,11 @@ export default async function StationDetailPage({
     redirect("/admin/stations");
   }
 
-  // Fetch all tenant users to allow assigning attendants/cashiers in modals
-  const tenantUsers = await prisma.tenantUser.findMany({
-    where: { tenantId: actor.tenantId },
-    select: {
-      id: true,
-      email: true,
-      firstName: true,
-      lastName: true,
-    },
-    orderBy: { email: "asc" },
-  });
-
   const serializedStation = JSON.parse(JSON.stringify(station));
-  const serializedTenantUsers = JSON.parse(JSON.stringify(tenantUsers));
 
   return (
     <StationDetailsManager
       station={serializedStation}
-      tenantUsers={serializedTenantUsers}
-      currentUserId={actor.userId}
     />
   );
 }

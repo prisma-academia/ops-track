@@ -140,7 +140,7 @@ export function InviteTenantUserForm({
                 name="roleTemplateId"
                 render={({ field }) => (
                   <Select onValueChange={field.onChange} value={field.value}>
-                    <SelectTrigger id="role" className={errors.roleTemplateId ? "border-destructive" : ""}>
+                    <SelectTrigger id="role" className={errors.roleTemplateId ? "border-destructive" : "" + "w-full"}>
                       <SelectValue placeholder="Select a role..." />
                     </SelectTrigger>
                     <SelectContent>

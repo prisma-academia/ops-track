@@ -16,26 +16,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxChips,
-  ComboboxChip,
-  ComboboxChipsInput,
-  useComboboxAnchor,
-} from "@/components/ui/combobox";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, User, ShieldCheck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 const Schema = z.object({
   code: z.string().min(2).max(50),
   name: z.string().min(2).max(100),
   region: z.string().min(2).max(100),
+  state: z.string().min(2).max(100),
+  city: z.string().min(2).max(100),
   location: z.string().max(255).optional().or(z.literal("")),
-  staffUserIds: z.array(z.string()).default([]),
+  managerId: z.string().optional().or(z.literal("")),
 });
 
 type Values = z.infer<typeof Schema>;
@@ -43,11 +34,10 @@ type Values = z.infer<typeof Schema>;
 export function CreateStationForm({
   users,
 }: {
-  users: { id: string; email: string; firstName: string | null; lastName: string | null }[];
+  users: { id: string; email: string; firstName: string | null; lastName: string | null; permissions?: string[] }[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const anchorRef = useComboboxAnchor();
   
   const { register, handleSubmit, formState, setValue, watch } = useForm({
     resolver: zodResolver(Schema),
@@ -55,16 +45,24 @@ export function CreateStationForm({
       name: "",
       code: "",
       region: "",
+      state: "",
+      city: "",
       location: "",
-      staffUserIds: [] as string[],
+      managerId: "",
     },
   });
 
-  const selectedStaff = watch("staffUserIds") || [];
+  const selectedManagerId = watch("managerId");
+  const selectedManager = users.find(u => u.id === selectedManagerId);
 
   const onSubmit = onSubmitForm(async (values) => {
     setError(null);
-    const res = await apiPost<{ station: { id: string } }>("/api/tenant/stations", values);
+    const payload = {
+      ...values,
+      staffUserIds: values.managerId ? [values.managerId] : [],
+    };
+    
+    const res = await apiPost<{ station: { id: string } }>("/api/tenant/stations", payload);
     if (res.error) {
       setError(res.error.message);
       return;
@@ -78,16 +76,6 @@ export function CreateStationForm({
   function onSubmitForm(callback: (values: Values) => Promise<void>) {
     return handleSubmit(callback);
   }
-
-  const staffItems = users.map((u) => ({
-    id: u.id,
-    value: u.id,
-    label: u.firstName || u.lastName 
-      ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-      : u.email,
-  }));
-
-  const selectedItems = staffItems.filter((item) => selectedStaff.includes(item.id));
 
   return (
     <form onSubmit={onSubmit} className="space-y-6 animate-in fade-in duration-500">
@@ -110,15 +98,6 @@ export function CreateStationForm({
             <p className="text-xs text-muted-foreground">Add a new retail outlet station to the tenant system</p>
           </div>
         </div>
-        {/* <Button
-          type="submit"
-          size="sm"
-          disabled={formState.isSubmitting}
-          className="h-9 rounded-full gap-2 px-4"
-        >
-          <Save className="h-4 w-4" />
-          {formState.isSubmitting ? "Saving..." : "Save Station"}
-        </Button> */}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -135,7 +114,6 @@ export function CreateStationForm({
                 id="name" 
                 placeholder="e.g. Lagos Mainland Station" 
                 {...register("name")} 
-                
               />
             </FormField>
 
@@ -144,7 +122,6 @@ export function CreateStationForm({
                 id="code" 
                 placeholder="e.g. AP-LAG-01" 
                 {...register("code")} 
-                
               />
             </FormField>
 
@@ -165,12 +142,29 @@ export function CreateStationForm({
               <input type="hidden" {...register("region")} />
             </FormField>
 
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="State*" htmlFor="state" error={formState.errors.state?.message}>
+                <TextInput 
+                  id="state" 
+                  placeholder="e.g. Lagos" 
+                  {...register("state")} 
+                />
+              </FormField>
+
+              <FormField label="City*" htmlFor="city" error={formState.errors.city?.message}>
+                <TextInput 
+                  id="city" 
+                  placeholder="e.g. Ikeja" 
+                  {...register("city")} 
+                />
+              </FormField>
+            </div>
+
             <FormField label="Location / Address" htmlFor="location" error={formState.errors.location?.message}>
               <TextInput 
                 id="location" 
-                placeholder="e.g. 10 Marina Street, Lagos" 
+                placeholder="e.g. 10 Marina Street" 
                 {...register("location")} 
-                
               />
             </FormField>
           </CardContent>
@@ -179,43 +173,51 @@ export function CreateStationForm({
         {/* Staff Assignment */}
         <Card className="lg:col-span-1 border-stone-200 bg-white/60 backdrop-blur-xs">
           <CardHeader className="pb-2">
-            <CardTitle>
-              Assign Staff
+            <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+              Assign Station Manager
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <FormField label="Assign Staff" htmlFor="staff-combobox" error={formState.errors.staffUserIds?.message}>
-              <Combobox
-                multiple
-                items={staffItems}
-                value={selectedItems}
-                onValueChange={(val: any[]) => {
-                  const ids = (val || []).map((v) => v.id);
-                  setValue("staffUserIds", ids, { shouldDirty: true });
-                }}
-              >
-                <ComboboxChips ref={anchorRef} className="w-full">
-                  {selectedItems.map((item) => (
-                    <ComboboxChip key={item.id}>
-                      {item.label}
-                    </ComboboxChip>
+            <FormField label="Select Manager" htmlFor="manager-select" error={formState.errors.managerId?.message}>
+              <Select value={selectedManagerId || "unassigned"} onValueChange={(v) => setValue("managerId", v === "unassigned" ? "" : v, { shouldValidate: true })}>
+                <SelectTrigger id="manager-select" className="w-full">
+                  <SelectValue placeholder="Select a user to manage this station" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.firstName || u.lastName 
+                        ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                        : u.email}
+                    </SelectItem>
                   ))}
-                  <ComboboxChipsInput placeholder={selectedStaff.length === 0 ? "Select staff..." : ""} />
-                </ComboboxChips>
-                <ComboboxContent anchor={anchorRef}>
-                  <ComboboxInput showTrigger={false} placeholder="Search" />
-                  <ComboboxEmpty>No items found.</ComboboxEmpty>
-                  <ComboboxList>
-                    {(item) => (
-                      <ComboboxItem key={item.id} value={item}>
-                        {item.label}
-                      </ComboboxItem>
-                    )}
-                  </ComboboxList>
-                </ComboboxContent>
-              </Combobox>
-              <input type="hidden" {...register("staffUserIds")} />
+                </SelectContent>
+              </Select>
+              <input type="hidden" {...register("managerId")} />
             </FormField>
+
+            {selectedManager && (
+              <div className="mt-4 p-4 rounded-lg border border-border bg-muted/30">
+                <div className="flex items-start gap-4">
+                  <div className="size-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <User size={20} />
+                  </div>
+                  <div className="space-y-1 overflow-hidden">
+                    <p className="font-semibold text-sm truncate">
+                      {selectedManager.firstName || selectedManager.lastName 
+                        ? `${selectedManager.firstName ?? ""} ${selectedManager.lastName ?? ""}`.trim()
+                        : "No Name Provided"}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">{selectedManager.email}</p>
+                    <div className="flex items-center gap-1.5 mt-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-sm w-max border border-emerald-200 dark:border-emerald-800">
+                      <ShieldCheck size={12} />
+                      Station Manager
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

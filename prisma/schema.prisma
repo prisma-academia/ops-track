@@ -372,6 +372,8 @@ model Station {
   name      String
   region    String // e.g., North-West, South-West
   location  String? // Address
+  city      String?
+  state     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

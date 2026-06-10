@@ -2,6 +2,9 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
+import Image from 'next/image';
+import logo from '@/assets/logo.png';
+import { Store } from "lucide-react";
 
 export type StationRow = {
   id: string;
@@ -16,8 +19,30 @@ export type StationRow = {
 };
 
 const columns: ColumnDef<StationRow>[] = [
-  { accessorKey: "code", header: "Code" },
-  { accessorKey: "name", header: "Name" },
+  { 
+    accessorKey: "name", 
+    header: "Station",
+    cell: ({ row }) => {
+      const name = row.original.name;
+      const code = row.original.code;
+      return (
+        <div className="flex items-center gap-3 py-1">
+          <div className="size-10 flex items-center justify-center shrink-0 text-primary">
+            <Image
+              src="/assets/icons/gps.png"
+              alt="My Image"
+              width={500}
+              height={300}
+            />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-semibold text-foreground">{name}</span>
+            <span className="text-xs text-muted-foreground font-mono">{code}</span>
+          </div>
+        </div>
+      );
+    }
+  },
   { accessorKey: "region", header: "Region" },
   { accessorKey: "location", header: "Location", cell: (info) => (info.getValue() as string) ?? "—" },
   { accessorKey: "staffCount", header: "Staff" },

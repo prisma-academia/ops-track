@@ -1,9 +1,7 @@
 "use client"
 
 import {
-  Building2,
   RefreshCcwIcon,
-  TrendingDown,
   TrendingUp,
   Coins,
   Droplet,
@@ -13,17 +11,15 @@ import {
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   XAxis,
-  YAxis
+  YAxis,
+  PieChart,
+  Pie,
+  Cell
 } from "recharts"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -56,19 +52,18 @@ import { DatePickerWithRange } from "@/components/date-range-picker"
  * ==========================================
  */
 
-// Trend Data (for Revenue and Profit charts)
+// Trend Data (synchronized Revenue and Profit charts)
 const trendData = [
-  { month: "Jan", revenue: 85000000, profit: 22000000, expenses: 63000000 },
-  { month: "Feb", revenue: 92000000, profit: 26000000, expenses: 66000000 },
-  { month: "Mar", revenue: 104000000, profit: 29000000, expenses: 75000000 },
-  { month: "Apr", revenue: 110000000, profit: 31000000, expenses: 79000000 },
-  { month: "May", revenue: 115000000, profit: 33000000, expenses: 82000000 },
-  { month: "Jun", revenue: 120400000, profit: 34800000, expenses: 85600000 },
+  { month: "Jan", revenue: 85000000, profit: 22000000 },
+  { month: "Feb", revenue: 92000000, profit: 26000000 },
+  { month: "Mar", revenue: 104000000, profit: 29000000 },
+  { month: "Apr", revenue: 110000000, profit: 31000000 },
+  { month: "May", revenue: 115000000, profit: 33000000 },
+  { month: "Jun", revenue: 120400000, profit: 34800000 },
 ]
 
 const revenueChartConfig = {
   revenue: { label: "Revenue", color: "var(--chart-1)" },
-  expenses: { label: "Expenses", color: "var(--chart-2)" },
 } satisfies ChartConfig
 
 const profitChartConfig = {
@@ -83,12 +78,18 @@ const stationRankings = [
   { name: "Kano - Nassarawa", revenue: "₦11,000,000", profit: "₦3,230,000", volume: "11,200 L", manager: "Ibrahim Musa", initial: "IM" },
 ]
 
-// Product Mix Contribution
-const productMix = [
-  { name: "PMS (Premium Motor Spirit)", percentage: 60, volume: "87,120 L", margin: "₦250/L", color: "bg-primary" },
-  { name: "AGO (Automotive Gas Oil / Diesel)", percentage: 30, volume: "43,560 L", margin: "₦230/L", color: "bg-chart-2" },
-  { name: "DPK (Dual Purpose Kerosene)", percentage: 10, volume: "14,520 L", margin: "₦210/L", color: "bg-chart-3" },
+// Product Mix Contribution (PMS, AGO, LPG)
+const productMixData = [
+  { name: "PMS", value: 60, volume: "87,120 L", margin: "₦250/L", color: "var(--chart-1)" },
+  { name: "AGO", value: 30, volume: "43,560 L", margin: "₦230/L", color: "var(--chart-2)" },
+  { name: "LPG", value: 10, volume: "14,520 L", margin: "₦210/L", color: "var(--chart-3)" },
 ]
+
+const productMixConfig = {
+  PMS: { label: "PMS (Premium Motor Spirit)", color: "var(--chart-1)" },
+  AGO: { label: "AGO (Automotive Gas Oil)", color: "var(--chart-2)" },
+  LPG: { label: "LPG (Liquefied Petroleum Gas)", color: "var(--chart-3)" },
+} satisfies ChartConfig
 
 export default function CommercialPerformancePage() {
   return (
@@ -110,9 +111,9 @@ export default function CommercialPerformancePage() {
         </CardHeader>
       </Card>
 
-      {/* KPI Dashboard Grid */}
+      {/* KPI Stats Row (Exactly 4 Cards) */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {/* KPI 1 */}
+        {/* KPI 1: Total Volume Sold */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardDescription className="text-sm font-medium">Total Volume Sold</CardDescription>
@@ -129,7 +130,7 @@ export default function CommercialPerformancePage() {
           </CardContent>
         </Card>
 
-        {/* KPI 2 */}
+        {/* KPI 2: Total Revenue */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardDescription className="text-sm font-medium">Total Revenue</CardDescription>
@@ -146,24 +147,7 @@ export default function CommercialPerformancePage() {
           </CardContent>
         </Card>
 
-        {/* KPI 3 */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardDescription className="text-sm font-medium">Expenses Incurred</CardDescription>
-            <Coins className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₦85,600,000</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              <span className="text-muted-foreground font-medium inline-flex items-center mr-1">
-                AGO & PMS Purchases
-              </span> 
-              and Operations
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* KPI 4 */}
+        {/* KPI 3: Net Profit */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardDescription className="text-sm font-medium">Net Profit</CardDescription>
@@ -179,10 +163,8 @@ export default function CommercialPerformancePage() {
             </p>
           </CardContent>
         </Card>
-      </div>
 
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {/* KPI 5 */}
+        {/* KPI 4: Margin per Litre */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardDescription className="text-sm font-medium">Margin per Litre</CardDescription>
@@ -195,165 +177,149 @@ export default function CommercialPerformancePage() {
             </p>
           </CardContent>
         </Card>
-
-        {/* KPI 6 */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardDescription className="text-sm font-medium">Revenue Growth %</CardDescription>
-            <Percent className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">+14.2%</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Target goal of 10.0% met
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* KPI 7 */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardDescription className="text-sm font-medium">Profit Growth %</CardDescription>
-            <Percent className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">+8.7%</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Consolidated net increase
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* KPI 8 */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardDescription className="text-sm font-medium">Product Mix Contribution</CardDescription>
-            <Droplet className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">PMS Led</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              PMS (60%) | AGO (30%) | DPK (10%)
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Visuals - Trends */}
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
-        {/* Revenue Trend Chart */}
-        <Card>
+      {/* Visuals Grid (Split-screen lg:grid-cols-3) */}
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
+        {/* Cols 1 & 2: Synchronized Revenue Trend vs Profit Trend */}
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Revenue & Expenses Trend</CardTitle>
-            <CardDescription>Monthly growth overview of gross revenue vs expenses</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ChartContainer config={revenueChartConfig} className="size-full">
-                <AreaChart
-                  data={trendData}
-                  margin={{ left: 12, right: 12, top: 10, bottom: 0 }}
-                >
-                  <CartesianGrid vertical={false} className="stroke-muted/30" />
-                  <XAxis
-                    dataKey="month"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                  />
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                  <Area
-                    dataKey="revenue"
-                    name="Revenue"
-                    type="monotone"
-                    fill="var(--color-revenue)"
-                    fillOpacity={0.1}
-                    stroke="var(--color-revenue)"
-                    strokeWidth={2}
-                  />
-                  <Area
-                    dataKey="expenses"
-                    name="Expenses"
-                    type="monotone"
-                    fill="var(--color-expenses)"
-                    fillOpacity={0.05}
-                    stroke="var(--color-expenses)"
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ChartContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Profit Trend Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Net Profit Trend</CardTitle>
-            <CardDescription>Consolidated profit margins trajectory</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ChartContainer config={profitChartConfig} className="size-full">
-                <LineChart
-                  data={trendData}
-                  margin={{ left: 12, right: 12, top: 10, bottom: 0 }}
-                >
-                  <CartesianGrid vertical={false} className="stroke-muted/30" />
-                  <XAxis
-                    dataKey="month"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                  />
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                  <Line
-                    dataKey="profit"
-                    name="Net Profit"
-                    type="monotone"
-                    stroke="var(--color-profit)"
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: "var(--color-profit)" }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ChartContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Product breakdown & Station Ranking */}
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
-        {/* Product Mix Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Product Sales Breakdown</CardTitle>
-            <CardDescription>Contribution by fuel type in total volume & average margin</CardDescription>
+            <CardTitle>Performance Trends</CardTitle>
+            <CardDescription>Synchronized view of monthly Revenue vs Net Profit</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {productMix.map((product) => (
-              <div key={product.name} className="space-y-2">
-                <div className="flex justify-between items-center text-sm font-medium">
-                  <span className="truncate max-w-[250px]">{product.name}</span>
-                  <span className="text-muted-foreground">{product.volume} ({product.percentage}%)</span>
-                </div>
-                <div className="w-full bg-muted/50 rounded-full h-3 overflow-hidden border border-border/50">
-                  <div 
-                    className={`${product.color} h-full rounded-full transition-all duration-500`} 
-                    style={{ width: `${product.percentage}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Margin: <strong>{product.margin}</strong></span>
-                  <span>Contribution: <strong>{product.percentage}%</strong></span>
-                </div>
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase">Revenue (Millions)</span>
+                <span className="text-xs text-muted-foreground">Target: ₦100M+</span>
               </div>
-            ))}
+              <div className="h-[140px]">
+                <ChartContainer config={revenueChartConfig} className="size-full">
+                  <AreaChart
+                    data={trendData}
+                    syncId="commercial"
+                    margin={{ left: 10, right: 10, top: 5, bottom: 5 }}
+                  >
+                    <CartesianGrid vertical={false} className="stroke-muted/30" />
+                    <XAxis
+                      dataKey="month"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      tickFormatter={(v) => `₦${(v / 1000000).toFixed(0)}M`}
+                    />
+                    <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                    <Area
+                      dataKey="revenue"
+                      name="Revenue"
+                      type="monotone"
+                      fill="var(--color-revenue)"
+                      fillOpacity={0.1}
+                      stroke="var(--color-revenue)"
+                      strokeWidth={2}
+                    />
+                  </AreaChart>
+                </ChartContainer>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase">Net Profit (Millions)</span>
+                <span className="text-xs text-muted-foreground">Margin: ~28.9%</span>
+              </div>
+              <div className="h-[140px]">
+                <ChartContainer config={profitChartConfig} className="size-full">
+                  <AreaChart
+                    data={trendData}
+                    syncId="commercial"
+                    margin={{ left: 10, right: 10, top: 5, bottom: 5 }}
+                  >
+                    <CartesianGrid vertical={false} className="stroke-muted/30" />
+                    <XAxis
+                      dataKey="month"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      tickFormatter={(v) => `₦${(v / 1000000).toFixed(0)}M`}
+                    />
+                    <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                    <Area
+                      dataKey="profit"
+                      name="Net Profit"
+                      type="monotone"
+                      fill="var(--color-profit)"
+                      fillOpacity={0.1}
+                      stroke="var(--color-profit)"
+                      strokeWidth={2}
+                    />
+                  </AreaChart>
+                </ChartContainer>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Station Ranking Table */}
+        {/* Col 3: Donut Chart Product Mix Contribution */}
+        <Card className="flex flex-col">
+          <CardHeader>
+            <CardTitle>Product Mix Contribution</CardTitle>
+            <CardDescription>Sales contribution by fuel product type</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 flex flex-col justify-between pb-4">
+            <div className="h-[200px] w-full flex items-center justify-center relative">
+              <ChartContainer config={productMixConfig} className="size-full">
+                <PieChart>
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent nameKey="name" />} />
+                  <Pie
+                    data={productMixData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={65}
+                    outerRadius={85}
+                    strokeWidth={2}
+                    stroke="var(--background)"
+                  >
+                    {productMixData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+              {/* Center label */}
+              <div className="absolute flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-2xl font-bold">145.2K</span>
+                <span className="text-[10px] text-muted-foreground uppercase font-medium tracking-wide">Litres Sold</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t text-center">
+              {productMixData.map((item) => (
+                <div key={item.name} className="flex flex-col items-center">
+                  <div className="flex items-center gap-1 text-xs font-semibold text-foreground">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                    {item.name}
+                  </div>
+                  <span className="text-sm font-bold mt-1 text-foreground">{item.value}%</span>
+                  <span className="text-[10px] text-muted-foreground">{item.volume}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Bottom Row: Station Rankings */}
+      <div className="grid gap-4 grid-cols-1">
         <Card>
           <CardHeader>
             <CardTitle>Station Revenue Ranking</CardTitle>
@@ -378,7 +344,7 @@ export default function CommercialPerformancePage() {
                           <Avatar className="h-7 w-7 border">
                             <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{station.initial}</AvatarFallback>
                           </Avatar>
-                          <div className="truncate max-w-[150px]">
+                          <div className="truncate max-w-[200px]">
                             <div className="font-semibold text-xs sm:text-sm">{station.name.split(" - ")[0]}</div>
                             <div className="text-[10px] text-muted-foreground">{station.manager}</div>
                           </div>
@@ -396,39 +362,6 @@ export default function CommercialPerformancePage() {
         </Card>
       </div>
 
-      {/* Business Questions Answered */}
-      <Card className="border border-primary/20 bg-primary/5">
-        <CardHeader className="flex flex-row items-center gap-2">
-          <HelpCircle className="w-5 h-5 text-primary shrink-0" />
-          <div>
-            <CardTitle>Business Questions Answered</CardTitle>
-            <CardDescription className="text-primary/70">Quick strategic answers from current commercial data.</CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-3">
-          <div className="p-4 rounded-xl border border-border bg-card">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">How much money did we make?</h4>
-            <p className="text-lg font-bold text-foreground mt-2">₦34,800,000</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Net profit generated from <strong>₦120.4M</strong> in revenue after subtracting <strong>₦85.6M</strong> in expenses.
-            </p>
-          </div>
-          <div className="p-4 rounded-xl border border-border bg-card">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Which product is most profitable?</h4>
-            <p className="text-lg font-bold text-primary mt-2">PMS (Gasoline)</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Contributes <strong>60%</strong> of sales volume and achieves an average net margin of <strong>₦250 per Litre</strong>.
-            </p>
-          </div>
-          <div className="p-4 rounded-xl border border-border bg-card">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Which station generates the most?</h4>
-            <p className="text-lg font-bold text-foreground mt-2">Lagos (VI)</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Generated <strong>₦42,100,000</strong> in revenue, accounting for <strong>35%</strong> of the total company revenue.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

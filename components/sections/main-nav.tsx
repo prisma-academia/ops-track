@@ -31,7 +31,9 @@ import {
   Truck,
   Coins,
   Users,
-  TrendingUp
+  TrendingUp,
+  Gauge,
+  AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -52,6 +54,8 @@ const iconMap: Record<string, React.ComponentType<{ size?: number }>> = {
   Coins,
   Users,
   TrendingUp,
+  Gauge,
+  AlertCircle,
 };
 
 export type NavItem = {

@@ -1,26 +1,38 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
-import { FormField, TextInput } from "@/components/form-field";
-import { Card } from "@/components/shell";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+import { Save } from "lucide-react";
 
 const Schema = z.object({
-  firstName: z.string().min(1).max(100),
-  lastName: z.string().min(1).max(100),
+  firstName: z.string().min(1, "First name is required").max(100),
+  lastName: z.string().min(1, "Last name is required").max(100),
   otherName: z.string().max(100).optional().or(z.literal("")),
   phone: z.string().max(40).optional().or(z.literal("")),
-  email: z.email(),
-  roleTemplateId: z.string().min(1),
+  email: z.email("Invalid email address"),
+  roleTemplateId: z.string().min(1, "Role is required"),
   permissions: z.array(z.string()).optional(),
 });
 type Values = z.infer<typeof Schema>;
+
+const allActions = ["read", "write", "approve"];
 
 export function InviteTenantUserForm({
   roles,
@@ -30,7 +42,7 @@ export function InviteTenantUserForm({
   allPermissions: readonly string[];
 }) {
   const router = useRouter();
-  const { register, handleSubmit, formState, control, setValue } = useForm<Values>({
+  const { register, handleSubmit, formState: { errors, isSubmitting }, control, setValue } = useForm<Values>({
     resolver: zodResolver(Schema),
     defaultValues: { permissions: [] },
   });
@@ -67,60 +79,177 @@ export function InviteTenantUserForm({
     if (res.data?.user.id) router.push(`/admin/users/${res.data.user.id}`);
   });
 
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      <Card>
-        <form onSubmit={onSubmit} className="grid grid-cols-2 gap-4">
-          <FormField label="First name" htmlFor="f" error={formState.errors.firstName?.message}>
-            <TextInput id="f" {...register("firstName")} />
-          </FormField>
-          <FormField label="Last name" htmlFor="l" error={formState.errors.lastName?.message}>
-            <TextInput id="l" {...register("lastName")} />
-          </FormField>
-          <FormField label="Other name (optional)" htmlFor="o" error={formState.errors.otherName?.message}>
-            <TextInput id="o" {...register("otherName")} />
-          </FormField>
-          <FormField label="Phone (optional)" htmlFor="p" error={formState.errors.phone?.message}>
-            <TextInput id="p" type="tel" {...register("phone")} />
-          </FormField>
-          <FormField label="Email" htmlFor="e" error={formState.errors.email?.message}>
-            <TextInput id="e" type="email" {...register("email")} />
-          </FormField>
-          <FormField label="Role" htmlFor="role" error={formState.errors.roleTemplateId?.message}>
-            <select
-              id="role"
-              className="rounded border border-stone-300 bg-white px-3 py-2 text-sm"
-              {...register("roleTemplateId")}
-            >
-              <option value="">Select…</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
-          </FormField>
-          {error ? <p className="col-span-2 text-sm text-red-600">{error}</p> : null}
-          <div className="col-span-2">
-            <Button type="submit" disabled={formState.isSubmitting}>
-              {formState.isSubmitting ? "Sending invite…" : "Send invite"}
-            </Button>
-          </div>
-        </form>
-      </Card>
+  const groupedPermissions = allPermissions.reduce((acc, key) => {
+    const perm = Object.values(PERMISSIONS).find(p => p.key === key);
+    if (!perm) return acc;
+    const moduleName = perm.module;
+    if (!acc[moduleName]) acc[moduleName] = { moduleName, perms: [] };
+    acc[moduleName].perms.push(perm);
+    return acc;
+  }, {} as Record<string, { moduleName: string, perms: typeof PERMISSIONS[keyof typeof PERMISSIONS][] }>);
 
-      <Card>
-        <h2 className="text-sm font-semibold uppercase text-stone-500 mb-4">Role permissions</h2>
-        <div className="grid grid-cols-1 gap-1 rounded border border-stone-200 p-3">
-          {allPermissions.map((p) => (
-            <label key={p} className="flex items-center gap-2 text-xs">
-              <Checkbox
-                checked={selectedPermissions.has(p)}
-                onCheckedChange={() => togglePermission(p)}
+  const modulesList = Object.values(groupedPermissions);
+
+  const getModuleName = (module: string) => {
+    return module.replace("tenant.", "").split(".").map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
+  };
+
+  return (
+    <form onSubmit={onSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* User Details - Left Column */}
+      <div className="lg:col-span-1 space-y-6">
+        <Card className="border-border/40 shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-semibold text-foreground">
+              User Details
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Provide the details and role for the new team member.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="firstName" className={errors.firstName ? "text-destructive" : ""}>First name *</Label>
+              <Input id="firstName" {...register("firstName")} className={errors.firstName ? "border-destructive" : ""} placeholder="e.g. John" />
+              {errors.firstName && <p className="text-xs text-destructive">{errors.firstName.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lastName" className={errors.lastName ? "text-destructive" : ""}>Last name *</Label>
+              <Input id="lastName" {...register("lastName")} className={errors.lastName ? "border-destructive" : ""} placeholder="e.g. Doe" />
+              {errors.lastName && <p className="text-xs text-destructive">{errors.lastName.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="otherName">Other name (optional)</Label>
+              <Input id="otherName" {...register("otherName")} />
+              {errors.otherName && <p className="text-xs text-destructive">{errors.otherName.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone (optional)</Label>
+              <Input id="phone" type="tel" {...register("phone")} placeholder="+1 (555) 000-0000" />
+              {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email" className={errors.email ? "text-destructive" : ""}>Email *</Label>
+              <Input id="email" type="email" {...register("email")} className={errors.email ? "border-destructive" : ""} placeholder="john@example.com" />
+              {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role" className={errors.roleTemplateId ? "text-destructive" : ""}>Role Template *</Label>
+              <Controller
+                control={control}
+                name="roleTemplateId"
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger id="role" className={errors.roleTemplateId ? "border-destructive" : ""}>
+                      <SelectValue placeholder="Select a role..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               />
-              <span className="font-mono">{p}</span>
-            </label>
-          ))}
-        </div>
-      </Card>
-    </div>
+              {errors.roleTemplateId && <p className="text-xs text-destructive">{errors.roleTemplateId.message}</p>}
+            </div>
+            
+            {error && <p className="text-sm text-destructive font-medium pt-2">{error}</p>}
+            
+            <div className="pt-4">
+              <Button type="submit" disabled={isSubmitting} className="w-full gap-2">
+                <Save className="h-4 w-4" />
+                {isSubmitting ? "Sending invite…" : "Send Invite"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Permissions Matrix - Right Column */}
+      <div className="lg:col-span-2">
+        <Card className="border-border/40 shadow-sm overflow-hidden p-0">
+          {/* <CardHeader className="bg-muted/10 pb-4 border-b border-border/40">
+            <CardTitle className="text-lg font-semibold text-foreground">
+              Permissions Matrix
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Granular access control. Selecting a role on the left will automatically apply predefined templates here.
+            </CardDescription>
+          </CardHeader> */}
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              {/* Column headers */}
+              <div className="grid grid-cols-6 border-b border-border/40 bg-muted/30 px-6 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">
+                <div className="col-span-3">Permissions Module</div>
+                {allActions.map((action) => (
+                  <div key={action} className="text-center">{action}</div>
+                ))}
+              </div>
+
+              {/* Rows */}
+              {modulesList.map((mod, index) => {
+                const readPerm = mod.perms.find(p => p.key.endsWith(':read'));
+                const writePerm = mod.perms.find(p => p.key.endsWith(':write'));
+                const approvePerm = mod.perms.find(p => p.key.endsWith(':approve'));
+                
+                // Construct a helpful combined description
+                const desc = [readPerm?.description, writePerm?.description].filter(Boolean).join(" • ");
+
+                return (
+                  <div
+                    key={mod.moduleName}
+                    className={`grid grid-cols-6 items-center px-6 py-4 text-sm hover:bg-muted/5 transition-colors ${
+                      index !== modulesList.length - 1 ? "border-b border-border/30" : ""
+                    }`}
+                  >
+                    <div className="col-span-3 pr-4">
+                      <p className="font-medium text-foreground">{getModuleName(mod.moduleName)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{desc}</p>
+                    </div>
+                    <div className="flex justify-center">
+                      {readPerm ? (
+                        <Checkbox
+                          id={`perm-${readPerm.key}`}
+                          checked={selectedPermissions.has(readPerm.key)}
+                          onCheckedChange={() => togglePermission(readPerm.key)}
+                          className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                        />
+                      ) : (
+                        <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
+                      )}
+                    </div>
+                    <div className="flex justify-center">
+                      {writePerm ? (
+                        <Checkbox
+                          id={`perm-${writePerm.key}`}
+                          checked={selectedPermissions.has(writePerm.key)}
+                          onCheckedChange={() => togglePermission(writePerm.key)}
+                          className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                        />
+                      ) : (
+                        <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
+                      )}
+                    </div>
+                    <div className="flex justify-center">
+                      {approvePerm ? (
+                        <Checkbox
+                          id={`perm-${approvePerm.key}`}
+                          checked={selectedPermissions.has(approvePerm.key)}
+                          onCheckedChange={() => togglePermission(approvePerm.key)}
+                          className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                        />
+                      ) : (
+                        <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </form>
   );
 }

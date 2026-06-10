@@ -53,6 +53,8 @@ interface DashboardLayoutShellProps {
   logoutEndpoint: string;
   logoutRedirect: string;
   logoutContext: "platform" | "tenant-admin" | "client";
+  stations?: { id: string; name: string; code: string }[];
+  activeStationId?: string;
 }
 
 export function DashboardLayoutShell({
@@ -64,6 +66,8 @@ export function DashboardLayoutShell({
   logoutEndpoint,
   logoutRedirect,
   logoutContext,
+  stations,
+  activeStationId,
 }: DashboardLayoutShellProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [logOutModal, setLogOutModal] = useState(false);
@@ -108,6 +112,8 @@ export function DashboardLayoutShell({
             user={{ name: user.name, email: user.email }}
             onSearchClick={() => setSearchOpen(true)}
             onLogout={() => setLogOutModal(true)}
+            stations={stations}
+            activeStationId={activeStationId}
           />
 
           <main className="flex-1 p-4 md:p-8 bg-white dark:bg-black h-full">

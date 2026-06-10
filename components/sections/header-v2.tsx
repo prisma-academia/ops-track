@@ -3,11 +3,18 @@
 import ProfileDropdown from "@/components/sections/dropdown-profile"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { Moon, Search, Sun } from "lucide-react"
+import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
+import { useRouter } from "next/navigation"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface HeaderV2Props {
   user?: {
@@ -17,14 +24,19 @@ interface HeaderV2Props {
   };
   onSearchClick?: () => void;
   onLogout?: () => void;
+  stations?: { id: string; name: string; code: string }[];
+  activeStationId?: string;
 }
 
 export default function HeaderV2({
   user,
-  onSearchClick,
-  onLogout
+  onLogout,
+  stations = [],
+  activeStationId = "all"
 }: HeaderV2Props) {
   const { theme, setTheme } = useTheme()
+  const router = useRouter()
+
   return (
     <header className="bg-card/95 backdrop-blur sticky top-0 z-50 w-full">
       <div className="flex h-18 items-center justify-between border-b gap-4 px-4 sm:px-8">
@@ -33,21 +45,31 @@ export default function HeaderV2({
 
           <Separator orientation="vertical" className="h-4" />
 
-          <div
-            className="relative flex items-center max-w-md w-full cursor-pointer group"
-            onClick={onSearchClick}
-          >
-            <Search className="absolute left-3 h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-            <Input
-              placeholder="Search..."
-              className="pl-9 h-10 w-[240px] lg:w-[320px] rounded-none! bg-muted/50 border-none pointer-events-none"
-              readOnly
-            />
-            <div className="absolute right-3 px-1.5 py-0.5 rounded-none! border bg-background text-[10px] font-medium text-muted-foreground pointer-events-none">
-              ⌘K
+          {stations.length > 0 && (
+            <div className="flex items-center">
+              <Select
+                value={activeStationId}
+                onValueChange={(val) => {
+                  document.cookie = `active-station-id=${val}; path=/; max-age=31536000; SameSite=Lax`;
+                  router.refresh();
+                }}
+              >
+                <SelectTrigger className="w-[180px] sm:w-[240px]">
+                  <SelectValue placeholder="All Stations" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value="all">All Stations</SelectItem>
+                  {stations.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name} ({s.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </div>
+          )}
         </div>
+
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"

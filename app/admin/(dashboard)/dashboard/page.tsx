@@ -42,12 +42,38 @@ import {
 } from "@/components/ui/table"
 
 import { DatePickerWithRange } from "@/components/date-range-picker"
+import { AssetTank } from "./Tank"
 
 /**
  * ==========================================
  * DATA & CONFIGS
  * ==========================================
  */
+
+// Mocking data that matches a typical station's setup
+const mockTanksData = [
+  {
+    id: "tank-1",
+    label: "PMS - Tank",
+    currentLitres: 34200,
+    maxCapacity: 45000,
+    type: "fuel" as const,
+  },
+  {
+    id: "tank-2",
+    label: "AGO - Tank",
+    currentLitres: 12000,
+    maxCapacity: 35000,
+    type: "fuel" as const,
+  },
+  {
+    id: "tank-3",
+    label: "LPG - Tank",
+    currentLitres: 3100,
+    maxCapacity: 20000,
+    type: "gas" as const, // Triggers the rounded pressure-vessel shape
+  },
+];
 
 // --- Line Chart Data & Config (from chart.tsx) ---
 const lineChartData = [
@@ -217,7 +243,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Top Performing Stations Table */}
-      <div>
+      {/* <div>
         <Card>
           <CardHeader>
             <CardTitle>Top Performing Stations</CardTitle>
@@ -340,6 +366,18 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+      </div> */}
+      {/* 2. Wrap them in a clean, responsive Tailwind Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {mockTanksData.map((tank) => (
+          <AssetTank
+            key={tank.id}
+            label={tank.label}
+            currentLitres={tank.currentLitres}
+            maxCapacity={tank.maxCapacity}
+            type={tank.type}
+          />
+        ))}
       </div>
     </div>
   )

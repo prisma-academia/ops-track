@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { formatDistanceToNow } from "date-fns"
+import { format, formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import { apiPost } from "@/lib/client/api"
 import type { ProductType } from "@/lib/generated/prisma/client"
@@ -22,7 +22,13 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
 import {
   Table,
   TableBody,
@@ -41,130 +47,225 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Edit, Fuel, MapPin, Save, Search, Store, X, Calendar, AlertTriangle } from "lucide-react"
+import {
+  ChevronDown,
+  Edit,
+  Fuel,
+  History,
+  Save,
+  Search,
+  Store,
+  X,
+} from "lucide-react"
+
+// ── Types ────────────────────────────────────────────────────────────────────
 
 type Station = {
-  id: string;
-  name: string;
-  code: string;
-  region: string;
-  location: string | null;
-};
+  id: string
+  name: string
+  code: string
+  region: string
+  location: string | null
+}
 
 type PriceControlRow = {
-  id: string;
-  stationId: string;
-  productType: ProductType;
-  pricePerLiter: number;
-  effectiveFrom: string;
-};
+  id: string
+  stationId: string
+  productType: ProductType
+  pricePerLiter: number
+  effectiveFrom: string
+}
 
 type MappedStation = Station & {
   fuels: {
-    PMS?: { price: number; lastUpdate: string; date: Date };
-    AGO?: { price: number; lastUpdate: string; date: Date };
-    DPK?: { price: number; lastUpdate: string; date: Date };
-    LPG?: { price: number; lastUpdate: string; date: Date };
+    PMS?: { price: number; lastUpdate: string; date: Date }
+    AGO?: { price: number; lastUpdate: string; date: Date }
+    DPK?: { price: number; lastUpdate: string; date: Date }
+    LPG?: { price: number; lastUpdate: string; date: Date }
   }
 }
 
-// Reusable mini-card for Fuel Inputs
-const FuelInputCard = ({ 
-  label, 
-  value, 
-  onChange, 
-  average, 
-  isEditing, 
-  colorClass, 
-  bgClass, 
-  borderClass 
-}: any) => {
+const FUEL_TYPES = ["PMS", "AGO", "DPK", "LPG"] as const
+const FUEL_LABELS: Record<string, string> = {
+  PMS: "PMS (Petrol)",
+  AGO: "AGO (Diesel)",
+  DPK: "DPK (Kerosene)",
+  LPG: "LPG (Gas)",
+}
+
+// ── Price Cell ───────────────────────────────────────────────────────────────
+
+function PriceCell({ product }: { product?: { price: number } }) {
+  if (!product) return <span className="text-muted-foreground text-sm">—</span>
   return (
-    <div className={`p-4 rounded-xl border transition-all duration-300 ${isEditing ? borderClass : 'border-border/40 bg-card/40'} ${isEditing ? bgClass : ''}`}>
-      <div className="flex items-center justify-between mb-3">
-        <Label className={`font-semibold ${colorClass}`}>{label}</Label>
-        {!isEditing && average > 0 && (
-          <Badge variant="outline" className={`text-[10px] font-mono ${colorClass} ${borderClass}`}>
-            Avg: ₦{average.toFixed(2)}
-          </Badge>
-        )}
-      </div>
-      
-      {isEditing ? (
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">₦</span>
-          <Input
-            type="number"
-            step="0.01"
-            placeholder="0.00"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className={`pl-8 text-lg font-bold h-12 bg-background/80 backdrop-blur-sm ${borderClass} focus-visible:ring-1 focus-visible:${borderClass}`}
-          />
-        </div>
-      ) : (
-        <div className="text-2xl font-bold font-mono tracking-tight text-foreground">
-          {average ? `₦ ${average.toFixed(2)}` : "—"}
-        </div>
-      )}
-    </div>
+    <span className="font-mono text-sm tabular-nums">
+      ₦{product.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    </span>
   )
 }
 
-const PriceCell = ({ product }: { product?: { price: number } }) => {
-  if (!product) return <span className="text-muted-foreground text-sm font-mono opacity-50">—</span>;
+// ── Station History Row ──────────────────────────────────────────────────────
+
+function StationHistoryRow({
+  station,
+  historyByProduct,
+}: {
+  station: MappedStation
+  historyByProduct: Record<string, PriceControlRow[]>
+}) {
+  const hasHistory = Object.values(historyByProduct).some((h) => h.length > 1)
+
+  if (!hasHistory) {
+    return (
+      <TableRow>
+        <TableCell colSpan={99} className="px-12 py-4">
+          <p className="text-sm text-muted-foreground">
+            No price change history available for this station.
+          </p>
+        </TableCell>
+      </TableRow>
+    )
+  }
+
   return (
-    <div className="font-mono text-sm font-semibold tracking-tight text-foreground/90 tabular-nums">
-      <span className="text-muted-foreground mr-1 text-xs font-normal">₦</span>
-      {product.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-    </div>
+    <TableRow>
+      <TableCell colSpan={99} className="p-0">
+        <div className="px-12 py-4">
+          <div className="flex items-center gap-2 mb-3">
+            <History className="size-4 text-muted-foreground" />
+            <span className="text-sm font-medium">
+              Price Change History — {station.name}
+            </span>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-xs">Product</TableHead>
+                <TableHead className="text-xs">Price</TableHead>
+                <TableHead className="text-xs">Effective From</TableHead>
+                <TableHead className="text-xs">Time Ago</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {FUEL_TYPES.flatMap((fuelType) => {
+                const records = historyByProduct[fuelType] ?? []
+                // Skip the first record (current price), show up to 10 historical
+                const historical = records.slice(1, 11)
+                if (historical.length === 0) return []
+                return historical.map((record) => (
+                  <TableRow key={record.id}>
+                    <TableCell>
+                      <Badge variant="secondary">{fuelType}</Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm tabular-nums">
+                      ₦
+                      {Number(record.pricePerLiter).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {format(
+                        new Date(record.effectiveFrom),
+                        "MMM d, yyyy 'at' h:mm a"
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatDistanceToNow(new Date(record.effectiveFrom), {
+                        addSuffix: true,
+                      })}
+                    </TableCell>
+                  </TableRow>
+                ))
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </TableCell>
+    </TableRow>
   )
 }
+
+// ── Main Component ───────────────────────────────────────────────────────────
 
 export function PricesManager({
   stations,
   currentPrices,
+  allPrices,
 }: {
-  stations: Station[];
-  currentPrices: PriceControlRow[];
+  stations: Station[]
+  currentPrices: PriceControlRow[]
+  allPrices: PriceControlRow[]
 }) {
   const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  
+  const [expandedStations, setExpandedStations] = useState<Record<string, boolean>>({})
+
   const [editingPrices, setEditingPrices] = useState<{
-    PMS: string;
-    AGO: string;
-    DPK: string;
-    LPG: string;
+    PMS: string
+    AGO: string
+    DPK: string
+    LPG: string
   }>({
     PMS: "",
     AGO: "",
     DPK: "",
     LPG: "",
   })
-  
+
   const [selectedStations, setSelectedStations] = useState<RowSelectionState>({})
   const [effectiveDateTime, setEffectiveDateTime] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
 
+  // Build price history index: stationId → productType → PriceControlRow[]
+  const priceHistoryIndex = useMemo(() => {
+    const index: Record<string, Record<string, PriceControlRow[]>> = {}
+    for (const p of allPrices) {
+      if (!index[p.stationId]) index[p.stationId] = {}
+      if (!index[p.stationId][p.productType]) index[p.stationId][p.productType] = []
+      index[p.stationId][p.productType].push(p)
+    }
+    return index
+  }, [allPrices])
+
   // Map stations data to include current active fuels
   const stationsData = useMemo<MappedStation[]>(() => {
-    return stations.map(station => {
-      const fuels: MappedStation["fuels"] = {};
-      const stationPrices = currentPrices.filter(p => p.stationId === station.id);
-      
+    return stations.map((station) => {
+      const fuels: MappedStation["fuels"] = {}
+      const stationPrices = currentPrices.filter((p) => p.stationId === station.id)
+
       for (const p of stationPrices) {
         fuels[p.productType] = {
           price: Number(p.pricePerLiter),
           date: new Date(p.effectiveFrom),
-          lastUpdate: formatDistanceToNow(new Date(p.effectiveFrom), { addSuffix: true })
-        };
+          lastUpdate: formatDistanceToNow(new Date(p.effectiveFrom), { addSuffix: true }),
+        }
       }
-      return { ...station, fuels };
+      return { ...station, fuels }
     })
   }, [stations, currentPrices])
+
+  // Average prices across all stations
+  const averages = useMemo(() => {
+    const sums: Record<string, number> = { PMS: 0, AGO: 0, DPK: 0, LPG: 0 }
+    const counts: Record<string, number> = { PMS: 0, AGO: 0, DPK: 0, LPG: 0 }
+
+    for (const s of stationsData) {
+      for (const ft of FUEL_TYPES) {
+        const fuel = s.fuels[ft]
+        if (fuel) {
+          sums[ft] += fuel.price
+          counts[ft]++
+        }
+      }
+    }
+
+    return Object.fromEntries(
+      FUEL_TYPES.map((ft) => [ft, counts[ft] ? sums[ft] / counts[ft] : 0])
+    ) as Record<string, number>
+  }, [stationsData])
 
   const handleEdit = () => {
     setIsEditing(true)
@@ -180,34 +281,30 @@ export function PricesManager({
   }
 
   const updatePrice = (fuelType: keyof typeof editingPrices, value: string) => {
-    setEditingPrices((prev) => ({
-      ...prev,
-      [fuelType]: value,
-    }))
+    setEditingPrices((prev) => ({ ...prev, [fuelType]: value }))
   }
 
-  const selectedStationIds = Object.keys(selectedStations).filter((key) => selectedStations[key])
-  
+  const selectedStationIds = Object.keys(selectedStations).filter(
+    (key) => selectedStations[key]
+  )
+
   const pricesPayload = useMemo(() => {
-    const payload: Record<string, number> = {};
-    if (editingPrices.PMS) payload.PMS = Number(editingPrices.PMS);
-    if (editingPrices.AGO) payload.AGO = Number(editingPrices.AGO);
-    if (editingPrices.DPK) payload.DPK = Number(editingPrices.DPK);
-    if (editingPrices.LPG) payload.LPG = Number(editingPrices.LPG);
-    return payload;
-  }, [editingPrices]);
+    const payload: Record<string, number> = {}
+    for (const ft of FUEL_TYPES) {
+      if (editingPrices[ft]) payload[ft] = Number(editingPrices[ft])
+    }
+    return payload
+  }, [editingPrices])
 
   const initiateSave = () => {
     if (selectedStationIds.length === 0) {
       toast.error("Please select at least one station from the table")
       return
     }
-
     if (Object.keys(pricesPayload).length === 0) {
       toast.error("Please enter a new price for at least one fuel type")
       return
     }
-
     setShowConfirmDialog(true)
   }
 
@@ -219,7 +316,7 @@ export function PricesManager({
       prices: pricesPayload,
       stationIds: selectedStationIds,
       effectiveFrom: effectiveDateTime || undefined,
-    });
+    })
 
     setIsSubmitting(false)
 
@@ -228,8 +325,9 @@ export function PricesManager({
       return
     }
 
-    toast.success(`Price changes applied successfully to ${selectedStationIds.length} station(s)`)
-
+    toast.success(
+      `Price changes applied successfully to ${selectedStationIds.length} station(s)`
+    )
     handleCancel()
     router.refresh()
   }
@@ -246,82 +344,108 @@ export function PricesManager({
     )
   }, [searchQuery, stationsData])
 
-  // Table columns definition
+  const toggleStationExpanded = (stationId: string) => {
+    setExpandedStations((prev) => ({ ...prev, [stationId]: !prev[stationId] }))
+  }
+
+  // Table columns
   const columns = useMemo<ColumnDef<MappedStation>[]>(
     () => [
-      {
-        id: "select",
-        header: ({ table }) => (
-          <div className="flex items-center justify-center pl-2">
-            <Checkbox
-              checked={
-                table.getIsAllPageRowsSelected() ||
-                (table.getIsSomePageRowsSelected() && "indeterminate")
-              }
-              onCheckedChange={(value) =>
-                table.toggleAllPageRowsSelected(!!value)
-              }
-              aria-label="Select all"
-              className={isEditing ? "border-primary" : ""}
-              disabled={!isEditing}
-            />
-          </div>
-        ),
-        cell: ({ row }) => (
-          <div className="flex items-center justify-center pl-2">
-            <Checkbox
-              checked={row.getIsSelected()}
-              onCheckedChange={(value) => row.toggleSelected(!!value)}
-              aria-label="Select row"
-              className={isEditing ? "border-primary" : ""}
-              disabled={!isEditing}
-            />
-          </div>
-        ),
-        enableSorting: false,
-        enableHiding: false,
-      },
+      ...(isEditing
+        ? [
+            {
+              id: "select",
+              header: ({ table }: any) => (
+                <Checkbox
+                  checked={
+                    table.getIsAllPageRowsSelected() ||
+                    (table.getIsSomePageRowsSelected() && "indeterminate")
+                  }
+                  onCheckedChange={(value: boolean) =>
+                    table.toggleAllPageRowsSelected(!!value)
+                  }
+                  aria-label="Select all"
+                />
+              ),
+              cell: ({ row }: any) => (
+                <Checkbox
+                  checked={row.getIsSelected()}
+                  onCheckedChange={(value: boolean) => row.toggleSelected(!!value)}
+                  aria-label="Select row"
+                />
+              ),
+              enableSorting: false,
+              enableHiding: false,
+            } satisfies ColumnDef<MappedStation>,
+          ]
+        : []),
       {
         accessorKey: "name",
-        header: "Station Details",
-        cell: ({ row }) => {
-          const name = row.original.name;
-          const code = row.original.code;
-          return (
-            <div className="flex items-center gap-3 py-1">
-              <div className="size-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 text-primary">
-                <Store size={20} />
-              </div>
-              <div className="flex flex-col">
-                <span className="font-semibold text-foreground tracking-tight">{name}</span>
-                <span className="text-xs text-muted-foreground font-mono">{code}</span>
-              </div>
+        header: "Station",
+        cell: ({ row }) => (
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col">
+              <span className="font-medium">{row.original.name}</span>
+              <span className="text-xs text-muted-foreground font-mono">
+                {row.original.code}
+              </span>
             </div>
-          );
-        },
+          </div>
+        ),
+      },
+      {
+        accessorKey: "region",
+        header: "Region",
+        cell: ({ row }) => (
+          <Badge variant="outline">{row.original.region}</Badge>
+        ),
       },
       {
         id: "pms",
-        header: "PMS (Petrol)",
-        cell: ({ row }) => <PriceCell product={row.original.fuels.PMS} />
+        header: "PMS",
+        cell: ({ row }) => <PriceCell product={row.original.fuels.PMS} />,
       },
       {
         id: "ago",
-        header: "AGO (Diesel)",
-        cell: ({ row }) => <PriceCell product={row.original.fuels.AGO} />
+        header: "AGO",
+        cell: ({ row }) => <PriceCell product={row.original.fuels.AGO} />,
       },
       {
         id: "dpk",
-        header: "DPK (Kero)",
-        cell: ({ row }) => <PriceCell product={row.original.fuels.DPK} />
+        header: "DPK",
+        cell: ({ row }) => <PriceCell product={row.original.fuels.DPK} />,
       },
       {
         id: "lpg",
-        header: "LPG (Gas)",
-        cell: ({ row }) => <PriceCell product={row.original.fuels.LPG} />
+        header: "LPG",
+        cell: ({ row }) => <PriceCell product={row.original.fuels.LPG} />,
+      },
+      {
+        id: "expand",
+        header: "",
+        cell: ({ row }) => {
+          const stationHistory = priceHistoryIndex[row.original.id] ?? {}
+          const hasHistory = Object.values(stationHistory).some((h) => h.length > 1)
+          if (!hasHistory) return null
+          return (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleStationExpanded(row.original.id)}
+            >
+              <ChevronDown
+                className={`size-4 transition-transform ${
+                  expandedStations[row.original.id] ? "rotate-180" : ""
+                }`}
+              />
+            </Button>
+          )
+        },
+        enableSorting: false,
+        enableHiding: false,
       },
     ],
-    [isEditing]
+    [isEditing, expandedStations, priceHistoryIndex]
   )
 
   const table = useReactTable({
@@ -343,332 +467,290 @@ export function PricesManager({
     },
   })
 
-  // To display average prices when not editing
-  const averages = useMemo(() => {
-    let pmsSum = 0, pmsCount = 0;
-    let agoSum = 0, agoCount = 0;
-    let dpkSum = 0, dpkCount = 0;
-    let lpgSum = 0, lpgCount = 0;
-
-    for (const s of stationsData) {
-      if (s.fuels.PMS) { pmsSum += s.fuels.PMS.price; pmsCount++; }
-      if (s.fuels.AGO) { agoSum += s.fuels.AGO.price; agoCount++; }
-      if (s.fuels.DPK) { dpkSum += s.fuels.DPK.price; dpkCount++; }
-      if (s.fuels.LPG) { lpgSum += s.fuels.LPG.price; lpgCount++; }
-    }
-
-    return {
-      PMS: pmsCount ? pmsSum / pmsCount : 0,
-      AGO: agoCount ? agoSum / agoCount : 0,
-      DPK: dpkCount ? dpkSum / dpkCount : 0,
-      LPG: lpgCount ? lpgSum / lpgCount : 0,
-    }
-  }, [stationsData])
-
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 xl:grid-cols-12 items-start gap-6 relative">
-        
-        {/* Left Side: Price Editing Card (Sticky Control Center) */}
-        <div className="xl:col-span-4 xl:sticky xl:top-6 space-y-6">
-          <Card className="shadow-sm border-border/40 overflow-hidden bg-card/60 backdrop-blur-xl">
-            <CardHeader className="border-b bg-muted/20 pb-5">
-              <div>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <div className="size-8 rounded-md bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                    <Fuel size={18} />
-                  </div>
-                  Control Center
-                </CardTitle>
-                <CardDescription className="mt-1.5">
-                  Update and manage pump prices across your retail network.
-                </CardDescription>
-              </div>
-            </CardHeader>
-
-            <CardContent className="space-y-4 pt-6">
-              <FuelInputCard
-                label="PMS (Petrol)"
-                value={editingPrices.PMS}
-                onChange={(v: string) => updatePrice("PMS", v)}
-                average={averages.PMS}
-                isEditing={isEditing}
-                colorClass="text-rose-700 dark:text-rose-400"
-                bgClass="bg-rose-50/50 dark:bg-rose-950/20"
-                borderClass="border-rose-200 dark:border-rose-900"
-              />
-              
-              <FuelInputCard
-                label="AGO (Diesel)"
-                value={editingPrices.AGO}
-                onChange={(v: string) => updatePrice("AGO", v)}
-                average={averages.AGO}
-                isEditing={isEditing}
-                colorClass="text-stone-700 dark:text-stone-300"
-                bgClass="bg-stone-50/80 dark:bg-stone-900/40"
-                borderClass="border-stone-200 dark:border-stone-800"
-              />
-
-              <FuelInputCard
-                label="DPK (Kerosene)"
-                value={editingPrices.DPK}
-                onChange={(v: string) => updatePrice("DPK", v)}
-                average={averages.DPK}
-                isEditing={isEditing}
-                colorClass="text-amber-700 dark:text-amber-500"
-                bgClass="bg-amber-50/50 dark:bg-amber-950/20"
-                borderClass="border-amber-200 dark:border-amber-900"
-              />
-
-              <FuelInputCard
-                label="LPG (Gas)"
-                value={editingPrices.LPG}
-                onChange={(v: string) => updatePrice("LPG", v)}
-                average={averages.LPG}
-                isEditing={isEditing}
-                colorClass="text-blue-700 dark:text-blue-400"
-                bgClass="bg-blue-50/50 dark:bg-blue-950/20"
-                borderClass="border-blue-200 dark:border-blue-900"
-              />
-
-              {/* Station Selection and DateTime */}
-              {isEditing && (
-                <div className="pt-2 animate-in fade-in slide-in-from-top-4 duration-500">
-                  <div className="p-4 rounded-xl border border-border/50 bg-muted/30 space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="effective-datetime" className="text-sm font-semibold flex items-center gap-2">
-                        <Calendar size={14} className="text-muted-foreground" />
-                        Effective Date & Time
-                      </Label>
-                      <Input
-                        id="effective-datetime"
-                        type="datetime-local"
-                        value={effectiveDateTime}
-                        onChange={(e) => setEffectiveDateTime(e.target.value)}
-                        className="bg-background/80"
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        Optional. Leave blank to apply immediately.
-                      </p>
-                    </div>
-                    
-                    <div className="p-3 bg-primary/10 text-primary text-xs rounded-lg border border-primary/20 flex gap-2">
-                      <MapPin className="size-4 shrink-0 mt-0.5" />
-                      <span className="leading-snug">
-                        Check the boxes on the table to select which stations these prices apply to.
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="pt-4 space-y-3">
-                {!isEditing ? (
+      {/* ── Top Card: Price Control Center ──────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Fuel className="size-5" />
+                Price Control Center
+              </CardTitle>
+              <CardDescription>
+                {isEditing
+                  ? "Enter new prices and select stations below to apply."
+                  : "Current average fuel prices across your network."}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              {!isEditing ? (
+                <Button onClick={handleEdit}>
+                  <Edit className="size-4 mr-2" />
+                  Update Prices
+                </Button>
+              ) : (
+                <>
                   <Button
-                    variant="default"
-                    className="w-full h-12 font-semibold text-md tracking-wide rounded-xl shadow-sm"
-                    onClick={handleEdit}
+                    variant="outline"
+                    onClick={handleCancel}
+                    disabled={isSubmitting}
                   >
-                    <Edit className="w-4 h-4 mr-2" />
-                    Enter Edit Mode
+                    <X className="size-4 mr-2" />
+                    Cancel
                   </Button>
+                  <Button onClick={initiateSave} disabled={isSubmitting}>
+                    <Save className="size-4 mr-2" />
+                    {isSubmitting ? "Saving..." : "Apply Prices"}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {FUEL_TYPES.map((ft) => (
+              <div key={ft} className="space-y-2">
+                <Label htmlFor={`price-${ft}`}>{FUEL_LABELS[ft]}</Label>
+                {isEditing ? (
+                  <InputGroup>
+                    <InputGroupAddon>₦</InputGroupAddon>
+                    <InputGroupInput
+                      id={`price-${ft}`}
+                      type="number"
+                      step="0.01"
+                      placeholder={
+                        averages[ft]
+                          ? `Current avg: ${averages[ft].toFixed(2)}`
+                          : "0.00"
+                      }
+                      value={editingPrices[ft]}
+                      onChange={(e) => updatePrice(ft, e.target.value)}
+                    />
+                  </InputGroup>
                 ) : (
-                  <div className="flex flex-col gap-3">
-                    <Button
-                      variant="default"
-                      className="w-full h-12 font-semibold text-md tracking-wide rounded-xl shadow-sm"
-                      onClick={initiateSave}
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? "Saving..." : (
-                        <><Save className="w-4 h-4 mr-2" /> Apply Prices</>
-                      )}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="w-full h-12 rounded-xl text-muted-foreground hover:text-foreground"
-                      onClick={handleCancel}
-                      disabled={isSubmitting}
-                    >
-                      Cancel Edit
-                    </Button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-mono font-semibold tabular-nums">
+                      {averages[ft] ? `₦${averages[ft].toFixed(2)}` : "—"}
+                    </span>
+                    {averages[ft] > 0 && (
+                      <Badge variant="secondary">avg</Badge>
+                    )}
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            ))}
+          </div>
 
-        {/* Right Side: Stations Table */}
-        <div className="xl:col-span-8">
-          <Card className="shadow-sm border-border/40 overflow-hidden bg-card/60 backdrop-blur-xl">
-            <CardHeader className="bg-muted/10 border-b px-6 py-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <CardTitle className="text-lg">Network Stations</CardTitle>
-                  <CardDescription className="mt-1">
-                    {isEditing 
-                      ? <span className="text-primary font-medium flex items-center gap-1.5"><AlertTriangle size={14} /> Selection mode active. Choose stations to update.</span>
-                      : "View current active prices across your stations"}
-                  </CardDescription>
-                </div>
-                <div className="relative w-full sm:w-72">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input
-                    placeholder="Search stations or regions..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 bg-background/60 shadow-sm rounded-xl h-10"
-                  />
-                </div>
+          {/* Effective date-time (only when editing) */}
+          {isEditing && (
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="effective-datetime">Effective Date & Time</Label>
+                <Input
+                  id="effective-datetime"
+                  type="datetime-local"
+                  value={effectiveDateTime}
+                  onChange={(e) => setEffectiveDateTime(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to apply immediately.
+                </p>
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                      <TableRow key={headerGroup.id} className="bg-muted/30 border-b-border/40">
-                        {headerGroup.headers.map((header) => (
-                          <TableHead key={header.id} className="whitespace-nowrap px-4 py-4 text-xs uppercase tracking-wider font-semibold">
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext()
-                                )}
-                          </TableHead>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableHeader>
-                  <TableBody>
-                    {table.getRowModel().rows?.length ? (
-                      table.getRowModel().rows.map((row) => (
-                        <TableRow
-                          key={row.id}
-                          data-state={row.getIsSelected() && "selected"}
-                          className={`transition-colors border-b-border/30 ${row.getIsSelected() ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-muted/30"}`}
-                        >
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id} className="px-4 py-3">
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext()
-                              )}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          colSpan={columns.length}
-                          className="h-48 text-center text-muted-foreground"
-                        >
-                          No stations match your search.
+              <div className="flex items-end">
+                <p className="text-sm text-muted-foreground">
+                  <strong>{selectedStationIds.length}</strong> station(s) selected.
+                  Use the checkboxes in the table below to choose which stations
+                  these prices apply to.
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Bottom Card: Stations Table ────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Store className="size-5" />
+                Network Stations
+              </CardTitle>
+              <CardDescription>
+                {isEditing
+                  ? "Select stations to apply new prices to."
+                  : "Current fuel prices by station. Expand rows to view history."}
+              </CardDescription>
+            </div>
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
+              <Input
+                placeholder="Search stations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <>
+                    <TableRow
+                      key={row.id}
+                      data-state={row.getIsSelected() && "selected"}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
                         </TableCell>
-                      </TableRow>
+                      ))}
+                    </TableRow>
+                    {expandedStations[row.original.id] && (
+                      <StationHistoryRow
+                        key={`${row.id}-history`}
+                        station={row.original}
+                        historyByProduct={priceHistoryIndex[row.original.id] ?? {}}
+                      />
                     )}
-                  </TableBody>
-                </Table>
-              </div>
+                  </>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center text-muted-foreground"
+                  >
+                    No stations match your search.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
 
-              {/* Pagination Info */}
-              {table.getPageCount() > 1 && (
-                <div className="flex items-center justify-between p-4 border-t border-border/40 text-sm text-muted-foreground bg-muted/10">
-                  <div>
-                    Showing <span className="font-medium text-foreground">{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}</span> to{" "}
-                    <span className="font-medium text-foreground">
+          {/* Pagination */}
+          {table.getPageCount() > 1 && (
+            <>
+              <Separator />
+              <div className="flex items-center justify-between px-4 py-3 text-sm text-muted-foreground">
+                <div>
+                  Showing{" "}
+                  <strong className="text-foreground">
+                    {table.getState().pagination.pageIndex *
+                      table.getState().pagination.pageSize +
+                      1}
+                  </strong>{" "}
+                  to{" "}
+                  <strong className="text-foreground">
                     {Math.min(
                       (table.getState().pagination.pageIndex + 1) *
                         table.getState().pagination.pageSize,
                       filteredStations.length
                     )}
-                    </span>{" "}
-                    of <span className="font-medium text-foreground">{filteredStations.length}</span> stations
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => table.previousPage()}
-                      disabled={!table.getCanPreviousPage()}
-                      className="rounded-lg shadow-sm"
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => table.nextPage()}
-                      disabled={!table.getCanNextPage()}
-                      className="rounded-lg shadow-sm"
-                    >
-                      Next
-                    </Button>
-                  </div>
+                  </strong>{" "}
+                  of{" "}
+                  <strong className="text-foreground">
+                    {filteredStations.length}
+                  </strong>{" "}
+                  stations
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => table.previousPage()}
+                    disabled={!table.getCanPreviousPage()}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => table.nextPage()}
+                    disabled={!table.getCanNextPage()}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Confirmation Dialog */}
+      {/* ── Confirmation Dialog ────────────────────────────────────────── */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent className="rounded-2xl">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-xl">
-              <AlertTriangle className="size-5 text-amber-500" />
-              Confirm Price Changes
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-base pt-2">
-              You are about to deploy new prices to <strong className="text-foreground">{selectedStationIds.length}</strong> station(s).
-              <div className="mt-4 space-y-2 p-4 bg-muted/40 rounded-xl border border-border/50">
-                {pricesPayload.PMS && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">PMS (Petrol)</span>
-                    <span className="font-mono font-bold text-foreground">₦{pricesPayload.PMS.toFixed(2)}/L</span>
-                  </div>
-                )}
-                {pricesPayload.AGO && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">AGO (Diesel)</span>
-                    <span className="font-mono font-bold text-foreground">₦{pricesPayload.AGO.toFixed(2)}/L</span>
-                  </div>
-                )}
-                {pricesPayload.DPK && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">DPK (Kerosene)</span>
-                    <span className="font-mono font-bold text-foreground">₦{pricesPayload.DPK.toFixed(2)}/L</span>
-                  </div>
-                )}
-                {pricesPayload.LPG && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">LPG (Gas)</span>
-                    <span className="font-mono font-bold text-foreground">₦{pricesPayload.LPG.toFixed(2)}/L</span>
-                  </div>
+            <AlertDialogTitle>Confirm Price Changes</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>
+                  You are about to deploy new prices to{" "}
+                  <strong className="text-foreground">
+                    {selectedStationIds.length}
+                  </strong>{" "}
+                  station(s).
+                </p>
+                <div className="space-y-2">
+                  {Object.entries(pricesPayload).map(([type, price]) => (
+                    <div key={type} className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {FUEL_LABELS[type]}
+                      </span>
+                      <span className="font-mono font-bold text-foreground">
+                        ₦{price.toFixed(2)}/L
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <Separator />
+                {effectiveDateTime ? (
+                  <p className="text-sm">
+                    These prices will take effect on{" "}
+                    <strong className="text-foreground">
+                      {new Date(effectiveDateTime).toLocaleString()}
+                    </strong>
+                    .
+                  </p>
+                ) : (
+                  <p className="text-sm">
+                    These prices will take effect{" "}
+                    <strong className="text-foreground">immediately</strong>.
+                  </p>
                 )}
               </div>
-              {effectiveDateTime ? (
-                <p className="mt-4 text-sm">
-                  These prices will take effect on <strong className="text-foreground">{new Date(effectiveDateTime).toLocaleString()}</strong>.
-                </p>
-              ) : (
-                <p className="mt-4 text-sm">
-                  These prices will take effect <strong className="text-foreground">immediately</strong>.
-                </p>
-              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-6">
-            <AlertDialogCancel className="rounded-xl h-10">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleConfirmSave} 
-              className="rounded-xl h-10 bg-primary text-primary-foreground"
-            >
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSave}>
               Confirm Deployment
             </AlertDialogAction>
           </AlertDialogFooter>

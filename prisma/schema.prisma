@@ -543,6 +543,7 @@ model Waybill {
   litersReceived Decimal?      @db.Decimal(12, 2) // Transit variance checking
   truckPlate     String
   driverName     String
+  driverPhone    String?
   status         WaybillStatus @default(DISPATCHED)
   gpsLatitude    Decimal?      @db.Decimal(9, 6)
   gpsLongitude   Decimal?      @db.Decimal(9, 6)

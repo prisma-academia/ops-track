@@ -30,12 +30,26 @@ export default async function WaybillsPage() {
     orderBy: { name: "asc" },
   });
 
-  const serializedWaybills = JSON.parse(JSON.stringify(waybills));
+  const rows = waybills.map((w) => ({
+    id: w.id,
+    number: w.number,
+    status: w.status as "DISPATCHED" | "DELIVERED",
+    productType: w.productType,
+    litersLoaded: Number(w.litersLoaded),
+    litersReceived: w.litersReceived ? Number(w.litersReceived) : null,
+    truckPlate: w.truckPlate,
+    driverName: w.driverName,
+    driverPhone: w.driverPhone,
+    dispatchedAt: w.dispatchedAt.toISOString(),
+    deliveredAt: w.deliveredAt ? w.deliveredAt.toISOString() : null,
+    station: w.station,
+  }));
+
   const serializedStations = JSON.parse(JSON.stringify(stations));
 
   return (
     <WaybillsManager
-      initialWaybills={serializedWaybills}
+      initialWaybills={rows}
       stations={serializedStations}
     />
   );

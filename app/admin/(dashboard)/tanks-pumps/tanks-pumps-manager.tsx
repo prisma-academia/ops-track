@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Flame, Gauge, X } from "lucide-react";
+import { Plus, Flame, Gauge } from "lucide-react";
 
 /**
  * ==========================================
@@ -98,15 +98,20 @@ export function TanksPumpsManager({
     defaultValues: { stationId: defaultStationId, name: "", productType: "PMS" as any, capacity: 0 },
   });
 
+  const [nozzleCount, setNozzleCount] = useState<number>(1);
+
   const pumpForm = useForm({
     resolver: zodResolver(AddPumpSchema),
     defaultValues: { stationId: defaultStationId, name: "", tankId: "", nozzles: [{ name: "Nozzle A" }] },
   });
 
-  const { fields: nozzleFields, append: appendNozzle, remove: removeNozzle } = useFieldArray({
-    control: pumpForm.control,
-    name: "nozzles",
-  });
+  const handleNozzleCountChange = (count: number) => {
+    setNozzleCount(count);
+    const newNozzles = Array.from({ length: count }, (_, i) => ({
+      name: `Nozzle ${String.fromCharCode(65 + i)}`,
+    }));
+    pumpForm.setValue("nozzles", newNozzles, { shouldValidate: true });
+  };
 
   const handleAddTank = tankForm.handleSubmit(async (values) => {
     setApiError(null);
@@ -133,6 +138,7 @@ export function TanksPumpsManager({
   const closeDialog = () => {
     setActiveDialog(null);
     setApiError(null);
+    setNozzleCount(1);
     tankForm.reset({ stationId: defaultStationId, name: "", productType: "PMS" as any, capacity: 0 });
     pumpForm.reset({ stationId: defaultStationId, name: "", tankId: "", nozzles: [{ name: "Nozzle A" }] });
     router.refresh();
@@ -334,43 +340,19 @@ export function TanksPumpsManager({
                 </select>
               </FormField>
 
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs text-muted-foreground font-semibold block">Pump Nozzles</label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    onClick={() => appendNozzle({ name: `Nozzle ${String.fromCharCode(65 + nozzleFields.length)}` })}
-                    className="h-7 px-2 text-[10px]"
-                  >
-                    + Add Nozzle
-                  </Button>
-                </div>
-                
-                <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
-                  {nozzleFields.map((field, index) => (
-                    <div key={field.id} className="flex gap-2 items-center">
-                      <TextInput
-                        placeholder="e.g. Nozzle A"
-                        {...pumpForm.register(`nozzles.${index}.name` as const)}
-                        className="text-xs py-1 h-8 flex-1"
-                      />
-                      {nozzleFields.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={() => removeNozzle(index)}
-                          className="text-stone-400 hover:text-stone-600 h-8 w-8"
-                        >
-                          <X size={14} />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <FormField label="Number of Nozzles" htmlFor="p_nozzle_count" error={pumpForm.formState.errors.nozzles?.message}>
+                <select
+                  id="p_nozzle_count"
+                  className="rounded border border-stone-300 bg-white px-3 py-2 text-sm w-full font-medium"
+                  value={nozzleCount}
+                  onChange={(e) => handleNozzleCountChange(Number(e.target.value))}
+                >
+                  <option value={1}>1 Nozzle</option>
+                  <option value={2}>2 Nozzles</option>
+                  <option value={3}>3 Nozzles</option>
+                  <option value={4}>4 Nozzles</option>
+                </select>
+              </FormField>
 
               {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 

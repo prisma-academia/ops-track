@@ -16,7 +16,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Save, User, ShieldCheck } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
+import { ArrowLeft, Save, User, ShieldCheck, ChevronsUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const Schema = z.object({
@@ -38,6 +47,7 @@ export function CreateStationForm({
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [openManagerSelect, setOpenManagerSelect] = useState(false);
   
   const { register, handleSubmit, formState, setValue, watch } = useForm({
     resolver: zodResolver(Schema),
@@ -179,22 +189,63 @@ export function CreateStationForm({
           </CardHeader>
           <CardContent className="space-y-4">
             <FormField label="Select Manager" htmlFor="manager-select" error={formState.errors.managerId?.message}>
-              <Select value={selectedManagerId || "unassigned"} onValueChange={(v) => setValue("managerId", v === "unassigned" ? "" : v, { shouldValidate: true })}>
-                <SelectTrigger id="manager-select" className="w-full">
-                  <SelectValue placeholder="Select a user to manage this station" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.firstName || u.lastName 
-                        ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-                        : u.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <input type="hidden" {...register("managerId")} />
+              <Popover open={openManagerSelect} onOpenChange={setOpenManagerSelect}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    id="manager-select"
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {selectedManager
+                        ? (selectedManager.firstName || selectedManager.lastName
+                            ? `${selectedManager.firstName ?? ""} ${selectedManager.lastName ?? ""}`.trim()
+                            : selectedManager.email)
+                        : "Unassigned"}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search users..." />
+                    <CommandList>
+                      <CommandEmpty>No user found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="unassigned"
+                          onSelect={() => {
+                            setValue("managerId", "", { shouldValidate: true });
+                            setOpenManagerSelect(false);
+                          }}
+                          data-checked={!selectedManagerId}
+                        >
+                          Unassigned
+                        </CommandItem>
+                        {users.map((u) => {
+                          const label = u.firstName || u.lastName
+                            ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                            : u.email;
+                          return (
+                            <CommandItem
+                              key={u.id}
+                              value={`${label} ${u.email}`.toLowerCase()}
+                              onSelect={() => {
+                                setValue("managerId", u.id, { shouldValidate: true });
+                                setOpenManagerSelect(false);
+                              }}
+                              data-checked={selectedManagerId === u.id}
+                            >
+                              {label}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </FormField>
 
             {selectedManager && (

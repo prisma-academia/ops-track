@@ -33,7 +33,8 @@ import {
   Users,
   TrendingUp,
   Gauge,
-  AlertCircle
+  AlertCircle,
+  ChartNoAxesCombined,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -56,6 +57,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number }>> = {
   TrendingUp,
   Gauge,
   AlertCircle,
+  ChartNoAxesCombined,
 };
 
 export type NavItem = {

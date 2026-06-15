@@ -19,19 +19,17 @@ export default async function PricesPage() {
     orderBy: { name: "asc" },
   });
 
-  // Fetch recent prices to determine the current active price for each station and product
-  const recentPrices = await prisma.priceControl.findMany({
-    where: { 
-      tenantId: actor.tenantId,
-      effectiveFrom: { lte: new Date() }
-    },
+  // Fetch all prices ordered by most recent first
+  const allPrices = await prisma.priceControl.findMany({
+    where: { tenantId: actor.tenantId },
     orderBy: { effectiveFrom: "desc" },
-    take: 5000,
   });
 
-  // Reduce to find the latest price for each station+product combination
+  // Derive current active price per station+product (latest with effectiveFrom <= now)
+  const now = new Date();
   const currentPricesMap = new Map();
-  for (const pc of recentPrices) {
+  for (const pc of allPrices) {
+    if (new Date(pc.effectiveFrom) > now) continue;
     const key = `${pc.stationId}-${pc.productType}`;
     if (!currentPricesMap.has(key)) {
       currentPricesMap.set(key, pc);
@@ -41,6 +39,7 @@ export default async function PricesPage() {
 
   const serializedStations = JSON.parse(JSON.stringify(stations));
   const serializedPrices = JSON.parse(JSON.stringify(currentPrices));
+  const serializedAllPrices = JSON.parse(JSON.stringify(allPrices));
 
   return (
     <div className="space-y-6">
@@ -51,6 +50,7 @@ export default async function PricesPage() {
       <PricesManager
         stations={serializedStations}
         currentPrices={serializedPrices}
+        allPrices={serializedAllPrices}
       />
     </div>
   );

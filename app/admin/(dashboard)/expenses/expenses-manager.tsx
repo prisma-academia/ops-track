@@ -1,15 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
-import { FormField, TextInput } from "@/components/form-field";
-import { DataTableToolbar } from "@/components/data-table-toolbar";
-import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { DataTable } from "@/components/data-table";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   Dialog,
   DialogContent,
@@ -17,16 +27,80 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
+import { Plus, CheckCircle2, AlertCircle, Eye, Check, User, ChevronsUpDown } from "lucide-react";
+import Image from "next/image";
+
+interface ExpenseUser {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+}
+
+interface ExpenseStation {
+  id: string;
+  name: string;
+  code: string;
+}
+
+interface ExpenseRow {
+  id: string;
+  tenantId: string;
+  stationId: string;
+  category: "FUEL_FOR_GEN" | "MAINTENANCE" | "UTILITIES" | "STATIONERY" | "OTHER";
+  paymentMethod: "CASH" | "POS";
+  amount: number;
+  description: string;
+  receiptUrl: string | null;
+  recordedById: string;
+  approvedById: string | null;
+  createdAt: string | Date;
+  station: ExpenseStation;
+  recordedBy: ExpenseUser | null;
+  approvedBy: ExpenseUser | null;
+}
 
 const RecordExpenseSchema = z.object({
-  stationId: z.string().min(1),
+  stationId: z.string().min(1, "Station is required"),
   category: z.enum(["FUEL_FOR_GEN", "MAINTENANCE", "UTILITIES", "STATIONERY", "OTHER"]),
   paymentMethod: z.enum(["CASH", "POS"]),
-  amount: z.coerce.number().positive(),
-  description: z.string().min(2).max(500),
+  amount: z.coerce.number().positive("Amount must be a positive number"),
+  description: z.string().min(2, "Description must be at least 2 characters").max(500),
   receiptUrl: z.string().optional().or(z.literal("")),
 });
+
+const CATEGORY_MAP = {
+  FUEL_FOR_GEN: "Generator Fuel",
+  MAINTENANCE: "Equipment Maintenance",
+  UTILITIES: "Utilities (Water, Power)",
+  STATIONERY: "Stationery",
+  OTHER: "Other Expenses",
+};
+
+const PAYMENT_METHOD_MAP = {
+  CASH: "Cash",
+  POS: "POS Machine",
+};
 
 function getOrdinalSuffix(day: number) {
   if (day > 3 && day < 21) return "th";
@@ -66,18 +140,22 @@ export function ExpensesManager({
   initialExpenses,
   stations,
 }: {
-  initialExpenses: any[];
+  initialExpenses: ExpenseRow[];
   stations: { id: string; name: string; code: string }[];
 }) {
   const router = useRouter();
-  const [expenses] = useState<any[]>(initialExpenses);
+  const expenses = initialExpenses;
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [openStationSelect, setOpenStationSelect] = useState(false);
 
   const form = useForm({
     resolver: zodResolver(RecordExpenseSchema),
-    defaultValues: { paymentMethod: "CASH" },
+    defaultValues: { paymentMethod: "CASH", stationId: "", category: "OTHER", amount: undefined, description: "", receiptUrl: "" },
   });
+
+  const { register, formState: { errors, isSubmitting }, control } = form;
 
   const handleRecordExpense = form.handleSubmit(async (values) => {
     setApiError(null);
@@ -100,193 +178,490 @@ export function ExpensesManager({
 
   const closeDialog = () => {
     setActiveDialog(null);
+    setSelectedExpense(null);
     setApiError(null);
-    form.reset({ paymentMethod: "CASH" });
+    form.reset({ paymentMethod: "CASH", stationId: "", category: "OTHER", amount: undefined, description: "", receiptUrl: "" });
     router.refresh();
   };
 
+  const currentSelectedExpense = selectedExpense
+    ? expenses.find((e) => e.id === selectedExpense.id) || selectedExpense
+    : null;
+
+  const columns: ColumnDef<ExpenseRow>[] = [
+    {
+      id: "station_name",
+      accessorFn: (row) => row.station?.name,
+      header: "Station",
+      cell: ({ row }) => {
+        const station = row.original.station;
+        return (
+          <div className="flex items-center gap-3 py-1">
+            <div className="size-10 flex items-center justify-center shrink-0 text-primary">
+              <Image
+                src="/assets/icons/gps.png"
+                alt="Station Icon"
+                width={500}
+                height={300}
+              />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-semibold text-foreground">{station?.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {formatHumanReadableDate(row.original.createdAt)}
+              </span>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "category",
+      header: "Category",
+      cell: ({ row }) => {
+        const cat = row.original.category;
+        return (
+          <Badge variant="secondary">
+            {CATEGORY_MAP[cat as keyof typeof CATEGORY_MAP] || cat}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "paymentMethod",
+      header: "Method",
+      cell: ({ row }) => {
+        const method = row.original.paymentMethod;
+        return (
+          <Badge variant="outline">
+            {PAYMENT_METHOD_MAP[method as keyof typeof PAYMENT_METHOD_MAP] || method}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "amount",
+      header: () => <div className="text-right">Amount</div>,
+      cell: ({ row }) => {
+        const amount = Number(row.original.amount);
+        return (
+          <div className="text-right font-bold text-foreground font-mono">
+            {amount.toLocaleString()}
+          </div>
+        );
+      },
+    },
+    {
+      id: "lifecycle",
+      header: "Recorded & Approved By",
+      cell: ({ row }) => {
+        const exp = row.original;
+        const recordedUser = exp.recordedBy;
+        const approvedUser = exp.approvedBy;
+        const approved = !!exp.approvedById;
+
+        return (
+          <div className="flex flex-col gap-2.5 py-1">
+            <div className="flex items-center gap-1 text-xs text-stone-700">
+              <User className="size-3 text-sky-500" />
+              <span className="font-medium">
+                {recordedUser
+                  ? `${recordedUser.firstName ?? ""} ${recordedUser.lastName ?? ""}`.trim()
+                  : "—"}
+              </span>
+            </div>
+
+            {approved ? (
+              <div className="flex items-center gap-1 text-xs text-emerald-600">
+                <CheckCircle2 className="size-3" />
+                <span className="font-semibold">
+                  {approvedUser
+                    ? `${approvedUser.firstName ?? ""} ${approvedUser.lastName ?? ""}`.trim()
+                    : "Yes"}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 text-xs text-amber-500 font-medium">
+                <AlertCircle className="size-3" />
+                <span>Pending Approval</span>
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: () => <div className="text-center">Action</div>,
+      cell: ({ row }) => {
+        const exp = row.original;
+        const approved = !!exp.approvedById;
+        return (
+          <div className="flex items-center gap-2 justify-center" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedExpense(exp);
+                setActiveDialog("details");
+              }}
+              className="flex items-center gap-1 h-8 px-3 rounded-4xl"
+            >
+              <Eye className="size-3.5" /> Details
+            </Button>
+            {!approved && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white border-none shadow-sm flex items-center gap-1 h-8 px-3 rounded-4xl"
+                  >
+                    <Check className="size-3.5" /> Approve
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Approve Expense Payout</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to approve this expense of{" "}
+                      <strong className="text-foreground">
+                        {Number(exp.amount).toLocaleString()}
+                      </strong>{" "}
+                      recorded for <strong className="text-foreground">{exp.station?.name}</strong>?
+                      This action will authorize the cash outflow.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => handleApproveExpense(exp.id, true)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      Confirm Approve
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <DataTableToolbar
+      <DataTable
+        columns={columns}
+        data={expenses}
         title="Local Expenses"
         description="Monitor and approve local station cash expenditures and payouts."
-        action={
+        filterColumnId="station_name"
+        searchPlaceholder="Search by station name…"
+        headerAction={
           <Button onClick={() => setActiveDialog("create")}>
             <Plus size={16} className="mr-1" /> Record Expense
           </Button>
         }
       />
 
-      <Card className="overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-stone-50 border-b">
-              <tr>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Date</th>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Station</th>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Category</th>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Method</th>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase text-right">Amount</th>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Description</th>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Recorded By</th>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Approved By</th>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {expenses.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-6 py-6 text-center text-stone-500">
-                    No expense records found.
-                  </td>
-                </tr>
-              ) : (
-                expenses.map((exp) => {
-                  const approved = !!exp.approvedById;
-                  return (
-                    <tr key={exp.id} className="hover:bg-stone-50/50">
-                      <td className="px-6 py-3 whitespace-nowrap">{formatHumanReadableDate(exp.createdAt)}</td>
-                      <td className="px-6 py-3">
-                        <span className="font-semibold text-stone-800">{exp.station.name}</span>
-                        <span className="text-[10px] text-stone-500 block font-mono">{exp.station.code}</span>
-                      </td>
-                      <td className="px-6 py-3 text-xs font-mono">{exp.category}</td>
-                      <td className="px-6 py-3 text-xs">{exp.paymentMethod}</td>
-                      <td className="px-6 py-3 text-right font-bold text-stone-800">
-                        {Number(exp.amount).toLocaleString()}
-                      </td>
-                      <td className="px-6 py-3 max-w-xs truncate" title={exp.description}>
-                        {exp.description}
-                      </td>
-                      <td className="px-6 py-3 text-xs">
-                        {exp.recordedBy
-                          ? `${exp.recordedBy.firstName ?? ""} ${exp.recordedBy.lastName ?? ""}`.trim()
-                          : "—"}
-                      </td>
-                      <td className="px-6 py-3 text-xs">
-                        {approved ? (
-                          <span className="flex items-center gap-1 text-emerald-600 font-semibold">
-                            <CheckCircle2 size={12} />
-                            {exp.approvedBy
-                              ? `${exp.approvedBy.firstName ?? ""} ${exp.approvedBy.lastName ?? ""}`.trim()
-                              : "Yes"}
-                          </span>
-                        ) : (
-                          <span className="text-stone-400 flex items-center gap-1">
-                            <AlertCircle size={12} /> Pending Approval
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-3 text-center">
-                        {!approved && (
-                          <Button size="xs" onClick={() => handleApproveExpense(exp.id, true)}>
-                            Approve
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
       {/* ==========================================
           CREATE EXPENSE DIALOG
       ========================================== */}
       {activeDialog === "create" && (
         <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent>
+          <DialogContent className="sm:max-w-xl">
             <DialogHeader>
               <DialogTitle>Record Petty Cash Expense</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleRecordExpense} className="space-y-4">
-              <FormField
-                label="Select Station"
-                htmlFor="e_stat"
-                error={form.formState.errors.stationId?.message}
-              >
-                <select
-                  id="e_stat"
-                  className="rounded border border-stone-300 bg-white px-3 py-2 text-sm"
-                  {...form.register("stationId")}
-                >
-                  <option value="">Select Station...</option>
-                  {stations.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.code})
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  label="Expense Category"
-                  htmlFor="e_cat"
-                  error={form.formState.errors.category?.message}
-                >
-                  <select
-                    id="e_cat"
-                    className="rounded border border-stone-300 bg-white px-3 py-2 text-sm"
-                    {...form.register("category")}
-                  >
-                    <option value="">Select Category...</option>
-                    <option value="FUEL_FOR_GEN">Generator Fuel</option>
-                    <option value="MAINTENANCE">Equipment Maintenance</option>
-                    <option value="UTILITIES">Utilities (Water, Power)</option>
-                    <option value="STATIONERY">Stationery</option>
-                    <option value="OTHER">Other Expenses</option>
-                  </select>
-                </FormField>
-
-                <FormField
-                  label="Payment Method"
-                  htmlFor="e_pay"
-                  error={form.formState.errors.paymentMethod?.message}
-                >
-                  <select
-                    id="e_pay"
-                    className="rounded border border-stone-300 bg-white px-3 py-2 text-sm"
-                    {...form.register("paymentMethod")}
-                  >
-                    <option value="CASH">Cash</option>
-                    <option value="POS">POS Machine</option>
-                  </select>
-                </FormField>
+              <div className="space-y-2">
+                <Label htmlFor="e_stat" className={errors.stationId ? "text-destructive" : ""}>
+                  Select Station *
+                </Label>
+                <Controller
+                  control={control}
+                  name="stationId"
+                  render={({ field }) => {
+                    const selectedStation = stations.find((s) => s.id === field.value);
+                    const displayLabel = selectedStation
+                      ? `${selectedStation.name} (${selectedStation.code})`
+                      : "Select a station...";
+                    return (
+                      <Popover open={openStationSelect} onOpenChange={setOpenStationSelect}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className={`w-full justify-between font-normal ${
+                              errors.stationId ? "border-destructive" : ""
+                            }`}
+                          >
+                            <span className="truncate">{displayLabel}</span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search station..." />
+                            <CommandList>
+                              <CommandEmpty>No station found.</CommandEmpty>
+                              <CommandGroup>
+                                {stations.map((s) => {
+                                  const label = `${s.name} (${s.code})`;
+                                  return (
+                                    <CommandItem
+                                      key={s.id}
+                                      value={label.toLowerCase()}
+                                      onSelect={() => {
+                                        form.setValue("stationId", s.id, { shouldValidate: true });
+                                        setOpenStationSelect(false);
+                                      }}
+                                      data-checked={field.value === s.id}
+                                    >
+                                      {label}
+                                    </CommandItem>
+                                  );
+                                })}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    );
+                  }}
+                />
+                {errors.stationId && (
+                  <p className="text-xs text-destructive">{errors.stationId.message}</p>
+                )}
               </div>
 
-              <FormField
-                label="Amount"
-                htmlFor="e_amt"
-                error={form.formState.errors.amount?.message}
-              >
-                <TextInput id="e_amt" type="number" placeholder="e.g. 15000" {...form.register("amount")} />
-              </FormField>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="e_cat" className={errors.category ? "text-destructive" : ""}>
+                    Expense Category *
+                  </Label>
+                  <Controller
+                    control={control}
+                    name="category"
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger id="e_cat" className={errors.category ? "border-destructive w-full" : "w-full"}>
+                          <SelectValue placeholder="Select Category..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="FUEL_FOR_GEN">Generator Fuel</SelectItem>
+                          <SelectItem value="MAINTENANCE">Equipment Maintenance</SelectItem>
+                          <SelectItem value="UTILITIES">Utilities (Water, Power)</SelectItem>
+                          <SelectItem value="STATIONERY">Stationery</SelectItem>
+                          <SelectItem value="OTHER">Other Expenses</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {errors.category && (
+                    <p className="text-xs text-destructive">{errors.category.message}</p>
+                  )}
+                </div>
 
-              <FormField
-                label="Description Details"
-                htmlFor="e_desc"
-                error={form.formState.errors.description?.message}
-              >
-                <TextInput
+                <div className="space-y-2">
+                  <Label htmlFor="e_pay" className={errors.paymentMethod ? "text-destructive" : ""}>
+                    Payment Method *
+                  </Label>
+                  <Controller
+                    control={control}
+                    name="paymentMethod"
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger id="e_pay" className={errors.paymentMethod ? "border-destructive w-full" : "w-full"}>
+                          <SelectValue placeholder="Select Method..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CASH">Cash</SelectItem>
+                          <SelectItem value="POS">POS Machine</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {errors.paymentMethod && (
+                    <p className="text-xs text-destructive">{errors.paymentMethod.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="e_amt" className={errors.amount ? "text-destructive" : ""}>
+                  Amount *
+                </Label>
+                <Input
+                  id="e_amt"
+                  type="number"
+                  placeholder="e.g. 15000"
+                  {...register("amount")}
+                  className={errors.amount ? "border-destructive" : ""}
+                />
+                {errors.amount && (
+                  <p className="text-xs text-destructive">{errors.amount.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="e_desc" className={errors.description ? "text-destructive" : ""}>
+                  Description Details *
+                </Label>
+                <Textarea
                   id="e_desc"
                   placeholder="e.g. Purchased office envelopes and clipboards"
-                  {...form.register("description")}
+                  {...register("description")}
+                  className={errors.description ? "border-destructive" : ""}
                 />
-              </FormField>
+                {errors.description && (
+                  <p className="text-xs text-destructive">{errors.description.message}</p>
+                )}
+              </div>
 
               {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 
               <DialogFooter showCloseButton={true}>
-                <Button type="submit">Record Payout</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Recording..." : "Record Payout"}
+                </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ==========================================
+          EXPENSE DETAILS DIALOG
+      ========================================== */}
+      {activeDialog === "details" && currentSelectedExpense && (
+        <Dialog open={true} onOpenChange={closeDialog}>
+          <DialogContent className="sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold">Expense Record Details</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-6">
+              {/* Grid of Key Info */}
+              <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-2xl border border-border/40">
+                <div>
+                  <span className="text-xs text-muted-foreground block font-medium">Station</span>
+                  <span className="font-semibold text-foreground">{currentSelectedExpense.station?.name}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono block">({currentSelectedExpense.station?.code})</span>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground block font-medium">Amount</span>
+                  <span className="font-bold text-foreground text-base font-mono">
+                    {Number(currentSelectedExpense.amount).toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground block font-medium">Category</span>
+                  <Badge variant="secondary" className="mt-1">
+                    {CATEGORY_MAP[currentSelectedExpense.category as keyof typeof CATEGORY_MAP] || currentSelectedExpense.category}
+                  </Badge>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground block font-medium">Payment Method</span>
+                  <Badge variant="outline" className="mt-1">
+                    {PAYMENT_METHOD_MAP[currentSelectedExpense.paymentMethod as keyof typeof PAYMENT_METHOD_MAP] || currentSelectedExpense.paymentMethod}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Description Details */}
+              <div className="space-y-1.5">
+                <span className="text-xs text-muted-foreground block font-medium">Description Details</span>
+                <p className="text-sm bg-background p-3 rounded-xl border border-border/30 whitespace-pre-wrap text-foreground">
+                  {currentSelectedExpense.description}
+                </p>
+              </div>
+
+              {/* Receipt Image if exists */}
+              {currentSelectedExpense.receiptUrl && (
+                <div className="space-y-1.5">
+                  <span className="text-xs text-muted-foreground block font-medium">Receipt Document</span>
+                  <div className="border border-border/40 rounded-xl overflow-hidden p-3 bg-muted/10 flex items-center justify-between">
+                    <span className="text-xs truncate max-w-xs">{currentSelectedExpense.receiptUrl}</span>
+                    <a
+                      href={currentSelectedExpense.receiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline font-semibold"
+                    >
+                      View Receipt
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Timeline of Created & Approved */}
+              <div className="space-y-3">
+                <span className="text-xs text-muted-foreground block font-medium">Transaction Timeline</span>
+                <div className="relative pl-6 space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-border/60">
+                  {/* Created By Node */}
+                  <div className="relative">
+                    <div className="absolute -left-[20px] top-1 size-3 rounded-full bg-primary border-2 border-background" />
+                    <div>
+                      <span className="text-sm font-semibold block">Expense Recorded</span>
+                      <span className="text-xs text-muted-foreground block">
+                        By{" "}
+                        <strong>
+                          {currentSelectedExpense.recordedBy
+                            ? `${currentSelectedExpense.recordedBy.firstName ?? ""} ${currentSelectedExpense.recordedBy.lastName ?? ""}`.trim()
+                            : "Unknown"}
+                        </strong>{" "}
+                        ({currentSelectedExpense.recordedBy?.email || "No email"})
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {formatHumanReadableDate(currentSelectedExpense.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Approved By Node */}
+                  <div className="relative">
+                    {currentSelectedExpense.approvedById ? (
+                      <>
+                        <div className="absolute -left-[20px] top-1 size-3 rounded-full bg-emerald-600 border-2 border-background" />
+                        <div>
+                          <span className="text-sm font-semibold text-emerald-600 block">
+                            Approved
+                          </span>
+                          <span className="text-xs text-muted-foreground block">
+                            By{" "}
+                            <strong>
+                              {currentSelectedExpense.approvedBy
+                                ? `${currentSelectedExpense.approvedBy.firstName ?? ""} ${currentSelectedExpense.approvedBy.lastName ?? ""}`.trim()
+                                : "Administrator"}
+                            </strong>{" "}
+                            ({currentSelectedExpense.approvedBy?.email || "No email"})
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="absolute -left-[20px] top-1 size-3 rounded-full bg-amber-500 border-2 border-background" />
+                        <div>
+                          <span className="text-sm font-semibold text-amber-500 block">Pending Approval</span>
+                          <span className="text-xs text-muted-foreground block">
+                            Awaiting verification and sign-off by a manager or supervisor.
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter showCloseButton={true} />
           </DialogContent>
         </Dialog>
       )}
     </div>
   );
 }
+

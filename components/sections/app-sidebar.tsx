@@ -21,7 +21,7 @@ export function AppSidebar({ items, title, roleLabel, userLabel }: AppSidebarPro
         <SidebarHeader className="px-4 pt-3">
           <div className="w-full p-2 border rounded-xl bg-muted/20">
             <div className="flex items-center gap-3 overflow-hidden">
-              <div className="flex items-center justify-center size-8 rounded-lg bg-primary/10 text-primary shrink-0">
+              <div className="flex items-center justify-center size-12 rounded-lg text-primary shrink-0">
                 <Image
                   src="/assets/icons/asa-oil-logo.png"
                   alt="ASA Oil Logo"

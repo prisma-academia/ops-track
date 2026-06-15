@@ -33,17 +33,18 @@ const NAV: NavItemConfig[] = [
   },
   { href: "/admin/users", key: "users", module: "users" as ModuleKey, icon: "CircleUserRound", permission: PERMISSIONS.TENANT_USERS_READ.key },
   { href: "/admin/stations", key: "stations", module: "stations" as ModuleKey, icon: "MapPin", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
-  { href: "/admin/tanks-pumps", key: "tanksPumps", module: "stations" as ModuleKey, icon: "Gauge", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/prices", key: "prices", module: "operations" as ModuleKey, icon: "ChartNoAxesCombined", permission: PERMISSIONS.TENANT_OPERATIONS_READ.key },
-  { href: "/admin/waybills", key: "waybills", module: "operations" as ModuleKey, icon: "Truck", permission: PERMISSIONS.TENANT_OPERATIONS_READ.key },
-  { href: "/admin/dippings", key: "dippings", module: "operations" as ModuleKey, icon: "ClipboardList", permission: PERMISSIONS.TENANT_OPERATIONS_READ.key },
-  { href: "/admin/shifts", key: "shifts", module: "operations" as ModuleKey, icon: "Activity", permission: PERMISSIONS.TENANT_OPERATIONS_READ.key },
   { href: "/admin/expenses", key: "expenses", module: "operations" as ModuleKey, icon: "Coins", permission: PERMISSIONS.TENANT_OPERATIONS_READ.key },
-  { href: "/admin/tickets", key: "tickets", module: "operations" as ModuleKey, icon: "AlertCircle", permission: PERMISSIONS.TENANT_TICKETS_READ.key },
-  { href: "/admin/customers", key: "customers", module: "customers" as ModuleKey, icon: "Users", permission: PERMISSIONS.TENANT_CUSTOMERS_READ.key },
+  { href: "/admin/waybills", key: "waybills", module: "operations" as ModuleKey, icon: "Truck", permission: PERMISSIONS.TENANT_OPERATIONS_READ.key },
   { href: "/admin/role-templates", key: "roles", module: "roles" as ModuleKey, icon: "Shield", permission: PERMISSIONS.TENANT_ROLES_READ.key },
   { href: "/admin/activity", key: "activity", module: "activity" as ModuleKey, icon: "Activity", permission: PERMISSIONS.TENANT_ACTIVITY_READ.key },
   { href: "/admin/settings", key: "settings", module: null, icon: "Settings", permission: null },
+  { href: "/admin/tanks-pumps", key: "tanksPumps", module: "stations" as ModuleKey, icon: "Gauge", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
+  { href: "/admin/dippings", key: "dippings", module: "operations" as ModuleKey, icon: "ClipboardList", permission: PERMISSIONS.TENANT_OPERATIONS_READ.key },
+  { href: "/admin/shifts", key: "shifts", module: "operations" as ModuleKey, icon: "Activity", permission: PERMISSIONS.TENANT_OPERATIONS_READ.key },
+  { href: "/admin/tickets", key: "tickets", module: "operations" as ModuleKey, icon: "AlertCircle", permission: PERMISSIONS.TENANT_TICKETS_READ.key },
+  { href: "/admin/customers", key: "customers", module: "customers" as ModuleKey, icon: "Users", permission: PERMISSIONS.TENANT_CUSTOMERS_READ.key },
+
 ];
 
 export default async function AdminDashboardLayout({ children }: { children: React.ReactNode }) {

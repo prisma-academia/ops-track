@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/command";
 import { ArrowLeft, Save, User, ShieldCheck, ChevronsUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import SpinnerEllipsis from "@/components/spinner-ellipsis";
 
 const Schema = z.object({
   code: z.string().min(2).max(50),
@@ -290,8 +291,17 @@ export function CreateStationForm({
           disabled={formState.isSubmitting}
           className="h-10 rounded-full px-5 gap-2"
         >
-          <Save className="h-4 w-4" />
-          {formState.isSubmitting ? "Creating..." : "Create Station"}
+          {formState.isSubmitting ? (
+            <>
+              <SpinnerEllipsis />
+              <span>Creating...</span>
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4" />
+              <span>Create Station</span>
+            </>
+          )}
         </Button>
       </div>
     </form>

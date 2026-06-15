@@ -1,10 +1,9 @@
-import { TableSkeleton } from "@/components/spinner";
+import SpinnerEllipsis from "@/components/spinner-ellipsis";
 
 export default function AdminDashboardLoading() {
   return (
-    <div className="p-8">
-      <div className="mb-4 h-6 w-40 animate-pulse rounded bg-stone-100" />
-      <TableSkeleton />
+    <div className="flex h-[60vh] w-full items-center justify-center">
+      <SpinnerEllipsis />
     </div>
   );
 }

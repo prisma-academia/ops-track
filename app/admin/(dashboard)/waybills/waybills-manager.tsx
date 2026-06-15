@@ -36,6 +36,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Plus, CheckCircle2, AlertCircle, Truck, User, Eye, ChevronsUpDown } from "lucide-react";
 import { WaybillsTable, type WaybillRow } from "./table";
+import SpinnerEllipsis from "@/components/spinner-ellipsis";
 
 const CreateWaybillSchema = z.object({
   stationId: z.string().min(1),
@@ -65,7 +66,7 @@ export function WaybillsManager({
   stations: { id: string; name: string; code: string }[];
 }) {
   const router = useRouter();
-  const [waybills] = useState<WaybillRow[]>(initialWaybills);
+  const waybills = initialWaybills;
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [selectedWaybill, setSelectedWaybill] = useState<WaybillRow | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -331,7 +332,16 @@ export function WaybillsManager({
               {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 
               <DialogFooter showCloseButton={true}>
-                <Button type="submit">Dispatch Truck</Button>
+                <Button type="submit" disabled={createForm.formState.isSubmitting} className="gap-2">
+                  {createForm.formState.isSubmitting ? (
+                    <>
+                      <SpinnerEllipsis />
+                      <span>Dispatching...</span>
+                    </>
+                  ) : (
+                    "Dispatch Truck"
+                  )}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -413,7 +423,16 @@ export function WaybillsManager({
               {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 
               <DialogFooter showCloseButton={true}>
-                <Button type="submit">Log Received Fuel</Button>
+                <Button type="submit" disabled={deliverForm.formState.isSubmitting} className="gap-2">
+                  {deliverForm.formState.isSubmitting ? (
+                    <>
+                      <SpinnerEllipsis />
+                      <span>Logging...</span>
+                    </>
+                  ) : (
+                    "Log Received Fuel"
+                  )}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>

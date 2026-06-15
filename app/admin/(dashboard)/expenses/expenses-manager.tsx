@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/command";
 import { Plus, CheckCircle2, AlertCircle, Eye, Check, User, ChevronsUpDown } from "lucide-react";
 import Image from "next/image";
+import SpinnerEllipsis from "@/components/spinner-ellipsis";
 
 interface ExpenseUser {
   id: string;
@@ -149,6 +150,8 @@ export function ExpensesManager({
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [openStationSelect, setOpenStationSelect] = useState(false);
+  const [approvingExpenseId, setApprovingExpenseId] = useState<string | null>(null);
+  const [approveConfirmOpenId, setApproveConfirmOpenId] = useState<string | null>(null);
 
   const form = useForm({
     resolver: zodResolver(RecordExpenseSchema),
@@ -168,10 +171,13 @@ export function ExpensesManager({
   });
 
   const handleApproveExpense = async (expenseId: string, approved: boolean) => {
+    setApprovingExpenseId(expenseId);
     const res = await apiPost(`/api/tenant/expenses/${expenseId}/approve`, { approved });
+    setApprovingExpenseId(null);
     if (res.error) {
       alert(res.error.message);
     } else {
+      setApproveConfirmOpenId(null);
       router.refresh();
     }
   };
@@ -310,12 +316,19 @@ export function ExpensesManager({
               <Eye className="size-3.5" /> Details
             </Button>
             {!approved && (
-              <AlertDialog>
+              <AlertDialog
+                open={approveConfirmOpenId === exp.id}
+                onOpenChange={(open) => {
+                  if (!open && approvingExpenseId === exp.id) return;
+                  setApproveConfirmOpenId(open ? exp.id : null);
+                }}
+              >
                 <AlertDialogTrigger asChild>
                   <Button
                     variant="default"
                     size="sm"
                     className="bg-emerald-600 hover:bg-emerald-700 text-white border-none shadow-sm flex items-center gap-1 h-8 px-3 rounded-4xl"
+                    onClick={() => setApproveConfirmOpenId(exp.id)}
                   >
                     <Check className="size-3.5" /> Approve
                   </Button>
@@ -333,12 +346,23 @@ export function ExpensesManager({
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogCancel disabled={approvingExpenseId === exp.id}>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() => handleApproveExpense(exp.id, true)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleApproveExpense(exp.id, true);
+                      }}
+                      disabled={approvingExpenseId === exp.id}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
                     >
-                      Confirm Approve
+                      {approvingExpenseId === exp.id ? (
+                        <>
+                          <SpinnerEllipsis />
+                          <span>Approving...</span>
+                        </>
+                      ) : (
+                        "Confirm Approve"
+                      )}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -524,8 +548,15 @@ export function ExpensesManager({
               {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 
               <DialogFooter showCloseButton={true}>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "Recording..." : "Record Payout"}
+                <Button type="submit" disabled={isSubmitting} className="gap-2">
+                  {isSubmitting ? (
+                    <>
+                      <SpinnerEllipsis />
+                      <span>Recording...</span>
+                    </>
+                  ) : (
+                    "Record Payout"
+                  )}
                 </Button>
               </DialogFooter>
             </form>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Fragment, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { format, formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
@@ -57,6 +57,7 @@ import {
   Store,
   X,
 } from "lucide-react"
+import SpinnerEllipsis from "@/components/spinner-ellipsis"
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -310,7 +311,6 @@ export function PricesManager({
 
   const handleConfirmSave = async () => {
     setIsSubmitting(true)
-    setShowConfirmDialog(false)
 
     const res = await apiPost("/api/tenant/prices/bulk", {
       prices: pricesPayload,
@@ -328,6 +328,7 @@ export function PricesManager({
     toast.success(
       `Price changes applied successfully to ${selectedStationIds.length} station(s)`
     )
+    setShowConfirmDialog(false)
     handleCancel()
     router.refresh()
   }
@@ -500,9 +501,18 @@ export function PricesManager({
                     <X className="size-4 mr-2" />
                     Cancel
                   </Button>
-                  <Button onClick={initiateSave} disabled={isSubmitting}>
-                    <Save className="size-4 mr-2" />
-                    {isSubmitting ? "Saving..." : "Apply Prices"}
+                  <Button onClick={initiateSave} disabled={isSubmitting} className="gap-2">
+                    {isSubmitting ? (
+                      <>
+                        <SpinnerEllipsis />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="size-4" />
+                        <span>Apply Prices</span>
+                      </>
+                    )}
                   </Button>
                 </>
               )}
@@ -618,9 +628,8 @@ export function PricesManager({
             <TableBody>
               {table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
-                  <>
+                  <Fragment key={row.id}>
                     <TableRow
-                      key={row.id}
                       data-state={row.getIsSelected() && "selected"}
                     >
                       {row.getVisibleCells().map((cell) => (
@@ -639,7 +648,7 @@ export function PricesManager({
                         historyByProduct={priceHistoryIndex[row.original.id] ?? {}}
                       />
                     )}
-                  </>
+                  </Fragment>
                 ))
               ) : (
                 <TableRow>
@@ -749,9 +758,23 @@ export function PricesManager({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmSave}>
-              Confirm Deployment
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                handleConfirmSave()
+              }}
+              disabled={isSubmitting}
+              className="gap-2"
+            >
+              {isSubmitting ? (
+                <>
+                  <SpinnerEllipsis />
+                  <span>Deploying...</span>
+                </>
+              ) : (
+                "Confirm Deployment"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

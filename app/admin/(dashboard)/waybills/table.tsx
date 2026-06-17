@@ -27,11 +27,9 @@ export type WaybillRow = {
 
 export function WaybillsTable({
   data,
-  onConfirmDelivery,
   onViewDetails,
 }: {
   data: WaybillRow[];
-  onConfirmDelivery: (waybill: WaybillRow) => void;
   onViewDetails: (waybill: WaybillRow) => void;
 }) {
   const columns: ColumnDef<WaybillRow>[] = [
@@ -146,15 +144,6 @@ export function WaybillsTable({
             >
               <Eye className="size-3.5" /> Details
             </Button>
-            {w.status === "DISPATCHED" && (
-              <Button
-                size="sm"
-                onClick={() => onConfirmDelivery(w)}
-                className="h-8 px-3 rounded-4xl"
-              >
-                Confirm Delivery
-              </Button>
-            )}
             {w.status === "DELIVERED" && w.deliveredAt && (
               <span className="text-[10px] text-muted-foreground">
                 {new Date(w.deliveredAt).toLocaleDateString("en-GB", {

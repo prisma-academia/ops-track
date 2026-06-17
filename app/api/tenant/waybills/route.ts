@@ -18,6 +18,10 @@ const CreateWaybillSchema = z.object({
   gpsLatitude: z.number().optional().nullable(),
   gpsLongitude: z.number().optional().nullable(),
   pictures: z.array(z.string()).optional(),
+  deliveryDatetime: z.string().optional().nullable(),
+  supplier: z.string().optional().nullable(),
+  depot: z.string().optional().nullable(),
+  transportCompany: z.string().optional().nullable(),
 });
 
 export async function GET(request: Request) {
@@ -102,6 +106,10 @@ export async function POST(request: Request) {
         gpsLatitude: body.gpsLatitude ?? null,
         gpsLongitude: body.gpsLongitude ?? null,
         pictures: body.pictures ?? [],
+        deliveryDatetime: body.deliveryDatetime ? new Date(body.deliveryDatetime) : null,
+        supplier: body.supplier ?? null,
+        depot: body.depot ?? null,
+        transportCompany: body.transportCompany ?? null,
         recordedById: actor.userId,
       },
     });

@@ -49,13 +49,10 @@ const CreateWaybillSchema = z.object({
   gpsLatitude: z.number().optional().nullable(),
   gpsLongitude: z.number().optional().nullable(),
   pictures: z.array(z.string()).default([]),
-});
-
-const DeliverWaybillSchema = z.object({
-  litersReceived: z.coerce.number().positive(),
-  gpsLatitude: z.coerce.number().optional().nullable(),
-  gpsLongitude: z.coerce.number().optional().nullable(),
-  pictures: z.array(z.string()).default([]),
+  deliveryDatetime: z.string().optional().nullable(),
+  supplier: z.string().optional().nullable(),
+  depot: z.string().optional().nullable(),
+  transportCompany: z.string().optional().nullable(),
 });
 
 export function WaybillsManager({
@@ -72,26 +69,8 @@ export function WaybillsManager({
   const [apiError, setApiError] = useState<string | null>(null);
   const [openStationSelect, setOpenStationSelect] = useState(false);
 
-  function formatDate(d: string | null | undefined) {
-    if (!d) return "—";
-    const date = new Date(d);
-    if (isNaN(date.getTime())) return "—";
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    const day = date.getDate();
-    const suffix = day > 3 && day < 21 ? "th" : ["th","st","nd","rd"][(day % 10) < 4 ? day % 10 : 0];
-    let hours = date.getHours();
-    const mins = date.getMinutes().toString().padStart(2, "0");
-    const ampm = hours >= 12 ? "pm" : "am";
-    hours = hours % 12 || 12;
-    return `${months[date.getMonth()]} ${day}${suffix} ${date.getFullYear()} ${hours}:${mins}${ampm}`;
-  }
-
   const createForm = useForm({
     resolver: zodResolver(CreateWaybillSchema),
-  });
-
-  const deliverForm = useForm({
-    resolver: zodResolver(DeliverWaybillSchema),
   });
 
   const handleCreateWaybill = createForm.handleSubmit(async (values) => {
@@ -104,30 +83,18 @@ export function WaybillsManager({
     }
   });
 
-  const handleDeliverWaybill = deliverForm.handleSubmit(async (values) => {
-    if (!selectedWaybill) return;
-    setApiError(null);
-    const res = await apiPatch(`/api/tenant/waybills/${selectedWaybill.id}`, values);
-    if (res.error) {
-      setApiError(res.error.message);
-    } else {
-      closeDialog();
-    }
-  });
-
   const closeDialog = () => {
     setActiveDialog(null);
     setSelectedWaybill(null);
     setApiError(null);
     createForm.reset();
-    deliverForm.reset();
     router.refresh();
   };
 
   return (
     <div className="space-y-6">
       <DataTableToolbar
-        title="Dispatches & Waybills"
+        title="Dispatches"
         description="Track fuel distribution movements from depots to retail stations."
         action={
           <Button onClick={() => setActiveDialog("create")}>
@@ -139,12 +106,7 @@ export function WaybillsManager({
       <WaybillsTable
         data={waybills}
         onViewDetails={(w) => {
-          setSelectedWaybill(w);
-          setActiveDialog("details");
-        }}
-        onConfirmDelivery={(w) => {
-          setSelectedWaybill(w);
-          setActiveDialog("deliver");
+          router.push(`/admin/waybills/${w.id}`);
         }}
       />
 
@@ -162,7 +124,7 @@ export function WaybillsManager({
             <form onSubmit={handleCreateWaybill} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="w_stat" className={createForm.formState.errors.stationId ? "text-destructive" : ""}>
-                  Target Retail Station *
+                  Receiving Station *
                 </Label>
                 <Controller
                   control={createForm.control}
@@ -329,6 +291,58 @@ export function WaybillsManager({
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="w_supplier" className={createForm.formState.errors.supplier ? "text-destructive" : ""}>
+                    Supplier
+                  </Label>
+                  <Input
+                    id="w_supplier"
+                    placeholder="e.g. NNPC"
+                    {...createForm.register("supplier")}
+                    className={createForm.formState.errors.supplier ? "border-destructive" : ""}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="w_depot" className={createForm.formState.errors.depot ? "text-destructive" : ""}>
+                    Depot
+                  </Label>
+                  <Input
+                    id="w_depot"
+                    placeholder="e.g. Apapa Depot"
+                    {...createForm.register("depot")}
+                    className={createForm.formState.errors.depot ? "border-destructive" : ""}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="w_trans" className={createForm.formState.errors.transportCompany ? "text-destructive" : ""}>
+                    Transport Company
+                  </Label>
+                  <Input
+                    id="w_trans"
+                    placeholder="e.g. Dangote Trans"
+                    {...createForm.register("transportCompany")}
+                    className={createForm.formState.errors.transportCompany ? "border-destructive" : ""}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="w_del_date" className={createForm.formState.errors.deliveryDatetime ? "text-destructive" : ""}>
+                    Expected Delivery Date/Time
+                  </Label>
+                  <Input
+                    id="w_del_date"
+                    type="datetime-local"
+                    {...createForm.register("deliveryDatetime")}
+                    className={createForm.formState.errors.deliveryDatetime ? "border-destructive" : ""}
+                  />
+                </div>
+              </div>
+
               {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 
               <DialogFooter showCloseButton={true}>
@@ -348,252 +362,7 @@ export function WaybillsManager({
         </Dialog>
       )}
 
-      {/* 2. Deliver Waybill Modal */}
-      {activeDialog === "deliver" && (
-        <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Confirm Dispatch Delivery</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleDeliverWaybill} className="space-y-4">
-              <div className="bg-stone-50 border p-3 rounded-lg text-xs space-y-1 dark:bg-stone-900/20 dark:border-stone-800">
-                <p>
-                  <strong>Waybill No:</strong> {selectedWaybill?.number}
-                </p>
-                <p>
-                  <strong>Destination:</strong> {selectedWaybill?.station.name}
-                </p>
-                <p>
-                  <strong>Expected Vol:</strong> {selectedWaybill ? Number(selectedWaybill.litersLoaded).toLocaleString() : 0} L
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="d_rec" className={deliverForm.formState.errors.litersReceived ? "text-destructive" : ""}>
-                  Actual Liters Discharged / Received *
-                </Label>
-                <Input
-                  id="d_rec"
-                  type="number"
-                  placeholder="e.g. 32980"
-                  {...deliverForm.register("litersReceived")}
-                  className={deliverForm.formState.errors.litersReceived ? "border-destructive" : ""}
-                />
-                {deliverForm.formState.errors.litersReceived && (
-                  <p className="text-xs text-destructive">{deliverForm.formState.errors.litersReceived.message}</p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="d_lat" className={deliverForm.formState.errors.gpsLatitude ? "text-destructive" : ""}>
-                    Discharge GPS Latitude
-                  </Label>
-                  <Input
-                    id="d_lat"
-                    type="number"
-                    step="any"
-                    placeholder="e.g. 6.45"
-                    {...deliverForm.register("gpsLatitude")}
-                    className={deliverForm.formState.errors.gpsLatitude ? "border-destructive" : ""}
-                  />
-                  {deliverForm.formState.errors.gpsLatitude && (
-                    <p className="text-xs text-destructive">{deliverForm.formState.errors.gpsLatitude.message}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="d_lng" className={deliverForm.formState.errors.gpsLongitude ? "text-destructive" : ""}>
-                    Discharge GPS Longitude
-                  </Label>
-                  <Input
-                    id="d_lng"
-                    type="number"
-                    step="any"
-                    placeholder="e.g. 3.42"
-                    {...deliverForm.register("gpsLongitude")}
-                    className={deliverForm.formState.errors.gpsLongitude ? "border-destructive" : ""}
-                  />
-                  {deliverForm.formState.errors.gpsLongitude && (
-                    <p className="text-xs text-destructive">{deliverForm.formState.errors.gpsLongitude.message}</p>
-                  )}
-                </div>
-              </div>
-
-              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
-
-              <DialogFooter showCloseButton={true}>
-                <Button type="submit" disabled={deliverForm.formState.isSubmitting} className="gap-2">
-                  {deliverForm.formState.isSubmitting ? (
-                    <>
-                      <SpinnerEllipsis />
-                      <span>Logging...</span>
-                    </>
-                  ) : (
-                    "Log Received Fuel"
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
-      {/* ==========================================
-          WAYBILL DETAILS DIALOG
-      ========================================== */}
-      {activeDialog === "details" && selectedWaybill && (
-        <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle className="text-lg font-bold">Waybill Record Details</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              {/* Compact Unified Details Card */}
-              <div className="bg-muted/10 border border-border/40 rounded-xl p-3 text-xs">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Waybill & Status */}
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider block">Waybill</span>
-                      <span className="font-bold text-foreground font-mono text-sm">{selectedWaybill.number}</span>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <span
-                        className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                          selectedWaybill.status === "DISPATCHED"
-                            ? "bg-amber-100 text-amber-800"
-                            : "bg-emerald-100 text-emerald-800"
-                        }`}
-                      >
-                        {selectedWaybill.status}
-                      </span>
-                      <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 font-mono font-bold">
-                        {selectedWaybill.productType}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {/* Destination & Logistics */}
-                  <div className="space-y-2 border-t md:border-t-0 md:border-l border-border/40 md:pl-4 pt-2 md:pt-0">
-                    <div>
-                      <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider block">Destination</span>
-                      <span className="font-semibold text-foreground truncate block" title={selectedWaybill.station.name}>
-                        {selectedWaybill.station.name}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground font-mono">({selectedWaybill.station.code})</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider block">Logistics</span>
-                      <span className="font-medium text-foreground block truncate" title={selectedWaybill.driverName}>
-                        {selectedWaybill.driverName}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground font-mono block">
-                        {selectedWaybill.truckPlate}{selectedWaybill.driverPhone ? ` · ${selectedWaybill.driverPhone}` : ""}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Volumes & Variance */}
-                  <div className="space-y-2 border-t md:border-t-0 md:border-l border-border/40 md:pl-4 pt-2 md:pt-0">
-                    <div className="flex justify-between">
-                      <div>
-                        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider block">Loaded</span>
-                        <span className="font-semibold text-foreground font-mono">
-                          {Number(selectedWaybill.litersLoaded).toLocaleString()} L
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider block">Received</span>
-                        <span className="font-semibold text-foreground font-mono">
-                          {selectedWaybill.litersReceived != null ? (
-                            <span className="text-emerald-600 font-bold">
-                              {Number(selectedWaybill.litersReceived).toLocaleString()} L
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground font-normal">Awaiting</span>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                    {selectedWaybill.litersReceived != null && (
-                      <div className="pt-1 border-t border-border/40">
-                        {(() => {
-                          const variance = Number(selectedWaybill.litersLoaded) - Number(selectedWaybill.litersReceived);
-                          return (
-                            <div className="flex items-center justify-between text-[10px]">
-                              <span className="text-muted-foreground font-medium">Variance:</span>
-                              <span className={`flex items-center gap-1 font-bold font-mono ${
-                                variance !== 0 ? "text-rose-500" : "text-emerald-500"
-                              }`}>
-                                {variance !== 0 ? <AlertCircle size={9} /> : <CheckCircle2 size={9} />}
-                                {variance.toLocaleString()} L
-                              </span>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Dispatch → Delivery Timeline */}
-              <div className="space-y-3">
-                <span className="text-xs text-muted-foreground block font-medium">Dispatch Timeline</span>
-                <div className="relative pl-6 space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-border/60">
-                  {/* Dispatched node */}
-                  <div className="relative">
-                    <div className="absolute -left-[20px] top-1 size-3 rounded-full bg-primary border-2 border-background" />
-                    <div>
-                      <span className="text-sm font-semibold block">Fuel Dispatched</span>
-                      <span className="text-xs text-muted-foreground block">
-                        Truck <strong>{selectedWaybill.truckPlate}</strong> loaded with{" "}
-                        <strong>{Number(selectedWaybill.litersLoaded).toLocaleString()} L</strong> of{" "}
-                        <strong>{selectedWaybill.productType}</strong>
-                      </span>
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        {formatDate(selectedWaybill.dispatchedAt)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Delivered node */}
-                  <div className="relative">
-                    {selectedWaybill.status === "DELIVERED" ? (
-                      <>
-                        <div className="absolute -left-[20px] top-1 size-3 rounded-full bg-emerald-600 border-2 border-background" />
-                        <div>
-                          <span className="text-sm font-semibold text-emerald-600 block">Delivery Confirmed</span>
-                          <span className="text-xs text-muted-foreground block">
-                            <strong>{Number(selectedWaybill.litersReceived).toLocaleString()} L</strong> received at{" "}
-                            <strong>{selectedWaybill.station.name}</strong>
-                          </span>
-                          <span className="text-[10px] text-muted-foreground font-mono">
-                            {formatDate(selectedWaybill.deliveredAt)}
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="absolute -left-[20px] top-1 size-3 rounded-full bg-amber-500 border-2 border-background" />
-                        <div>
-                          <span className="text-sm font-semibold text-amber-500 block">Awaiting Delivery</span>
-                          <span className="text-xs text-muted-foreground block">
-                            Truck is en route to <strong>{selectedWaybill.station.name}</strong>. Confirm delivery upon arrival.
-                          </span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter showCloseButton={true} />
-          </DialogContent>
-        </Dialog>
-      )}
+      {/* (Waybill Details Modal has been removed and replaced with a full page view) */}
     </div>
   );
 }

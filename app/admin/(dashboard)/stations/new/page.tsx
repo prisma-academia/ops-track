@@ -13,6 +13,7 @@ export default async function NewStationPage() {
       email: true,
       firstName: true,
       lastName: true,
+      phone: true,
     },
     orderBy: { email: "asc" },
   });

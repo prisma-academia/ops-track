@@ -7,7 +7,9 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
-import { FormField, TextInput } from "@/components/form-field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -25,9 +27,10 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { ArrowLeft, Save, User, ShieldCheck, ChevronsUpDown } from "lucide-react";
+import { ArrowLeft, Save, User, ShieldCheck, ChevronsUpDown, Mail, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
+import nigerianLocations from "@/constant/nigerian-locations.json";
 
 const Schema = z.object({
   code: z.string().min(2).max(50),
@@ -44,11 +47,12 @@ type Values = z.infer<typeof Schema>;
 export function CreateStationForm({
   users,
 }: {
-  users: { id: string; email: string; firstName: string | null; lastName: string | null; permissions?: string[] }[];
+  users: { id: string; email: string; firstName: string | null; lastName: string | null; phone?: string | null; permissions?: string[] }[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [openManagerSelect, setOpenManagerSelect] = useState(false);
+  const [openStateSelect, setOpenStateSelect] = useState(false);
   
   const { register, handleSubmit, formState, setValue, watch } = useForm({
     resolver: zodResolver(Schema),
@@ -64,7 +68,8 @@ export function CreateStationForm({
   });
 
   const selectedManagerId = watch("managerId");
-  const selectedManager = users.find(u => u.id === selectedManagerId);
+  const selectedManager = users.find((u) => u.id === selectedManagerId);
+  const selectedState = watch("state");
 
   const onSubmit = onSubmitForm(async (values) => {
     setError(null);
@@ -120,64 +125,115 @@ export function CreateStationForm({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <FormField label="Station Name*" htmlFor="name" error={formState.errors.name?.message}>
-              <TextInput 
+            <div className="space-y-2">
+              <Label htmlFor="name" className={formState.errors.name ? "text-destructive" : ""}>Station Name*</Label>
+              <Input 
                 id="name" 
                 placeholder="e.g. Lagos Mainland Station" 
-                {...register("name")} 
+                {...register("name")}
+                className={formState.errors.name ? "border-destructive" : ""}
               />
-            </FormField>
-
-            <FormField label="Station Code*" htmlFor="code" error={formState.errors.code?.message}>
-              <TextInput 
-                id="code" 
-                placeholder="e.g. AP-LAG-01" 
-                {...register("code")} 
-              />
-            </FormField>
-
-            <FormField label="Region*" htmlFor="region" error={formState.errors.region?.message}>
-              <Select onValueChange={(v) => setValue("region", v, { shouldValidate: true })}>
-                <SelectTrigger id="region" className="w-full">
-                  <SelectValue placeholder="Select a region" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="South-West">South-West</SelectItem>
-                  <SelectItem value="South-East">South-East</SelectItem>
-                  <SelectItem value="North-Central">North-Central</SelectItem>
-                  <SelectItem value="North-West">North-West</SelectItem>
-                  <SelectItem value="North-East">North-East</SelectItem>
-                  <SelectItem value="South-South">South-South</SelectItem>
-                </SelectContent>
-              </Select>
-              <input type="hidden" {...register("region")} />
-            </FormField>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="State*" htmlFor="state" error={formState.errors.state?.message}>
-                <TextInput 
-                  id="state" 
-                  placeholder="e.g. Lagos" 
-                  {...register("state")} 
-                />
-              </FormField>
-
-              <FormField label="City*" htmlFor="city" error={formState.errors.city?.message}>
-                <TextInput 
-                  id="city" 
-                  placeholder="e.g. Ikeja" 
-                  {...register("city")} 
-                />
-              </FormField>
+              {formState.errors.name && <p className="text-xs text-destructive">{formState.errors.name.message}</p>}
             </div>
 
-            <FormField label="Location / Address" htmlFor="location" error={formState.errors.location?.message}>
-              <TextInput 
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="code" className={formState.errors.code ? "text-destructive" : ""}>Station Code*</Label>
+                <Input 
+                  id="code" 
+                  placeholder="e.g. AP-LAG-01" 
+                  {...register("code")}
+                  className={formState.errors.code ? "border-destructive" : ""}
+                />
+                {formState.errors.code && <p className="text-xs text-destructive">{formState.errors.code.message}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="region" className={formState.errors.region ? "text-destructive" : ""}>Region*</Label>
+                <Select onValueChange={(v) => setValue("region", v, { shouldValidate: true })}>
+                  <SelectTrigger id="region" className="w-full">
+                    <SelectValue placeholder="Select a region" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="South-West">South-West</SelectItem>
+                    <SelectItem value="South-East">South-East</SelectItem>
+                    <SelectItem value="North-Central">North-Central</SelectItem>
+                    <SelectItem value="North-West">North-West</SelectItem>
+                    <SelectItem value="North-East">North-East</SelectItem>
+                    <SelectItem value="South-South">South-South</SelectItem>
+                  </SelectContent>
+                </Select>
+                <input type="hidden" {...register("region")} />
+                {formState.errors.region && <p className="text-xs text-destructive">{formState.errors.region.message}</p>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="state" className={formState.errors.state ? "text-destructive" : ""}>State*</Label>
+                <Popover open={openStateSelect} onOpenChange={setOpenStateSelect}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      id="state"
+                      className={`w-full justify-between font-normal ${formState.errors.state ? "border-destructive" : ""}`}
+                    >
+                      <span className="truncate">{selectedState || "Select state..."}</span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search state..." />
+                      <CommandList className="max-h-[200px] overflow-y-auto">
+                        <CommandEmpty>No state found.</CommandEmpty>
+                        <CommandGroup>
+                          {nigerianLocations.map((loc) => (
+                            <CommandItem
+                              key={loc.state}
+                              value={loc.state.toLowerCase()}
+                              onSelect={() => {
+                                setValue("state", loc.state, { shouldValidate: true });
+                                setOpenStateSelect(false);
+                              }}
+                              data-checked={selectedState === loc.state}
+                            >
+                              {loc.state}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <input type="hidden" {...register("state")} />
+                {formState.errors.state && <p className="text-xs text-destructive">{formState.errors.state.message}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="city" className={formState.errors.city ? "text-destructive" : ""}>City*</Label>
+                <Input 
+                  id="city" 
+                  placeholder="e.g. Ikeja" 
+                  {...register("city")}
+                  className={formState.errors.city ? "border-destructive" : ""}
+                />
+                {formState.errors.city && <p className="text-xs text-destructive">{formState.errors.city.message}</p>}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="location" className={formState.errors.location ? "text-destructive" : ""}>Location / Address</Label>
+              <Textarea 
                 id="location" 
                 placeholder="e.g. 10 Marina Street" 
-                {...register("location")} 
+                {...register("location")}
+                className={formState.errors.location ? "border-destructive" : ""}
+                rows={3}
               />
-            </FormField>
+              {formState.errors.location && <p className="text-xs text-destructive">{formState.errors.location.message}</p>}
+            </div>
           </CardContent>
         </Card>
 
@@ -189,7 +245,8 @@ export function CreateStationForm({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <FormField label="Select Manager" htmlFor="manager-select" error={formState.errors.managerId?.message}>
+            <div className="space-y-2">
+              <Label htmlFor="manager-select" className={formState.errors.managerId ? "text-destructive" : ""}>Select Manager</Label>
               <Popover open={openManagerSelect} onOpenChange={setOpenManagerSelect}>
                 <PopoverTrigger asChild>
                   <Button
@@ -247,25 +304,37 @@ export function CreateStationForm({
                   </Command>
                 </PopoverContent>
               </Popover>
-            </FormField>
+              {formState.errors.managerId && <p className="text-xs text-destructive">{formState.errors.managerId.message}</p>}
+            </div>
 
             {selectedManager && (
-              <div className="mt-4 p-4 rounded-lg border border-border bg-muted/30">
-                <div className="flex items-start gap-4">
-                  <div className="size-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <User size={20} />
-                  </div>
-                  <div className="space-y-1 overflow-hidden">
-                    <p className="font-semibold text-sm truncate">
+              <div className="mt-4 flex items-center gap-4 rounded-xl border border-border bg-gradient-to-br from-stone-50 to-stone-100/50 p-4 shadow-sm dark:from-stone-900/50 dark:to-stone-900/20">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-4 ring-primary/5">
+                  <User size={20} strokeWidth={2.5} />
+                </div>
+                <div className="flex-1 space-y-1 overflow-hidden">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-semibold text-foreground">
                       {selectedManager.firstName || selectedManager.lastName 
                         ? `${selectedManager.firstName ?? ""} ${selectedManager.lastName ?? ""}`.trim()
                         : "No Name Provided"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate">{selectedManager.email}</p>
-                    <div className="flex items-center gap-1.5 mt-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-sm w-max border border-emerald-200 dark:border-emerald-800">
+                    <div className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                       <ShieldCheck size={12} />
-                      Station Manager
+                      <span>Manager</span>
                     </div>
+                  </div>
+                  <div className="flex flex-col gap-1 mt-1.5">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Mail size={12} className="shrink-0 opacity-70" />
+                      <span className="truncate">{selectedManager.email}</span>
+                    </div>
+                    {selectedManager.phone && (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Phone size={12} className="shrink-0 opacity-70" />
+                        <span className="truncate">{selectedManager.phone}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -11,6 +11,11 @@ const DeliverWaybillSchema = z.object({
   gpsLatitude: z.number().optional().nullable(),
   gpsLongitude: z.number().optional().nullable(),
   pictures: z.array(z.string()).optional(),
+  arrivalTime: z.string().optional().nullable(),
+  truckNumberVerified: z.boolean().optional(),
+  driverVerified: z.boolean().optional(),
+  waybillVerified: z.boolean().optional(),
+  arrivalPictures: z.array(z.string()).optional(),
 });
 
 export async function GET(
@@ -39,6 +44,14 @@ export async function GET(
             lastName: true,
           },
         },
+        dippings: {
+          include: {
+            tank: true,
+            recordedBy: {
+              select: { firstName: true, lastName: true }
+            }
+          }
+        }
       },
     });
 
@@ -82,6 +95,11 @@ export async function PATCH(
         gpsLatitude: body.gpsLatitude !== undefined ? body.gpsLatitude : existing.gpsLatitude,
         gpsLongitude: body.gpsLongitude !== undefined ? body.gpsLongitude : existing.gpsLongitude,
         pictures: updatedPictures,
+        arrivalTime: body.arrivalTime ? new Date(body.arrivalTime) : existing.arrivalTime,
+        truckNumberVerified: body.truckNumberVerified ?? existing.truckNumberVerified,
+        driverVerified: body.driverVerified ?? existing.driverVerified,
+        waybillVerified: body.waybillVerified ?? existing.waybillVerified,
+        arrivalPictures: body.arrivalPictures ?? existing.arrivalPictures,
         deliveredAt: new Date(),
       },
     });

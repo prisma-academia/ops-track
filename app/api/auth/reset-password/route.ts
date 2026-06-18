@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db/client";
-import { resolveHost } from "@/lib/auth/context";
+import { resolveHost, resolveTenantFromHeaders } from "@/lib/auth/context";
 import { hashOpaqueToken } from "@/lib/auth/tokens";
 import { hashPassword, validatePolicy, assertNotReused, recordPassword } from "@/lib/auth/password";
 import { revokeAllSessionsForUser } from "@/lib/auth/session";
@@ -27,7 +27,8 @@ export async function POST(request: Request) {
     if (!policy.ok) throw new DomainError(400, "weak_password", policy.reason);
 
     const h = await headers();
-    const ctx = resolveHost(h.get("host"));
+    const xTenantSlug = h.get("x-tenant-slug");
+    const ctx = resolveTenantFromHeaders(h.get("host"), xTenantSlug);
     const tokenHash = hashOpaqueToken(token);
     const row = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
     if (!row || row.consumedAt || row.expiresAt.getTime() < Date.now()) {

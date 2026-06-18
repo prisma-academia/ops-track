@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db/client";
-import { resolveHost } from "@/lib/auth/context";
+import { resolveHost, resolveTenantFromHeaders } from "@/lib/auth/context";
 import { hashOpaqueToken, newOpaqueToken } from "@/lib/auth/tokens";
 import { sendEmail } from "@/lib/email/send";
 import { passwordResetEmail } from "@/lib/email/templates";
@@ -68,7 +68,8 @@ export async function POST(request: Request) {
     const meta = requestMeta(request);
     await enforceRateLimit(RATE_PRESETS.FORGOT_PASSWORD, [meta.ip, body.email.toLowerCase()]);
     const h = await headers();
-    const ctx = resolveHost(h.get("host"));
+    const xTenantSlug = h.get("x-tenant-slug");
+    const ctx = resolveTenantFromHeaders(h.get("host"), xTenantSlug);
 
     if (body.surface === "platform") {
       enterContext({ mode: "platform", tenantId: null });

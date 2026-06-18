@@ -40,3 +40,13 @@ export function isValidSlug(slug: string): boolean {
   if (RESERVED_SLUGS.has(slug)) return false;
   return SLUG_REGEX.test(slug);
 }
+
+export function resolveTenantFromHeaders(
+  host: string | null | undefined,
+  xTenantSlug: string | null | undefined
+): HostContext {
+  if (xTenantSlug && isValidSlug(xTenantSlug)) {
+    return { mode: "tenant", slug: xTenantSlug };
+  }
+  return resolveHost(host);
+}

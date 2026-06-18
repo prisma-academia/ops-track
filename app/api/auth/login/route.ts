@@ -12,7 +12,7 @@ import {
   RATE_PRESETS,
 } from "@/lib/auth/rate-limit";
 import { audit, requestMeta } from "@/lib/auth/audit";
-import { resolveHost } from "@/lib/auth/context";
+import { resolveHost, resolveTenantFromHeaders } from "@/lib/auth/context";
 import { enterContext } from "@/lib/db/tenant-context";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
@@ -36,7 +36,8 @@ export async function POST(request: Request) {
 
     const h = await headers();
     const host = h.get("host");
-    const ctx = resolveHost(host);
+    const xTenantSlug = h.get("x-tenant-slug");
+    const ctx = resolveTenantFromHeaders(host, xTenantSlug);
 
     if (ctx.mode === "platform") {
       enterContext({ mode: "platform", tenantId: null });
@@ -119,6 +120,7 @@ async function loginTenant(slug: string, email: string, password: string, meta: 
 
   const user = await prisma.tenantUser.findUnique({
     where: { tenantId_email: { tenantId: tenant.id, email: email.toLowerCase() } },
+    include: { stations: true },
   });
   if (!user || user.status !== "ACTIVE") {
     await recordLoginAttempt(`${slug}:${email}`, "tenant-admin", false, meta.ip);
@@ -148,7 +150,7 @@ async function loginTenant(slug: string, email: string, password: string, meta: 
   });
 
   const scope = user.mustChangePassword ? "MUST_CHANGE_PASSWORD" : "FULL";
-  await createSession({
+  const { token } = await createSession({
     userId: user.id,
     userType: "TENANT",
     tenantId: tenant.id,
@@ -166,7 +168,20 @@ async function loginTenant(slug: string, email: string, password: string, meta: 
     ip: meta.ip,
     userAgent: meta.userAgent,
   });
-  return { mustChangePassword: user.mustChangePassword, redirect: user.mustChangePassword ? "/admin/auth/change-password" : "/admin/dashboard" };
+  return { 
+    mustChangePassword: user.mustChangePassword, 
+    redirect: user.mustChangePassword ? "/admin/auth/change-password" : "/admin/dashboard",
+    token,
+    user: {
+      id: user.id,
+      name: `${user.firstName} ${user.lastName}`,
+      email: user.email,
+      role: user.isOwner ? "Owner" : "Admin",
+      stations: user.isOwner 
+        ? await prisma.station.findMany({ where: { tenantId: tenant.id } })
+        : user.stations,
+    }
+  };
 }
 
 async function loginClient(
@@ -222,7 +237,7 @@ async function loginClient(
   });
 
   const scope = user.mustChangePassword ? "MUST_CHANGE_PASSWORD" : "FULL";
-  await createSession({
+  const { token } = await createSession({
     userId: user.id,
     userType: "CLIENT",
     tenantId: tenant.id,
@@ -247,5 +262,15 @@ async function loginClient(
     : profileIncomplete
       ? "/profile"
       : "/dashboard";
-  return { mustChangePassword: user.mustChangePassword, redirect };
+  return { 
+    mustChangePassword: user.mustChangePassword, 
+    redirect,
+    token,
+    user: {
+      id: user.id,
+      name: `${user.firstName} ${user.lastName}`,
+      email: user.email,
+      role: "Client"
+    }
+  };
 }

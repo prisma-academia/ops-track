@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { headers } from "next/headers";
-import { resolveHost } from "@/lib/auth/context";
+import { resolveHost, resolveTenantFromHeaders } from "@/lib/auth/context";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { handleError, DomainError } from "@/lib/api/errors";
 
@@ -14,7 +14,8 @@ export async function POST(request: Request) {
     await requireCsrf(request);
     Body.parse(await request.json());
     const h = await headers();
-    const ctx = resolveHost(h.get("host"));
+    const xTenantSlug = h.get("x-tenant-slug");
+    const ctx = resolveTenantFromHeaders(h.get("host"), xTenantSlug);
     if (ctx.mode !== "tenant") {
       throw new DomainError(400, "no_tenant", "OTP is only available in tenant context.");
     }

@@ -128,3 +128,53 @@ export async function POST(
     return handleError(e);
   }
 }
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: stationId } = await params;
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+
+    const station = await prisma.station.findUnique({
+      where: { id: stationId },
+      include: { tanks: true },
+    });
+
+    if (!station || station.tenantId !== actor.tenantId) {
+      throw new DomainError(404, "not_found", "Station not found.");
+    }
+
+    const tankIds = station.tanks.map((t) => t.id);
+
+    // Fetch routine tank dippings
+    const dippings = await prisma.tankDipping.findMany({
+      where: {
+        tankId: { in: tankIds },
+        tenantId: actor.tenantId,
+      },
+      include: {
+        tank: true,
+      },
+      orderBy: { recordedAt: "desc" },
+    });
+
+    // Fetch waybill dippings
+    const waybillDippings = await prisma.waybillDipping.findMany({
+      where: {
+        tankId: { in: tankIds },
+        tenantId: actor.tenantId,
+      },
+      include: {
+        tank: true,
+        waybill: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return ok({ dippings, waybillDippings });
+  } catch (e) {
+    return handleError(e);
+  }
+}

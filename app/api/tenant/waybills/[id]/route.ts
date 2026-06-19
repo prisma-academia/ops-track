@@ -7,7 +7,7 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 
 const DeliverWaybillSchema = z.object({
-  litersReceived: z.coerce.number().positive(),
+  litersReceived: z.coerce.number().positive().optional().nullable(),
   gpsLatitude: z.number().optional().nullable(),
   gpsLongitude: z.number().optional().nullable(),
   pictures: z.array(z.string()).optional(),

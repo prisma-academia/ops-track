@@ -366,6 +366,12 @@ enum ExpensePaymentMethod {
   POS
 }
 
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Station {
   id        String   @id @default(uuid())
   tenantId  String
@@ -655,6 +661,7 @@ model Expense {
   amount        Decimal              @db.Decimal(12, 2)
   description   String               @db.Text
   receiptUrl    String? // Receipt photo/doc
+  status        ExpenseStatus        @default(PENDING)
 
   recordedById String
   recordedBy   TenantUser  @relation("ExpenseRecordedBy", fields: [recordedById], references: [id], onDelete: Restrict)

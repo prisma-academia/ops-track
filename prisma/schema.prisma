@@ -436,7 +436,6 @@ model PriceControl {
   @@map("price_controls")
 }
 
-// Tracks shifting sales records computed by Cashiers/Attendants
 model DailySalesLog {
   id             String      @id @default(uuid())
   tenantId       String
@@ -450,6 +449,8 @@ model DailySalesLog {
   amountCash     Decimal     @db.Decimal(12, 2) // Cash collected
   amountPos      Decimal     @db.Decimal(12, 2) // POS payments
   amountTransfer Decimal     @db.Decimal(12, 2) // Bank transfers
+  cashReceiptUrl String?
+  posReceiptUrl  String?
   logDate        DateTime    @db.Date
 
   @@index([tenantId])

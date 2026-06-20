@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -70,6 +70,18 @@ export function CreateStationForm({
   const selectedManagerId = watch("managerId");
   const selectedManager = users.find((u) => u.id === selectedManagerId);
   const selectedState = watch("state");
+  const watchName = watch("name");
+
+  useEffect(() => {
+    if (watchName) {
+      const prefix = watchName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
+      if (prefix) {
+        setValue("code", `${prefix}-001`, { shouldValidate: true });
+      } else {
+        setValue("code", "", { shouldValidate: true });
+      }
+    }
+  }, [watchName, setValue]);
 
   const onSubmit = onSubmitForm(async (values) => {
     setError(null);
@@ -142,8 +154,9 @@ export function CreateStationForm({
                 <Input 
                   id="code" 
                   placeholder="e.g. AP-LAG-01" 
+                  readOnly
                   {...register("code")}
-                  className={formState.errors.code ? "border-destructive" : ""}
+                  className={formState.errors.code ? "border-destructive bg-muted opacity-70 cursor-not-allowed" : "bg-muted opacity-70 cursor-not-allowed"}
                 />
                 {formState.errors.code && <p className="text-xs text-destructive">{formState.errors.code.message}</p>}
               </div>

@@ -89,67 +89,55 @@ export function StationDetailsManager({
   return (
     <div className="space-y-6">
       {/* ---------------- FULL WIDTH HEADER CARD ---------------- */}
-      <Card className="border-border/40 shadow-sm overflow-hidden bg-card/60">
-        <div className="flex flex-col lg:flex-row items-stretch">
-          
-          {/* Left section: Info */}
-          <div className="flex-1 p-6 flex flex-col justify-center space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="size-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                <Store size={24} />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">{station.name}</h1>
-                <p className="text-sm text-muted-foreground font-mono">Code: {station.code}</p>
-              </div>
+      <Card className="border-border/50 shadow-sm bg-card">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 gap-6">
+          <div className="flex items-center gap-5">
+            <div className="size-14 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center text-primary">
+              <Store size={26} strokeWidth={1.5} />
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-              <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                <MapPin size={16} className="mt-0.5 shrink-0 text-stone-400" />
-                <span>
-                  {station.location || "No exact address provided"}<br/>
-                  <span className="font-semibold text-foreground/80">{station.region} Region</span>
-                </span>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground">{station.name}</h1>
+                <Badge variant="outline" className="font-mono text-xs bg-muted/50 text-muted-foreground border-border/50">{station.code}</Badge>
               </div>
-              <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                <User size={16} className="mt-0.5 shrink-0 text-stone-400" />
-                <span>
-                  Station Manager<br/>
-                  <span className="font-semibold text-foreground/80">{managerName}</span>
-                </span>
+              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <MapPin size={14} strokeWidth={2} />
+                  <span>{station.location ? `${station.location}, ` : ""}{station.region} Region</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <User size={14} strokeWidth={2} />
+                  <span>Manager: <span className="font-medium text-foreground">{managerName}</span></span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Right section: Prices */}
-          <div className="w-full lg:w-72 bg-muted/20 border-t lg:border-t-0 lg:border-l border-border/40 p-6 flex flex-col justify-center">
-            <h3 className="text-xs uppercase font-bold tracking-widest text-muted-foreground mb-4">Active Pump Prices</h3>
-            <div className="space-y-3">
-              {Object.keys(latestPrices).length === 0 ? (
-                <div className="text-sm text-muted-foreground italic">No prices configured</div>
-              ) : (
-                Object.entries(latestPrices).map(([product, price]) => (
-                  <div key={product} className="flex justify-between items-center border-b border-border/30 pb-2 last:border-0 last:pb-0">
-                    <span className="font-mono text-sm font-semibold">{product}</span>
-                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">₦{Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /L</span>
-                  </div>
-                ))
-              )}
-            </div>
+          <div className="flex gap-3 overflow-x-auto w-full md:w-auto">
+            {Object.keys(latestPrices).length === 0 ? (
+              <div className="text-sm text-muted-foreground italic px-4 py-2 border border-dashed rounded-xl flex items-center justify-center">
+                No prices configured
+              </div>
+            ) : (
+              Object.entries(latestPrices).map(([product, price]) => (
+                <div key={product} className="flex flex-col px-4 py-2 bg-muted/20 border border-border/50 rounded-xl min-w-[100px]">
+                  <span className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">{product}</span>
+                  <span className="text-base font-bold text-foreground">₦{Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </Card>
 
       {/* ---------------- TABS NAVIGATION ---------------- */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-full justify-start overflow-x-auto overflow-y-hidden bg-transparent border-b rounded-none h-auto p-0 mb-6 gap-6">
-          <TabsTrigger value="overview" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 data-[state=active]:shadow-none">Overview & Assets</TabsTrigger>
-          <TabsTrigger value="dippings" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 data-[state=active]:shadow-none">Dippings</TabsTrigger>
-          <TabsTrigger value="shifts" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 data-[state=active]:shadow-none">Shift Logs</TabsTrigger>
-          <TabsTrigger value="waybills" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 data-[state=active]:shadow-none">Waybills</TabsTrigger>
-          <TabsTrigger value="expenses" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 data-[state=active]:shadow-none">Expenses</TabsTrigger>
-          <TabsTrigger value="tickets" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 data-[state=active]:shadow-none">Tickets</TabsTrigger>
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="dippings">Dippings</TabsTrigger>
+          <TabsTrigger value="shifts">Shift Logs</TabsTrigger>
+          <TabsTrigger value="waybills">Waybills</TabsTrigger>
+          <TabsTrigger value="expenses">Expenses</TabsTrigger>
         </TabsList>
 
         {/* ---------------- OVERVIEW TAB ---------------- */}
@@ -324,29 +312,45 @@ export function StationDetailsManager({
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Waybill No.</th>
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Driver / Truck</th>
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Volume Dispatched</th>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Variance</th>
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/30">
                   {(!station.waybills || station.waybills.length === 0) ? (
-                    <tr><td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">No waybill records found.</td></tr>
+                    <tr><td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">No waybill records found.</td></tr>
                   ) : (
-                    station.waybills.map((w: any) => (
-                      <tr key={w.id} className="hover:bg-muted/10">
-                        <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(w.dispatchedAt)}</td>
-                        <td className="px-6 py-4 font-mono text-xs font-semibold">{w.waybillNumber}</td>
-                        <td className="px-6 py-4 text-muted-foreground">{w.driverName} • {w.truckNumber}</td>
-                        <td className="px-6 py-4 text-right font-mono font-medium">{Number(w.litersDispatched).toLocaleString()} L</td>
-                        <td className="px-6 py-4 text-center">
-                          <Badge variant="outline" className={
-                            w.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" : 
-                            w.status === "IN_TRANSIT" ? "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/30" : ""
-                          }>
-                            {w.status}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))
+                    station.waybills.map((w: any) => {
+                      const dispatched = Number(w.litersLoaded) || 0;
+                      const received = w.litersReceived ? Number(w.litersReceived) : null;
+                      const variance = received !== null ? received - dispatched : null;
+                      
+                      return (
+                        <tr key={w.id} className="hover:bg-muted/10">
+                          <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(w.dispatchedAt)}</td>
+                          <td className="px-6 py-4 font-mono text-xs font-semibold">{w.number}</td>
+                          <td className="px-6 py-4 text-muted-foreground text-xs">{w.driverName} • {w.truckPlate}</td>
+                          <td className="px-6 py-4 text-right font-mono font-medium">{dispatched.toLocaleString()} L</td>
+                          <td className="px-6 py-4 text-right font-mono font-medium">
+                            {variance === null ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : (
+                              <span className={variance < 0 ? "text-rose-600" : "text-emerald-600"}>
+                                {variance > 0 ? "+" : ""}{variance.toLocaleString()} L
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <Badge variant="outline" className={
+                              w.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" : 
+                              w.status === "IN_TRANSIT" ? "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/30" : ""
+                            }>
+                              {w.status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -387,47 +391,6 @@ export function StationDetailsManager({
                             "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30"
                           }>
                             {e.status}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* ---------------- TICKETS TAB ---------------- */}
-        <TabsContent value="tickets" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-muted/30 border-b border-border/50">
-                  <tr>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Date Raised</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Category</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Title</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {(!station.tickets || station.tickets.length === 0) ? (
-                    <tr><td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">No tickets found.</td></tr>
-                  ) : (
-                    station.tickets.map((t: any) => (
-                      <tr key={t.id} className="hover:bg-muted/10">
-                        <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(t.createdAt)}</td>
-                        <td className="px-6 py-4">
-                          <Badge variant="secondary" className="text-[10px] font-medium">{t.category}</Badge>
-                        </td>
-                        <td className="px-6 py-4 font-medium text-foreground truncate max-w-sm">{t.title}</td>
-                        <td className="px-6 py-4 text-center">
-                          <Badge variant="outline" className={
-                            t.status === "CLOSED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" : 
-                            "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30"
-                          }>
-                            {t.status}
                           </Badge>
                         </td>
                       </tr>

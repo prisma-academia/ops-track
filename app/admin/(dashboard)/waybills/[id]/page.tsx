@@ -54,7 +54,7 @@ export default async function WaybillDetailsPage({
   }
 
   const variance = waybill.litersReceived != null 
-    ? Number(waybill.litersLoaded) - Number(waybill.litersReceived) 
+    ? Number(waybill.litersReceived) - Number(waybill.litersLoaded) 
     : null;
 
   const totalDischarged = waybill.dippings.reduce((acc, dip) => {
@@ -75,7 +75,16 @@ export default async function WaybillDetailsPage({
             Created by {waybill.recordedBy?.firstName} {waybill.recordedBy?.lastName} on {formatDate(waybill.dispatchedAt)}
           </p>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-4">
+          {variance !== null && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Variance:</span>
+              <span className={`flex items-center gap-1 font-semibold text-sm ${variance < 0 ? "text-rose-600" : variance > 0 ? "text-amber-500" : "text-emerald-600"}`}>
+                {variance === 0 ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                {variance > 0 ? '+' : ''}{variance.toLocaleString()} L
+              </span>
+            </div>
+          )}
           {waybill.status === "DISPATCHED" ? (
              <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100 uppercase font-semibold text-xs rounded-sm px-2">Dispatched</Badge>
           ) : (
@@ -123,15 +132,6 @@ export default async function WaybillDetailsPage({
                 </div>
               </dl>
               
-              {variance !== null && (
-                <div className="mt-6 pt-4 border-t flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground font-medium">Transit Variance</span>
-                  <span className={`flex items-center gap-1.5 font-semibold ${variance !== 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                    {variance !== 0 ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />}
-                    {variance.toLocaleString()} L
-                  </span>
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -208,10 +208,22 @@ export default async function WaybillDetailsPage({
                   })}
                 </TableBody>
                 <TableFooter className="bg-transparent border-t">
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={5} className="text-right text-muted-foreground">Total Discharged</TableCell>
-                    <TableCell className="text-right tabular-nums font-bold text-foreground">
+                  <TableRow className="hover:bg-transparent border-b-0">
+                    <TableCell colSpan={5} className="text-right text-muted-foreground pb-1">Expected Quantity</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium pb-1">
+                      {Number(waybill.litersLoaded).toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow className="hover:bg-transparent border-b-0">
+                    <TableCell colSpan={5} className="text-right text-muted-foreground py-1">Discharged</TableCell>
+                    <TableCell className="text-right tabular-nums font-bold text-foreground py-1">
                       {totalDischarged.toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={5} className="text-right text-muted-foreground pt-1">Variance</TableCell>
+                    <TableCell className={`text-right tabular-nums font-bold pt-1 ${(totalDischarged - Number(waybill.litersLoaded)) < 0 ? 'text-rose-600' : (totalDischarged - Number(waybill.litersLoaded)) > 0 ? 'text-amber-500' : 'text-emerald-600'}`}>
+                      {(totalDischarged - Number(waybill.litersLoaded)) > 0 ? '+' : ''}{(totalDischarged - Number(waybill.litersLoaded)).toLocaleString()}
                     </TableCell>
                   </TableRow>
                 </TableFooter>

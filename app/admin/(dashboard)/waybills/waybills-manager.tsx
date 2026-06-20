@@ -103,6 +103,22 @@ export function WaybillsManager({
         }
       />
 
+      <div className="flex items-center gap-6 text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg border mb-4">
+        <span className="font-semibold text-foreground uppercase tracking-wider">Variance Legend:</span>
+        <div className="flex items-center gap-1.5">
+          <div className="size-2.5 rounded-full bg-emerald-500" />
+          <span>Exact Match</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="size-2.5 rounded-full bg-rose-600" />
+          <span>Shortage (-)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="size-2.5 rounded-full bg-amber-500" />
+          <span>Addition (+)</span>
+        </div>
+      </div>
+
       <WaybillsTable
         data={waybills}
         onViewDetails={(w) => {

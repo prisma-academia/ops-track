@@ -5,17 +5,17 @@ import { DataTable } from "@/components/data-table";
 import Image from 'next/image';
 import logo from '@/assets/logo.png';
 import { Store } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 
 export type StationRow = {
   id: string;
   code: string;
   name: string;
-  region: string;
-  location: string | null;
-  staffCount: number;
-  tanksCount: number;
-  pumpsCount: number;
-  ticketsCount: number;
+  pmsLiters: number;
+  agoLiters: number;
+  lpgLiters: number;
+  lastSalesAmount: number;
+  lastWaybillDate: string | null;
 };
 
 const columns: ColumnDef<StationRow>[] = [
@@ -43,12 +43,46 @@ const columns: ColumnDef<StationRow>[] = [
       );
     }
   },
-  { accessorKey: "region", header: "Region" },
-  { accessorKey: "location", header: "Location", cell: (info) => (info.getValue() as string) ?? "—" },
-  { accessorKey: "staffCount", header: "Staff" },
-  { accessorKey: "tanksCount", header: "Tanks" },
-  { accessorKey: "pumpsCount", header: "Pumps" },
-  { accessorKey: "ticketsCount", header: "Open Tickets" },
+  { 
+    accessorKey: "pmsLiters", 
+    header: "PMS (L)",
+    cell: ({ row }) => row.original.pmsLiters.toLocaleString()
+  },
+  { 
+    accessorKey: "agoLiters", 
+    header: "AGO (L)",
+    cell: ({ row }) => row.original.agoLiters.toLocaleString()
+  },
+  { 
+    accessorKey: "lpgLiters", 
+    header: "LPG (L)",
+    cell: ({ row }) => row.original.lpgLiters.toLocaleString()
+  },
+  { 
+    accessorKey: "lastSalesAmount", 
+    header: "Last Sales Amount",
+    cell: ({ row }) => {
+      const amount = row.original.lastSalesAmount;
+      return amount > 0 ? `₦${amount.toLocaleString()}` : "—";
+    }
+  },
+  { 
+    accessorKey: "lastWaybillDate", 
+    header: "Last Waybill Date",
+    cell: ({ row }) => {
+      const dateStr = row.original.lastWaybillDate;
+      if (!dateStr) return "—";
+      const date = new Date(dateStr);
+      return (
+        <div className="flex flex-col">
+          <span>{date.toLocaleDateString()}</span>
+          <span className="text-xs text-muted-foreground">
+            {formatDistanceToNow(date, { addSuffix: true })}
+          </span>
+        </div>
+      );
+    }
+  },
 ];
 
 export function StationsTable({ data }: { data: StationRow[] }) {

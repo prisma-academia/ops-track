@@ -5,6 +5,7 @@ import { DataTable } from "@/components/data-table";
 import Image from "next/image";
 import { AlertCircle, CheckCircle2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export type WaybillRow = {
   id: string;
@@ -97,25 +98,39 @@ export function WaybillsTable({
       cell: ({ row }) => {
         const w = row.original;
         if (w.litersReceived == null) return <span className="text-muted-foreground">—</span>;
-        const variance = Number(w.litersLoaded) - Number(w.litersReceived);
+        const variance = Number(w.litersReceived) - Number(w.litersLoaded);
+        
+        const tooltipText = variance < 0 
+          ? `Shortage of ${Math.abs(variance).toLocaleString()} L`
+          : variance > 0 
+          ? `Addition of ${variance.toLocaleString()} L`
+          : "Exact match";
+
         return (
-          <div className="flex flex-col gap-0.5">
-            <span className="font-medium text-emerald-600">
-              {Number(w.litersReceived).toLocaleString()}
-            </span>
-            <span
-              className={`flex items-center gap-1 text-[10px] font-bold ${
-                variance !== 0 ? "text-rose-500" : "text-emerald-500"
-              }`}
-            >
-              {variance !== 0 ? (
-                <AlertCircle size={10} />
-              ) : (
-                <CheckCircle2 size={10} />
-              )}
-              Var: {variance.toLocaleString()} L
-            </span>
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex flex-col gap-0.5 w-fit cursor-help">
+                <span className="font-medium text-emerald-600">
+                  {Number(w.litersReceived).toLocaleString()}
+                </span>
+                <span
+                  className={`flex items-center gap-1 text-[10px] font-bold ${
+                    variance < 0 ? "text-rose-600" : variance > 0 ? "text-amber-500" : "text-emerald-600"
+                  }`}
+                >
+                  {variance === 0 ? (
+                    <CheckCircle2 size={10} />
+                  ) : (
+                    <AlertCircle size={10} />
+                  )}
+                  Var: {variance > 0 ? '+' : ''}{variance.toLocaleString()} L
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{tooltipText}</p>
+            </TooltipContent>
+          </Tooltip>
         );
       },
     },
@@ -144,15 +159,6 @@ export function WaybillsTable({
             >
               <Eye className="size-3.5" /> Details
             </Button>
-            {w.status === "DELIVERED" && w.deliveredAt && (
-              <span className="text-[10px] text-muted-foreground">
-                {new Date(w.deliveredAt).toLocaleDateString("en-GB", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })}
-              </span>
-            )}
           </div>
         );
       },
@@ -160,11 +166,13 @@ export function WaybillsTable({
   ];
 
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      filterColumnId="number"
-      searchPlaceholder="Search by waybill number…"
-    />
+    <TooltipProvider>
+      <DataTable
+        columns={columns}
+        data={data}
+        filterColumnId="number"
+        searchPlaceholder="Search by waybill number…"
+      />
+    </TooltipProvider>
   );
 }

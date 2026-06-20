@@ -11,28 +11,51 @@ export default async function StationsPage() {
     where: { tenantId: actor.tenantId },
     orderBy: { createdAt: "desc" },
     include: {
-      _count: {
-        select: {
-          staff: true,
-          tanks: true,
-          pumps: true,
-          tickets: true,
-        },
+      tanks: {
+        select: { productType: true, capacity: true },
+      },
+      dailySalesLogs: {
+        orderBy: { logDate: "desc" },
+        take: 1,
+        select: { amountCash: true, amountPos: true, amountTransfer: true },
+      },
+      waybills: {
+        orderBy: { dispatchedAt: "desc" },
+        take: 1,
+        select: { dispatchedAt: true },
       },
     },
   });
 
-  const rows = stations.map((s) => ({
-    id: s.id,
-    code: s.code,
-    name: s.name,
-    region: s.region,
-    location: s.location,
-    staffCount: s._count.staff,
-    tanksCount: s._count.tanks,
-    pumpsCount: s._count.pumps,
-    ticketsCount: s._count.tickets,
-  }));
+  const rows = stations.map((s) => {
+    let pmsLiters = 0;
+    let agoLiters = 0;
+    let lpgLiters = 0;
+
+    s.tanks.forEach((t) => {
+      if (t.productType === "PMS") pmsLiters += Number(t.capacity);
+      if (t.productType === "AGO") agoLiters += Number(t.capacity);
+      if (t.productType === "LPG") lpgLiters += Number(t.capacity);
+    });
+
+    const lastSales = s.dailySalesLogs[0];
+    const lastSalesAmount = lastSales
+      ? Number(lastSales.amountCash) + Number(lastSales.amountPos) + Number(lastSales.amountTransfer)
+      : 0;
+
+    const lastWaybillDate = s.waybills[0]?.dispatchedAt?.toISOString() || null;
+
+    return {
+      id: s.id,
+      code: s.code,
+      name: s.name,
+      pmsLiters,
+      agoLiters,
+      lpgLiters,
+      lastSalesAmount,
+      lastWaybillDate,
+    };
+  });
 
   return (
     <div>

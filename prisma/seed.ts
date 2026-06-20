@@ -24,10 +24,6 @@ async function main() {
   }
 
   await ensurePlatformRole("Platform Super Admin", ALL_PLATFORM_PERMISSION_KEYS);
-  await ensurePlatformRole(
-    "Platform Read-only",
-    ALL_PLATFORM_PERMISSION_KEYS.filter((k) => k.endsWith(":read"))
-  );
 
   const passwordHash = await argon2.hash(adminPassword, {
     type: argon2.argon2id,

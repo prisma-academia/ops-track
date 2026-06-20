@@ -8,6 +8,7 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
 
 const RecordShiftSchema = z.object({
+  id: z.string().optional(),
   nozzleId: z.string().min(1),
   attendantId: z.string().min(1),
   openingMeter: z.coerce.number().nonnegative(),
@@ -45,7 +46,11 @@ export async function GET(
       include: {
         nozzle: {
           include: {
-            pump: true,
+            pump: {
+              include: {
+                tank: true,
+              },
+            },
           },
         },
         attendant: {
@@ -120,6 +125,7 @@ export async function POST(
 
     const shiftLog = await prisma.shiftLog.create({
       data: {
+        id: body.id,
         tenantId: actor.tenantId,
         nozzleId: body.nozzleId,
         attendantId: body.attendantId,

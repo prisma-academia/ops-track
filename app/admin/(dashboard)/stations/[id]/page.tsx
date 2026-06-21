@@ -66,6 +66,9 @@ export default async function StationDetailPage({
       dailySalesLogs: {
         orderBy: { logDate: "desc" },
         take: 30,
+        include: {
+          recordedBy: { select: { firstName: true, lastName: true } },
+        },
       },
       waybills: {
         orderBy: { dispatchedAt: "desc" },

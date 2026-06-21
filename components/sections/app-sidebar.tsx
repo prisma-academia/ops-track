@@ -16,10 +16,10 @@ interface AppSidebarProps {
 export function AppSidebar({ items, title, roleLabel, userLabel }: AppSidebarProps) {
   return (
     <Sidebar className="px-0 h-full [&_[data-slot=sidebar-inner]]:h-full">
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
         {/* ---------------- Header ---------------- */}
-        <SidebarHeader className="px-4 pt-3">
-          <div className="w-full p-2 border rounded-xl bg-muted/20">
+        <SidebarHeader className="px-4">
+          <div className="w-full border rounded-md bg-muted/20">
             <div className="flex items-center gap-3 overflow-hidden">
               <div className="flex items-center justify-center size-12 rounded-lg text-primary shrink-0">
                 <Image

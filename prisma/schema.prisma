@@ -696,3 +696,27 @@ model WaybillDipping {
   @@index([waybillId])
   @@map("waybill_dippings")
 }
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("suppliers")
+}
+
+model Depot {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("depots")
+}
+
+model TransportCompany {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("transport_companies")
+}

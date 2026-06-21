@@ -138,6 +138,7 @@ export function StationDetailsManager({
           <TabsTrigger value="shifts">Shift Logs</TabsTrigger>
           <TabsTrigger value="waybills">Waybills</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          <TabsTrigger value="sales">Sales</TabsTrigger>
         </TabsList>
 
         {/* ---------------- OVERVIEW TAB ---------------- */}
@@ -395,6 +396,52 @@ export function StationDetailsManager({
                         </td>
                       </tr>
                     ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* ---------------- SALES TAB ---------------- */}
+        <TabsContent value="sales" className="mt-0 animate-in fade-in duration-500">
+          <Card className="border-border/40 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-muted/30 border-b border-border/50">
+                  <tr>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Product</th>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Volume Sold</th>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Cash</th>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">POS / Transfer</th>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Total Revenue</th>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Recorded By</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/30">
+                  {(!station.dailySalesLogs || station.dailySalesLogs.length === 0) ? (
+                    <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No sales records found.</td></tr>
+                  ) : (
+                    station.dailySalesLogs.map((log: any) => {
+                      const totalRevenue = Number(log.amountCash) + Number(log.amountPos) + Number(log.amountTransfer);
+                      const digitalRevenue = Number(log.amountPos) + Number(log.amountTransfer);
+                      const recorder = log.recordedBy ? `${log.recordedBy.firstName ?? ""} ${log.recordedBy.lastName ?? ""}`.trim() : "Unknown";
+
+                      return (
+                        <tr key={log.id} className="hover:bg-muted/10">
+                          <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(log.logDate).split(" ")[0] + " " + formatHumanReadableDate(log.logDate).split(" ")[1] + " " + formatHumanReadableDate(log.logDate).split(" ")[2]}</td>
+                          <td className="px-6 py-4">
+                            <Badge variant="secondary" className="text-[10px] font-medium font-mono">{log.productType}</Badge>
+                          </td>
+                          <td className="px-6 py-4 text-right font-medium">{Number(log.litersSold).toLocaleString()} L</td>
+                          <td className="px-6 py-4 text-right text-muted-foreground">₦{Number(log.amountCash).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="px-6 py-4 text-right text-muted-foreground">₦{digitalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="px-6 py-4 text-right font-bold text-foreground">₦{totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="px-6 py-4 text-center text-muted-foreground">{recorder}</td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

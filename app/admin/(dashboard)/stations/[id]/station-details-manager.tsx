@@ -2,9 +2,22 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { apiPost } from "@/lib/client/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { FormField, TextInput } from "@/components/form-field";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   MapPin,
   Store,
@@ -15,9 +28,25 @@ import {
   Flame,
   Gauge,
   Wallet,
-  Clock
+  Clock,
+  Settings,
+  Plus,
+  Droplet,
+  Cloud
 } from "lucide-react";
 import { AssetTank } from "@/app/admin/(dashboard)/dashboard/Tank";
+
+const AddTankSchema = z.object({
+  name: z.string().min(1, "Please enter a tank name").max(50),
+  productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
+  capacity: z.coerce.number().positive("Capacity must be positive"),
+});
+
+const AddPumpSchema = z.object({
+  name: z.string().min(1, "Please enter a pump name").max(50),
+  tankId: z.string().min(1, "Please select a tank"),
+  nozzles: z.array(z.object({ name: z.string().min(1) })).min(1),
+});
 
 function formatHumanReadableDate(dateInput: string | Date | null | undefined): string {
   if (!dateInput) return "—";
@@ -53,6 +82,35 @@ function formatHumanReadableDate(dateInput: string | Date | null | undefined): s
   return `${month} ${day}${getOrdinalSuffix(day)} ${year} ${hours}:${minutesStr}${ampm}`;
 }
 
+const PRODUCT_ICONS: Record<string, React.ReactNode> = {
+  PMS: <Flame size={14} className="text-rose-500" />,
+  AGO: <Droplet size={14} className="text-amber-500" />,
+  DPK: <Droplet size={14} className="text-blue-500" />,
+  LPG: <Cloud size={14} className="text-slate-500" />,
+};
+
+const PRODUCT_NAMES: Record<string, string> = {
+  PMS: "PMS (Petrol)",
+  AGO: "AGO (Diesel)",
+  DPK: "DPK (Kerosene)",
+  LPG: "LPG (Gas)",
+};
+
+const StatusBadge = ({ status }: { status: string }) => {
+  switch (status) {
+    case "ACTIVE":
+      return <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 text-[10px] ml-2">Active</Badge>;
+    case "MAINTENANCE":
+      return <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30 text-[10px] ml-2">Maintenance</Badge>;
+    case "OFFLINE":
+      return <Badge variant="outline" className="text-stone-600 border-stone-200 bg-stone-50 dark:bg-stone-900/30 text-[10px] ml-2">Offline</Badge>;
+    case "ISSUE":
+      return <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30 text-[10px] ml-2">Issue</Badge>;
+    default:
+      return null;
+  }
+};
+
 export function StationDetailsManager({
   station,
 }: {
@@ -60,6 +118,58 @@ export function StationDetailsManager({
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");
+  const [activeDialog, setActiveDialog] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [nozzleCount, setNozzleCount] = useState<number>(1);
+
+  const tankForm = useForm({
+    resolver: zodResolver(AddTankSchema),
+    defaultValues: { name: "", productType: "PMS" as any, capacity: 0 },
+  });
+
+  const pumpForm = useForm({
+    resolver: zodResolver(AddPumpSchema),
+    defaultValues: { name: "", tankId: "", nozzles: [{ name: "Nozzle A" }] },
+  });
+
+  const handleNozzleCountChange = (count: number) => {
+    setNozzleCount(count);
+    const newNozzles = Array.from({ length: count }, (_, i) => ({
+      name: `Nozzle ${String.fromCharCode(65 + i)}`,
+    }));
+    pumpForm.setValue("nozzles", newNozzles, { shouldValidate: true });
+  };
+
+  const handleAddTank = tankForm.handleSubmit(async (values) => {
+    setApiError(null);
+    const payload = { ...values, stationId: station.id };
+    const res = await apiPost(`/api/tenant/stations/${station.id}/tanks`, payload);
+    if (res.error) {
+      setApiError(res.error.message);
+    } else {
+      closeDialog();
+    }
+  });
+
+  const handleAddPump = pumpForm.handleSubmit(async (values) => {
+    setApiError(null);
+    const payload = { ...values, stationId: station.id };
+    const res = await apiPost(`/api/tenant/stations/${station.id}/pumps`, payload);
+    if (res.error) {
+      setApiError(res.error.message);
+    } else {
+      closeDialog();
+    }
+  });
+
+  const closeDialog = () => {
+    setActiveDialog(null);
+    setApiError(null);
+    setNozzleCount(1);
+    tankForm.reset({ name: "", productType: "PMS" as any, capacity: 0 });
+    pumpForm.reset({ name: "", tankId: "", nozzles: [{ name: "Nozzle A" }] });
+    router.refresh();
+  };
 
   // Flatten and sort data
   const allDippings = station.tanks
@@ -91,14 +201,16 @@ export function StationDetailsManager({
       {/* ---------------- FULL WIDTH HEADER CARD ---------------- */}
       <Card className="border-border/50 shadow-sm bg-card">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 gap-6">
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-5 flex-1">
             <div className="size-14 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center text-primary">
               <Store size={26} strokeWidth={1.5} />
             </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-semibold tracking-tight text-foreground">{station.name}</h1>
-                <Badge variant="outline" className="font-mono text-xs bg-muted/50 text-muted-foreground border-border/50">{station.code}</Badge>
+            <div className="space-y-1.5 flex-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h1 className="text-2xl font-semibold tracking-tight text-foreground">{station.name}</h1>
+                  <Badge variant="outline" className="font-mono text-xs bg-muted/50 text-muted-foreground border-border/50">{station.code}</Badge>
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1.5">
@@ -113,18 +225,26 @@ export function StationDetailsManager({
             </div>
           </div>
 
-          <div className="flex gap-3 overflow-x-auto w-full md:w-auto">
+          <div className="flex items-start gap-4">
+            {/* Prices Grid */}
             {Object.keys(latestPrices).length === 0 ? (
-              <div className="text-sm text-muted-foreground italic px-4 py-2 border border-dashed rounded-xl flex items-center justify-center">
+              <div className="text-sm text-muted-foreground italic px-4 py-2 border border-dashed rounded-xl flex items-center justify-center min-h-[60px]">
                 No prices configured
               </div>
             ) : (
-              Object.entries(latestPrices).map(([product, price]) => (
-                <div key={product} className="flex flex-col px-4 py-2 bg-muted/20 border border-border/50 rounded-xl min-w-[100px]">
-                  <span className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">{product}</span>
-                  <span className="text-base font-bold text-foreground">₦{Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-              ))
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 w-full md:w-auto">
+                {Object.entries(latestPrices).map(([product, price]) => (
+                  <div key={product} className="flex items-center gap-3 px-3 py-2 bg-muted/20 border border-border/50 rounded-xl min-w-[140px]">
+                    <div className="p-1.5 bg-background border border-border/50 rounded-md">
+                      {PRODUCT_ICONS[product] || <Flame size={14} />}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-medium text-muted-foreground">{PRODUCT_NAMES[product] || product}</span>
+                      <span className="text-sm font-bold text-foreground leading-tight">₦{Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -132,19 +252,27 @@ export function StationDetailsManager({
 
       {/* ---------------- TABS NAVIGATION ---------------- */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="dippings">Dippings</TabsTrigger>
-          <TabsTrigger value="shifts">Shift Logs</TabsTrigger>
-          <TabsTrigger value="waybills">Waybills</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>
-          <TabsTrigger value="sales">Sales</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="dippings">Dippings</TabsTrigger>
+            <TabsTrigger value="shifts">Shift Logs</TabsTrigger>
+            <TabsTrigger value="waybills">Waybills</TabsTrigger>
+            <TabsTrigger value="expenses">Expenses</TabsTrigger>
+            <TabsTrigger value="sales">Sales</TabsTrigger>
+          </TabsList>
+          <Button variant="outline" size="sm" onClick={() => setActiveDialog("config")} className="h-9 shrink-0 gap-2">
+            <Settings size={14} />
+            <span>Config</span>
+          </Button>
+        </div>
 
         {/* ---------------- OVERVIEW TAB ---------------- */}
         <TabsContent value="overview" className="mt-0 space-y-6 animate-in fade-in duration-500">
           
-          <h2 className="text-lg font-semibold tracking-tight text-foreground">Storage Tanks</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">Storage Tanks</h2>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {station.tanks.length === 0 ? (
@@ -159,6 +287,12 @@ export function StationDetailsManager({
 
                 return (
                   <div key={tank.id}>
+                    <div className="mb-2 flex items-center justify-between">
+                       <div className="flex items-center">
+                         <span className="text-sm font-medium">{tank.name}</span>
+                         <StatusBadge status={tank.status || "ACTIVE"} />
+                       </div>
+                    </div>
                     <AssetTank 
                       currentLitres={currentLitres} 
                       maxCapacity={capacity} 
@@ -186,6 +320,7 @@ export function StationDetailsManager({
                       <span className="flex items-center gap-2">
                         <Gauge size={16} className="text-muted-foreground" />
                         {pump.name}
+                        <StatusBadge status={pump.status || "ACTIVE"} />
                       </span>
                       <Badge variant="secondary" className="text-[10px] font-mono">Tank: {pump.tank.name}</Badge>
                     </CardTitle>
@@ -195,8 +330,13 @@ export function StationDetailsManager({
                       <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider block">Nozzles ({pump.nozzles.length})</span>
                       <div className="flex flex-wrap gap-2">
                         {pump.nozzles.map((noz: any) => (
-                          <span key={noz.id} className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-md font-medium border border-border/50">
+                          <span key={noz.id} className="flex items-center text-xs bg-muted text-muted-foreground px-2 py-1 rounded-md font-medium border border-border/50">
                             {noz.name}
+                            <span className={`ml-1.5 size-1.5 rounded-full ${
+                              noz.status === 'ACTIVE' || !noz.status ? 'bg-emerald-500' :
+                              noz.status === 'ISSUE' ? 'bg-rose-500' :
+                              noz.status === 'MAINTENANCE' ? 'bg-amber-500' : 'bg-stone-500'
+                            }`} title={noz.status || 'ACTIVE'} />
                           </span>
                         ))}
                       </div>
@@ -450,6 +590,90 @@ export function StationDetailsManager({
         </TabsContent>
 
       </Tabs>
+
+      {/* Config Dialog */}
+      {activeDialog === "config" && (
+        <Dialog open={true} onOpenChange={closeDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Station Configuration & Assets</DialogTitle>
+            </DialogHeader>
+            
+            <Tabs defaultValue="addTank" className="w-full mt-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="addTank">Add Storage Tank</TabsTrigger>
+                <TabsTrigger value="addPump">Add Dispenser / Pump</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="addTank" className="pt-4">
+                <form onSubmit={handleAddTank} className="space-y-4">
+                  <FormField label="Tank Name" htmlFor="t_name" error={tankForm.formState.errors.name?.message}>
+                    <TextInput id="t_name" placeholder="e.g. PMS Tank 1" {...tankForm.register("name")} />
+                  </FormField>
+                  
+                  <FormField label="Product Type" htmlFor="t_prod" error={tankForm.formState.errors.productType?.message}>
+                    <select id="t_prod" className="rounded border border-stone-300 bg-white px-3 py-2 text-sm w-full" {...tankForm.register("productType")}>
+                      <option value="PMS">PMS (Petrol)</option>
+                      <option value="AGO">AGO (Diesel)</option>
+                      <option value="DPK">DPK (Kerosene)</option>
+                      <option value="LPG">LPG (Gas)</option>
+                    </select>
+                  </FormField>
+
+                  <FormField label="Liters Capacity" htmlFor="t_cap" error={tankForm.formState.errors.capacity?.message}>
+                    <TextInput id="t_cap" type="number" placeholder="e.g. 45000" {...tankForm.register("capacity")} />
+                  </FormField>
+
+                  {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+
+                  <div className="flex justify-end pt-4 border-t mt-4">
+                    <Button type="button" variant="outline" className="mr-2" onClick={closeDialog}>Cancel</Button>
+                    <Button type="submit">Create Tank</Button>
+                  </div>
+                </form>
+              </TabsContent>
+              
+              <TabsContent value="addPump" className="pt-4">
+                <form onSubmit={handleAddPump} className="space-y-4">
+                  <FormField label="Pump Name" htmlFor="p_name" error={pumpForm.formState.errors.name?.message}>
+                    <TextInput id="p_name" placeholder="e.g. Pump 1" {...pumpForm.register("name")} />
+                  </FormField>
+
+                  <FormField label="Draws From Tank" htmlFor="p_tank" error={pumpForm.formState.errors.tankId?.message}>
+                    <select id="p_tank" className="rounded border border-stone-300 bg-white px-3 py-2 text-sm w-full" {...pumpForm.register("tankId")}>
+                      <option value="">Select tank...</option>
+                      {station.tanks.map((t: any) => (
+                        <option key={t.id} value={t.id}>{t.name} ({t.productType})</option>
+                      ))}
+                    </select>
+                  </FormField>
+
+                  <FormField label="Number of Nozzles" htmlFor="p_nozzle_count" error={pumpForm.formState.errors.nozzles?.message}>
+                    <select
+                      id="p_nozzle_count"
+                      className="rounded border border-stone-300 bg-white px-3 py-2 text-sm w-full font-medium"
+                      value={nozzleCount}
+                      onChange={(e) => handleNozzleCountChange(Number(e.target.value))}
+                    >
+                      <option value={1}>1 Nozzle</option>
+                      <option value={2}>2 Nozzles</option>
+                      <option value={3}>3 Nozzles</option>
+                      <option value={4}>4 Nozzles</option>
+                    </select>
+                  </FormField>
+
+                  {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+
+                  <div className="flex justify-end pt-4 border-t mt-4">
+                    <Button type="button" variant="outline" className="mr-2" onClick={closeDialog}>Cancel</Button>
+                    <Button type="submit">Create Pump</Button>
+                  </div>
+                </form>
+              </TabsContent>
+            </Tabs>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

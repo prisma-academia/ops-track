@@ -73,6 +73,7 @@ interface ExpenseRow {
   amount: number;
   description: string;
   receiptUrl: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
   recordedById: string;
   approvedById: string | null;
   createdAt: string | Date;
@@ -170,14 +171,15 @@ export function ExpensesManager({
     }
   });
 
-  const handleApproveExpense = async (expenseId: string, approved: boolean) => {
+  const handleApproveExpense = async (expenseId: string, status: "APPROVED" | "REJECTED") => {
     setApprovingExpenseId(expenseId);
-    const res = await apiPost(`/api/tenant/expenses/${expenseId}/approve`, { approved });
+    const res = await apiPost(`/api/tenant/expenses/${expenseId}/approve`, { status });
     setApprovingExpenseId(null);
     if (res.error) {
       alert(res.error.message);
     } else {
       setApproveConfirmOpenId(null);
+      setActiveDialog(null);
       router.refresh();
     }
   };
@@ -264,7 +266,6 @@ export function ExpensesManager({
         const exp = row.original;
         const recordedUser = exp.recordedBy;
         const approvedUser = exp.approvedBy;
-        const approved = !!exp.approvedById;
 
         return (
           <div className="flex flex-col gap-2.5 py-1">
@@ -277,7 +278,7 @@ export function ExpensesManager({
               </span>
             </div>
 
-            {approved ? (
+            {exp.status === "APPROVED" ? (
               <div className="flex items-center gap-1 text-xs text-emerald-600">
                 <CheckCircle2 className="size-3" />
                 <span className="font-semibold">
@@ -285,6 +286,11 @@ export function ExpensesManager({
                     ? `${approvedUser.firstName ?? ""} ${approvedUser.lastName ?? ""}`.trim()
                     : "Yes"}
                 </span>
+              </div>
+            ) : exp.status === "REJECTED" ? (
+              <div className="flex items-center gap-1 text-xs text-red-600 font-medium">
+                <AlertCircle className="size-3" />
+                <span>Rejected</span>
               </div>
             ) : (
               <div className="flex items-center gap-1 text-xs text-amber-500 font-medium">
@@ -301,7 +307,6 @@ export function ExpensesManager({
       header: () => <div className="text-center">Action</div>,
       cell: ({ row }) => {
         const exp = row.original;
-        const approved = !!exp.approvedById;
         return (
           <div className="flex items-center gap-2 justify-center" onClick={(e) => e.stopPropagation()}>
             <Button
@@ -315,59 +320,6 @@ export function ExpensesManager({
             >
               <Eye className="size-3.5" /> Details
             </Button>
-            {!approved && (
-              <AlertDialog
-                open={approveConfirmOpenId === exp.id}
-                onOpenChange={(open) => {
-                  if (!open && approvingExpenseId === exp.id) return;
-                  setApproveConfirmOpenId(open ? exp.id : null);
-                }}
-              >
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white border-none shadow-sm flex items-center gap-1 h-8 px-3 rounded-4xl"
-                    onClick={() => setApproveConfirmOpenId(exp.id)}
-                  >
-                    <Check className="size-3.5" /> Approve
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Approve Expense Payout</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Are you sure you want to approve this expense of{" "}
-                      <strong className="text-foreground">
-                        {Number(exp.amount).toLocaleString()}
-                      </strong>{" "}
-                      recorded for <strong className="text-foreground">{exp.station?.name}</strong>?
-                      This action will authorize the cash outflow.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel disabled={approvingExpenseId === exp.id}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleApproveExpense(exp.id, true);
-                      }}
-                      disabled={approvingExpenseId === exp.id}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-                    >
-                      {approvingExpenseId === exp.id ? (
-                        <>
-                          <SpinnerEllipsis />
-                          <span>Approving...</span>
-                        </>
-                      ) : (
-                        "Confirm Approve"
-                      )}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
           </div>
         );
       },
@@ -569,14 +521,14 @@ export function ExpensesManager({
       ========================================== */}
       {activeDialog === "details" && currentSelectedExpense && (
         <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
+          <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader className="shrink-0">
               <DialogTitle className="text-lg font-bold">Expense Record Details</DialogTitle>
             </DialogHeader>
             
-            <div className="space-y-6">
+            <div className="space-y-5 overflow-y-auto pr-2 pb-2">
               {/* Grid of Key Info */}
-              <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-2xl border border-border/40">
+              <div className="grid grid-cols-2 gap-3 bg-muted/20 p-3 rounded-2xl border border-border/40">
                 <div>
                   <span className="text-xs text-muted-foreground block font-medium">Station</span>
                   <span className="font-semibold text-foreground">{currentSelectedExpense.station?.name}</span>
@@ -629,9 +581,9 @@ export function ExpensesManager({
               )}
 
               {/* Timeline of Created & Approved */}
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <span className="text-xs text-muted-foreground block font-medium">Transaction Timeline</span>
-                <div className="relative pl-6 space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-border/60">
+                <div className="relative pl-6 space-y-4 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-border/60">
                   {/* Created By Node */}
                   <div className="relative">
                     <div className="absolute -left-[20px] top-1 size-3 rounded-full bg-primary border-2 border-background" />
@@ -652,15 +604,31 @@ export function ExpensesManager({
                     </div>
                   </div>
 
-                  {/* Approved By Node */}
+                  {/* Status Node */}
                   <div className="relative">
-                    {currentSelectedExpense.approvedById ? (
+                    {currentSelectedExpense.status === "APPROVED" ? (
                       <>
                         <div className="absolute -left-[20px] top-1 size-3 rounded-full bg-emerald-600 border-2 border-background" />
                         <div>
                           <span className="text-sm font-semibold text-emerald-600 block">
                             Approved
                           </span>
+                          <span className="text-xs text-muted-foreground block">
+                            By{" "}
+                            <strong>
+                              {currentSelectedExpense.approvedBy
+                                ? `${currentSelectedExpense.approvedBy.firstName ?? ""} ${currentSelectedExpense.approvedBy.lastName ?? ""}`.trim()
+                                : "Administrator"}
+                            </strong>{" "}
+                            ({currentSelectedExpense.approvedBy?.email || "No email"})
+                          </span>
+                        </div>
+                      </>
+                    ) : currentSelectedExpense.status === "REJECTED" ? (
+                      <>
+                        <div className="absolute -left-[20px] top-1 size-3 rounded-full bg-red-600 border-2 border-background" />
+                        <div>
+                          <span className="text-sm font-semibold text-red-600 block">Rejected</span>
                           <span className="text-xs text-muted-foreground block">
                             By{" "}
                             <strong>
@@ -688,7 +656,31 @@ export function ExpensesManager({
               </div>
             </div>
 
-            <DialogFooter showCloseButton={true} />
+            <DialogFooter className="flex-row items-center sm:justify-end gap-2 shrink-0 pt-2 border-t">
+              {currentSelectedExpense.status === "PENDING" && (
+                <div className="flex items-center gap-2 mr-auto">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => handleApproveExpense(currentSelectedExpense.id, "REJECTED")}
+                    disabled={approvingExpenseId === currentSelectedExpense.id}
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    type="button"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => handleApproveExpense(currentSelectedExpense.id, "APPROVED")}
+                    disabled={approvingExpenseId === currentSelectedExpense.id}
+                  >
+                    Approve
+                  </Button>
+                </div>
+              )}
+              <Button type="button" variant="outline" onClick={closeDialog}>
+                Close
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}

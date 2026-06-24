@@ -214,7 +214,7 @@ export function SalesReportsManager({
     <div className="space-y-6">
       
       {/* Filters and Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-card p-6 rounded-xl border shadow-sm">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-card p-6 rounded-xl border">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold tracking-tight">Sales Reports</h1>
           <p className="text-muted-foreground text-sm">Monitor daily sales logs across all your stations.</p>

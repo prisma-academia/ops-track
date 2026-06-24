@@ -7,7 +7,7 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 
 const ApproveExpenseSchema = z.object({
-  approved: z.boolean(),
+  status: z.enum(["APPROVED", "REJECTED", "PENDING"]),
 });
 
 export async function POST(
@@ -29,7 +29,8 @@ export async function POST(
     const expense = await prisma.expense.update({
       where: { id },
       data: {
-        approvedById: body.approved ? actor.userId : null,
+        status: body.status,
+        approvedById: body.status !== "PENDING" ? actor.userId : null,
       },
       include: {
         approvedBy: {
@@ -46,11 +47,11 @@ export async function POST(
     await audit({
       actorType: "TENANT_USER",
       actorId: actor.userId,
-      action: body.approved ? "expense.approve" : "expense.unapprove",
+      action: `expense.${body.status.toLowerCase()}`,
       tenantId: actor.tenantId,
       targetType: "Expense",
       targetId: expense.id,
-      after: { approved: body.approved, approverId: actor.userId } as object,
+      after: { status: body.status, approverId: actor.userId } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });

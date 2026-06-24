@@ -35,7 +35,6 @@ const NAV: NavItemConfig[] = [
   { href: "/admin/stations", key: "stations", module: "stations" as ModuleKey, icon: "MapPin", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/expenses", key: "expenses", module: "operations" as ModuleKey, icon: "Coins", permission: PERMISSIONS.TENANT_OPERATIONS_READ.key },
   { href: "/admin/waybills", key: "waybills", module: "operations" as ModuleKey, icon: "Truck", permission: PERMISSIONS.TENANT_OPERATIONS_READ.key },
-  { href: "/admin/tanks-pumps", key: "tanksPumps", module: "stations" as ModuleKey, icon: "Gauge", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/prices", key: "prices", module: "operations" as ModuleKey, icon: "ChartNoAxesCombined", permission: PERMISSIONS.TENANT_OPERATIONS_READ.key },
   { href: "/admin/sales-reports", key: "salesReports", module: "operations" as ModuleKey, icon: "FileText", permission: PERMISSIONS.TENANT_OPERATIONS_READ.key },
   { href: "/admin/role-templates", key: "roles", module: "roles" as ModuleKey, icon: "Shield", permission: PERMISSIONS.TENANT_ROLES_READ.key },

@@ -29,6 +29,10 @@ export default async function StationDetailPage({
             orderBy: { recordedAt: "desc" },
             take: 100,
           },
+          waybillDippings: {
+            orderBy: { createdAt: "desc" },
+            take: 100,
+          },
         },
       },
       pumps: {

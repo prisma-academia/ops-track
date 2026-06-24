@@ -26,7 +26,7 @@ import {
   AlertCircle,
   Truck,
   Flame,
-  Gauge,
+  Fuel,
   Wallet,
   Clock,
   Settings,
@@ -172,8 +172,19 @@ export function StationDetailsManager({
   };
 
   // Flatten and sort data
-  const allDippings = station.tanks
-    .flatMap((t: any) => t.dippings.map((d: any) => ({ ...d, tank: t })))
+  const regularDippings = station.tanks
+    .flatMap((t: any) => t.dippings.map((d: any) => ({ ...d, tank: t, reason: d.reason || "ROUTINE" })));
+
+  const waybillDips = station.tanks
+    .flatMap((t: any) => (t.waybillDippings || []).map((d: any) => ({
+      ...d,
+      tank: t,
+      recordedAt: d.createdAt,
+      dippingLiters: d.afterLiters !== null ? d.afterLiters : d.beforeLiters,
+      reason: "WAYBILL DISCHARGE"
+    })));
+
+  const allDippings = [...regularDippings, ...waybillDips]
     .sort((a: any, b: any) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
 
   const allShiftLogs = station.pumps
@@ -271,82 +282,151 @@ export function StationDetailsManager({
         <TabsContent value="overview" className="mt-0 space-y-6 animate-in fade-in duration-500">
           
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold tracking-tight text-foreground">Storage Tanks</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">Infrastructure Overview</h2>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="flex flex-col gap-12 lg:gap-16">
             {station.tanks.length === 0 ? (
-              <div className="col-span-full py-8 text-center border rounded-xl border-dashed">
-                <p className="text-muted-foreground text-sm">No storage tanks configured.</p>
+              <div className="w-full py-8 text-center border rounded-xl border-dashed">
+                <p className="text-muted-foreground text-sm">No infrastructure configured.</p>
               </div>
             ) : (
               station.tanks.map((tank: any) => {
                 const lastDip = tank.dippings?.[0];
-                const currentLitres = lastDip ? Number(lastDip.dippingLiters) : 0;
+                const lastWaybillDip = tank.waybillDippings?.[0];
+                
+                let currentLitres = 0;
+                let latestDate = 0;
+
+                if (lastDip) {
+                  currentLitres = Number(lastDip.dippingLiters);
+                  latestDate = new Date(lastDip.recordedAt).getTime();
+                }
+
+                if (lastWaybillDip) {
+                  const waybillDate = new Date(lastWaybillDip.createdAt).getTime();
+                  if (waybillDate > latestDate) {
+                    currentLitres = lastWaybillDip.afterLiters !== null ? Number(lastWaybillDip.afterLiters) : Number(lastWaybillDip.beforeLiters);
+                    latestDate = waybillDate;
+                  }
+                }
+
                 const capacity = Number(tank.capacity);
+                const tankPumps = station.pumps.filter((p: any) => p.tankId === tank.id);
 
                 return (
-                  <div key={tank.id}>
-                    <div className="mb-2 flex items-center justify-between">
-                       <div className="flex items-center">
-                         <span className="text-sm font-medium">{tank.name}</span>
-                         <StatusBadge status={tank.status || "ACTIVE"} />
+                  <div key={tank.id} className="flex flex-col lg:flex-row items-center lg:items-stretch w-full relative">
+                    
+                    {/* TANK CONTAINER */}
+                    <div className="w-full lg:w-[320px] xl:w-[380px] shrink-0 relative flex flex-col justify-center">
+                       <div className="mb-3 flex items-center justify-between px-1">
+                         <div className="flex items-center gap-2">
+                           <span className="text-sm font-bold text-foreground">{tank.name}</span>
+                           <StatusBadge status={tank.status || "ACTIVE"} />
+                         </div>
+                         <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">{tank.productType}</Badge>
                        </div>
+                       
+                       <div className="relative z-10 w-full">
+                         <AssetTank 
+                           currentLitres={currentLitres} 
+                           maxCapacity={capacity} 
+                           label={tank.name} 
+                           type={tank.productType === "LPG" ? "gas" : "fuel"} 
+                         />
+                       </div>
+
+                       {/* Tank horizontal connector (Desktop) */}
+                       {tankPumps.length > 0 && (
+                         <div className="hidden lg:block absolute top-1/2 -right-8 w-8 border-t-2 border-dashed border-border/60 -translate-y-[1px]" />
+                       )}
                     </div>
-                    <AssetTank 
-                      currentLitres={currentLitres} 
-                      maxCapacity={capacity} 
-                      label={tank.name} 
-                      type={tank.productType === "LPG" ? "gas" : "fuel"} 
-                    />
+
+                    {/* PUMPS CONTAINER */}
+                    <div className="flex-1 w-full relative ml-4 lg:ml-8 pt-6 lg:pt-0 flex flex-col justify-center">
+                      {tankPumps.length === 0 ? (
+                        <div className="text-xs text-muted-foreground italic bg-muted/30 px-4 py-3 rounded-xl border border-dashed border-border/50 lg:ml-8 text-center lg:text-left">
+                          No dispensers connected to this tank
+                        </div>
+                      ) : (
+                        <div className="space-y-5">
+                          {tankPumps.map((pump: any, index: number) => {
+                            const isFirst = index === 0;
+                            const isLast = index === tankPumps.length - 1;
+                            return (
+                              <div key={pump.id} className="relative pl-8 lg:pl-10">
+                                {/* Vertical tree line */}
+                                <div 
+                                  className={`absolute left-0 border-l-2 border-dashed border-border/60 
+                                    ${isFirst ? 'top-[-24px] lg:top-[50%]' : 'top-0'} 
+                                    ${isLast ? 'bottom-auto' : 'bottom-[-20px]'} 
+                                    ${isLast ? (isFirst ? 'h-[calc(50%+24px)] lg:h-0' : 'h-[50%]') : 'h-auto'}
+                                  `}
+                                />
+                                {/* Horizontal connector to pump */}
+                                <div className="absolute w-8 lg:w-10 border-t-2 border-dashed border-border/60 left-0 top-1/2 -translate-y-[1px]" />
+                                
+                                <Card className="border-border/40 shadow-sm relative z-10 bg-card/80 backdrop-blur-sm py-2">
+                                  <CardHeader className="px-4 py-0">
+                                    <CardTitle className="font-semibold text-sm flex items-center justify-between">
+                                      <span className="flex items-center gap-2">
+                                        <div className="p-1.5 bg-primary/10 text-primary rounded-md">
+                                          <Fuel size={14} />
+                                        </div>
+                                        {pump.name}
+                                      </span>
+                                      <StatusBadge status={pump.status || "ACTIVE"} />
+                                    </CardTitle>
+                                  </CardHeader>
+                                  <CardContent className="px-4 pb-4 pt-0">
+                                    <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider block mb-2 mt-1">Nozzles ({pump.nozzles.length})</div>
+                                    
+                                    {/* Connecting Lines to Nozzles inside Pump */}
+                                    <div className="space-y-3">
+                                      {pump.nozzles.map((noz: any, nIndex: number) => {
+                                        const isLastNoz = nIndex === pump.nozzles.length - 1;
+                                        return (
+                                          <div key={noz.id} className="relative pl-6">
+                                            {/* Vertical tree line for nozzle */}
+                                            <div 
+                                              className="absolute left-1 border-l-2 border-dashed border-border/40"
+                                              style={{
+                                                top: nIndex === 0 ? '-12px' : '0',
+                                                bottom: isLastNoz ? 'auto' : '-12px',
+                                                height: isLastNoz ? (nIndex === 0 ? '28px' : '16px') : 'auto'
+                                              }}
+                                            />
+                                            {/* Horizontal connector to nozzle */}
+                                            <div className="absolute w-5 border-t-2 border-dashed border-border/40 left-1 top-[16px]" />
+                                            
+                                            <div className="flex items-center justify-between w-full text-xs bg-background text-foreground px-3 py-2 rounded-md font-medium border border-border/50 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                                              <span className="flex items-center gap-2">
+                                                <div className={`size-2 rounded-full ${
+                                                  noz.status === 'ACTIVE' || !noz.status ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]' :
+                                                  noz.status === 'ISSUE' ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.3)]' :
+                                                  noz.status === 'MAINTENANCE' ? 'bg-amber-500' : 'bg-stone-500'
+                                                }`} />
+                                                {noz.name}
+                                              </span>
+                                              <span className="text-[10px] text-muted-foreground uppercase tracking-widest">{noz.status || 'ACTIVE'}</span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )
               })
             )}
           </div>
-
-          <h2 className="text-lg font-semibold tracking-tight text-foreground pt-4 border-t">Dispensers / Pumps</h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {station.pumps.length === 0 ? (
-              <div className="col-span-full py-8 text-center border rounded-xl border-dashed">
-                <p className="text-muted-foreground text-sm">No dispensers configured.</p>
-              </div>
-            ) : (
-              station.pumps.map((pump: any) => (
-                <Card key={pump.id} className="border-border/40 shadow-sm">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="font-semibold text-sm flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <Gauge size={16} className="text-muted-foreground" />
-                        {pump.name}
-                        <StatusBadge status={pump.status || "ACTIVE"} />
-                      </span>
-                      <Badge variant="secondary" className="text-[10px] font-mono">Tank: {pump.tank.name}</Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider block">Nozzles ({pump.nozzles.length})</span>
-                      <div className="flex flex-wrap gap-2">
-                        {pump.nozzles.map((noz: any) => (
-                          <span key={noz.id} className="flex items-center text-xs bg-muted text-muted-foreground px-2 py-1 rounded-md font-medium border border-border/50">
-                            {noz.name}
-                            <span className={`ml-1.5 size-1.5 rounded-full ${
-                              noz.status === 'ACTIVE' || !noz.status ? 'bg-emerald-500' :
-                              noz.status === 'ISSUE' ? 'bg-rose-500' :
-                              noz.status === 'MAINTENANCE' ? 'bg-amber-500' : 'bg-stone-500'
-                            }`} title={noz.status || 'ACTIVE'} />
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
-
         </TabsContent>
 
         {/* ---------------- DIPPINGS TAB ---------------- */}

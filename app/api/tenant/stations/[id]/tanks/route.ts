@@ -52,6 +52,7 @@ export async function POST(
     await requireCsrf(request);
     const { id: stationId } = await params;
     const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_WRITE.key);
+
     const body = CreateTankSchema.parse(await request.json());
     const meta = requestMeta(request);
 

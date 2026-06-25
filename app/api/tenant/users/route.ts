@@ -90,17 +90,20 @@ export async function POST(request: Request) {
       userAgent: meta.userAgent,
     });
 
-    const loginUrl = `http://${tenant.slug}.${env.APP_DOMAIN}/admin/auth/login`;
-    await sendEmail({
-      to: body.email,
-      subject: `You're invited to ${tenant.name}`,
-      html: inviteEmail({
-        name: `${body.firstName} ${body.lastName}`,
-        loginUrl,
-        tempPassword,
-        subjectLabel: tenant.name,
-      }),
-    });
+    if (role.name !== "Attendant") {
+      const loginUrl = `http://${tenant.slug}.${env.APP_DOMAIN}/admin/auth/login`;
+      await sendEmail({
+        to: body.email,
+        subject: `You're invited to ${tenant.name}`,
+        html: inviteEmail({
+          name: `${body.firstName} ${body.lastName}`,
+          loginUrl,
+          tempPassword,
+          subjectLabel: tenant.name,
+        }),
+      });
+    }
+
     return ok({ user });
   } catch (e) {
     return handleError(e);

@@ -11,6 +11,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { FormField, TextInput } from "@/components/form-field";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +42,9 @@ import {
   Plus,
   Droplet,
   Cloud,
-  Pencil
+  Pencil,
+  ChevronsUpDown,
+  Check
 } from "lucide-react";
 import { AssetTank } from "@/app/admin/(dashboard)/dashboard/Tank";
 
@@ -47,6 +58,13 @@ const AddPumpSchema = z.object({
   name: z.string().min(1, "Please enter a pump name").max(50),
   tankId: z.string().min(1, "Please select a tank"),
   nozzles: z.array(z.object({ name: z.string().min(1) })).min(1),
+});
+
+const EditStationSchema = z.object({
+  name: z.string().min(2, "Station name must be at least 2 characters"),
+  code: z.string().min(2, "Station code must be at least 2 characters"),
+  region: z.string().optional(),
+  location: z.string().optional().nullable(),
 });
 
 function formatHumanReadableDate(dateInput: string | Date | null | undefined): string {
@@ -125,6 +143,7 @@ export function StationDetailsManager({
   const [apiError, setApiError] = useState<string | null>(null);
   const [nozzleCount, setNozzleCount] = useState<number>(1);
   const [selectedManagerId, setSelectedManagerId] = useState<string>("");
+  const [openManagerSelect, setOpenManagerSelect] = useState(false);
 
   const tankForm = useForm({
     resolver: zodResolver(AddTankSchema),
@@ -134,6 +153,16 @@ export function StationDetailsManager({
   const pumpForm = useForm({
     resolver: zodResolver(AddPumpSchema),
     defaultValues: { name: "", tankId: "", nozzles: [{ name: "Nozzle A" }] },
+  });
+
+  const editStationForm = useForm({
+    resolver: zodResolver(EditStationSchema),
+    defaultValues: {
+      name: station.name || "",
+      code: station.code || "",
+      region: station.region || "",
+      location: station.location || "",
+    }
   });
 
   const handleNozzleCountChange = (count: number) => {
@@ -188,6 +217,16 @@ export function StationDetailsManager({
     }
   };
 
+  const handleEditStation = editStationForm.handleSubmit(async (values) => {
+    setApiError(null);
+    const res = await apiPatch(`/api/tenant/stations/${station.id}`, values);
+    if (res.error) {
+      setApiError(res.error.message);
+    } else {
+      closeDialog();
+    }
+  });
+
   // Flatten and sort data
   const regularDippings = station.tanks
     .flatMap((t: any) => t.dippings.map((d: any) => ({ ...d, tank: t, reason: d.reason || "ROUTINE" })));
@@ -238,6 +277,9 @@ export function StationDetailsManager({
                 <div className="flex items-center gap-3">
                   <h1 className="text-2xl font-semibold tracking-tight text-foreground">{station.name}</h1>
                   <Badge variant="outline" className="font-mono text-xs bg-muted/50 text-muted-foreground border-border/50">{station.code}</Badge>
+                  <button onClick={() => setActiveDialog("edit-station")} className="inline-flex items-center justify-center rounded-full bg-primary/10 hover:bg-primary/20 text-primary p-1.5 transition-colors ml-2" title="Edit Station Info">
+                    <Pencil size={14} />
+                  </button>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
@@ -253,7 +295,7 @@ export function StationDetailsManager({
                   <span className="text-muted-foreground group-hover:text-foreground transition-colors">
                     Manager: <span className="font-medium text-foreground">{managerName}</span>
                   </span>
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 bg-primary/10 text-primary p-1 rounded-full">
+                  <div className="opacity-50 group-hover:opacity-100 transition-opacity ml-1 bg-primary/10 text-primary p-1 rounded-full">
                     <Pencil size={12} />
                   </div>
                 </div>
@@ -706,24 +748,111 @@ export function StationDetailsManager({
             <form onSubmit={handleAssignManager} className="space-y-4 pt-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Select Manager</label>
-                <select
-                  className="rounded border border-stone-300 bg-white px-3 py-2 text-sm w-full"
-                  value={selectedManagerId}
-                  onChange={(e) => setSelectedManagerId(e.target.value)}
-                >
-                  <option value="">Unassigned</option>
-                  {users.map((u) => {
-                    const label = u.firstName || u.lastName
-                      ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-                      : u.email;
-                    return (
-                      <option key={u.id} value={u.id}>
-                        {label} ({u.email})
-                      </option>
-                    );
-                  })}
-                </select>
+                <Popover open={openManagerSelect} onOpenChange={setOpenManagerSelect}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-between font-normal bg-white"
+                    >
+                      <span className="truncate">
+                        {selectedManagerId === "" ? "Unassigned" : (
+                          users.find(u => u.id === selectedManagerId)
+                            ? (() => {
+                                const u = users.find(u => u.id === selectedManagerId)!;
+                                return u.firstName || u.lastName
+                                  ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                                  : u.email;
+                              })()
+                            : "Select..."
+                        )}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search users..." />
+                      <CommandList>
+                        <CommandEmpty>No user found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="unassigned"
+                            onSelect={() => {
+                              setSelectedManagerId("");
+                              setOpenManagerSelect(false);
+                            }}
+                          >
+                            Unassigned
+                            {selectedManagerId === "" && <Check className="ml-auto h-4 w-4" />}
+                          </CommandItem>
+                          {users.map((u) => {
+                            const label = u.firstName || u.lastName
+                              ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                              : u.email;
+                            return (
+                              <CommandItem
+                                key={u.id}
+                                value={`${label} ${u.email}`.toLowerCase()}
+                                onSelect={() => {
+                                  setSelectedManagerId(u.id);
+                                  setOpenManagerSelect(false);
+                                }}
+                              >
+                                {label} ({u.email})
+                                {selectedManagerId === u.id && <Check className="ml-auto h-4 w-4" />}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
+
+              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+
+              <DialogFooter className="mt-4">
+                <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>
+                <Button type="submit">Save Changes</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Edit Station Dialog */}
+      {activeDialog === "edit-station" && (
+        <Dialog open={true} onOpenChange={closeDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Station Information</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleEditStation} className="space-y-4 pt-4">
+              <FormField label="Station Name" htmlFor="s_name" error={editStationForm.formState.errors.name?.message}>
+                <TextInput id="s_name" {...editStationForm.register("name")} />
+              </FormField>
+
+              <FormField label="Station Code" htmlFor="s_code" error={editStationForm.formState.errors.code?.message}>
+                <TextInput id="s_code" {...editStationForm.register("code")} />
+              </FormField>
+
+              <FormField label="Region" htmlFor="s_region" error={editStationForm.formState.errors.region?.message}>
+                <select id="s_region" className="rounded border border-stone-300 bg-white px-3 py-2 text-sm w-full" {...editStationForm.register("region")}>
+                  <option value="">Select Region</option>
+                  <option value="South-West">South-West</option>
+                  <option value="South-East">South-East</option>
+                  <option value="North-Central">North-Central</option>
+                  <option value="North-West">North-West</option>
+                  <option value="North-East">North-East</option>
+                  <option value="South-South">South-South</option>
+                </select>
+              </FormField>
+
+              <FormField label="Location" htmlFor="s_location" error={editStationForm.formState.errors.location?.message}>
+                <TextInput id="s_location" {...editStationForm.register("location")} />
+              </FormField>
 
               {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 

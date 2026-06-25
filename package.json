@@ -58,7 +58,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.3.1",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.0",
     "@types/pg": "^8.20.0",
@@ -66,6 +66,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "postcss": "^8.5.15",
     "prisma": "^7.8.0",
     "react-email": "^6.1.4",
     "tailwindcss": "^4",

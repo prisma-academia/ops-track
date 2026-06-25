@@ -94,11 +94,24 @@ export default async function StationDetailPage({
     redirect("/admin/stations");
   }
 
+  const users = await prisma.tenantUser.findMany({
+    where: { tenantId: actor.tenantId },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+    },
+    orderBy: { email: "asc" },
+  });
+
   const serializedStation = JSON.parse(JSON.stringify(station));
 
   return (
     <StationDetailsManager
       station={serializedStation}
+      users={users}
     />
   );
 }

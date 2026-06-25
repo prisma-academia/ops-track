@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { apiPost } from "@/lib/client/api";
+import { apiPost, apiPatch } from "@/lib/client/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -32,7 +32,8 @@ import {
   Settings,
   Plus,
   Droplet,
-  Cloud
+  Cloud,
+  Pencil
 } from "lucide-react";
 import { AssetTank } from "@/app/admin/(dashboard)/dashboard/Tank";
 
@@ -113,14 +114,17 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 export function StationDetailsManager({
   station,
+  users,
 }: {
   station: any;
+  users: any[];
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [nozzleCount, setNozzleCount] = useState<number>(1);
+  const [selectedManagerId, setSelectedManagerId] = useState<string>("");
 
   const tankForm = useForm({
     resolver: zodResolver(AddTankSchema),
@@ -169,6 +173,19 @@ export function StationDetailsManager({
     tankForm.reset({ name: "", productType: "PMS" as any, capacity: 0 });
     pumpForm.reset({ name: "", tankId: "", nozzles: [{ name: "Nozzle A" }] });
     router.refresh();
+  };
+
+  const handleAssignManager = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setApiError(null);
+    const res = await apiPatch(`/api/tenant/stations/${station.id}`, {
+      staffUserIds: selectedManagerId ? [selectedManagerId] : [],
+    });
+    if (res.error) {
+      setApiError(res.error.message);
+    } else {
+      closeDialog();
+    }
   };
 
   // Flatten and sort data
@@ -228,9 +245,17 @@ export function StationDetailsManager({
                   <MapPin size={14} strokeWidth={2} />
                   <span>{station.location ? `${station.location}, ` : ""}{station.region} Region</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <User size={14} strokeWidth={2} />
-                  <span>Manager: <span className="font-medium text-foreground">{managerName}</span></span>
+                <div 
+                  className="flex items-center gap-1.5 group cursor-pointer hover:bg-muted/50 p-1 -ml-1 rounded-md transition-colors" 
+                  onClick={() => { setSelectedManagerId(station.staff && station.staff.length > 0 ? station.staff[0].id : ""); setActiveDialog("manager"); }}
+                >
+                  <User size={14} strokeWidth={2} className="text-muted-foreground group-hover:text-primary transition-colors" />
+                  <span className="text-muted-foreground group-hover:text-foreground transition-colors">
+                    Manager: <span className="font-medium text-foreground">{managerName}</span>
+                  </span>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 bg-primary/10 text-primary p-1 rounded-full">
+                    <Pencil size={12} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -670,6 +695,46 @@ export function StationDetailsManager({
         </TabsContent>
 
       </Tabs>
+
+      {/* Assign Manager Dialog */}
+      {activeDialog === "manager" && (
+        <Dialog open={true} onOpenChange={closeDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Assign Station Manager</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleAssignManager} className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Select Manager</label>
+                <select
+                  className="rounded border border-stone-300 bg-white px-3 py-2 text-sm w-full"
+                  value={selectedManagerId}
+                  onChange={(e) => setSelectedManagerId(e.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {users.map((u) => {
+                    const label = u.firstName || u.lastName
+                      ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                      : u.email;
+                    return (
+                      <option key={u.id} value={u.id}>
+                        {label} ({u.email})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+
+              <DialogFooter className="mt-4">
+                <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>
+                <Button type="submit">Save Changes</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Config Dialog */}
       {activeDialog === "config" && (

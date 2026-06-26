@@ -130,7 +130,7 @@ export function CreateStationForm({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Main form */}
-        <Card className="lg:col-span-1 border-stone-200 bg-white/60 backdrop-blur-xs">
+        <Card className="lg:col-span-1 border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
               Station Details
@@ -251,7 +251,7 @@ export function CreateStationForm({
         </Card>
 
         {/* Staff Assignment */}
-        <Card className="lg:col-span-1 border-stone-200 bg-white/60 backdrop-blur-xs">
+        <Card className="lg:col-span-1 border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
               Assign Station Manager

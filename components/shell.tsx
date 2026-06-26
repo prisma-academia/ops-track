@@ -23,17 +23,17 @@ export function AppShell({
 }) {
   return (
     <div className="flex min-h-screen flex-1">
-      <aside className="w-64 shrink-0 border-r border-stone-200 bg-white px-4 py-6">
+      <aside className="w-64 shrink-0 border-r border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 px-4 py-6">
         <div className="mb-6">
-          <div className="text-xs uppercase tracking-wider text-stone-500">{title}</div>
-          <div className="mt-1 text-sm text-stone-700">{userLabel}</div>
+          <div className="text-xs uppercase tracking-wider text-stone-500 dark:text-stone-400">{title}</div>
+          <div className="mt-1 text-sm text-stone-700 dark:text-stone-300">{userLabel}</div>
         </div>
         <nav className="flex flex-col gap-1">
           {nav.map((n) => (
             <Link
               key={n.href}
               href={n.href}
-              className="rounded px-3 py-2 text-sm text-stone-700 hover:bg-stone-100"
+              className="rounded px-3 py-2 text-sm text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800"
             >
               {n.label}
             </Link>
@@ -55,7 +55,7 @@ export function AppShell({
 export function PageHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
     <div className="mb-6 flex items-center justify-between">
-      <h1 className="text-xl font-semibold">{title}</h1>
+      <h1 className="text-xl font-semibold text-foreground">{title}</h1>
       {action ? <div>{action}</div> : null}
     </div>
   );
@@ -64,7 +64,7 @@ export function PageHeader({ title, action }: { title: string; action?: ReactNod
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div
-      className={`rounded-lg border border-stone-200 bg-white p-6 ${className ?? ""}`}
+      className={`rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950/60 text-foreground p-6 ${className ?? ""}`}
     >
       {children}
     </div>

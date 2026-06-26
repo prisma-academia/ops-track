@@ -18,6 +18,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus, User, DollarSign } from "lucide-react";
+import SpinnerEllipsis from "@/components/spinner-ellipsis";
 
 const CreateCustomerSchema = z.object({
   name: z.string().min(2).max(100),
@@ -30,7 +31,6 @@ export function CustomersManager({
   initialCustomers: any[];
 }) {
   const router = useRouter();
-  const [customers] = useState<any[]>(initialCustomers);
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -80,14 +80,14 @@ export function CustomersManager({
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {customers.length === 0 ? (
+              {initialCustomers.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-6 py-6 text-center text-stone-500">
                     No B2B customer accounts created yet.
                   </td>
                 </tr>
               ) : (
-                customers.map((c) => (
+                initialCustomers.map((c) => (
                   <tr key={c.id} className="hover:bg-stone-50/50">
                     <td className="px-6 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-3">
@@ -150,7 +150,16 @@ export function CustomersManager({
               {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 
               <DialogFooter showCloseButton={true}>
-                <Button type="submit">Create Customer</Button>
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? (
+                    <div className="flex items-center gap-2">
+                      <SpinnerEllipsis />
+                      <span>Creating...</span>
+                    </div>
+                  ) : (
+                    "Create Customer"
+                  )}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>

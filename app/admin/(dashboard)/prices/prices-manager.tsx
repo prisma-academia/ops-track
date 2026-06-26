@@ -759,7 +759,7 @@ export function PricesManager({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+            <Button
               onClick={(e) => {
                 e.preventDefault()
                 handleConfirmSave()
@@ -775,7 +775,7 @@ export function PricesManager({
               ) : (
                 "Confirm Deployment"
               )}
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

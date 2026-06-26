@@ -245,8 +245,8 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
       <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         
         {/* Column 1: General Info */}
-        <div className="bg-card p-6 rounded-xl border shadow-sm space-y-8">
-          <h3 className="font-semibold text-lg border-b pb-4">General Information</h3>
+        <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm space-y-8">
+          <h3 className="font-semibold text-lg border-b pb-4 text-foreground">General Information</h3>
 
           {/* Station Selection */}
         <div className="space-y-2">
@@ -386,8 +386,8 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
 
         {/* Column 2: Logistics & Submit */}
         <div className="space-y-8">
-          <div className="bg-card p-6 rounded-xl border shadow-sm space-y-8">
-            <h3 className="font-semibold text-lg border-b pb-4">Logistics & Supply Information</h3>
+          <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm space-y-8">
+            <h3 className="font-semibold text-lg border-b pb-4 text-foreground">Logistics & Supply Information</h3>
 
         {/* Lookups */}
         <div className="grid grid-cols-2 gap-6">
@@ -503,7 +503,7 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
 
           </div>
 
-          <div className="bg-card p-6 rounded-xl border shadow-sm space-y-6">
+          <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm space-y-6">
             {apiError && <p className="text-sm text-red-600 font-medium">{apiError}</p>}
 
             <div className="flex items-center justify-end gap-4">

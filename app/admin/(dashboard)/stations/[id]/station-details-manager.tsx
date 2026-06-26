@@ -266,7 +266,7 @@ export function StationDetailsManager({
   return (
     <div className="space-y-6">
       {/* ---------------- FULL WIDTH HEADER CARD ---------------- */}
-      <Card className="border-border/50 shadow-sm bg-card">
+      <Card className="border-border/50 bg-card">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 gap-6">
           <div className="flex items-center gap-5 flex-1">
             <div className="size-14 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center text-primary">
@@ -330,14 +330,14 @@ export function StationDetailsManager({
 
       {/* ---------------- TABS NAVIGATION ---------------- */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="dippings">Dippings</TabsTrigger>
-            <TabsTrigger value="shifts">Shift Logs</TabsTrigger>
-            <TabsTrigger value="waybills">Waybills</TabsTrigger>
-            <TabsTrigger value="expenses">Expenses</TabsTrigger>
-            <TabsTrigger value="sales">Sales</TabsTrigger>
+        <div className="flex items-center justify-between mb-3">
+          <TabsList className="h-12 px-1 py-1">
+            <TabsTrigger value="overview" className="px-5 py-3 text-sm">Overview</TabsTrigger>
+            <TabsTrigger value="dippings" className="px-5 py-3 text-sm">Dippings</TabsTrigger>
+            <TabsTrigger value="shifts" className="px-5 py-3 text-sm">Shift Logs</TabsTrigger>
+            <TabsTrigger value="waybills" className="px-5 py-3 text-sm">Waybills</TabsTrigger>
+            <TabsTrigger value="expenses" className="px-5 py-3 text-sm">Expenses</TabsTrigger>
+            <TabsTrigger value="sales" className="px-5 py-3 text-sm">Sales</TabsTrigger>
           </TabsList>
           <Button variant="outline" size="sm" onClick={() => setActiveDialog("config")} className="h-9 shrink-0 gap-2">
             <Settings size={14} />

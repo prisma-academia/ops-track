@@ -1,15 +1,11 @@
 "use client"
 
 import { Fragment, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
 import { format, formatDistanceToNow } from "date-fns"
-import { toast } from "sonner"
-import { apiPost } from "@/lib/client/api"
 import type { ProductType } from "@/lib/generated/prisma/client"
 
 import {
   ColumnDef,
-  RowSelectionState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -20,14 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group"
-import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import {
   Table,
@@ -38,26 +27,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import {
   ChevronDown,
-  Edit,
-  Fuel,
   History,
-  Save,
   Search,
   Store,
-  X,
 } from "lucide-react"
-import SpinnerEllipsis from "@/components/spinner-ellipsis"
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,12 +61,6 @@ type MappedStation = Station & {
 }
 
 const FUEL_TYPES = ["PMS", "AGO", "DPK", "LPG"] as const
-const FUEL_LABELS: Record<string, string> = {
-  PMS: "PMS (Petrol)",
-  AGO: "AGO (Diesel)",
-  DPK: "DPK (Kerosene)",
-  LPG: "LPG (Gas)",
-}
 
 // ── Price Cell ───────────────────────────────────────────────────────────────
 
@@ -198,26 +166,7 @@ export function PricesManager({
   currentPrices: PriceControlRow[]
   allPrices: PriceControlRow[]
 }) {
-  const router = useRouter()
-  const [isEditing, setIsEditing] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [expandedStations, setExpandedStations] = useState<Record<string, boolean>>({})
-
-  const [editingPrices, setEditingPrices] = useState<{
-    PMS: string
-    AGO: string
-    DPK: string
-    LPG: string
-  }>({
-    PMS: "",
-    AGO: "",
-    DPK: "",
-    LPG: "",
-  })
-
-  const [selectedStations, setSelectedStations] = useState<RowSelectionState>({})
-  const [effectiveDateTime, setEffectiveDateTime] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
 
   // Build price history index: stationId → productType → PriceControlRow[]
@@ -248,91 +197,6 @@ export function PricesManager({
     })
   }, [stations, currentPrices])
 
-  // Average prices across all stations
-  const averages = useMemo(() => {
-    const sums: Record<string, number> = { PMS: 0, AGO: 0, DPK: 0, LPG: 0 }
-    const counts: Record<string, number> = { PMS: 0, AGO: 0, DPK: 0, LPG: 0 }
-
-    for (const s of stationsData) {
-      for (const ft of FUEL_TYPES) {
-        const fuel = s.fuels[ft]
-        if (fuel) {
-          sums[ft] += fuel.price
-          counts[ft]++
-        }
-      }
-    }
-
-    return Object.fromEntries(
-      FUEL_TYPES.map((ft) => [ft, counts[ft] ? sums[ft] / counts[ft] : 0])
-    ) as Record<string, number>
-  }, [stationsData])
-
-  const handleEdit = () => {
-    setIsEditing(true)
-    setEditingPrices({ PMS: "", AGO: "", DPK: "", LPG: "" })
-  }
-
-  const handleCancel = () => {
-    setIsEditing(false)
-    setEditingPrices({ PMS: "", AGO: "", DPK: "", LPG: "" })
-    setSelectedStations({})
-    setEffectiveDateTime("")
-    setShowConfirmDialog(false)
-  }
-
-  const updatePrice = (fuelType: keyof typeof editingPrices, value: string) => {
-    setEditingPrices((prev) => ({ ...prev, [fuelType]: value }))
-  }
-
-  const selectedStationIds = Object.keys(selectedStations).filter(
-    (key) => selectedStations[key]
-  )
-
-  const pricesPayload = useMemo(() => {
-    const payload: Record<string, number> = {}
-    for (const ft of FUEL_TYPES) {
-      if (editingPrices[ft]) payload[ft] = Number(editingPrices[ft])
-    }
-    return payload
-  }, [editingPrices])
-
-  const initiateSave = () => {
-    if (selectedStationIds.length === 0) {
-      toast.error("Please select at least one station from the table")
-      return
-    }
-    if (Object.keys(pricesPayload).length === 0) {
-      toast.error("Please enter a new price for at least one fuel type")
-      return
-    }
-    setShowConfirmDialog(true)
-  }
-
-  const handleConfirmSave = async () => {
-    setIsSubmitting(true)
-
-    const res = await apiPost("/api/tenant/prices/bulk", {
-      prices: pricesPayload,
-      stationIds: selectedStationIds,
-      effectiveFrom: effectiveDateTime || undefined,
-    })
-
-    setIsSubmitting(false)
-
-    if (res.error) {
-      toast.error(res.error.message)
-      return
-    }
-
-    toast.success(
-      `Price changes applied successfully to ${selectedStationIds.length} station(s)`
-    )
-    setShowConfirmDialog(false)
-    handleCancel()
-    router.refresh()
-  }
-
   // Filter stations based on search query
   const filteredStations = useMemo(() => {
     if (!searchQuery) return stationsData
@@ -352,34 +216,6 @@ export function PricesManager({
   // Table columns
   const columns = useMemo<ColumnDef<MappedStation>[]>(
     () => [
-      ...(isEditing
-        ? [
-            {
-              id: "select",
-              header: ({ table }: any) => (
-                <Checkbox
-                  checked={
-                    table.getIsAllPageRowsSelected() ||
-                    (table.getIsSomePageRowsSelected() && "indeterminate")
-                  }
-                  onCheckedChange={(value: boolean) =>
-                    table.toggleAllPageRowsSelected(!!value)
-                  }
-                  aria-label="Select all"
-                />
-              ),
-              cell: ({ row }: any) => (
-                <Checkbox
-                  checked={row.getIsSelected()}
-                  onCheckedChange={(value: boolean) => row.toggleSelected(!!value)}
-                  aria-label="Select row"
-                />
-              ),
-              enableSorting: false,
-              enableHiding: false,
-            } satisfies ColumnDef<MappedStation>,
-          ]
-        : []),
       {
         accessorKey: "name",
         header: "Station",
@@ -446,7 +282,7 @@ export function PricesManager({
         enableHiding: false,
       },
     ],
-    [isEditing, expandedStations, priceHistoryIndex]
+    [expandedStations, priceHistoryIndex]
   )
 
   const table = useReactTable({
@@ -455,12 +291,6 @@ export function PricesManager({
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    enableRowSelection: true,
-    onRowSelectionChange: setSelectedStations,
-    getRowId: (row) => row.id,
-    state: {
-      rowSelection: selectedStations,
-    },
     initialState: {
       pagination: {
         pageSize: 15,
@@ -469,316 +299,131 @@ export function PricesManager({
   })
 
   return (
-    <div className="space-y-6">
-      {/* ── Top Card: Price Control Center ──────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Fuel className="size-5" />
-                Price Control Center
-              </CardTitle>
-              <CardDescription>
-                {isEditing
-                  ? "Enter new prices and select stations below to apply."
-                  : "Current average fuel prices across your network."}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              {!isEditing ? (
-                <Button onClick={handleEdit}>
-                  <Edit className="size-4 mr-2" />
-                  Update Prices
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={handleCancel}
-                    disabled={isSubmitting}
-                  >
-                    <X className="size-4 mr-2" />
-                    Cancel
-                  </Button>
-                  <Button onClick={initiateSave} disabled={isSubmitting} className="gap-2">
-                    {isSubmitting ? (
-                      <>
-                        <SpinnerEllipsis />
-                        <span>Saving...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save className="size-4" />
-                        <span>Apply Prices</span>
-                      </>
-                    )}
-                  </Button>
-                </>
-              )}
-            </div>
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Store className="size-5" />
+              Network Stations
+            </CardTitle>
+            <CardDescription>
+              Current fuel prices by station. Expand rows to view history.
+            </CardDescription>
           </div>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {FUEL_TYPES.map((ft) => (
-              <div key={ft} className="space-y-2">
-                <Label htmlFor={`price-${ft}`}>{FUEL_LABELS[ft]}</Label>
-                {isEditing ? (
-                  <InputGroup>
-                    <InputGroupAddon>₦</InputGroupAddon>
-                    <InputGroupInput
-                      id={`price-${ft}`}
-                      type="number"
-                      step="0.01"
-                      placeholder={
-                        averages[ft]
-                          ? `Current avg: ${averages[ft].toFixed(2)}`
-                          : "0.00"
-                      }
-                      value={editingPrices[ft]}
-                      onChange={(e) => updatePrice(ft, e.target.value)}
-                    />
-                  </InputGroup>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-mono font-semibold tabular-nums">
-                      {averages[ft] ? `₦${averages[ft].toFixed(2)}` : "—"}
-                    </span>
-                    {averages[ft] > 0 && (
-                      <Badge variant="secondary">avg</Badge>
-                    )}
-                  </div>
-                )}
-              </div>
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
+            <Input
+              placeholder="Search stations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
+              </TableRow>
             ))}
-          </div>
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <Fragment key={row.id}>
+                  <TableRow>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                  {expandedStations[row.original.id] && (
+                    <StationHistoryRow
+                      key={`${row.id}-history`}
+                      station={row.original}
+                      historyByProduct={priceHistoryIndex[row.original.id] ?? {}}
+                    />
+                  )}
+                </Fragment>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center text-muted-foreground"
+                >
+                  No stations match your search.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
 
-          {/* Effective date-time (only when editing) */}
-          {isEditing && (
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="effective-datetime">Effective Date & Time</Label>
-                <Input
-                  id="effective-datetime"
-                  type="datetime-local"
-                  value={effectiveDateTime}
-                  onChange={(e) => setEffectiveDateTime(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Leave blank to apply immediately.
-                </p>
+        {/* Pagination */}
+        {table.getPageCount() > 1 && (
+          <>
+            <Separator />
+            <div className="flex items-center justify-between px-4 py-3 text-sm text-muted-foreground">
+              <div>
+                Showing{" "}
+                <strong className="text-foreground">
+                  {table.getState().pagination.pageIndex *
+                    table.getState().pagination.pageSize +
+                    1}
+                </strong>{" "}
+                to{" "}
+                <strong className="text-foreground">
+                  {Math.min(
+                    (table.getState().pagination.pageIndex + 1) *
+                      table.getState().pagination.pageSize,
+                    filteredStations.length
+                  )}
+                </strong>{" "}
+                of{" "}
+                <strong className="text-foreground">
+                  {filteredStations.length}
+                </strong>{" "}
+                stations
               </div>
-              <div className="flex items-end">
-                <p className="text-sm text-muted-foreground">
-                  <strong>{selectedStationIds.length}</strong> station(s) selected.
-                  Use the checkboxes in the table below to choose which stations
-                  these prices apply to.
-                </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                >
+                  Next
+                </Button>
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Bottom Card: Stations Table ────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Store className="size-5" />
-                Network Stations
-              </CardTitle>
-              <CardDescription>
-                {isEditing
-                  ? "Select stations to apply new prices to."
-                  : "Current fuel prices by station. Expand rows to view history."}
-              </CardDescription>
-            </div>
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
-              <Input
-                placeholder="Search stations..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <Fragment key={row.id}>
-                    <TableRow
-                      data-state={row.getIsSelected() && "selected"}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext()
-                          )}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                    {expandedStations[row.original.id] && (
-                      <StationHistoryRow
-                        key={`${row.id}-history`}
-                        station={row.original}
-                        historyByProduct={priceHistoryIndex[row.original.id] ?? {}}
-                      />
-                    )}
-                  </Fragment>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-24 text-center text-muted-foreground"
-                  >
-                    No stations match your search.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-
-          {/* Pagination */}
-          {table.getPageCount() > 1 && (
-            <>
-              <Separator />
-              <div className="flex items-center justify-between px-4 py-3 text-sm text-muted-foreground">
-                <div>
-                  Showing{" "}
-                  <strong className="text-foreground">
-                    {table.getState().pagination.pageIndex *
-                      table.getState().pagination.pageSize +
-                      1}
-                  </strong>{" "}
-                  to{" "}
-                  <strong className="text-foreground">
-                    {Math.min(
-                      (table.getState().pagination.pageIndex + 1) *
-                        table.getState().pagination.pageSize,
-                      filteredStations.length
-                    )}
-                  </strong>{" "}
-                  of{" "}
-                  <strong className="text-foreground">
-                    {filteredStations.length}
-                  </strong>{" "}
-                  stations
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => table.previousPage()}
-                    disabled={!table.getCanPreviousPage()}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => table.nextPage()}
-                    disabled={!table.getCanNextPage()}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Confirmation Dialog ────────────────────────────────────────── */}
-      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Price Changes</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-4">
-                <p>
-                  You are about to deploy new prices to{" "}
-                  <strong className="text-foreground">
-                    {selectedStationIds.length}
-                  </strong>{" "}
-                  station(s).
-                </p>
-                <div className="space-y-2">
-                  {Object.entries(pricesPayload).map(([type, price]) => (
-                    <div key={type} className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {FUEL_LABELS[type]}
-                      </span>
-                      <span className="font-mono font-bold text-foreground">
-                        ₦{price.toFixed(2)}/L
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <Separator />
-                {effectiveDateTime ? (
-                  <p className="text-sm">
-                    These prices will take effect on{" "}
-                    <strong className="text-foreground">
-                      {new Date(effectiveDateTime).toLocaleString()}
-                    </strong>
-                    .
-                  </p>
-                ) : (
-                  <p className="text-sm">
-                    These prices will take effect{" "}
-                    <strong className="text-foreground">immediately</strong>.
-                  </p>
-                )}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault()
-                handleConfirmSave()
-              }}
-              disabled={isSubmitting}
-              className="gap-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <SpinnerEllipsis />
-                  <span>Deploying...</span>
-                </>
-              ) : (
-                "Confirm Deployment"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }

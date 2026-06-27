@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiPatch } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { FormField, TextInput } from "@/components/form-field";
@@ -24,6 +25,7 @@ export function RoleDetailEditor({
   const [n, setN] = useState(name);
   const [selected, setSelected] = useState<Set<string>>(new Set(initial));
   const [pending, setPending] = useState(false);
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
@@ -47,7 +49,8 @@ export function RoleDetailEditor({
       setError(res.error.message);
       return;
     }
-    setInfo("Saved.");
+    router.push(endpoint.includes("platform") ? "/role-templates" : "/admin/role-templates");
+    router.refresh();
   }
 
   return (
@@ -60,7 +63,7 @@ export function RoleDetailEditor({
           System roles cannot be renamed. Built-in Owner role permissions cannot be reduced.
         </p>
       ) : null}
-      <div className="grid grid-cols-2 gap-2 rounded border border-stone-200 p-3 text-sm">
+      <div className="grid grid-cols-2 gap-2 rounded border border-stone-200 dark:border-stone-800 p-3 text-sm">
         {allPermissions.map((p) => (
           <label key={p} className="flex items-center gap-2">
             <input type="checkbox" checked={selected.has(p)} onChange={() => toggle(p)} />
@@ -68,12 +71,15 @@ export function RoleDetailEditor({
           </label>
         ))}
       </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {info ? <p className="text-sm text-green-700">{info}</p> : null}
-      <div>
-        <Button onClick={save} disabled={pending}>
-          {pending ? "Saving…" : "Save"}
-        </Button>
+      {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+      {info ? <p className="text-sm text-green-700 dark:text-green-400">{info}</p> : null}
+      <div className="flex items-center gap-4 mt-2">
+       <Button variant="outline" type="button" onClick={() => router.back()} disabled={pending}>
+  Back
+</Button>
+<Button onClick={save} disabled={pending}>
+  {pending ? "Saving…" : "Save"}
+</Button>
       </div>
     </div>
   );

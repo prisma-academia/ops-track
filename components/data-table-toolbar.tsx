@@ -17,8 +17,8 @@ export function DataTableToolbar({
   return (
     <div className="mb-4 flex items-center justify-between">
       <div>
-        <h1 className="text-xl font-semibold">{title}</h1>
-        {description ? <p className="mt-1 text-sm text-stone-600">{description}</p> : null}
+        <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
       </div>
       <div className="flex items-center gap-2">
         {action}

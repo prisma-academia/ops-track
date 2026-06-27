@@ -116,28 +116,28 @@ export function SalesReportsManager({
       title: "Transactions",
       subtitle: filteredReports.length.toString(),
       cardIcon: Handbag,
-      badgeColor: "bg-teal-400/10 text-teal-700",
+      badgeColor: "bg-teal-400/10 text-teal-700 dark:text-teal-400",
       statusValue: "Period",
     },
     {
       title: "Volume Sold",
       subtitle: `${stats.totalLiters.toLocaleString()} L`,
       cardIcon: Droplets,
-      badgeColor: "bg-blue-400/10 text-blue-700",
+      badgeColor: "bg-blue-400/10 text-blue-700 dark:text-blue-400",
       statusValue: "Period",
     },
     {
       title: "Cash Revenue",
       subtitle: `₦${stats.cash.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       cardIcon: Banknote,
-      badgeColor: "bg-emerald-400/10 text-emerald-700",
+      badgeColor: "bg-emerald-400/10 text-emerald-700 dark:text-emerald-400",
       statusValue: "Period",
     },
     {
       title: "Digital Revenue",
       subtitle: `₦${stats.digital.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       cardIcon: ChartColumnIncreasing,
-      badgeColor: "bg-indigo-400/10 text-indigo-700",
+      badgeColor: "bg-indigo-400/10 text-indigo-700 dark:text-indigo-400",
       statusValue: "Period",
     },
   ];
@@ -214,9 +214,9 @@ export function SalesReportsManager({
     <div className="space-y-6">
       
       {/* Filters and Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-card p-6 rounded-xl border">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-card text-card-foreground p-6 rounded-xl border">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">Sales Reports</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Sales Reports</h1>
           <p className="text-muted-foreground text-sm">Monitor daily sales logs across all your stations.</p>
         </div>
         

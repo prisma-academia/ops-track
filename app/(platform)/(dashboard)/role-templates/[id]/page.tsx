@@ -16,7 +16,8 @@ export default async function PlatformRoleDetailPage({
   if (!role || role.scope !== "PLATFORM") notFound();
   return (
     <div>
-      <PageHeader title={role.name} />
+      
+      <PageHeader title={role.name}/>
       <Card>
         <RoleDetailEditor
           id={role.id}

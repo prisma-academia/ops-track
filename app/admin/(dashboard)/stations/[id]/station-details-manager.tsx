@@ -47,6 +47,7 @@ import {
   Check
 } from "lucide-react";
 import { AssetTank } from "@/app/admin/(dashboard)/dashboard/Tank";
+import SpinnerEllipsis from "@/components/spinner-ellipsis";
 
 const AddTankSchema = z.object({
   name: z.string().min(1, "Please enter a tank name").max(50),
@@ -144,6 +145,7 @@ export function StationDetailsManager({
   const [nozzleCount, setNozzleCount] = useState<number>(1);
   const [selectedManagerId, setSelectedManagerId] = useState<string>("");
   const [openManagerSelect, setOpenManagerSelect] = useState(false);
+  const [isAssigningManager, setIsAssigningManager] = useState(false);
 
   const tankForm = useForm({
     resolver: zodResolver(AddTankSchema),
@@ -199,6 +201,7 @@ export function StationDetailsManager({
     setActiveDialog(null);
     setApiError(null);
     setNozzleCount(1);
+    setIsAssigningManager(false);
     tankForm.reset({ name: "", productType: "PMS" as any, capacity: 0 });
     pumpForm.reset({ name: "", tankId: "", nozzles: [{ name: "Nozzle A" }] });
     router.refresh();
@@ -207,9 +210,11 @@ export function StationDetailsManager({
   const handleAssignManager = async (e: React.FormEvent) => {
     e.preventDefault();
     setApiError(null);
+    setIsAssigningManager(true);
     const res = await apiPatch(`/api/tenant/stations/${station.id}`, {
       staffUserIds: selectedManagerId ? [selectedManagerId] : [],
     });
+    setIsAssigningManager(false);
     if (res.error) {
       setApiError(res.error.message);
     } else {
@@ -753,7 +758,7 @@ export function StationDetailsManager({
                     <Button
                       type="button"
                       variant="outline"
-                      className="w-full justify-between font-normal bg-white"
+                      className="w-full justify-between font-normal bg-background"
                     >
                       <span className="truncate">
                         {selectedManagerId === "" ? "Unassigned" : (
@@ -814,8 +819,10 @@ export function StationDetailsManager({
               {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 
               <DialogFooter className="mt-4">
-                <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>
-                <Button type="submit">Save Changes</Button>
+                <Button type="button" variant="outline" onClick={closeDialog} disabled={isAssigningManager}>Cancel</Button>
+                <Button type="submit" disabled={isAssigningManager} className="gap-2">
+                  {isAssigningManager ? <><SpinnerEllipsis /><span>Saving...</span></> : "Save Changes"}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -839,7 +846,7 @@ export function StationDetailsManager({
               </FormField>
 
               <FormField label="Region" htmlFor="s_region" error={editStationForm.formState.errors.region?.message}>
-                <select id="s_region" className="rounded border border-stone-300 bg-white px-3 py-2 text-sm w-full" {...editStationForm.register("region")}>
+                <select id="s_region" className="rounded border border-input bg-background px-3 py-2 text-sm w-full" {...editStationForm.register("region")}>
                   <option value="">Select Region</option>
                   <option value="South-West">South-West</option>
                   <option value="South-East">South-East</option>
@@ -857,8 +864,10 @@ export function StationDetailsManager({
               {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 
               <DialogFooter className="mt-4">
-                <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>
-                <Button type="submit">Save Changes</Button>
+                <Button type="button" variant="outline" onClick={closeDialog} disabled={editStationForm.formState.isSubmitting}>Cancel</Button>
+                <Button type="submit" disabled={editStationForm.formState.isSubmitting} className="gap-2">
+                  {editStationForm.formState.isSubmitting ? <><SpinnerEllipsis /><span>Saving...</span></> : "Save Changes"}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -886,7 +895,7 @@ export function StationDetailsManager({
                   </FormField>
                   
                   <FormField label="Product Type" htmlFor="t_prod" error={tankForm.formState.errors.productType?.message}>
-                    <select id="t_prod" className="rounded border border-stone-300 bg-white px-3 py-2 text-sm w-full" {...tankForm.register("productType")}>
+                    <select id="t_prod" className="rounded border border-input bg-background px-3 py-2 text-sm w-full" {...tankForm.register("productType")}>
                       <option value="PMS">PMS (Petrol)</option>
                       <option value="AGO">AGO (Diesel)</option>
                       <option value="DPK">DPK (Kerosene)</option>
@@ -901,8 +910,10 @@ export function StationDetailsManager({
                   {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 
                   <div className="flex justify-end pt-4 border-t mt-4">
-                    <Button type="button" variant="outline" className="mr-2" onClick={closeDialog}>Cancel</Button>
-                    <Button type="submit">Create Tank</Button>
+                    <Button type="button" variant="outline" className="mr-2" onClick={closeDialog} disabled={tankForm.formState.isSubmitting}>Cancel</Button>
+                    <Button type="submit" disabled={tankForm.formState.isSubmitting} className="gap-2">
+                      {tankForm.formState.isSubmitting ? <><SpinnerEllipsis /><span>Creating...</span></> : "Create Tank"}
+                    </Button>
                   </div>
                 </form>
               </TabsContent>
@@ -914,7 +925,7 @@ export function StationDetailsManager({
                   </FormField>
 
                   <FormField label="Draws From Tank" htmlFor="p_tank" error={pumpForm.formState.errors.tankId?.message}>
-                    <select id="p_tank" className="rounded border border-stone-300 bg-white px-3 py-2 text-sm w-full" {...pumpForm.register("tankId")}>
+                    <select id="p_tank" className="rounded border border-input bg-background px-3 py-2 text-sm w-full" {...pumpForm.register("tankId")}>
                       <option value="">Select tank...</option>
                       {station.tanks.map((t: any) => (
                         <option key={t.id} value={t.id}>{t.name} ({t.productType})</option>
@@ -925,7 +936,7 @@ export function StationDetailsManager({
                   <FormField label="Number of Nozzles" htmlFor="p_nozzle_count" error={pumpForm.formState.errors.nozzles?.message}>
                     <select
                       id="p_nozzle_count"
-                      className="rounded border border-stone-300 bg-white px-3 py-2 text-sm w-full font-medium"
+                      className="rounded border border-input bg-background px-3 py-2 text-sm w-full font-medium"
                       value={nozzleCount}
                       onChange={(e) => handleNozzleCountChange(Number(e.target.value))}
                     >
@@ -939,8 +950,10 @@ export function StationDetailsManager({
                   {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 
                   <div className="flex justify-end pt-4 border-t mt-4">
-                    <Button type="button" variant="outline" className="mr-2" onClick={closeDialog}>Cancel</Button>
-                    <Button type="submit">Create Pump</Button>
+                    <Button type="button" variant="outline" className="mr-2" onClick={closeDialog} disabled={pumpForm.formState.isSubmitting}>Cancel</Button>
+                    <Button type="submit" disabled={pumpForm.formState.isSubmitting} className="gap-2">
+                      {pumpForm.formState.isSubmitting ? <><SpinnerEllipsis /><span>Creating...</span></> : "Create Pump"}
+                    </Button>
                   </div>
                 </form>
               </TabsContent>

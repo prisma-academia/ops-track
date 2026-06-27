@@ -94,6 +94,7 @@ export function WaybillsManager({
   return (
     <div className="space-y-6">
       <DataTableToolbar
+        
         title="Dispatches"
         description="Track fuel distribution movements from depots to retail stations."
         action={

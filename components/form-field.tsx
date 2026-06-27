@@ -13,7 +13,7 @@ export function FormField({
 }) {
   return (
     <label className="flex flex-col gap-1 text-sm" htmlFor={htmlFor}>
-      <span className="text-stone-700">{label}</span>
+      <span className="text-foreground">{label}</span>
       {children}
       {error ? <span className="text-xs text-red-600">{error}</span> : null}
     </label>
@@ -26,7 +26,7 @@ export function TextInput(
   return (
     <input
       {...props}
-      className={`rounded border border-stone-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-stone-500 ${props.className ?? ""}`}
+      className={`rounded border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 ${props.className ?? ""}`}
     />
   );
 }

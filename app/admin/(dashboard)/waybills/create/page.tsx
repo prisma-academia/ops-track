@@ -19,7 +19,7 @@ export default async function CreateWaybillPage() {
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">New Fuel Dispatch</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">New Fuel Dispatch</h2>
         <p className="text-muted-foreground">
           Create a new waybill to track fuel delivery to a retail station.
         </p>

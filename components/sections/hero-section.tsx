@@ -85,7 +85,7 @@ export default function HeroSection({ slug }: { slug: string }) {
                                         <Link
                                             href="#link"
                                             className="hover:bg-background dark:hover:border-t-border bg-muted group mx-auto flex w-fit items-center gap-4 rounded-full border p-1 pl-4 shadow-md shadow-zinc-950/5 transition-colors duration-300 dark:border-t-white/5 dark:shadow-zinc-950">
-                                            <span className="text-foreground text-sm">Introducing Smart Learning Analytics</span>
+                                            <span className="text-foreground text-sm">Introducing Smart Fuel & Fleet Analytics</span>
                                             <span className="dark:border-background block h-4 w-0.5 border-l bg-white dark:bg-zinc-700"></span>
 
                                             <div className="bg-background group-hover:bg-muted size-6 overflow-hidden rounded-full duration-500">
@@ -107,14 +107,14 @@ export default function HeroSection({ slug }: { slug: string }) {
                                     animate="visible"
                                     variants={itemVariants}
                                     className="mx-auto mt-8 max-w-4xl text-balance text-5xl max-md:font-semibold md:text-7xl lg:mt-16 xl:text-[5.25rem]">
-                                    Empower Education with Modern Learning
+                                    Empower Operations with Modern Station Management
                                 </motion.h1>
                                 <motion.p
                                     initial="hidden"
                                     animate="visible"
                                     variants={itemVariants}
                                     className="mx-auto mt-8 max-w-2xl text-balance text-lg">
-                                    A comprehensive and intuitive learning management system designed to streamline school operations, engage students, and simplify teaching.
+                                    A comprehensive and intuitive fuel, station, and fleet management SaaS system designed to streamline operations, track metrics, and simplify logistics.
                                 </motion.p>
 
                                 <motion.div

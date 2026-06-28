@@ -82,9 +82,13 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
 
   const form = useForm<z.infer<typeof CreateWaybillSchema>>({
     resolver: zodResolver(CreateWaybillSchema) as any,
+    defaultValues: {
+      productType: "PMS",
+    }
   });
 
   const watchStationId = form.watch("stationId");
+  const watchProductType = form.watch("productType");
 
   // Fetch Lookups
   useEffect(() => {
@@ -106,15 +110,15 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
 
   // Auto-generate Waybill Number
   useEffect(() => {
-    if (watchStationId) {
+    if (watchStationId && watchProductType) {
       const station = stations.find((s) => s.id === watchStationId);
       if (station) {
         const today = new Date().toISOString().split("T")[0].replace(/-/g, "");
-        const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
-        form.setValue("number", `WB-${station.code}-${today}-${randomStr}`, { shouldValidate: true });
+        const randomNum = Math.floor(Math.random() * 900) + 100;
+        form.setValue("number", `WB-${station.code}-${today}-${watchProductType}-${randomNum}`, { shouldValidate: true });
       }
     }
-  }, [watchStationId, stations, form]);
+  }, [watchStationId, watchProductType, stations, form]);
 
   // Handle Date/Time Change
   useEffect(() => {
@@ -246,7 +250,12 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
         
         {/* Column 1: General Info */}
         <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm space-y-8">
-          <h3 className="font-semibold text-lg border-b pb-4 text-foreground">General Information</h3>
+          <div className="flex items-center justify-between border-b pb-4">
+            <h3 className="font-semibold text-lg text-foreground">General Information</h3>
+            {form.watch("number") && (
+              <span className="text-sm font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full">{form.watch("number")}</span>
+            )}
+          </div>
 
           {/* Station Selection */}
         <div className="space-y-2">

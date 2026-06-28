@@ -39,6 +39,13 @@ export const PERMISSIONS = {
   TENANT_PRICES_WRITE: { key: "tenant.prices:write", module: "tenant.prices", description: "Manage prices" },
   TENANT_EXPENSES_READ: { key: "tenant.expenses:read", module: "tenant.expenses", description: "View expenses" },
   TENANT_EXPENSES_WRITE: { key: "tenant.expenses:write", module: "tenant.expenses", description: "Manage expenses" },
+  // Mobile app permissions
+  MOBILE_TENANT_DIPPINGS: { key: "mobile.tenant.dippings", module: "mobile.tenant.dippings", description: "Mobile app: Manage dippings" },
+  MOBILE_TENANT_REPORTS: { key: "mobile.tenant.reports", module: "mobile.tenant.reports", description: "Mobile app: Manage reports" },
+  MOBILE_TENANT_SHIFTS: { key: "mobile.tenant.shifts", module: "mobile.tenant.shifts", description: "Mobile app: Manage shifts" },
+  MOBILE_TENANT_EXPENSES: { key: "mobile.tenant.expenses", module: "mobile.tenant.expenses", description: "Mobile app: Manage expenses" },
+  MOBILE_TENANT_ATTENDANTS: { key: "mobile.tenant.attendants", module: "mobile.tenant.attendants", description: "Mobile app: Manage attendants" },
+  MOBILE_TENANT_WAYBILLS: { key: "mobile.tenant.waybills", module: "mobile.tenant.waybills", description: "Mobile app: Manage waybills" },
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]["key"];
@@ -50,7 +57,7 @@ export const ALL_PLATFORM_PERMISSION_KEYS: PermissionKey[] = ALL_PERMISSIONS
   .map((p) => p.key as PermissionKey);
 
 export const ALL_TENANT_PERMISSION_KEYS: PermissionKey[] = ALL_PERMISSIONS
-  .filter((p) => p.key.startsWith("tenant."))
+  .filter((p) => p.key.startsWith("tenant.") || p.key.startsWith("mobile.tenant."))
   .map((p) => p.key as PermissionKey);
 
 // Built-in tenant role templates seeded per-tenant on tenant creation.
@@ -85,6 +92,12 @@ export const TENANT_BUILTIN_ROLES = [
       PERMISSIONS.TENANT_PRICES_WRITE.key,
       PERMISSIONS.TENANT_EXPENSES_READ.key,
       PERMISSIONS.TENANT_EXPENSES_WRITE.key,
+      PERMISSIONS.MOBILE_TENANT_DIPPINGS.key,
+      PERMISSIONS.MOBILE_TENANT_REPORTS.key,
+      PERMISSIONS.MOBILE_TENANT_SHIFTS.key,
+      PERMISSIONS.MOBILE_TENANT_EXPENSES.key,
+      PERMISSIONS.MOBILE_TENANT_ATTENDANTS.key,
+      PERMISSIONS.MOBILE_TENANT_WAYBILLS.key,
     ] as PermissionKey[],
     isSystem: true,
   },
@@ -107,6 +120,12 @@ export const TENANT_BUILTIN_ROLES = [
       PERMISSIONS.TENANT_EXPENSES_READ.key,
       PERMISSIONS.TENANT_EXPENSES_WRITE.key,
       PERMISSIONS.TENANT_CUSTOMERS_READ.key,
+      PERMISSIONS.MOBILE_TENANT_DIPPINGS.key,
+      PERMISSIONS.MOBILE_TENANT_REPORTS.key,
+      PERMISSIONS.MOBILE_TENANT_SHIFTS.key,
+      PERMISSIONS.MOBILE_TENANT_EXPENSES.key,
+      PERMISSIONS.MOBILE_TENANT_ATTENDANTS.key,
+      PERMISSIONS.MOBILE_TENANT_WAYBILLS.key,
     ] as PermissionKey[],
     isSystem: true,
   },
@@ -121,6 +140,8 @@ export const TENANT_BUILTIN_ROLES = [
       PERMISSIONS.TENANT_EXPENSES_READ.key,
       PERMISSIONS.TENANT_EXPENSES_WRITE.key,
       PERMISSIONS.TENANT_CUSTOMERS_READ.key,
+      PERMISSIONS.MOBILE_TENANT_SHIFTS.key,
+      PERMISSIONS.MOBILE_TENANT_EXPENSES.key,
     ] as PermissionKey[],
     isSystem: true,
   },
@@ -134,6 +155,8 @@ export const TENANT_BUILTIN_ROLES = [
       PERMISSIONS.TENANT_SHIFTS_WRITE.key,
       PERMISSIONS.TENANT_DIPPINGS_READ.key,
       PERMISSIONS.TENANT_DIPPINGS_WRITE.key,
+      PERMISSIONS.MOBILE_TENANT_DIPPINGS.key,
+      PERMISSIONS.MOBILE_TENANT_SHIFTS.key,
     ] as PermissionKey[],
     isSystem: true,
   },

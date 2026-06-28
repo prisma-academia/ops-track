@@ -17,7 +17,7 @@ export default async function PlatformRoleDetailPage({
   return (
     <div>
       
-      <PageHeader title={role.name}/>
+      <PageHeader title={role.name} backHref="/platform/role-templates" />
       <Card>
         <RoleDetailEditor
           id={role.id}

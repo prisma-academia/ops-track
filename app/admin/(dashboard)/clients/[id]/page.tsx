@@ -16,7 +16,7 @@ export default async function ClientDetailPage({
   if (!client || client.tenantId !== actor.tenantId) notFound();
   return (
     <div>
-      <PageHeader title={`${client.firstName ?? ""} ${client.lastName ?? ""}`.trim() || client.email} />
+      <PageHeader title={`${client.firstName ?? ""} ${client.lastName ?? ""}`.trim() || client.email} backHref="/admin/clients" />
       <Card>
         <dl className="grid grid-cols-2 gap-2 text-sm">
           <dt className="text-stone-500">Email</dt>

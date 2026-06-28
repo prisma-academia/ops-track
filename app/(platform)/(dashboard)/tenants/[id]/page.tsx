@@ -52,7 +52,7 @@ export default async function TenantDrilldownPage({
 
   return (
     <div>
-      <PageHeader title={tenant.name} />
+      <PageHeader title={tenant.name} backHref="/platform/tenants" />
 
       <Tabs defaultValue="basic" className="w-full">
         <TabsList className="mb-4">

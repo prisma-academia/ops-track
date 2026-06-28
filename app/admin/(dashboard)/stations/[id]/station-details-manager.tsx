@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -44,7 +45,8 @@ import {
   Cloud,
   Pencil,
   ChevronsUpDown,
-  Check
+  Check,
+  ArrowLeft
 } from "lucide-react";
 import { AssetTank } from "@/app/admin/(dashboard)/dashboard/Tank";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
@@ -274,6 +276,11 @@ export function StationDetailsManager({
       <Card className="border-border/50 bg-card">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 gap-6">
           <div className="flex items-center gap-5 flex-1">
+            <Button variant="outline" size="icon" asChild className="shrink-0 h-10 w-10 border-border/50">
+              <Link href="/admin/stations">
+                <ArrowLeft className="size-4" />
+              </Link>
+            </Button>
             <div className="size-14 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center text-primary">
               <Store size={26} strokeWidth={1.5} />
             </div>

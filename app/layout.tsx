@@ -2,26 +2,25 @@ import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
-import { Geist, Geist_Mono, Manrope, Inter, IBM_Plex_Sans } from "next/font/google";
+import { Rubik, Source_Serif_4, Fira_Code } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-const geistHeading = Geist({subsets:['latin'],variable:'--font-heading'});
-
-const inter = Inter({subsets:['latin'],variable:'--font-sans'});
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const fontSans = Rubik({
   subsets: ["latin"],
-  preload: false,
+  variable: "--font-sans",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const fontSerif = Source_Serif_4({
   subsets: ["latin"],
-  preload: false,
+  variable: "--font-serif",
+});
+
+const fontMono = Fira_Code({
+  subsets: ["latin"],
+  variable: "--font-mono",
 });
 
 export const metadata: Metadata = {
@@ -42,9 +41,9 @@ export default async function RootLayout({
       className={cn(
               "h-full",
               "antialiased",
-              geistSans.variable,
-              geistMono.variable
-            , "font-sans", inter.variable, geistHeading.variable)}
+              fontSans.variable,
+              fontMono.variable
+            , "font-sans", fontSans.variable, fontSerif.variable)}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-stone-50 text-stone-900">

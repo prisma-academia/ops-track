@@ -122,9 +122,6 @@ export function WaybillsManager({
 
       <WaybillsTable
         data={waybills}
-        onViewDetails={(w) => {
-          router.push(`/admin/waybills/${w.id}`);
-        }}
       />
 
       {/* ==========================================

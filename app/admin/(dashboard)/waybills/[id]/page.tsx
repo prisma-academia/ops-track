@@ -67,10 +67,8 @@ export default async function WaybillDetailsPage({
   if (waybill.status === "DELIVERED") {
     currentStep = 4;
     isCompleted = true; 
-  } else if (waybill.status === "IN_TRANSIT") {
-    currentStep = 3;
   } else if (waybill.status === "DISPATCHED") {
-    currentStep = 2;
+    currentStep = 3;
   }
 
   const steps = [

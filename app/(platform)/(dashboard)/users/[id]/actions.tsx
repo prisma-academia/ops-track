@@ -111,15 +111,12 @@ export function UserDetailActions({
 
   return (
     <div className="space-y-6">
-      <Card className="border-border/40 shadow-sm overflow-hidden p-0">
-        <CardHeader className="bg-muted/10 pb-4 border-b border-border/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <Card className="overflow-hidden">
+        <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="space-y-1">
             <CardTitle className="text-lg font-semibold text-foreground">
               Permissions Matrix
             </CardTitle>
-            <CardDescription className="text-xs">
-              Manage fine-grained access control for this user.
-            </CardDescription>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <div className="flex-1 sm:w-48">
@@ -143,7 +140,7 @@ export function UserDetailActions({
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="px-0">
           <div className="overflow-x-auto">
             {/* Column headers */}
             <div className="grid grid-cols-6 border-b border-border/40 bg-muted/30 px-6 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">

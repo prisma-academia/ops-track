@@ -402,13 +402,6 @@ export function UpdatePricesManager({
         ),
       },
       {
-        accessorKey: "region",
-        header: "Region",
-        cell: ({ row }) => (
-          <Badge variant="outline">{row.original.region}</Badge>
-        ),
-      },
-      {
         id: "pms",
         header: "PMS",
         cell: ({ row }) => <PriceCell product={row.original.fuels.PMS} />,

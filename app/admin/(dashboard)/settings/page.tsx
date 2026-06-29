@@ -17,7 +17,11 @@ export default async function TenantSettingsPage() {
 
   const settings = parseTenantSettings(tenant.settingsJson);
   const logoUrl =
-    settings.logoKey && s3Configured() ? publicUrlForKey(settings.logoKey) : null;
+    settings.logoKey?.startsWith("http")
+      ? settings.logoKey
+      : settings.logoKey && s3Configured()
+      ? publicUrlForKey(settings.logoKey)
+      : null;
   const t = await getTranslations("settings");
 
   return (
@@ -26,7 +30,7 @@ export default async function TenantSettingsPage() {
       <Card>
         <SettingsForm
           initial={{ name: tenant.name, settings, logoUrl }}
-          storageEnabled={s3Configured()}
+          storageEnabled={s3Configured() || !!process.env.CLOUDINARY_CLOUD_NAME}
         />
       </Card>
     </div>

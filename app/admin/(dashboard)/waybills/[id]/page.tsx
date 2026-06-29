@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { ArrowLeft, CheckCircle2, AlertCircle, MapPin, Truck, BarChartIcon } from "lucide-react";
+import { ArrowLeft, CheckCircle2, AlertCircle, MapPin, Truck, BarChartIcon, Package, ClipboardCheck } from "lucide-react";
 
 function formatDate(d: Date | null | undefined) {
   if (!d) return "—";
@@ -60,6 +60,25 @@ export default async function WaybillDetailsPage({
   const totalDischarged = waybill.dippings.reduce((acc, dip) => {
     return acc + (dip.afterLiters ? Number(dip.afterLiters) - Number(dip.beforeLiters) : 0);
   }, 0);
+
+  let currentStep = 2;
+  let isCompleted = false;
+
+  if (waybill.status === "DELIVERED") {
+    currentStep = 4;
+    isCompleted = true; 
+  } else if (waybill.status === "IN_TRANSIT") {
+    currentStep = 3;
+  } else if (waybill.status === "DISPATCHED") {
+    currentStep = 2;
+  }
+
+  const steps = [
+    { id: 1, icon: Package, title: "Waybill Generated", desc: "Order processing" },
+    { id: 2, icon: ClipboardCheck, title: "Verified", desc: "Documentation checked" },
+    { id: 3, icon: Truck, title: "Dispatched", desc: "From the depot to the station" },
+    { id: 4, icon: MapPin, title: "Delivered", desc: "Arrived at destination" },
+  ];
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-10">
@@ -234,6 +253,50 @@ export default async function WaybillDetailsPage({
 
         {/* Sidebar Column */}
         <div className="space-y-6">
+          {/* Location Tracking Progress */}
+          <Card className="shadow-none border-muted bg-card">
+            <CardHeader className="py-0">
+              <CardTitle className="text-sm font-bold">Tracking Status</CardTitle>
+            </CardHeader>
+            <CardContent className="pb-6">
+              <div className="flex flex-col w-full relative">
+                {steps.map((step, index) => {
+                  const isComplete = isCompleted || step.id < currentStep;
+                  const isActive = !isCompleted && step.id === currentStep;
+
+                  return (
+                    <div key={step.id} className="relative flex gap-4 pb-6 last:pb-0">
+                      {/* Vertical line connecting to next item */}
+                      {index < steps.length - 1 && (
+                        <div
+                          className={`absolute left-4 top-8 bottom-0 w-[2px] -ml-[1px] transition-colors ${
+                            isComplete ? "bg-primary" : "bg-border"
+                          }`}
+                        />
+                      )}
+                      
+                      <div
+                        className={`flex items-center justify-center size-8 rounded-full border-[1.5px] shrink-0 relative z-10 transition-colors mt-0.5 ${
+                          isComplete
+                            ? "bg-primary border-primary text-primary-foreground"
+                            : isActive
+                            ? "bg-background border-primary text-primary"
+                            : "bg-background border-border text-muted-foreground/40"
+                        }`}
+                      >
+                        <step.icon size={14} strokeWidth={isActive || isComplete ? 2.5 : 2} />
+                      </div>
+                      <div className="flex-1">
+                        <p className={`text-sm font-medium leading-none ${isActive ? 'text-foreground' : isComplete ? 'text-foreground' : 'text-muted-foreground'}`}>{step.title}</p>
+                        <p className="text-xs text-muted-foreground mt-1.5">{step.desc}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="shadow-none border-muted">
             <CardHeader className="">
               <CardTitle className="text-sm font-medium">Destination</CardTitle>

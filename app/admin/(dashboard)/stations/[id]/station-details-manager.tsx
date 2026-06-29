@@ -8,10 +8,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiPost, apiPatch } from "@/lib/client/api";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { FormField, TextInput } from "@/components/form-field";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -226,13 +228,46 @@ export function StationDetailsManager({
 
   const handleEditStation = editStationForm.handleSubmit(async (values) => {
     setApiError(null);
-    const res = await apiPatch(`/api/tenant/stations/${station.id}`, values);
+    const res = await apiPatch(`/api/tenant/stations/${station.id}`, {
+      ...values,
+      staffUserIds: selectedManagerId ? [selectedManagerId] : [],
+    });
     if (res.error) {
       setApiError(res.error.message);
     } else {
       closeDialog();
     }
   });
+
+  const openEditStation = () => {
+    setSelectedManagerId(station.staff && station.staff.length > 0 ? station.staff[0].id : "");
+    editStationForm.reset({
+      name: station.name || "",
+      code: station.code || "",
+      region: station.region || "",
+      location: station.location || "",
+    });
+    setActiveDialog("edit-station");
+  };
+
+  const openConfigDialog = () => {
+    const nextTankIndex = (station.tanks?.length || 0) + 1;
+    const nextPumpIndex = (station.pumps?.length || 0) + 1;
+
+    tankForm.reset({
+      name: `TANK ${nextTankIndex}`,
+      productType: "PMS",
+      capacity: 0
+    });
+
+    pumpForm.reset({
+      name: `PUMP ${nextPumpIndex}`,
+      tankId: "",
+      nozzles: [{ name: "Nozzle A" }]
+    });
+
+    setActiveDialog("config");
+  };
 
   // Flatten and sort data
   const regularDippings = station.tanks
@@ -273,77 +308,102 @@ export function StationDetailsManager({
   return (
     <div className="space-y-6">
       {/* ---------------- FULL WIDTH HEADER CARD ---------------- */}
-      <Card className="border-border/50 bg-card">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 gap-6">
-          <div className="flex items-center gap-5 flex-1">
-            <Button variant="outline" size="icon" asChild className="shrink-0 h-10 w-10 border-border/50">
+      <Card>
+        <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" size="icon" asChild className="h-10 w-10 shrink-0">
               <Link href="/admin/stations">
-                <ArrowLeft className="size-4" />
+                <ArrowLeft className="h-4 w-4" />
               </Link>
             </Button>
-            <div className="size-14 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center text-primary">
-              <Store size={26} strokeWidth={1.5} />
-            </div>
-            <div className="space-y-1.5 flex-1">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-semibold tracking-tight text-foreground">{station.name}</h1>
-                  <Badge variant="outline" className="font-mono text-xs bg-muted/50 text-muted-foreground border-border/50">{station.code}</Badge>
-                  <button onClick={() => setActiveDialog("edit-station")} className="inline-flex items-center justify-center rounded-full bg-primary/10 hover:bg-primary/20 text-primary p-1.5 transition-colors ml-2" title="Edit Station Info">
-                    <Pencil size={14} />
-                  </button>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                  <MapPin size={14} strokeWidth={2} />
-                  <span>{station.location ? `${station.location}, ` : ""}{station.region} Region</span>
-                </div>
-                <div 
-                  className="flex items-center gap-1.5 group cursor-pointer hover:bg-muted/50 p-1 -ml-1 rounded-md transition-colors" 
-                  onClick={() => { setSelectedManagerId(station.staff && station.staff.length > 0 ? station.staff[0].id : ""); setActiveDialog("manager"); }}
-                >
-                  <User size={14} strokeWidth={2} className="text-muted-foreground group-hover:text-primary transition-colors" />
-                  <span className="text-muted-foreground group-hover:text-foreground transition-colors">
-                    Manager: <span className="font-medium text-foreground">{managerName}</span>
-                  </span>
-                  <div className="opacity-50 group-hover:opacity-100 transition-opacity ml-1 bg-primary/10 text-primary p-1 rounded-full">
-                    <Pencil size={12} />
-                  </div>
-                </div>
-              </div>
+            <div>
+              <CardTitle className="text-xl">Station Overview</CardTitle>
             </div>
           </div>
-
-          <div className="flex items-start gap-4">
-            {/* Prices Grid */}
-            {Object.keys(latestPrices).length === 0 ? (
-              <div className="text-sm text-muted-foreground italic px-4 py-2 border border-dashed rounded-xl flex items-center justify-center min-h-[60px]">
-                No prices configured
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 w-full md:w-auto">
-                {Object.entries(latestPrices).map(([product, price]) => (
-                  <div key={product} className="flex items-center gap-3 px-3 py-2 bg-muted/20 border border-border/50 rounded-xl min-w-[140px]">
-                    <div className="p-1.5 bg-background border border-border/50 rounded-md">
-                      {PRODUCT_ICONS[product] || <Flame size={14} />}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-medium text-muted-foreground">{PRODUCT_NAMES[product] || product}</span>
-                      <span className="text-sm font-bold text-foreground leading-tight">₦{Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+          <CardAction className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={openEditStation} className="gap-2">
+              <Pencil className="h-4 w-4" />
+              Edit Station
+            </Button>
+            <Button onClick={openConfigDialog} className="gap-2">
+              <Settings className="h-4 w-4" />
+              Config
+            </Button>
+          </CardAction>
+        </CardHeader>
       </Card>
+
+      {/* ---------------- STATION INFO & PRICES GRID ---------------- */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 items-start">
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle className="text-lg">Station Information</CardTitle>
+            <CardDescription>Manager and operations</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-6 pt-2">
+              <div className="flex items-center gap-4">
+                <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <Store size={20} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium leading-none">{station.name}</p>
+                    <Badge variant="outline" className="font-mono text-[10px] px-1 py-0 h-4">{station.code}</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1.5 flex items-center gap-1">
+                    <MapPin size={12} />
+                    {station.location ? `${station.location}, ` : ""}{station.region} Region
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <User size={20} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium leading-none">Station Manager</p>
+                  <p className="text-sm text-muted-foreground mt-1.5">{managerName}</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 sm:grid-cols-2 h-full">
+          {Object.keys(latestPrices).length === 0 ? (
+            <Card className="col-span-1 sm:col-span-2 flex items-center justify-center h-full min-h-[120px]">
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground italic">No prices configured</p>
+              </CardContent>
+            </Card>
+          ) : (
+            Object.entries(latestPrices).map(([product, price]) => (
+              <Card key={product} className="flex flex-col justify-center">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {PRODUCT_NAMES[product] || product}
+                  </CardTitle>
+                  <div className="p-2 bg-primary/5 text-primary rounded-md">
+                    {PRODUCT_ICONS[product] || <Flame size={14} />}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    ₦{Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      </div>
 
       {/* ---------------- TABS NAVIGATION ---------------- */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex items-center justify-between mb-3">
-          <TabsList className="h-12 px-1 py-1">
+          <TabsList className="h-12 px-1 py-1 overflow-x-auto w-full justify-start md:w-auto">
             <TabsTrigger value="overview" className="px-5 py-3 text-sm">Overview</TabsTrigger>
             <TabsTrigger value="dippings" className="px-5 py-3 text-sm">Dippings</TabsTrigger>
             <TabsTrigger value="shifts" className="px-5 py-3 text-sm">Shift Logs</TabsTrigger>
@@ -351,10 +411,6 @@ export function StationDetailsManager({
             <TabsTrigger value="expenses" className="px-5 py-3 text-sm">Expenses</TabsTrigger>
             <TabsTrigger value="sales" className="px-5 py-3 text-sm">Sales</TabsTrigger>
           </TabsList>
-          <Button variant="outline" size="sm" onClick={() => setActiveDialog("config")} className="h-9 shrink-0 gap-2">
-            <Settings size={14} />
-            <span>Config</span>
-          </Button>
         </div>
 
         {/* ---------------- OVERVIEW TAB ---------------- */}
@@ -510,7 +566,7 @@ export function StationDetailsManager({
 
         {/* ---------------- DIPPINGS TAB ---------------- */}
         <TabsContent value="dippings" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm">
+          <Card className="border-border/40 shadow-sm py-0">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-muted/30 border-b border-border/50">
@@ -546,7 +602,7 @@ export function StationDetailsManager({
 
         {/* ---------------- SHIFTS TAB ---------------- */}
         <TabsContent value="shifts" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm">
+          <Card className="border-border/40 shadow-sm py-0">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-muted/30 border-b border-border/50">
@@ -603,7 +659,7 @@ export function StationDetailsManager({
 
         {/* ---------------- WAYBILLS TAB ---------------- */}
         <TabsContent value="waybills" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm">
+          <Card className="border-border/40 shadow-sm py-0">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-muted/30 border-b border-border/50">
@@ -660,7 +716,7 @@ export function StationDetailsManager({
 
         {/* ---------------- EXPENSES TAB ---------------- */}
         <TabsContent value="expenses" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm">
+          <Card className="border-border/40 shadow-sm py-0">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-muted/30 border-b border-border/50">
@@ -704,7 +760,7 @@ export function StationDetailsManager({
 
         {/* ---------------- SALES TAB ---------------- */}
         <TabsContent value="sales" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm">
+          <Card className="border-border/40 shadow-sm py-0">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-muted/30 border-b border-border/50">
@@ -750,127 +806,125 @@ export function StationDetailsManager({
 
       </Tabs>
 
-      {/* Assign Manager Dialog */}
-      {activeDialog === "manager" && (
+      {/* Edit Station & Assign Manager Dialog */}
+      {activeDialog === "edit-station" && (
         <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent>
+          <DialogContent className="sm:max-w-3xl">
             <DialogHeader>
-              <DialogTitle>Assign Station Manager</DialogTitle>
+              <DialogTitle>Edit Station & Management</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleAssignManager} className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Select Manager</label>
-                <Popover open={openManagerSelect} onOpenChange={setOpenManagerSelect}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full justify-between font-normal bg-background"
+            <form onSubmit={handleEditStation} className="pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Left Column: Station Details */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold border-b pb-2 mb-4">Station Details</h3>
+                  <FormField label="Station Name" htmlFor="s_name" error={editStationForm.formState.errors.name?.message}>
+                    <Input id="s_name" {...editStationForm.register("name")} />
+                  </FormField>
+
+                  <FormField label="Station Code" htmlFor="s_code" error={editStationForm.formState.errors.code?.message}>
+                    <Input id="s_code" {...editStationForm.register("code")} />
+                  </FormField>
+
+                  <FormField label="Region" htmlFor="s_region" error={editStationForm.formState.errors.region?.message}>
+                    <Select 
+                      onValueChange={(val) => editStationForm.setValue("region", val)} 
+                      value={editStationForm.watch("region")}
                     >
-                      <span className="truncate">
-                        {selectedManagerId === "" ? "Unassigned" : (
-                          users.find(u => u.id === selectedManagerId)
-                            ? (() => {
-                                const u = users.find(u => u.id === selectedManagerId)!;
-                                return u.firstName || u.lastName
-                                  ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-                                  : u.email;
-                              })()
-                            : "Select..."
-                        )}
-                      </span>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                    <Command>
-                      <CommandInput placeholder="Search users..." />
-                      <CommandList>
-                        <CommandEmpty>No user found.</CommandEmpty>
-                        <CommandGroup>
-                          <CommandItem
-                            value="unassigned"
-                            onSelect={() => {
-                              setSelectedManagerId("");
-                              setOpenManagerSelect(false);
-                            }}
-                          >
-                            Unassigned
-                            {selectedManagerId === "" && <Check className="ml-auto h-4 w-4" />}
-                          </CommandItem>
-                          {users.map((u) => {
-                            const label = u.firstName || u.lastName
-                              ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-                              : u.email;
-                            return (
+                      <SelectTrigger className="w-full" id="s_region">
+                        <SelectValue placeholder="Select Region" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="South-West">South-West</SelectItem>
+                        <SelectItem value="South-East">South-East</SelectItem>
+                        <SelectItem value="North-Central">North-Central</SelectItem>
+                        <SelectItem value="North-West">North-West</SelectItem>
+                        <SelectItem value="North-East">North-East</SelectItem>
+                        <SelectItem value="South-South">South-South</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+
+                  <FormField label="Location" htmlFor="s_location" error={editStationForm.formState.errors.location?.message}>
+                    <Input id="s_location" {...editStationForm.register("location")} />
+                  </FormField>
+                </div>
+
+                {/* Right Column: Manager Assignment */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold border-b pb-2 mb-4">Management</h3>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Select Manager</label>
+                    <Popover open={openManagerSelect} onOpenChange={setOpenManagerSelect}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-between font-normal bg-background"
+                        >
+                          <span className="truncate">
+                            {selectedManagerId === "" ? "Unassigned" : (
+                              users.find(u => u.id === selectedManagerId)
+                                ? (() => {
+                                    const u = users.find(u => u.id === selectedManagerId)!;
+                                    return u.firstName || u.lastName
+                                      ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                                      : u.email;
+                                  })()
+                                : "Select..."
+                            )}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search users..." />
+                          <CommandList>
+                            <CommandEmpty>No user found.</CommandEmpty>
+                            <CommandGroup>
                               <CommandItem
-                                key={u.id}
-                                value={`${label} ${u.email}`.toLowerCase()}
+                                value="unassigned"
                                 onSelect={() => {
-                                  setSelectedManagerId(u.id);
+                                  setSelectedManagerId("");
                                   setOpenManagerSelect(false);
                                 }}
                               >
-                                {label} ({u.email})
-                                {selectedManagerId === u.id && <Check className="ml-auto h-4 w-4" />}
+                                Unassigned
+                                {selectedManagerId === "" && <Check className="ml-auto h-4 w-4" />}
                               </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                              {users.map((u) => {
+                                const label = u.firstName || u.lastName
+                                  ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                                  : u.email;
+                                return (
+                                  <CommandItem
+                                    key={u.id}
+                                    value={`${label} ${u.email}`.toLowerCase()}
+                                    onSelect={() => {
+                                      setSelectedManagerId(u.id);
+                                      setOpenManagerSelect(false);
+                                    }}
+                                  >
+                                    {label} ({u.email})
+                                    {selectedManagerId === u.id && <Check className="ml-auto h-4 w-4" />}
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
               </div>
 
-              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+              {apiError && <p className="text-xs text-red-600 mt-4">{apiError}</p>}
 
-              <DialogFooter className="mt-4">
-                <Button type="button" variant="outline" onClick={closeDialog} disabled={isAssigningManager}>Cancel</Button>
-                <Button type="submit" disabled={isAssigningManager} className="gap-2">
-                  {isAssigningManager ? <><SpinnerEllipsis /><span>Saving...</span></> : "Save Changes"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Edit Station Dialog */}
-      {activeDialog === "edit-station" && (
-        <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Station Information</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleEditStation} className="space-y-4 pt-4">
-              <FormField label="Station Name" htmlFor="s_name" error={editStationForm.formState.errors.name?.message}>
-                <TextInput id="s_name" {...editStationForm.register("name")} />
-              </FormField>
-
-              <FormField label="Station Code" htmlFor="s_code" error={editStationForm.formState.errors.code?.message}>
-                <TextInput id="s_code" {...editStationForm.register("code")} />
-              </FormField>
-
-              <FormField label="Region" htmlFor="s_region" error={editStationForm.formState.errors.region?.message}>
-                <select id="s_region" className="rounded border border-input bg-background px-3 py-2 text-sm w-full" {...editStationForm.register("region")}>
-                  <option value="">Select Region</option>
-                  <option value="South-West">South-West</option>
-                  <option value="South-East">South-East</option>
-                  <option value="North-Central">North-Central</option>
-                  <option value="North-West">North-West</option>
-                  <option value="North-East">North-East</option>
-                  <option value="South-South">South-South</option>
-                </select>
-              </FormField>
-
-              <FormField label="Location" htmlFor="s_location" error={editStationForm.formState.errors.location?.message}>
-                <TextInput id="s_location" {...editStationForm.register("location")} />
-              </FormField>
-
-              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
-
-              <DialogFooter className="mt-4">
+              <DialogFooter className="mt-6">
                 <Button type="button" variant="outline" onClick={closeDialog} disabled={editStationForm.formState.isSubmitting}>Cancel</Button>
                 <Button type="submit" disabled={editStationForm.formState.isSubmitting} className="gap-2">
                   {editStationForm.formState.isSubmitting ? <><SpinnerEllipsis /><span>Saving...</span></> : "Save Changes"}

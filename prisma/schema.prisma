@@ -132,6 +132,7 @@ model TenantUser {
   lastLoginAt         DateTime?
   failedLoginAttempts Int        @default(0)
   lockedUntil         DateTime?
+  expoPushTokens      String[]   @default([])
 
   stations          Station[]       @relation("StationStaff")
   recordedSalesLogs DailySalesLog[] @relation("SalesRecordedBy")

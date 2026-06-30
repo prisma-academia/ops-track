@@ -17,7 +17,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_EXPENSES_WRITE.key);
     const body = ApproveExpenseSchema.parse(await request.json());
     const meta = requestMeta(request);
 

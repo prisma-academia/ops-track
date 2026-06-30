@@ -21,7 +21,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id: waybillId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
     const body = CreateWaybillDippingSchema.parse(await request.json());
     const meta = requestMeta(request);
 

@@ -5,7 +5,7 @@ import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { UpdatePricesManager } from "./update-prices-manager";
 
 export default async function UpdatePricesPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_PRICES_WRITE.key);
 
   const stations = await prisma.station.findMany({
     where: { tenantId: actor.tenantId },

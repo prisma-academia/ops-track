@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { ShiftsManager } from "./shifts-manager";
 
 export default async function ShiftsPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_SHIFTS_READ.key);
 
   const userWithStations = await prisma.tenantUser.findUnique({
     where: { id: actor.userId },

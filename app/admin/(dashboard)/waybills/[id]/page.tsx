@@ -29,7 +29,7 @@ export default async function WaybillDetailsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_READ.key);
   const { id } = await params;
 
   const waybill = await prisma.waybill.findUnique({

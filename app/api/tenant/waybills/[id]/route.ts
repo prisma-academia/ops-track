@@ -24,7 +24,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_READ.key);
 
     const waybill = await prisma.waybill.findUnique({
       where: { id },
@@ -72,7 +72,7 @@ export async function PATCH(
   try {
     await requireCsrf(request);
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
     const body = DeliverWaybillSchema.parse(await request.json());
     const meta = requestMeta(request);
 

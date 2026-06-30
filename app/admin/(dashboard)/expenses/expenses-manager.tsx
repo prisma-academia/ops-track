@@ -331,7 +331,7 @@ export function ExpensesManager({
       <DataTable
         columns={columns}
         data={expenses}
-        title="Local Expenses"
+        title="Station Expenses"
         description="Monitor and approve local station cash expenditures and payouts."
         filterColumnId="station_name"
         searchPlaceholder="Search by station name…"

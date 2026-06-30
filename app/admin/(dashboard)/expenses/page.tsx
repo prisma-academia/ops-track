@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { ExpensesManager } from "./expenses-manager";
 
 export default async function ExpensesPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_EXPENSES_READ.key);
 
   const expenses = await prisma.expense.findMany({
     where: { tenantId: actor.tenantId },

@@ -20,7 +20,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_WRITE.key);
     const body = CreateDippingSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -135,7 +135,7 @@ export async function GET(
 ) {
   try {
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_READ.key);
 
     const station = await prisma.station.findUnique({
       where: { id: stationId },

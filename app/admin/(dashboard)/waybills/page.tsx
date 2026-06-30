@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { WaybillsManager } from "./waybills-manager";
 
 export default async function WaybillsPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_READ.key);
 
   const waybills = await prisma.waybill.findMany({
     where: { tenantId: actor.tenantId },

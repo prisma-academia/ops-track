@@ -307,7 +307,11 @@ export default async function WaybillDetailsPage({
                 <div>
                   <p className="font-medium text-sm">{waybill.station.name}</p>
                   {/* <p className="text-xs text-muted-foreground mt-0.5">{waybill.station.code}</p> */}
-                  <p className="text-xs text-muted-foreground">{waybill.station.city || waybill.station.region}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {waybill.station.ward ? `${waybill.station.ward}, ` : ""}
+                    {waybill.station.lga ? `${waybill.station.lga}, ` : ""}
+                    {waybill.station.state || ""}
+                  </p>
                 </div>
               </div>
             </CardContent>

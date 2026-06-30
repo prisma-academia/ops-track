@@ -105,14 +105,11 @@ export function InviteTenantUserForm({
     title: string,
     description: string
   ) => (
-    <Card className="border-border/40 shadow-sm overflow-hidden p-0">
-      <CardHeader className="bg-muted/10 pb-4 border-b border-border/40 px-6 py-4">
+    <Card className="border-border/40 shadow-sm overflow-hidden p-0 gap-0">
+      <CardHeader className="bg-muted/10 border-b border-border/40 pt-2">
         <CardTitle className="text-lg font-semibold text-foreground">
           {title}
         </CardTitle>
-        <CardDescription className="text-xs">
-          {description}
-        </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <div className="overflow-x-auto">

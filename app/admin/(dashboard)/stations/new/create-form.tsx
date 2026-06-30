@@ -35,10 +35,13 @@ import nigerianLocations from "@/constant/nigerian-locations.json";
 const Schema = z.object({
   code: z.string().min(2).max(50),
   name: z.string().min(2).max(100),
-  region: z.string().min(2).max(100),
-  state: z.string().min(2).max(100),
-  city: z.string().min(2).max(100),
+  state: z.string().min(2, "Please select a state"),
+  lga: z.string().min(2, "Please select an LGA"),
+  ward: z.string().min(2, "Please select a ward"),
   location: z.string().max(255).optional().or(z.literal("")),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
+  altitude: z.number().optional().nullable(),
   managerId: z.string().optional().or(z.literal("")),
 });
 
@@ -53,16 +56,21 @@ export function CreateStationForm({
   const [error, setError] = useState<string | null>(null);
   const [openManagerSelect, setOpenManagerSelect] = useState(false);
   const [openStateSelect, setOpenStateSelect] = useState(false);
+  const [openLgaSelect, setOpenLgaSelect] = useState(false);
+  const [openWardSelect, setOpenWardSelect] = useState(false);
   
   const { register, handleSubmit, formState, setValue, watch } = useForm({
     resolver: zodResolver(Schema),
     defaultValues: {
       name: "",
       code: "",
-      region: "",
       state: "",
-      city: "",
+      lga: "",
+      ward: "",
       location: "",
+      latitude: null,
+      longitude: null,
+      altitude: null,
       managerId: "",
     },
   });
@@ -70,6 +78,8 @@ export function CreateStationForm({
   const selectedManagerId = watch("managerId");
   const selectedManager = users.find((u) => u.id === selectedManagerId);
   const selectedState = watch("state");
+  const selectedLga = watch("lga");
+  const selectedWard = watch("ward");
   const watchName = watch("name");
 
   useEffect(() => {
@@ -82,6 +92,39 @@ export function CreateStationForm({
       }
     }
   }, [watchName, setValue]);
+
+  useEffect(() => {
+    setValue("lga", "", { shouldValidate: false });
+    setValue("ward", "", { shouldValidate: false });
+    setValue("latitude", null);
+    setValue("longitude", null);
+  }, [selectedState, setValue]);
+
+  useEffect(() => {
+    setValue("ward", "", { shouldValidate: false });
+    setValue("latitude", null);
+    setValue("longitude", null);
+  }, [selectedLga, setValue]);
+
+  const availableLgas = selectedState
+    ? nigerianLocations.find((loc) => loc.state === selectedState)?.lgas || []
+    : [];
+
+  const availableWards = selectedLga
+    ? availableLgas.find((l) => l.name === selectedLga)?.wards || []
+    : [];
+
+  const handleWardSelect = (wardName: string) => {
+    setValue("ward", wardName, { shouldValidate: true });
+    const wardObj = availableWards.find((w) => w.name === wardName);
+    if (wardObj) {
+      setValue("latitude", wardObj.latitude);
+      setValue("longitude", wardObj.longitude);
+    } else {
+      setValue("latitude", null);
+      setValue("longitude", null);
+    }
+  };
 
   const onSubmit = onSubmitForm(async (values) => {
     setError(null);
@@ -137,6 +180,7 @@ export function CreateStationForm({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
+            {/* Station Name - Full Width */}
             <div className="space-y-2">
               <Label htmlFor="name" className={formState.errors.name ? "text-destructive" : ""}>Station Name*</Label>
               <Input 
@@ -148,7 +192,10 @@ export function CreateStationForm({
               {formState.errors.name && <p className="text-xs text-destructive">{formState.errors.name.message}</p>}
             </div>
 
+            {/* State and Station Code - Same Row */}
             <div className="grid grid-cols-2 gap-4">
+
+              {/* Station Code */}
               <div className="space-y-2">
                 <Label htmlFor="code" className={formState.errors.code ? "text-destructive" : ""}>Station Code*</Label>
                 <Input 
@@ -161,27 +208,7 @@ export function CreateStationForm({
                 {formState.errors.code && <p className="text-xs text-destructive">{formState.errors.code.message}</p>}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="region" className={formState.errors.region ? "text-destructive" : ""}>Region*</Label>
-                <Select onValueChange={(v) => setValue("region", v, { shouldValidate: true })}>
-                  <SelectTrigger id="region" className="w-full">
-                    <SelectValue placeholder="Select a region" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="South-West">South-West</SelectItem>
-                    <SelectItem value="South-East">South-East</SelectItem>
-                    <SelectItem value="North-Central">North-Central</SelectItem>
-                    <SelectItem value="North-West">North-West</SelectItem>
-                    <SelectItem value="North-East">North-East</SelectItem>
-                    <SelectItem value="South-South">South-South</SelectItem>
-                  </SelectContent>
-                </Select>
-                <input type="hidden" {...register("region")} />
-                {formState.errors.region && <p className="text-xs text-destructive">{formState.errors.region.message}</p>}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+                {/* State */}
               <div className="space-y-2">
                 <Label htmlFor="state" className={formState.errors.state ? "text-destructive" : ""}>State*</Label>
                 <Popover open={openStateSelect} onOpenChange={setOpenStateSelect}>
@@ -190,7 +217,7 @@ export function CreateStationForm({
                       type="button"
                       variant="outline"
                       id="state"
-                      className={`w-full justify-between font-normal ${formState.errors.state ? "border-destructive" : ""}`}
+                      className={`w-full justify-between font-normal bg-background ${formState.errors.state ? "border-destructive" : ""}`}
                     >
                       <span className="truncate">{selectedState || "Select state..."}</span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -223,16 +250,96 @@ export function CreateStationForm({
                 <input type="hidden" {...register("state")} />
                 {formState.errors.state && <p className="text-xs text-destructive">{formState.errors.state.message}</p>}
               </div>
+            </div>
 
+            {/* LGA and Ward - Same Row */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* LGA */}
               <div className="space-y-2">
-                <Label htmlFor="city" className={formState.errors.city ? "text-destructive" : ""}>City*</Label>
-                <Input 
-                  id="city" 
-                  placeholder="e.g. Ikeja" 
-                  {...register("city")}
-                  className={formState.errors.city ? "border-destructive" : ""}
-                />
-                {formState.errors.city && <p className="text-xs text-destructive">{formState.errors.city.message}</p>}
+                <Label htmlFor="lga" className={formState.errors.lga ? "text-destructive" : ""}>LGA*</Label>
+                <Popover open={openLgaSelect} onOpenChange={setOpenLgaSelect}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      id="lga"
+                      disabled={!selectedState}
+                      className={`w-full justify-between font-normal bg-background ${formState.errors.lga ? "border-destructive" : ""}`}
+                    >
+                      <span className="truncate">{selectedLga || "Select LGA..."}</span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search LGA..." />
+                      <CommandList className="max-h-[200px] overflow-y-auto">
+                        <CommandEmpty>No LGA found.</CommandEmpty>
+                        <CommandGroup>
+                          {availableLgas.map((lga) => (
+                            <CommandItem
+                              key={lga.name}
+                              value={lga.name.toLowerCase()}
+                              onSelect={() => {
+                                setValue("lga", lga.name, { shouldValidate: true });
+                                setOpenLgaSelect(false);
+                              }}
+                              data-checked={selectedLga === lga.name}
+                            >
+                              {lga.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <input type="hidden" {...register("lga")} />
+                {formState.errors.lga && <p className="text-xs text-destructive">{formState.errors.lga.message}</p>}
+              </div>
+
+              {/* Ward */}
+              <div className="space-y-2">
+                <Label htmlFor="ward" className={formState.errors.ward ? "text-destructive" : ""}>Ward*</Label>
+                <Popover open={openWardSelect} onOpenChange={setOpenWardSelect}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      id="ward"
+                      disabled={!selectedLga}
+                      className={`w-full justify-between font-normal bg-background ${formState.errors.ward ? "border-destructive" : ""}`}
+                    >
+                      <span className="truncate">{selectedWard || "Select ward..."}</span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search ward..." />
+                      <CommandList className="max-h-[200px] overflow-y-auto">
+                        <CommandEmpty>No ward found.</CommandEmpty>
+                        <CommandGroup>
+                          {availableWards.map((ward) => (
+                            <CommandItem
+                              key={ward.name}
+                              value={ward.name.toLowerCase()}
+                              onSelect={() => {
+                                handleWardSelect(ward.name);
+                                setOpenWardSelect(false);
+                              }}
+                              data-checked={selectedWard === ward.name}
+                            >
+                              {ward.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <input type="hidden" {...register("ward")} />
+                {formState.errors.ward && <p className="text-xs text-destructive">{formState.errors.ward.message}</p>}
               </div>
             </div>
 

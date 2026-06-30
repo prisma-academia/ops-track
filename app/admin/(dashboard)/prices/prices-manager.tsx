@@ -39,7 +39,9 @@ type Station = {
   id: string
   name: string
   code: string
-  region: string
+  state: string | null
+  lga: string | null
+  ward: string | null
   location: string | null
 }
 
@@ -231,10 +233,10 @@ export function PricesManager({
         ),
       },
       {
-        accessorKey: "region",
-        header: "Region",
+        accessorKey: "lga",
+        header: "LGA",
         cell: ({ row }) => (
-          <Badge variant="outline">{row.original.region}</Badge>
+          <Badge variant="outline">{row.original.lga || "—"}</Badge>
         ),
       },
       {

@@ -9,8 +9,13 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 const UpdateStationSchema = z.object({
   code: z.string().min(2).max(50).optional(),
   name: z.string().min(2).max(100).optional(),
-  region: z.string().min(2).max(100).optional(),
   location: z.string().max(255).optional().nullable(),
+  state: z.string().max(100).optional().nullable(),
+  lga: z.string().max(100).optional().nullable(),
+  ward: z.string().max(100).optional().nullable(),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
+  altitude: z.number().optional().nullable(),
   staffUserIds: z.array(z.string()).optional(),
 });
 
@@ -98,8 +103,13 @@ export async function PATCH(
       data: {
         code: body.code ? body.code.toUpperCase() : undefined,
         name: body.name,
-        region: body.region,
         location: body.location,
+        state: body.state,
+        lga: body.lga,
+        ward: body.ward,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        altitude: body.altitude,
         staff: staffData,
       },
       include: {

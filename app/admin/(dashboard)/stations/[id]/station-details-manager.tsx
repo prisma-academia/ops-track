@@ -52,6 +52,7 @@ import {
 } from "lucide-react";
 import { AssetTank } from "@/app/admin/(dashboard)/dashboard/Tank";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
+import nigerianLocations from "@/constant/nigerian-locations.json";
 
 const AddTankSchema = z.object({
   name: z.string().min(1, "Please enter a tank name").max(50),
@@ -68,8 +69,13 @@ const AddPumpSchema = z.object({
 const EditStationSchema = z.object({
   name: z.string().min(2, "Station name must be at least 2 characters"),
   code: z.string().min(2, "Station code must be at least 2 characters"),
-  region: z.string().optional(),
+  state: z.string().min(2, "Please select a state"),
+  lga: z.string().min(2, "Please select an LGA"),
+  ward: z.string().min(2, "Please select a ward"),
   location: z.string().optional().nullable(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
+  altitude: z.number().nullable().optional(),
 });
 
 function formatHumanReadableDate(dateInput: string | Date | null | undefined): string {
@@ -166,10 +172,43 @@ export function StationDetailsManager({
     defaultValues: {
       name: station.name || "",
       code: station.code || "",
-      region: station.region || "",
+      state: station.state || "",
+      lga: station.lga || "",
+      ward: station.ward || "",
       location: station.location || "",
+      latitude: station.latitude != null ? Number(station.latitude) : null,
+      longitude: station.longitude != null ? Number(station.longitude) : null,
+      altitude: station.altitude != null ? Number(station.altitude) : null,
     }
   });
+
+  const [openStateSelect, setOpenStateSelect] = useState(false);
+  const [openLgaSelect, setOpenLgaSelect] = useState(false);
+  const [openWardSelect, setOpenWardSelect] = useState(false);
+
+  const selectedState = editStationForm.watch("state");
+  const selectedLga = editStationForm.watch("lga");
+  const selectedWard = editStationForm.watch("ward");
+
+  const availableLgas = selectedState
+    ? nigerianLocations.find((loc) => loc.state === selectedState)?.lgas || []
+    : [];
+
+  const availableWards = selectedLga
+    ? availableLgas.find((l) => l.name === selectedLga)?.wards || []
+    : [];
+
+  const handleWardSelect = (wardName: string) => {
+    editStationForm.setValue("ward", wardName, { shouldValidate: true });
+    const wardObj = availableWards.find((w) => w.name === wardName);
+    if (wardObj) {
+      editStationForm.setValue("latitude", wardObj.latitude);
+      editStationForm.setValue("longitude", wardObj.longitude);
+    } else {
+      editStationForm.setValue("latitude", null);
+      editStationForm.setValue("longitude", null);
+    }
+  };
 
   const handleNozzleCountChange = (count: number) => {
     setNozzleCount(count);
@@ -244,29 +283,54 @@ export function StationDetailsManager({
     editStationForm.reset({
       name: station.name || "",
       code: station.code || "",
-      region: station.region || "",
+      state: station.state || "",
+      lga: station.lga || "",
+      ward: station.ward || "",
       location: station.location || "",
+      latitude: station.latitude != null ? Number(station.latitude) : null,
+      longitude: station.longitude != null ? Number(station.longitude) : null,
+      altitude: station.altitude != null ? Number(station.altitude) : null,
     });
     setActiveDialog("edit-station");
   };
 
-  const openConfigDialog = () => {
-    const nextTankIndex = (station.tanks?.length || 0) + 1;
-    const nextPumpIndex = (station.pumps?.length || 0) + 1;
+  const [configTab, setConfigTab] = useState<string>("addTank");
 
+  const openAddTankDialog = () => {
+    const nextTankIndex = (station.tanks?.length || 0) + 1;
     tankForm.reset({
       name: `TANK ${nextTankIndex}`,
       productType: "PMS",
       capacity: 0
     });
+    setConfigTab("addTank");
+    setActiveDialog("config");
+  };
 
+  const openAddPumpDialog = () => {
+    const nextPumpIndex = (station.pumps?.length || 0) + 1;
     pumpForm.reset({
       name: `PUMP ${nextPumpIndex}`,
       tankId: "",
       nozzles: [{ name: "Nozzle A" }]
     });
-
+    setConfigTab("addPump");
     setActiveDialog("config");
+  };
+
+  const openAddPumpDialogForTank = (tankId: string) => {
+    const nextPumpIndex = (station.pumps?.length || 0) + 1;
+    pumpForm.reset({
+      name: `PUMP ${nextPumpIndex}`,
+      tankId: tankId,
+      nozzles: [{ name: "Nozzle A" }]
+    });
+    setConfigTab("addPump");
+    setActiveDialog("config");
+  };
+
+  const openConfigDialog = () => {
+    openAddTankDialog();
   };
 
   // Flatten and sort data
@@ -334,96 +398,164 @@ export function StationDetailsManager({
       </Card>
 
       {/* ---------------- STATION INFO & PRICES GRID ---------------- */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 items-start">
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle className="text-lg">Station Information</CardTitle>
-            <CardDescription>Manager and operations</CardDescription>
+      <div className="grid gap-6 md:grid-cols-2 items-stretch">
+        {/* Station Information Card */}
+        <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Store size={16} className="text-primary" />
+              Station Information
+            </CardTitle>
+            <CardDescription className="text-xs">Operational status and location details</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-6 pt-2">
-              <div className="flex items-center gap-4">
-                <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                  <Store size={20} />
+          <CardContent className="flex-1 flex flex-col justify-between">
+            <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+              <div className="col-span-2 flex items-center gap-3">
+                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <User size={16} />
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium leading-none">{station.name}</p>
-                    <Badge variant="outline" className="font-mono text-[10px] px-1 py-0 h-4">{station.code}</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1.5 flex items-center gap-1">
-                    <MapPin size={12} />
-                    {station.location ? `${station.location}, ` : ""}{station.region} Region
-                  </p>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Station Manager</p>
+                  <p className="font-semibold text-foreground">{managerName}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3">
+                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-0.5">
+                  <Store size={16} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Station Code</p>
+                  <Badge variant="outline" className="font-mono text-[10px] px-2 py-0.5 h-5 bg-background">{station.code}</Badge>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4">
-                <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                  <User size={20} />
+              <div className="flex items-start gap-3">
+                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-0.5">
+                  <MapPin size={16} />
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium leading-none">Station Manager</p>
-                  <p className="text-sm text-muted-foreground mt-1.5">{managerName}</p>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Location / Ward / LGA</p>
+                  <p className="font-semibold text-foreground text-xs leading-tight">
+                    {station.ward ? `${station.ward}, ` : ""}{station.lga ? `${station.lga}, ` : ""}{station.state || "N/A"}
+                  </p>
+                  {station.location && (
+                    <p className="text-[11px] text-muted-foreground mt-1 line-clamp-1">{station.location}</p>
+                  )}
                 </div>
               </div>
+
+              {((station.latitude != null) || (station.longitude != null) || (station.altitude != null)) && (
+                <div className="col-span-2 flex items-center gap-3 border-t border-dashed border-stone-200 dark:border-stone-800 pt-3 mt-1">
+                  <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">GPS Coordinates</div>
+                  <div className="flex gap-4 text-xs font-mono">
+                    {station.latitude != null && (
+                      <div><span className="text-muted-foreground">LAT:</span> <span className="font-medium text-foreground">{Number(station.latitude).toFixed(6)}</span></div>
+                    )}
+                    {station.longitude != null && (
+                      <div><span className="text-muted-foreground">LON:</span> <span className="font-medium text-foreground">{Number(station.longitude).toFixed(6)}</span></div>
+                    )}
+                    {station.altitude != null && (
+                      <div><span className="text-muted-foreground">ALT:</span> <span className="font-medium text-foreground">{Number(station.altitude).toFixed(1)}m</span></div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 sm:grid-cols-2 h-full">
-          {Object.keys(latestPrices).length === 0 ? (
-            <Card className="col-span-1 sm:col-span-2 flex items-center justify-center h-full min-h-[120px]">
-              <CardContent className="pt-6">
-                <p className="text-sm text-muted-foreground italic">No prices configured</p>
-              </CardContent>
-            </Card>
-          ) : (
-            Object.entries(latestPrices).map(([product, price]) => (
-              <Card key={product} className="flex flex-col justify-center">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {PRODUCT_NAMES[product] || product}
-                  </CardTitle>
-                  <div className="p-2 bg-primary/5 text-primary rounded-md">
-                    {PRODUCT_ICONS[product] || <Flame size={14} />}
+        {/* Consolidated Prices Card */}
+        <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Fuel size={16} className="text-primary" />
+              Product Prices
+            </CardTitle>
+            <CardDescription className="text-xs">Active retail fuel prices per unit</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1">
+            <div className="grid grid-cols-2 gap-3">
+              {["PMS", "AGO", "DPK", "LPG"].map((product) => {
+                const price = latestPrices[product];
+                return (
+                  <div key={product} className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
+                    <div className="p-2 bg-primary/10 text-primary rounded-lg shrink-0">
+                      {PRODUCT_ICONS[product] || <Flame size={14} />}
+                    </div>
+                    <div className="overflow-hidden">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate">
+                        {PRODUCT_NAMES[product] ? PRODUCT_NAMES[product].split(" ")[0] : product}
+                      </p>
+                      <p className="text-base font-bold text-foreground font-mono mt-0.5 truncate">
+                        {price != null ? (
+                          `₦${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        ) : (
+                          "—"
+                        )}
+                      </p>
+                    </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    ₦{Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* ---------------- TABS NAVIGATION ---------------- */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex items-center justify-between mb-3">
-          <TabsList className="h-12 px-1 py-1 overflow-x-auto w-full justify-start md:w-auto">
-            <TabsTrigger value="overview" className="px-5 py-3 text-sm">Overview</TabsTrigger>
-            <TabsTrigger value="dippings" className="px-5 py-3 text-sm">Dippings</TabsTrigger>
-            <TabsTrigger value="shifts" className="px-5 py-3 text-sm">Shift Logs</TabsTrigger>
-            <TabsTrigger value="waybills" className="px-5 py-3 text-sm">Waybills</TabsTrigger>
-            <TabsTrigger value="expenses" className="px-5 py-3 text-sm">Expenses</TabsTrigger>
-            <TabsTrigger value="sales" className="px-5 py-3 text-sm">Sales</TabsTrigger>
+        <div className="flex items-center justify-between mb-4">
+          <TabsList className="h-4 px-1.5 py-2 justify-start md:w-auto gap-1">
+            <TabsTrigger value="overview" className="px-6 py-4 text-[15px] font-semibold">Overview</TabsTrigger>
+            <TabsTrigger value="dippings" className="px-6 py-4 text-[15px] font-semibold">Dippings</TabsTrigger>
+            <TabsTrigger value="shifts" className="px-6 py-4 text-[15px] font-semibold">Shift Logs</TabsTrigger>
+            <TabsTrigger value="waybills" className="px-6 py-4 text-[15px] font-semibold">Waybills</TabsTrigger>
+            <TabsTrigger value="expenses" className="px-6 py-4 text-[15px] font-semibold">Expenses</TabsTrigger>
+            <TabsTrigger value="sales" className="px-6 py-4 text-[15px] font-semibold">Sales</TabsTrigger>
           </TabsList>
         </div>
 
         {/* ---------------- OVERVIEW TAB ---------------- */}
         <TabsContent value="overview" className="mt-0 space-y-6 animate-in fade-in duration-500">
           
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold tracking-tight text-foreground">Infrastructure Overview</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 dark:border-stone-800 pb-3">
+            <div>
+              <h2 className="text-base font-bold text-foreground">Infrastructure Overview</h2>
+              <p className="text-xs text-muted-foreground">Storage tanks and dispensing pumps layout mapping</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={openAddTankDialog} className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800">
+                <Plus size={14} className="text-primary" />
+                Add Tank
+              </Button>
+              <Button size="sm" variant="outline" onClick={openAddPumpDialog} className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800">
+                <Plus size={14} className="text-primary" />
+                Add Pump / Dispenser
+              </Button>
+            </div>
           </div>
           
           <div className="flex flex-col gap-12 lg:gap-16">
             {station.tanks.length === 0 ? (
-              <div className="w-full py-8 text-center border rounded-xl border-dashed">
-                <p className="text-muted-foreground text-sm">No infrastructure configured.</p>
+              <div className="w-full flex flex-col items-center justify-center py-16 px-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-2xl bg-stone-50/50 dark:bg-stone-900/10 text-center">
+                <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-4">
+                  <Droplet size={24} />
+                </div>
+                <h3 className="text-base font-bold text-foreground mb-1">No Infrastructure Configured</h3>
+                <p className="text-xs text-muted-foreground max-w-sm mb-6">
+                  Get started by adding storage fuel tanks and pump dispensers to map out this retail station's physical layout.
+                </p>
+                <div className="flex items-center gap-3">
+                  <Button onClick={openAddTankDialog} className="gap-2 shadow-xs text-xs h-9">
+                    <Plus size={15} />
+                    Add Storage Tank
+                  </Button>
+                  <Button variant="outline" onClick={openAddPumpDialog} className="gap-2 text-xs h-9 bg-white dark:bg-stone-950 border-stone-200 dark:border-stone-800">
+                    <Plus size={15} />
+                    Add Pump / Dispenser
+                  </Button>
+                </div>
               </div>
             ) : (
               station.tanks.map((tank: any) => {
@@ -480,8 +612,18 @@ export function StationDetailsManager({
                     {/* PUMPS CONTAINER */}
                     <div className="flex-1 w-full relative ml-4 lg:ml-8 pt-6 lg:pt-0 flex flex-col justify-center">
                       {tankPumps.length === 0 ? (
-                        <div className="text-xs text-muted-foreground italic bg-muted/30 px-4 py-3 rounded-xl border border-dashed border-border/50 lg:ml-8 text-center lg:text-left">
-                          No dispensers connected to this tank
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-2xl bg-stone-50/50 dark:bg-stone-900/10 lg:ml-8">
+                          <p className="text-xs text-muted-foreground italic">No dispensers connected to this tank</p>
+                          <Button 
+                            type="button" 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => openAddPumpDialogForTank(tank.id)}
+                            className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-950 border-stone-200 dark:border-stone-800"
+                          >
+                            <Plus size={13} className="text-primary" />
+                            Connect Pump
+                          </Button>
                         </div>
                       ) : (
                         <div className="space-y-5">
@@ -819,34 +961,153 @@ export function StationDetailsManager({
                 {/* Left Column: Station Details */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-semibold border-b pb-2 mb-4">Station Details</h3>
+                  
+                  {/* Station Name - Full Width */}
                   <FormField label="Station Name" htmlFor="s_name" error={editStationForm.formState.errors.name?.message}>
                     <Input id="s_name" {...editStationForm.register("name")} />
                   </FormField>
 
-                  <FormField label="Station Code" htmlFor="s_code" error={editStationForm.formState.errors.code?.message}>
-                    <Input id="s_code" {...editStationForm.register("code")} />
-                  </FormField>
+                  {/* State and Station Code - Same Row */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* State */}
+                    <FormField label="State" htmlFor="s_state" error={editStationForm.formState.errors.state?.message}>
+                      <Popover open={openStateSelect} onOpenChange={setOpenStateSelect}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            id="s_state"
+                            className="w-full justify-between font-normal bg-background"
+                          >
+                            <span className="truncate">{selectedState || "Select State"}</span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search state..." />
+                            <CommandList className="max-h-[200px] overflow-y-auto">
+                              <CommandEmpty>No state found.</CommandEmpty>
+                              <CommandGroup>
+                                {nigerianLocations.map((loc) => (
+                                  <CommandItem
+                                    key={loc.state}
+                                    value={loc.state.toLowerCase()}
+                                    onSelect={() => {
+                                      editStationForm.setValue("state", loc.state, { shouldValidate: true });
+                                      editStationForm.setValue("lga", "");
+                                      editStationForm.setValue("ward", "");
+                                      editStationForm.setValue("latitude", null);
+                                      editStationForm.setValue("longitude", null);
+                                      setOpenStateSelect(false);
+                                    }}
+                                  >
+                                    {loc.state}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <input type="hidden" {...editStationForm.register("state")} />
+                    </FormField>
 
-                  <FormField label="Region" htmlFor="s_region" error={editStationForm.formState.errors.region?.message}>
-                    <Select 
-                      onValueChange={(val) => editStationForm.setValue("region", val)} 
-                      value={editStationForm.watch("region")}
-                    >
-                      <SelectTrigger className="w-full" id="s_region">
-                        <SelectValue placeholder="Select Region" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="South-West">South-West</SelectItem>
-                        <SelectItem value="South-East">South-East</SelectItem>
-                        <SelectItem value="North-Central">North-Central</SelectItem>
-                        <SelectItem value="North-West">North-West</SelectItem>
-                        <SelectItem value="North-East">North-East</SelectItem>
-                        <SelectItem value="South-South">South-South</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormField>
+                    {/* Station Code */}
+                    <FormField label="Station Code" htmlFor="s_code" error={editStationForm.formState.errors.code?.message}>
+                      <Input id="s_code" {...editStationForm.register("code")} />
+                    </FormField>
+                  </div>
 
-                  <FormField label="Location" htmlFor="s_location" error={editStationForm.formState.errors.location?.message}>
+                  {/* LGA and Ward - Same Row */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* LGA */}
+                    <FormField label="LGA" htmlFor="s_lga" error={editStationForm.formState.errors.lga?.message}>
+                      <Popover open={openLgaSelect} onOpenChange={setOpenLgaSelect}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            id="s_lga"
+                            disabled={!selectedState}
+                            className="w-full justify-between font-normal bg-background"
+                          >
+                            <span className="truncate">{selectedLga || "Select LGA"}</span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search LGA..." />
+                            <CommandList className="max-h-[200px] overflow-y-auto">
+                              <CommandEmpty>No LGA found.</CommandEmpty>
+                              <CommandGroup>
+                                {availableLgas.map((lga: any) => (
+                                  <CommandItem
+                                    key={lga.name}
+                                    value={lga.name.toLowerCase()}
+                                    onSelect={() => {
+                                      editStationForm.setValue("lga", lga.name, { shouldValidate: true });
+                                      editStationForm.setValue("ward", "");
+                                      editStationForm.setValue("latitude", null);
+                                      editStationForm.setValue("longitude", null);
+                                      setOpenLgaSelect(false);
+                                    }}
+                                  >
+                                    {lga.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <input type="hidden" {...editStationForm.register("lga")} />
+                    </FormField>
+
+                    {/* Ward */}
+                    <FormField label="Ward" htmlFor="s_ward" error={editStationForm.formState.errors.ward?.message}>
+                      <Popover open={openWardSelect} onOpenChange={setOpenWardSelect}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            id="s_ward"
+                            disabled={!selectedLga}
+                            className="w-full justify-between font-normal bg-background"
+                          >
+                            <span className="truncate">{selectedWard || "Select Ward"}</span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search ward..." />
+                            <CommandList className="max-h-[200px] overflow-y-auto">
+                              <CommandEmpty>No ward found.</CommandEmpty>
+                              <CommandGroup>
+                                {availableWards.map((ward: any) => (
+                                  <CommandItem
+                                    key={ward.name}
+                                    value={ward.name.toLowerCase()}
+                                    onSelect={() => {
+                                      handleWardSelect(ward.name);
+                                      setOpenWardSelect(false);
+                                    }}
+                                  >
+                                    {ward.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <input type="hidden" {...editStationForm.register("ward")} />
+                    </FormField>
+                  </div>
+
+                  <FormField label="Location / Address" htmlFor="s_location" error={editStationForm.formState.errors.location?.message}>
                     <Input id="s_location" {...editStationForm.register("location")} />
                   </FormField>
                 </div>
@@ -943,7 +1204,7 @@ export function StationDetailsManager({
               <DialogTitle>Station Configuration & Assets</DialogTitle>
             </DialogHeader>
             
-            <Tabs defaultValue="addTank" className="w-full mt-4">
+            <Tabs value={configTab} onValueChange={setConfigTab} className="w-full mt-4">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="addTank">Add Storage Tank</TabsTrigger>
                 <TabsTrigger value="addPump">Add Dispenser / Pump</TabsTrigger>

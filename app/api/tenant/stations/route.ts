@@ -10,10 +10,13 @@ import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
 const CreateStationSchema = z.object({
   code: z.string().min(2).max(50),
   name: z.string().min(2).max(100),
-  region: z.string().min(2).max(100),
   location: z.string().max(255).optional().nullable(),
-  city: z.string().max(100).optional().nullable(),
   state: z.string().max(100).optional().nullable(),
+  lga: z.string().max(100).optional().nullable(),
+  ward: z.string().max(100).optional().nullable(),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
+  altitude: z.number().optional().nullable(),
   staffUserIds: z.array(z.string()).optional(),
 });
 
@@ -77,10 +80,13 @@ export async function POST(request: Request) {
         tenantId: actor.tenantId,
         code: body.code.toUpperCase(),
         name: body.name,
-        region: body.region,
         location: body.location ?? null,
-        city: body.city ?? null,
         state: body.state ?? null,
+        lga: body.lga ?? null,
+        ward: body.ward ?? null,
+        latitude: body.latitude ?? null,
+        longitude: body.longitude ?? null,
+        altitude: body.altitude ?? null,
         staff: {
           connect: staffConnect,
         },

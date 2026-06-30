@@ -386,10 +386,13 @@ model Station {
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   code      String // e.g., AP-LAG-01
   name      String
-  region    String // e.g., North-West, South-West
   location  String? // Address
-  city      String?
   state     String?
+  lga       String?
+  ward      String?
+  latitude  Decimal? @db.Decimal(9, 6)
+  longitude Decimal? @db.Decimal(9, 6)
+  altitude  Decimal? @db.Decimal(9, 6)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

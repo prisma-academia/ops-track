@@ -73,7 +73,9 @@ type Station = {
   id: string
   name: string
   code: string
-  region: string
+  state: string | null
+  lga: string | null
+  ward: string | null
   location: string | null
 }
 

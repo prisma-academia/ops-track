@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { cn, formatHumanReadableDate } from "@/lib/utils";
 import { z } from "zod";
 import { apiPost, apiPatch } from "@/lib/client/api";
 import { Badge } from "@/components/ui/badge";
@@ -78,39 +79,7 @@ const EditStationSchema = z.object({
   altitude: z.number().nullable().optional(),
 });
 
-function formatHumanReadableDate(dateInput: string | Date | null | undefined): string {
-  if (!dateInput) return "—";
-  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
-  if (isNaN(date.getTime())) return "—";
 
-  const months = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-  ];
-  
-  const month = months[date.getMonth()];
-  const day = date.getDate();
-  const year = date.getFullYear();
-  
-  let hours = date.getHours();
-  const minutes = date.getMinutes();
-  const ampm = hours >= 12 ? "pm" : "am";
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  const minutesStr = minutes < 10 ? "0" + minutes : minutes;
-
-  const getOrdinalSuffix = (day: number) => {
-    if (day > 3 && day < 21) return "th";
-    switch (day % 10) {
-      case 1:  return "st";
-      case 2:  return "nd";
-      case 3:  return "rd";
-      default: return "th";
-    }
-  };
-
-  return `${month} ${day}${getOrdinalSuffix(day)} ${year} ${hours}:${minutesStr}${ampm}`;
-}
 
 const PRODUCT_ICONS: Record<string, React.ReactNode> = {
   PMS: <Flame size={14} className="text-rose-500" />,
@@ -815,16 +784,17 @@ export function StationDetailsManager({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/30">
-                  {(!station.waybills || station.waybills.length === 0) ? (
+                  {(!station.waybillAllocations || station.waybillAllocations.length === 0) ? (
                     <tr><td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">No waybill records found.</td></tr>
                   ) : (
-                    station.waybills.map((w: any) => {
-                      const dispatched = Number(w.litersLoaded) || 0;
-                      const received = w.litersReceived ? Number(w.litersReceived) : null;
+                    station.waybillAllocations.map((a: any) => {
+                      const w = a.waybill;
+                      const dispatched = Number(a.litersToDispense) || 0;
+                      const received = a.litersReceived ? Number(a.litersReceived) : null;
                       const variance = received !== null ? received - dispatched : null;
                       
                       return (
-                        <tr key={w.id} className="hover:bg-muted/10">
+                        <tr key={a.id} className="hover:bg-muted/10">
                           <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(w.dispatchedAt)}</td>
                           <td className="px-6 py-4 font-mono text-xs font-semibold">{w.number}</td>
                           <td className="px-6 py-4 text-muted-foreground text-xs">{w.driverName} • {w.truckPlate}</td>
@@ -840,10 +810,10 @@ export function StationDetailsManager({
                           </td>
                           <td className="px-6 py-4 text-center">
                             <Badge variant="outline" className={
-                              w.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" : 
-                              w.status === "IN_TRANSIT" ? "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/30" : ""
+                              a.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" : 
+                              a.status === "IN_TRANSIT" ? "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/30" : ""
                             }>
-                              {w.status}
+                              {a.status}
                             </Badge>
                           </td>
                         </tr>

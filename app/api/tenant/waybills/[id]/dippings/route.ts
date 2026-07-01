@@ -20,20 +20,21 @@ export async function POST(
 ) {
   try {
     await requireCsrf(request);
-    const { id: waybillId } = await params;
+    const { id: waybillAllocationId } = await params;
     const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
     const body = CreateWaybillDippingSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    const waybill = await prisma.waybill.findUnique({
-      where: { id: waybillId },
+    const allocation = await prisma.waybillAllocation.findUnique({
+      where: { id: waybillAllocationId },
+      include: { waybill: true }
     });
 
-    if (!waybill || waybill.tenantId !== actor.tenantId) {
-      throw new DomainError(404, "not_found", "Waybill not found.");
+    if (!allocation || allocation.tenantId !== actor.tenantId) {
+      throw new DomainError(404, "not_found", "Waybill allocation not found.");
     }
 
-    if (waybill.status !== "DELIVERED") {
+    if (allocation.status !== "DELIVERED") {
       throw new DomainError(400, "invalid_status", "Waybill must be received/delivered before dipping.");
     }
 
@@ -42,7 +43,7 @@ export async function POST(
       where: { id: { in: uniqueTankIds } },
     });
 
-    if (tanks.length !== uniqueTankIds.length || tanks.some(t => t.stationId !== waybill.stationId || t.tenantId !== actor.tenantId)) {
+    if (tanks.length !== uniqueTankIds.length || tanks.some(t => t.stationId !== allocation.stationId || t.tenantId !== actor.tenantId)) {
       throw new DomainError(404, "not_found", "One or more tanks not found or belong to a different station.");
     }
 
@@ -54,7 +55,8 @@ export async function POST(
         const dipping = await tx.waybillDipping.create({
           data: {
             tenantId: actor.tenantId,
-            waybillId,
+            waybillId: allocation.waybillId,
+            waybillAllocationId: allocation.id,
             tankId: dip.tankId,
             beforeLiters: dip.beforeLiters,
             afterLiters: dip.afterLiters ?? null,
@@ -69,10 +71,10 @@ export async function POST(
       }
 
       if (totalNetDischarged > 0 || body.dippings.some(d => d.afterLiters !== null && d.afterLiters !== undefined)) {
-        await tx.waybill.update({
-          where: { id: waybillId },
+        await tx.waybillAllocation.update({
+          where: { id: waybillAllocationId },
           data: {
-            litersReceived: waybill.litersReceived !== null 
+            litersReceived: allocation.litersReceived !== null 
               ? { increment: totalNetDischarged }
               : totalNetDischarged,
           },
@@ -88,9 +90,10 @@ export async function POST(
       action: "waybill_dipping.record",
       tenantId: actor.tenantId,
       targetType: "WaybillDipping",
-      targetId: result[0]?.id || waybillId,
+      targetId: result[0]?.id || waybillAllocationId,
       after: {
-        waybillId,
+        waybillAllocationId,
+        waybillId: allocation.waybillId,
         dippingsCount: body.dippings.length,
         dippings: body.dippings,
       } as object,

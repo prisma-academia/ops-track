@@ -74,10 +74,14 @@ export default async function StationDetailPage({
           recordedBy: { select: { firstName: true, lastName: true } },
         },
       },
-      waybills: {
-        orderBy: { dispatchedAt: "desc" },
+      waybillAllocations: {
+        orderBy: { createdAt: "desc" },
         include: {
-          recordedBy: { select: { firstName: true, lastName: true } },
+          waybill: {
+            include: {
+              recordedBy: { select: { firstName: true, lastName: true } },
+            },
+          },
         },
       },
       expenses: {

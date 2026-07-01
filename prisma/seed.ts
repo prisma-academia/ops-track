@@ -49,6 +49,15 @@ async function main() {
       permissions: ALL_PLATFORM_PERMISSION_KEYS,
     },
   });
+  
+  const suppliers = ["NNPC", "DANGOTE", "MARKETERS"];
+  for (const s of suppliers) {
+    await prisma.supplier.upsert({
+      where: { name: s },
+      update: {},
+      create: { name: s },
+    });
+  }
 
   console.log(`Seed complete. Super admin: ${adminEmail.toLowerCase()}`);
 }

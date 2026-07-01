@@ -1,7 +1,7 @@
 import { rawPrisma as prisma } from '@/lib/db/raw-client';
 
 async function main() {
-  const suppliers = ['NNPC Retail Limited', 'MRS Oil Nigeria Plc', 'Conoil Plc', 'Rainoil Limited', 'NIPCO Plc'];
+  const suppliers = ['NNPC', 'DANGOTE', 'MARKETERS', 'NNPC Retail Limited', 'MRS Oil Nigeria Plc', 'Conoil Plc', 'Rainoil Limited', 'NIPCO Plc'];
   for (const s of suppliers) {
     await prisma.supplier.upsert({ where: { name: s }, update: {}, create: { name: s } });
   }

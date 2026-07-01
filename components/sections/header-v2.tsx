@@ -86,7 +86,7 @@ export default function HeaderV2({
     <header className="bg-card/95 backdrop-blur sticky top-0 z-50 w-full">
       <div className="flex h-18 items-center justify-between border-b gap-4 px-4 sm:px-8">
         <div className="flex items-center gap-4">
-          <SidebarTrigger />
+          <SidebarTrigger className="cursor-pointer"/>
 
           <Separator orientation="vertical" className="h-4" />
 

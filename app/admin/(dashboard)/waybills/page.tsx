@@ -6,15 +6,25 @@ import { WaybillsManager } from "./waybills-manager";
 export default async function WaybillsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_READ.key);
 
-  const waybills = await prisma.waybill.findMany({
+  const allocations = await prisma.waybillAllocation.findMany({
     where: { tenantId: actor.tenantId },
-    orderBy: { dispatchedAt: "desc" },
+    orderBy: { waybill: { dispatchedAt: "desc" } },
     include: {
       station: {
         select: {
           id: true,
           name: true,
           code: true,
+        },
+      },
+      waybill: {
+        include: {
+          recordedBy: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
         },
       },
     },
@@ -30,19 +40,20 @@ export default async function WaybillsPage() {
     orderBy: { name: "asc" },
   });
 
-  const rows = waybills.map((w) => ({
-    id: w.id,
-    number: w.number,
-    status: w.status as "DISPATCHED" | "DELIVERED",
-    productType: w.productType,
-    litersLoaded: Number(w.litersLoaded),
-    litersReceived: w.litersReceived ? Number(w.litersReceived) : null,
-    truckPlate: w.truckPlate,
-    driverName: w.driverName,
-    driverPhone: w.driverPhone,
-    dispatchedAt: w.dispatchedAt.toISOString(),
-    deliveredAt: w.deliveredAt ? w.deliveredAt.toISOString() : null,
-    station: w.station,
+  const rows = allocations.map((a) => ({
+    id: a.waybillId, // Keep waybillId as row ID so clicking navigates to the whole Waybill Details
+    allocationId: a.id,
+    number: a.waybill.number,
+    status: a.status as "DISPATCHED" | "DELIVERED",
+    productType: a.waybill.productType,
+    litersLoaded: Number(a.litersToDispense), // Map this allocation volume as litersLoaded for backward compatibility in table component
+    litersReceived: a.litersReceived ? Number(a.litersReceived) : null,
+    truckPlate: a.waybill.truckPlate,
+    driverName: a.waybill.driverName,
+    driverPhone: a.waybill.driverPhone,
+    dispatchedAt: a.waybill.dispatchedAt.toISOString(),
+    deliveredAt: a.deliveredAt ? a.deliveredAt.toISOString() : null,
+    station: a.station,
   }));
 
   const serializedStations = JSON.parse(JSON.stringify(stations));

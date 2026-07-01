@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { User, Droplets, Banknote, ChartColumnIncreasing, Handbag, CalendarIcon } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
-import { cn } from "@/lib/utils";
+import { cn, formatHumanReadableDate } from "@/lib/utils";
 
 interface SalesReportStation {
   id: string;
@@ -40,23 +40,6 @@ interface SalesReportRow {
   logDate: string | Date;
   station: SalesReportStation;
   recordedBy: SalesReportUser | null;
-}
-
-function formatHumanReadableDate(dateInput: string | Date | null | undefined): string {
-  if (!dateInput) return "—";
-  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
-  if (isNaN(date.getTime())) return "—";
-
-  const months = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-  ];
-  
-  const month = months[date.getMonth()];
-  const day = date.getDate();
-  const year = date.getFullYear();
-  
-  return `${month} ${day}, ${year}`;
 }
 
 export function SalesReportsManager({

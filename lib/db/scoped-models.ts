@@ -26,6 +26,7 @@ export const STRICT_SCOPED: ReadonlySet<string> = new Set([
   "Ticket",
   "Customer",
   "Waybill",
+  "WaybillAllocation",
   "Pump",
   "Nozzle",
   "ShiftLog",

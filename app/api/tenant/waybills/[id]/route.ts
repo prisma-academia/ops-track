@@ -26,7 +26,7 @@ export async function GET(
     const { id } = await params;
     const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_READ.key);
 
-    const waybill = await prisma.waybill.findUnique({
+    const allocation = await prisma.waybillAllocation.findUnique({
       where: { id },
       include: {
         station: {
@@ -36,12 +36,16 @@ export async function GET(
             code: true,
           },
         },
-        recordedBy: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
+        waybill: {
+          include: {
+            recordedBy: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         },
         dippings: {
@@ -50,16 +54,50 @@ export async function GET(
             recordedBy: {
               select: { firstName: true, lastName: true }
             }
+          },
+          orderBy: {
+            createdAt: 'asc'
           }
         }
       },
     });
 
-    if (!waybill || waybill.tenantId !== actor.tenantId) {
-      throw new DomainError(404, "not_found", "Waybill not found.");
+    if (!allocation || allocation.tenantId !== actor.tenantId) {
+      throw new DomainError(404, "not_found", "Waybill allocation not found.");
     }
 
-    return ok(waybill);
+    const mapped = {
+      id: allocation.id,
+      stationId: allocation.stationId,
+      number: allocation.waybill.number,
+      productType: allocation.waybill.productType,
+      litersLoaded: Number(allocation.litersToDispense),
+      litersReceived: allocation.litersReceived ? Number(allocation.litersReceived) : null,
+      truckPlate: allocation.waybill.truckPlate,
+      driverName: allocation.waybill.driverName,
+      driverPhone: allocation.waybill.driverPhone,
+      status: allocation.status,
+      gpsLatitude: allocation.gpsLatitude ? Number(allocation.gpsLatitude) : null,
+      gpsLongitude: allocation.gpsLongitude ? Number(allocation.gpsLongitude) : null,
+      pictures: allocation.waybill.pictures || [],
+      arrivalPictures: allocation.arrivalPictures || [],
+      deliveryDatetime: allocation.waybill.deliveryDatetime?.toISOString() ?? null,
+      arrivalTime: allocation.arrivalTime?.toISOString() ?? null,
+      supplier: allocation.waybill.supplier,
+      depot: allocation.waybill.depot,
+      transportCompany: allocation.waybill.transportCompany,
+      truckNumberVerified: allocation.truckNumberVerified,
+      driverVerified: allocation.driverVerified,
+      waybillVerified: allocation.waybillVerified,
+      dispatchedAt: allocation.waybill.dispatchedAt.toISOString(),
+      deliveredAt: allocation.deliveredAt?.toISOString() ?? null,
+      recordedById: allocation.waybill.recordedById,
+      recordedBy: allocation.waybill.recordedBy,
+      station: allocation.station,
+      dippings: allocation.dippings,
+    };
+
+    return ok(mapped);
   } catch (e) {
     return handleError(e);
   }
@@ -76,25 +114,27 @@ export async function PATCH(
     const body = DeliverWaybillSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    const existing = await prisma.waybill.findUnique({ where: { id } });
+    const existing = await prisma.waybillAllocation.findUnique({
+      where: { id },
+      include: { waybill: true }
+    });
     if (!existing || existing.tenantId !== actor.tenantId) {
-      throw new DomainError(404, "not_found", "Waybill not found.");
+      throw new DomainError(404, "not_found", "Waybill allocation not found.");
     }
 
     if (existing.status !== "DISPATCHED") {
-      throw new DomainError(400, "already_processed", `Waybill status is currently: ${existing.status}`);
+      throw new DomainError(400, "already_processed", `Waybill allocation status is currently: ${existing.status}`);
     }
 
-    const updatedPictures = [...(existing.pictures || []), ...(body.pictures || [])];
+    const updatedPictures = [...(existing.waybill.pictures || []), ...(body.pictures || [])];
 
-    const waybill = await prisma.waybill.update({
+    const allocation = await prisma.waybillAllocation.update({
       where: { id },
       data: {
         status: "DELIVERED",
         litersReceived: body.litersReceived,
         gpsLatitude: body.gpsLatitude !== undefined ? body.gpsLatitude : existing.gpsLatitude,
         gpsLongitude: body.gpsLongitude !== undefined ? body.gpsLongitude : existing.gpsLongitude,
-        pictures: updatedPictures,
         arrivalTime: body.arrivalTime ? new Date(body.arrivalTime) : existing.arrivalTime,
         truckNumberVerified: body.truckNumberVerified ?? existing.truckNumberVerified,
         driverVerified: body.driverVerified ?? existing.driverVerified,
@@ -102,27 +142,69 @@ export async function PATCH(
         arrivalPictures: body.arrivalPictures ?? existing.arrivalPictures,
         deliveredAt: new Date(),
       },
+      include: {
+        waybill: true
+      }
     });
+
+    // Update dispatch pictures if any new dispatch pictures were uploaded
+    if (body.pictures && body.pictures.length > 0) {
+      await prisma.waybill.update({
+        where: { id: existing.waybillId },
+        data: {
+          pictures: updatedPictures
+        }
+      });
+    }
 
     await audit({
       actorType: "TENANT_USER",
       actorId: actor.userId,
       action: "waybill.deliver",
       tenantId: actor.tenantId,
-      targetType: "Waybill",
-      targetId: waybill.id,
+      targetType: "WaybillAllocation",
+      targetId: allocation.id,
       before: { status: existing.status } as object,
       after: {
-        status: waybill.status,
-        litersLoaded: waybill.litersLoaded,
-        litersReceived: waybill.litersReceived,
-        variance: Number(waybill.litersLoaded) - Number(waybill.litersReceived),
+        status: allocation.status,
+        litersLoaded: Number(allocation.litersToDispense),
+        litersReceived: allocation.litersReceived ? Number(allocation.litersReceived) : null,
+        variance: Number(allocation.litersToDispense) - (allocation.litersReceived ? Number(allocation.litersReceived) : 0),
       } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
 
-    return ok({ waybill });
+    const mapped = {
+      id: allocation.id,
+      stationId: allocation.stationId,
+      number: allocation.waybill.number,
+      productType: allocation.waybill.productType,
+      litersLoaded: Number(allocation.litersToDispense),
+      litersReceived: allocation.litersReceived ? Number(allocation.litersReceived) : null,
+      truckPlate: allocation.waybill.truckPlate,
+      driverName: allocation.waybill.driverName,
+      driverPhone: allocation.waybill.driverPhone,
+      status: allocation.status,
+      gpsLatitude: allocation.gpsLatitude ? Number(allocation.gpsLatitude) : null,
+      gpsLongitude: allocation.gpsLongitude ? Number(allocation.gpsLongitude) : null,
+      pictures: updatedPictures,
+      arrivalPictures: allocation.arrivalPictures || [],
+      deliveryDatetime: allocation.waybill.deliveryDatetime?.toISOString() ?? null,
+      arrivalTime: allocation.arrivalTime?.toISOString() ?? null,
+      supplier: allocation.waybill.supplier,
+      depot: allocation.waybill.depot,
+      transportCompany: allocation.waybill.transportCompany,
+      truckNumberVerified: allocation.truckNumberVerified,
+      driverVerified: allocation.driverVerified,
+      waybillVerified: allocation.waybillVerified,
+      dispatchedAt: allocation.waybill.dispatchedAt.toISOString(),
+      deliveredAt: allocation.deliveredAt?.toISOString() ?? null,
+      recordedById: allocation.waybill.recordedById,
+      stationId_number: `${allocation.stationId}_${allocation.waybill.number}` // compatibility field if any
+    };
+
+    return ok({ waybill: mapped });
   } catch (e) {
     return handleError(e);
   }

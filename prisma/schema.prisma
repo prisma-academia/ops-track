@@ -87,6 +87,7 @@ model Tenant {
   tickets                    Ticket[]
   customers                  Customer[]
   waybills                   Waybill[]
+  waybillAllocations         WaybillAllocation[]
   waybillDippings            WaybillDipping[]
   pumps                      Pump[]
   nozzles                    Nozzle[]
@@ -403,7 +404,7 @@ model Station {
   dailyReports   DailyStockReport[]
   tickets        Ticket[]
   dailySalesLogs DailySalesLog[]
-  waybills       Waybill[]
+  waybillAllocations WaybillAllocation[]
   pumps          Pump[]
   expenses       Expense[]
 
@@ -554,45 +555,72 @@ model Customer {
 }
 
 model Waybill {
-  id             String        @id @default(uuid())
-  tenantId       String
-  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  stationId      String
-  station        Station       @relation(fields: [stationId], references: [id], onDelete: Cascade)
-  number         String // Waybill Number
-  productType    ProductType
-  litersLoaded   Decimal       @db.Decimal(12, 2)
-  litersReceived Decimal?      @db.Decimal(12, 2) // Transit variance checking
-  truckPlate     String
-  driverName     String
-  driverPhone    String?
-  status         WaybillStatus @default(DISPATCHED)
-  gpsLatitude    Decimal?      @db.Decimal(9, 6)
-  gpsLongitude   Decimal?      @db.Decimal(9, 6)
-  pictures            String[]      @default([]) // URLs or keys of photos
-  arrivalPictures     String[]      @default([]) // Truck, truck number, and location photos on arrival
-  dispatchedAt        DateTime      @default(now())
-  deliveryDatetime    DateTime?
-  arrivalTime         DateTime?
-  deliveredAt         DateTime?
+  id               String              @id @default(uuid())
+  tenantId         String
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  number           String              // Waybill Number
+  productType      ProductType
+  litersLoaded     Decimal             @db.Decimal(12, 2)
+  truckPlate       String
+  driverName       String
+  driverPhone      String?
+  pictures         String[]            @default([]) // URLs or keys of photos
+  dispatchedAt     DateTime            @default(now())
+  deliveryDatetime DateTime?
   
-  supplier            String?
-  depot               String?
-  transportCompany    String?
+  supplier         String?
+  depot            String?
+  transportCompany String?
 
-  truckNumberVerified Boolean       @default(false)
-  driverVerified      Boolean       @default(false)
-  waybillVerified     Boolean       @default(false)
-
-  recordedById String
-  recordedBy   TenantUser @relation(fields: [recordedById], references: [id], onDelete: Restrict)
-  dippings     WaybillDipping[]
+  recordedById     String
+  recordedBy       TenantUser          @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+  
+  allocations      WaybillAllocation[]
+  dippings         WaybillDipping[]
 
   @@unique([tenantId, number])
   @@index([tenantId])
-  @@index([stationId])
   @@index([recordedById])
   @@map("waybills")
+}
+
+model WaybillAllocation {
+  id                 String        @id @default(uuid())
+  tenantId           String
+  tenant             Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  waybillId          String
+  waybill            Waybill       @relation(fields: [waybillId], references: [id], onDelete: Cascade)
+  stationId          String
+  station            Station       @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  
+  // Volume and financial details per station
+  litersToDispense   Decimal       @db.Decimal(12, 2)
+  litersReceived     Decimal?      @db.Decimal(12, 2)
+  costPerLiter       Decimal       @db.Decimal(10, 2)
+  transportationCost Decimal       @db.Decimal(12, 2)
+  
+  // Delivery details per station
+  status             WaybillStatus @default(DISPATCHED)
+  gpsLatitude        Decimal?      @db.Decimal(9, 6)
+  gpsLongitude       Decimal?      @db.Decimal(9, 6)
+  arrivalPictures    String[]      @default([])
+  arrivalTime        DateTime?
+  deliveredAt        DateTime?
+  
+  truckNumberVerified Boolean      @default(false)
+  driverVerified      Boolean      @default(false)
+  waybillVerified     Boolean      @default(false)
+
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  dippings           WaybillDipping[]
+
+  @@unique([waybillId, stationId])
+  @@index([tenantId])
+  @@index([waybillId])
+  @@index([stationId])
+  @@map("waybill_allocations")
 }
 
 model Pump {
@@ -693,21 +721,24 @@ model Expense {
 }
 
 model WaybillDipping {
-  id           String     @id @default(uuid())
-  tenantId     String
-  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  waybillId    String
-  waybill      Waybill    @relation(fields: [waybillId], references: [id], onDelete: Cascade)
-  tankId       String
-  tank         Tank       @relation(fields: [tankId], references: [id], onDelete: Cascade)
-  beforeLiters Decimal    @db.Decimal(12, 2)
-  afterLiters  Decimal?   @db.Decimal(12, 2)
-  recordedById String
-  recordedBy   TenantUser @relation(fields: [recordedById], references: [id], onDelete: Restrict)
-  createdAt    DateTime   @default(now())
+  id                  String            @id @default(uuid())
+  tenantId            String
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  waybillId           String
+  waybill             Waybill           @relation(fields: [waybillId], references: [id], onDelete: Cascade)
+  waybillAllocationId String
+  waybillAllocation   WaybillAllocation @relation(fields: [waybillAllocationId], references: [id], onDelete: Cascade)
+  tankId              String
+  tank                Tank              @relation(fields: [tankId], references: [id], onDelete: Cascade)
+  beforeLiters        Decimal           @db.Decimal(12, 2)
+  afterLiters         Decimal?          @db.Decimal(12, 2)
+  recordedById        String
+  recordedBy          TenantUser        @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+  createdAt           DateTime          @default(now())
 
   @@index([tenantId])
   @@index([waybillId])
+  @@index([waybillAllocationId])
   @@map("waybill_dippings")
 }
 

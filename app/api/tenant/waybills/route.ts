@@ -8,20 +8,29 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
 
 const CreateWaybillSchema = z.object({
-  stationId: z.string().min(1),
   number: z.string().min(1).max(50),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   litersLoaded: z.coerce.number().positive(),
   truckPlate: z.string().min(1).max(20),
   driverName: z.string().min(1).max(100),
   driverPhone: z.string().optional().nullable(),
-  gpsLatitude: z.number().optional().nullable(),
-  gpsLongitude: z.number().optional().nullable(),
   pictures: z.array(z.string()).optional(),
   deliveryDatetime: z.string().optional().nullable(),
-  supplier: z.string().optional().nullable(),
+  supplier: z.string().min(1, "Supplier is required"),
   depot: z.string().optional().nullable(),
   transportCompany: z.string().optional().nullable(),
+  allocations: z.array(z.object({
+    stationId: z.string().min(1),
+    litersToDispense: z.coerce.number().positive(),
+    costPerLiter: z.coerce.number().positive(),
+    transportationCost: z.coerce.number().nonnegative(),
+  })).min(1, "At least one station assignment is required"),
+}).refine((data) => {
+  const sum = data.allocations.reduce((acc, a) => acc + Number(a.litersToDispense), 0);
+  return Math.abs(sum - data.litersLoaded) < 0.01;
+}, {
+  message: "The sum of station allocations must equal the total liters loaded.",
+  path: ["litersLoaded"]
 });
 
 export async function GET(request: Request) {
@@ -33,13 +42,13 @@ export async function GET(request: Request) {
     const stationId = url.searchParams.get("stationId") || undefined;
     const status = url.searchParams.get("status") || undefined;
 
-    const rows = await prisma.waybill.findMany({
+    const allocations = await prisma.waybillAllocation.findMany({
       where: { 
         tenantId: actor.tenantId,
         ...(stationId ? { stationId } : {}),
         ...(status ? { status: status as any } : {}),
       },
-      orderBy: { dispatchedAt: "desc" },
+      orderBy: { waybill: { dispatchedAt: "desc" } },
       take,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       include: {
@@ -50,18 +59,52 @@ export async function GET(request: Request) {
             code: true,
           },
         },
-        recordedBy: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
+        waybill: {
+          include: {
+            recordedBy: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         },
       },
     });
 
-    return ok(rows, buildPageMeta(rows, take));
+    const mapped = allocations.map((a) => ({
+      id: a.id, // Return allocation ID as waybill ID for the mobile client
+      stationId: a.stationId,
+      number: a.waybill.number,
+      productType: a.waybill.productType,
+      litersLoaded: Number(a.litersToDispense),
+      litersReceived: a.litersReceived ? Number(a.litersReceived) : null,
+      truckPlate: a.waybill.truckPlate,
+      driverName: a.waybill.driverName,
+      driverPhone: a.waybill.driverPhone,
+      status: a.status,
+      gpsLatitude: a.gpsLatitude ? Number(a.gpsLatitude) : null,
+      gpsLongitude: a.gpsLongitude ? Number(a.gpsLongitude) : null,
+      pictures: a.waybill.pictures || [],
+      arrivalPictures: a.arrivalPictures || [],
+      deliveryDatetime: a.waybill.deliveryDatetime?.toISOString() ?? null,
+      arrivalTime: a.arrivalTime?.toISOString() ?? null,
+      supplier: a.waybill.supplier,
+      depot: a.waybill.depot,
+      transportCompany: a.waybill.transportCompany,
+      truckNumberVerified: a.truckNumberVerified,
+      driverVerified: a.driverVerified,
+      waybillVerified: a.waybillVerified,
+      dispatchedAt: a.waybill.dispatchedAt.toISOString(),
+      deliveredAt: a.deliveredAt?.toISOString() ?? null,
+      recordedById: a.waybill.recordedById,
+      recordedBy: a.waybill.recordedBy,
+      station: a.station,
+    }));
+
+    return ok(mapped, buildPageMeta(allocations, take));
   } catch (e) {
     return handleError(e);
   }
@@ -74,10 +117,13 @@ export async function POST(request: Request) {
     const body = CreateWaybillSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    // Verify station ownership
-    const station = await prisma.station.findUnique({ where: { id: body.stationId } });
-    if (!station || station.tenantId !== actor.tenantId) {
-      throw new DomainError(404, "not_found", "Station not found.");
+    // Verify all station ownerships
+    const stationIds = body.allocations.map(a => a.stationId);
+    const stations = await prisma.station.findMany({
+      where: { id: { in: stationIds }, tenantId: actor.tenantId }
+    });
+    if (stations.length !== new Set(stationIds).size) {
+      throw new DomainError(404, "not_found", "One or more stations not found or belong to a different tenant.");
     }
 
     // Verify waybill number uniqueness within this tenant
@@ -96,22 +142,31 @@ export async function POST(request: Request) {
     const waybill = await prisma.waybill.create({
       data: {
         tenantId: actor.tenantId,
-        stationId: body.stationId,
         number: body.number,
         productType: body.productType,
         litersLoaded: body.litersLoaded,
         truckPlate: body.truckPlate,
         driverName: body.driverName,
         driverPhone: body.driverPhone ?? null,
-        gpsLatitude: body.gpsLatitude ?? null,
-        gpsLongitude: body.gpsLongitude ?? null,
         pictures: body.pictures ?? [],
         deliveryDatetime: body.deliveryDatetime ? new Date(body.deliveryDatetime) : null,
         supplier: body.supplier ?? null,
         depot: body.depot ?? null,
         transportCompany: body.transportCompany ?? null,
         recordedById: actor.userId,
+        allocations: {
+          create: body.allocations.map(a => ({
+            tenantId: actor.tenantId,
+            stationId: a.stationId,
+            litersToDispense: a.litersToDispense,
+            costPerLiter: a.costPerLiter,
+            transportationCost: a.transportationCost,
+          }))
+        }
       },
+      include: {
+        allocations: true
+      }
     });
 
     await audit({
@@ -121,7 +176,7 @@ export async function POST(request: Request) {
       tenantId: actor.tenantId,
       targetType: "Waybill",
       targetId: waybill.id,
-      after: { number: waybill.number, litersLoaded: waybill.litersLoaded, stationId: waybill.stationId } as object,
+      after: { number: waybill.number, litersLoaded: waybill.litersLoaded, allocationsCount: waybill.allocations.length } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });

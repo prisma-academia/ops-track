@@ -24,8 +24,8 @@ const fontMono = Fira_Code({
 });
 
 export const metadata: Metadata = {
-  title: "Multi-Tenant SaaS",
-  description: "Multi-tenant SaaS platform",
+  title: "RasForge",
+  description: "Manage your filling station with ease.",
 };
 
 export default async function RootLayout({

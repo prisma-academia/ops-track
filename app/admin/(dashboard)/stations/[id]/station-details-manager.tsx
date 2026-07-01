@@ -883,17 +883,23 @@ export function StationDetailsManager({
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Cash</th>
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">POS / Transfer</th>
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Total Revenue</th>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Status</th>
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Recorded By</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/30">
                   {(!station.dailySalesLogs || station.dailySalesLogs.length === 0) ? (
-                    <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No sales records found.</td></tr>
+                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">No sales records found.</td></tr>
                   ) : (
                     station.dailySalesLogs.map((log: any) => {
                       const totalRevenue = Number(log.amountCash) + Number(log.amountPos) + Number(log.amountTransfer);
                       const digitalRevenue = Number(log.amountPos) + Number(log.amountTransfer);
                       const recorder = log.recordedBy ? `${log.recordedBy.firstName ?? ""} ${log.recordedBy.lastName ?? ""}`.trim() : "Unknown";
+
+                      const flags = [];
+                      if (log.flaggedAmount) flags.push("Amount");
+                      if (log.flaggedLiters) flags.push("Liters");
+                      if (log.flaggedReceipt) flags.push("Receipt");
 
                       return (
                         <tr key={log.id} className="hover:bg-muted/10">
@@ -905,6 +911,22 @@ export function StationDetailsManager({
                           <td className="px-6 py-4 text-right text-muted-foreground">₦{Number(log.amountCash).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td className="px-6 py-4 text-right text-muted-foreground">₦{digitalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td className="px-6 py-4 text-right font-bold text-foreground">₦{totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="px-6 py-4 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              {log.status === "APPROVED" ? (
+                                <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 text-[10px] font-semibold">Approved</Badge>
+                              ) : log.status === "REJECTED" ? (
+                                <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50 text-[10px] font-semibold">Rejected</Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 text-[10px] font-semibold">Pending</Badge>
+                              )}
+                              {flags.length > 0 && (
+                                <span className="text-[9px] text-rose-500 font-semibold leading-none">
+                                  Flagged: {flags.join(", ")}
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-6 py-4 text-center text-muted-foreground">{recorder}</td>
                         </tr>
                       );

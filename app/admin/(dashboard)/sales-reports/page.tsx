@@ -25,6 +25,14 @@ export default async function SalesReportsPage() {
           lastName: true,
         },
       },
+      approvedBy: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
     },
   });
 

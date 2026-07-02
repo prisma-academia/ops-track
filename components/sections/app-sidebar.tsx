@@ -10,11 +10,12 @@ import Image from 'next/image';
 interface AppSidebarProps {
   items: NavItem[];
   title: string;
+  logoUrl?: string | null;
   roleLabel: string;
   userLabel: string;
 }
 
-export function AppSidebar({ items, title, roleLabel, userLabel }: AppSidebarProps) {
+export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel }: AppSidebarProps) {
   return (
     <Sidebar className="px-0 h-full [&_[data-slot=sidebar-inner]]:h-full">
       <div className="flex flex-col gap-4">
@@ -23,13 +24,21 @@ export function AppSidebar({ items, title, roleLabel, userLabel }: AppSidebarPro
           <div className="w-full border rounded-md bg-muted/20">
             <div className="flex items-center gap-3 overflow-hidden p-2">
               <div className="flex items-center justify-center size-10 rounded-lg text-primary shrink-0">
-                <Image
-                  src="/assets/icons/asa-oil-logo.png"
-                  alt="ASA Oil Logo"
-                  width={40}
-                  height={40}
-                  className="rounded-md"
-                />
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt={`${title} Logo`}
+                    className="size-10 rounded-md object-contain bg-white"
+                  />
+                ) : (
+                  <Image
+                    src="/assets/icons/asa-oil-logo.png"
+                    alt="ASA Oil Logo"
+                    width={40}
+                    height={40}
+                    className="rounded-md"
+                  />
+                )}
               </div>
               <div className="flex flex-col items-start truncate min-w-0">
                 <span className="text-sm font-semibold font-heading truncate w-full text-left">{title}</span>

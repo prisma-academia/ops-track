@@ -45,6 +45,7 @@ interface DashboardLayoutShellProps {
   children: React.ReactNode;
   navItems: NavItem[];
   title: string;
+  logoUrl?: string | null;
   user: {
     name: string;
     email: string;
@@ -61,6 +62,7 @@ export function DashboardLayoutShell({
   children,
   navItems,
   title,
+  logoUrl,
   user,
   roleLabel,
   logoutEndpoint,
@@ -103,6 +105,7 @@ export function DashboardLayoutShell({
         <AppSidebar
           items={navItems}
           title={title}
+          logoUrl={logoUrl}
           roleLabel={roleLabel}
           userLabel={user.name}
         />

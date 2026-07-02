@@ -8,13 +8,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Moon, Sun, Bell, Truck, Coins, RefreshCw, Info, Check } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useRouter } from "next/navigation"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+
 import {
   Sheet,
   SheetContent,
@@ -87,32 +81,6 @@ export default function HeaderV2({
       <div className="flex h-18 items-center justify-between border-b gap-4 px-4 sm:px-8">
         <div className="flex items-center gap-4">
           <SidebarTrigger className="cursor-pointer"/>
-
-          <Separator orientation="vertical" className="h-4" />
-
-          {stations.length > 0 && (
-            <div className="flex items-center">
-              <Select
-                value={activeStationId}
-                onValueChange={(val) => {
-                  document.cookie = `active-station-id=${val}; path=/; max-age=31536000; SameSite=Lax`;
-                  router.refresh();
-                }}
-              >
-                <SelectTrigger className="w-[180px] sm:w-[240px]">
-                  <SelectValue placeholder="All Stations" />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  <SelectItem value="all">All Stations</SelectItem>
-                  {stations.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name} ({s.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
         </div>
 
         <div className="flex items-center gap-3">

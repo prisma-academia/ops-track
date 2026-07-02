@@ -6,6 +6,7 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { parseTenantSettings, type ModuleKey } from "@/lib/tenant/settings";
 import { DashboardLayoutShell } from "@/components/dashboard-layout-shell";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
+import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 import { UnauthorizedToast } from "@/components/unauthorized-toast";
 
 interface NavItemConfig {
@@ -90,7 +91,15 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
   if (!tenant || tenant.status !== "ACTIVE") redirect("/maintenance");
 
   const tNav = await getTranslations("nav");
-  const enabled = parseTenantSettings(tenant?.settingsJson).enabledModules;
+  const settings = parseTenantSettings(tenant?.settingsJson);
+  const enabled = settings.enabledModules;
+  
+  const logoUrl =
+    settings.logoKey?.startsWith("http")
+      ? settings.logoKey
+      : settings.logoKey && s3Configured()
+      ? publicUrlForKey(settings.logoKey)
+      : null;
   
   const mapNavItem = (n: NavItemConfig): any => {
     return {
@@ -116,6 +125,7 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
   return (
     <DashboardLayoutShell
       title={tenant?.name ?? "Tenant"}
+      logoUrl={logoUrl}
       navItems={nav}
       user={{ name: label, email: userWithStations.email }}
       roleLabel="Tenant Admin"

@@ -133,7 +133,7 @@ export default async function VarianceAuditPage({
           time: dip.recordedAt,
           type: "DIP",
           actualDip: Number(dip.dippingLiters),
-          label: `Physical Dip (${dip.shift || "Manual"})`,
+          label: `Physical Dip (${dip.reason || "Manual"})`,
         });
       }
 

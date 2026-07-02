@@ -87,7 +87,7 @@ export async function POST(
          throw new DomainError(404, "not_found", "Tank not found.");
       }
       
-      const newLevel = Number(latestTank.currentLiters) + body.dippingLiters;
+      const newLevel = body.dippingLiters;
       if (newLevel > Number(latestTank.capacity)) {
         throw new DomainError(400, "capacity_exceeded", `Dipping volume (${body.dippingLiters} L) would push tank "${latestTank.name}" to ${newLevel.toLocaleString()} L, exceeding capacity of ${Number(latestTank.capacity).toLocaleString()} L.`);
       }
@@ -116,13 +116,11 @@ export async function POST(
         },
       });
 
-      // Update tank currentLiters atomically
-      if (body.dippingLiters !== 0) {
-        await tx.tank.update({
-          where: { id: body.tankId },
-          data: { currentLiters: { increment: body.dippingLiters } },
-        });
-      }
+      // Update tank currentLiters atomically to match the physical dip
+      await tx.tank.update({
+        where: { id: body.tankId },
+        data: { currentLiters: body.dippingLiters },
+      });
 
       return dipping;
     });

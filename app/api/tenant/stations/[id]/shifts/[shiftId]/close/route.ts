@@ -84,6 +84,7 @@ export async function POST(
           declaredCash: body.declaredCash,
           declaredPos: body.declaredPos,
           declaredTransfer: body.declaredTransfer,
+          closedAt: new Date(),
         },
         include: {
           attendant: {

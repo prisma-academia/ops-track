@@ -704,6 +704,7 @@ model ShiftLog {
 
   shiftDate DateTime @db.Date
   createdAt DateTime @default(now())
+  closedAt  DateTime?
 
   @@index([tenantId])
   @@index([nozzleId])

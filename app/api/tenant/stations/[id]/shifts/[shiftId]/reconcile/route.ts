@@ -81,23 +81,47 @@ export async function POST(
 
     const varianceCash = declaredRevenue - expectedRevenue;
 
-    const updatedShiftLog = await prisma.shiftLog.update({
-      where: { id: shiftId },
-      data: {
-        reconciledById: actor.userId,
-        varianceCash,
-        reconciledAt: new Date(),
-      },
-      include: {
-        reconciledBy: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
+    // Get the tank connected to this nozzle's pump
+    const tankId = shiftLog.nozzle.pump.tank.id;
+    const tankCurrentLiters = Number(shiftLog.nozzle.pump.tank.currentLiters);
+
+    // Guard: ensure tank won't go negative
+    if (tankCurrentLiters - litersSold < 0) {
+      throw new DomainError(
+        400,
+        "insufficient_tank_volume",
+        `Cannot reconcile: deducting ${litersSold.toLocaleString()} L would bring tank below 0 (current: ${tankCurrentLiters.toLocaleString()} L). Record a dipping first.`
+      );
+    }
+
+    const updatedShiftLog = await prisma.$transaction(async (tx) => {
+      // Update the shift log with reconciliation data
+      const updated = await tx.shiftLog.update({
+        where: { id: shiftId },
+        data: {
+          reconciledById: actor.userId,
+          varianceCash,
+          reconciledAt: new Date(),
+        },
+        include: {
+          reconciledBy: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
           },
         },
-      },
+      });
+
+      // Deduct litersSold from the tank's currentLiters
+      await tx.tank.update({
+        where: { id: tankId },
+        data: { currentLiters: { decrement: litersSold } },
+      });
+
+      return updated;
     });
 
     await audit({

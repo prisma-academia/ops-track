@@ -15,6 +15,7 @@ export default async function StationsPage() {
         select: { productType: true, capacity: true },
       },
       dailySalesLogs: {
+        where: { status: "APPROVED" },
         orderBy: { logDate: "desc" },
         take: 1,
         select: { amountCash: true, amountPos: true, amountTransfer: true },

@@ -6,6 +6,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
+import { sendPushNotification } from "@/lib/notifications";
 
 const CreateWaybillSchema = z.object({
   number: z.string().min(1).max(50),
@@ -180,6 +181,52 @@ export async function POST(request: Request) {
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
+
+    // Notify assigned staff for each allocated station
+    try {
+      const stationsWithStaff = await prisma.station.findMany({
+        where: {
+          id: { in: stationIds },
+          tenantId: actor.tenantId,
+        },
+        include: {
+          staff: {
+            select: {
+              id: true,
+              expoPushTokens: true,
+            },
+          },
+        },
+      });
+
+      for (const station of stationsWithStaff) {
+        const allocation = waybill.allocations.find((a) => a.stationId === station.id);
+        if (!allocation) continue;
+
+        // Gather all push tokens for staff assigned to this station
+        const tokens = station.staff.flatMap((s) => s.expoPushTokens);
+        if (tokens.length === 0) continue;
+
+        const liters = Number(allocation.litersToDispense).toLocaleString();
+        const product = waybill.productType;
+        const title = "New Dispatch Assigned";
+        const notifBody = `A new dispatch of ${liters} L of ${product} has been created for ${station.name} (Waybill: #${waybill.number}).`;
+
+        await sendPushNotification(
+          tokens,
+          title,
+          notifBody,
+          {
+            waybillId: waybill.id,
+            allocationId: allocation.id,
+            stationId: station.id,
+            action: "waybill.assigned",
+          }
+        );
+      }
+    } catch (err) {
+      console.error("Failed to send waybill push notifications:", err);
+    }
 
     return ok({ waybill });
   } catch (e) {

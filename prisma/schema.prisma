@@ -359,6 +359,7 @@ enum StationRole {
 enum WaybillStatus {
   DISPATCHED
   DELIVERED
+  COMPLETED
   CANCELLED
 }
 
@@ -428,8 +429,9 @@ model Tank {
   station     Station     @relation(fields: [stationId], references: [id], onDelete: Cascade)
   name        String // e.g., "PMS Tank 1"
   productType ProductType
-  capacity    Decimal     @db.Decimal(12, 2)
-  status      AssetStatus @default(ACTIVE)
+  capacity      Decimal     @db.Decimal(12, 2)
+  currentLiters Decimal     @default(0.00) @db.Decimal(12, 2)
+  status        AssetStatus @default(ACTIVE)
 
   dippings TankDipping[]
   waybillDippings WaybillDipping[]
@@ -626,6 +628,7 @@ model WaybillAllocation {
   truckNumberVerified Boolean      @default(false)
   driverVerified      Boolean      @default(false)
   waybillVerified     Boolean      @default(false)
+  cancellationReason  String?      @db.Text
 
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt

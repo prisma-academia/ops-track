@@ -79,6 +79,19 @@ export async function POST(
 
     // Execute actions
     const result = await prisma.$transaction(async (tx) => {
+      // Validate capacity inside transaction to prevent race conditions
+      const latestTank = await tx.tank.findUnique({
+        where: { id: body.tankId },
+      });
+      if (!latestTank) {
+         throw new DomainError(404, "not_found", "Tank not found.");
+      }
+      
+      const newLevel = Number(latestTank.currentLiters) + body.dippingLiters;
+      if (newLevel > Number(latestTank.capacity)) {
+        throw new DomainError(400, "capacity_exceeded", `Dipping volume (${body.dippingLiters} L) would push tank "${latestTank.name}" to ${newLevel.toLocaleString()} L, exceeding capacity of ${Number(latestTank.capacity).toLocaleString()} L.`);
+      }
+
       // If pricePerLiter is provided, create a new PriceControl entry
       if (body.pricePerLiter !== undefined) {
         await tx.priceControl.create({
@@ -102,6 +115,14 @@ export async function POST(
           recordedAt: new Date(),
         },
       });
+
+      // Update tank currentLiters atomically
+      if (body.dippingLiters !== 0) {
+        await tx.tank.update({
+          where: { id: body.tankId },
+          data: { currentLiters: { increment: body.dippingLiters } },
+        });
+      }
 
       return dipping;
     });

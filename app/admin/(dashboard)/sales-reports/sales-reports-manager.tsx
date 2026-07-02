@@ -21,7 +21,7 @@ import {
 import { User, Droplets, Banknote, ChartColumnIncreasing, Handbag, CalendarIcon, Eye, CheckCircle2, AlertCircle } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
-import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { cn, formatHumanReadableDate, formatShortCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { apiPatch } from "@/lib/client/api";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
@@ -185,14 +185,14 @@ export function SalesReportsManager({
     },
     {
       title: "Cash Revenue",
-      subtitle: `₦${stats.cash.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      subtitle: formatShortCurrency(stats.cash),
       cardIcon: Banknote,
       badgeColor: "bg-emerald-400/10 text-emerald-700 dark:text-emerald-400",
       statusValue: "Period",
     },
     {
       title: "Digital Revenue",
-      subtitle: `₦${stats.digital.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      subtitle: formatShortCurrency(stats.digital),
       cardIcon: ChartColumnIncreasing,
       badgeColor: "bg-indigo-400/10 text-indigo-700 dark:text-indigo-400",
       statusValue: "Period",
@@ -246,7 +246,7 @@ export function SalesReportsManager({
         const total = Number(row.original.amountCash) + Number(row.original.amountPos) + Number(row.original.amountTransfer);
         return (
           <div className="text-right font-bold text-foreground">
-            ₦{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            {formatShortCurrency(total)}
           </div>
         );
       },
@@ -495,19 +495,19 @@ export function SalesReportsManager({
                 <div className="space-y-1.5 divide-y divide-border/20 text-sm">
                   <div className="flex justify-between items-center py-1">
                     <span className="text-muted-foreground">Cash Revenue</span>
-                    <span className="font-semibold font-mono">₦{Number(selectedReport.amountCash).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="font-semibold font-mono">{formatShortCurrency(Number(selectedReport.amountCash))}</span>
                   </div>
                   <div className="flex justify-between items-center py-1">
                     <span className="text-muted-foreground">POS Revenue</span>
-                    <span className="font-semibold font-mono">₦{Number(selectedReport.amountPos).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="font-semibold font-mono">{formatShortCurrency(Number(selectedReport.amountPos))}</span>
                   </div>
                   <div className="flex justify-between items-center py-1">
                     <span className="text-muted-foreground">Bank Transfer</span>
-                    <span className="font-semibold font-mono">₦{Number(selectedReport.amountTransfer).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="font-semibold font-mono">{formatShortCurrency(Number(selectedReport.amountTransfer))}</span>
                   </div>
                   <div className="flex justify-between items-center pt-2 font-bold text-base">
                     <span>Total Revenue</span>
-                    <span className="text-primary">₦{(Number(selectedReport.amountCash) + Number(selectedReport.amountPos) + Number(selectedReport.amountTransfer)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="text-primary">{formatShortCurrency(Number(selectedReport.amountCash) + Number(selectedReport.amountPos) + Number(selectedReport.amountTransfer))}</span>
                   </div>
                 </div>
               </div>

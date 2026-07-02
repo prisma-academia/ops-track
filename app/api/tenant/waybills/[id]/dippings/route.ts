@@ -89,36 +89,35 @@ export async function POST(
           const netAdded = Number(dip.afterLiters) - Number(dip.beforeLiters);
           totalNetDischarged += netAdded;
 
-          // Update tank currentLiters atomically
+          // Update tank currentLiters explicitly to avoid Decimal increment issues
           if (netAdded !== 0) {
-            await tx.tank.update({
-              where: { id: dip.tankId },
-              data: { currentLiters: { increment: netAdded } },
-            });
+            const tank = await tx.tank.findUnique({ where: { id: dip.tankId } });
+            if (tank) {
+              await tx.tank.update({
+                where: { id: dip.tankId },
+                data: { currentLiters: Number(tank.currentLiters || 0) + netAdded },
+              });
+            }
           }
         }
-      }
-
-      // Update litersReceived on the allocation
-      if (totalNetDischarged > 0 || body.dippings.some(d => d.afterLiters !== null && d.afterLiters !== undefined)) {
-        await tx.waybillAllocation.update({
-          where: { id: waybillAllocationId },
-          data: {
-            litersReceived: allocation.litersReceived !== null 
-              ? { increment: totalNetDischarged }
-              : totalNetDischarged,
-          },
-        });
       }
 
       // Check if allocation should be auto-completed
       const currentReceived = Number(allocation.litersReceived ?? 0) + totalNetDischarged;
       const shouldComplete = currentReceived >= Number(allocation.litersToDispense) || body.completeWithShortage;
 
+      const updateData: any = {};
+      if (totalNetDischarged > 0 || body.dippings.some(d => d.afterLiters !== null && d.afterLiters !== undefined)) {
+        updateData.litersReceived = currentReceived;
+      }
       if (shouldComplete) {
+        updateData.status = "COMPLETED";
+      }
+
+      if (Object.keys(updateData).length > 0) {
         await tx.waybillAllocation.update({
           where: { id: waybillAllocationId },
-          data: { status: "COMPLETED" },
+          data: updateData,
         });
       }
 

@@ -117,6 +117,8 @@ export function StationDetailsManager({
   station: any;
   users: any[];
 }) {
+  console.log("Station Details Data:", station);
+
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
@@ -311,7 +313,7 @@ export function StationDetailsManager({
       ...d,
       tank: t,
       recordedAt: d.createdAt,
-      dippingLiters: d.afterLiters !== null ? d.afterLiters : d.beforeLiters,
+      dippingLiters: d.afterLiters !== null ? Number(d.afterLiters) - Number(d.beforeLiters) : 0,
       reason: "WAYBILL DISCHARGE"
     })));
 
@@ -528,24 +530,7 @@ export function StationDetailsManager({
               </div>
             ) : (
               station.tanks.map((tank: any) => {
-                const lastDip = tank.dippings?.[0];
-                const lastWaybillDip = tank.waybillDippings?.[0];
-                
-                let currentLitres = 0;
-                let latestDate = 0;
-
-                if (lastDip) {
-                  currentLitres = Number(lastDip.dippingLiters);
-                  latestDate = new Date(lastDip.recordedAt).getTime();
-                }
-
-                if (lastWaybillDip) {
-                  const waybillDate = new Date(lastWaybillDip.createdAt).getTime();
-                  if (waybillDate > latestDate) {
-                    currentLitres = lastWaybillDip.afterLiters !== null ? Number(lastWaybillDip.afterLiters) : Number(lastWaybillDip.beforeLiters);
-                    latestDate = waybillDate;
-                  }
-                }
+                const currentLitres = Number(tank.currentLiters || 0);
 
                 const capacity = Number(tank.capacity);
                 const tankPumps = station.pumps.filter((p: any) => p.tankId === tank.id);

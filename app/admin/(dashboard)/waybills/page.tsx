@@ -44,7 +44,7 @@ export default async function WaybillsPage() {
     id: a.waybillId, // Keep waybillId as row ID so clicking navigates to the whole Waybill Details
     allocationId: a.id,
     number: a.waybill.number,
-    status: a.status as "DISPATCHED" | "DELIVERED",
+    status: a.status as "DISPATCHED" | "DELIVERED" | "COMPLETED",
     productType: a.waybill.productType,
     litersLoaded: Number(a.litersToDispense), // Map this allocation volume as litersLoaded for backward compatibility in table component
     litersReceived: a.litersReceived ? Number(a.litersReceived) : null,

@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 export type WaybillRow = {
   id: string;
   number: string;
-  status: "DISPATCHED" | "DELIVERED";
+  status: "DISPATCHED" | "DELIVERED" | "COMPLETED";
   productType: string;
   litersLoaded: number;
   litersReceived: number | null;

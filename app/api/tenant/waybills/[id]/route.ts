@@ -110,8 +110,11 @@ export async function PATCH(
   try {
     await requireCsrf(request);
     const { id } = await params;
+    console.log("PATCH /api/tenant/waybills/[id] HIT! ID:", id);
     const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
+    console.log("ACTOR:", actor);
     const body = DeliverWaybillSchema.parse(await request.json());
+    console.log("BODY PARSED:", body);
     const meta = requestMeta(request);
 
     const existing = await prisma.waybillAllocation.findUnique({
@@ -119,14 +122,20 @@ export async function PATCH(
       include: { waybill: true }
     });
     if (!existing || existing.tenantId !== actor.tenantId) {
+      console.log("EXISTING NOT FOUND OR TENANT MISMATCH:", existing?.tenantId, actor.tenantId);
       throw new DomainError(404, "not_found", "Waybill allocation not found.");
     }
 
     if (existing.status !== "DISPATCHED") {
+      console.log("STATUS IS NOT DISPATCHED:", existing.status);
       throw new DomainError(400, "already_processed", `Waybill allocation status is currently: ${existing.status}`);
     }
+    
+    console.log("VALIDATION PASSED, PROCEEDING TO UPDATE");
 
-    const updatedPictures = [...(existing.waybill.pictures || []), ...(body.pictures || [])];
+    const existingPictures = Array.isArray(existing.waybill.pictures) ? existing.waybill.pictures : [];
+    const incomingPictures = Array.isArray(body.pictures) ? body.pictures : [];
+    const updatedPictures = [...existingPictures, ...incomingPictures];
 
     const allocation = await prisma.waybillAllocation.update({
       where: { id },
@@ -139,7 +148,7 @@ export async function PATCH(
         truckNumberVerified: body.truckNumberVerified ?? existing.truckNumberVerified,
         driverVerified: body.driverVerified ?? existing.driverVerified,
         waybillVerified: body.waybillVerified ?? existing.waybillVerified,
-        arrivalPictures: body.arrivalPictures ?? existing.arrivalPictures,
+        arrivalPictures: body.arrivalPictures ?? (Array.isArray(existing.arrivalPictures) ? existing.arrivalPictures : []),
         deliveredAt: new Date(),
       },
       include: {
@@ -175,6 +184,8 @@ export async function PATCH(
       userAgent: meta.userAgent,
     });
 
+    console.log("AUDIT DONE, RETURNING MAPPED");
+
     const mapped = {
       id: allocation.id,
       stationId: allocation.stationId,
@@ -206,6 +217,7 @@ export async function PATCH(
 
     return ok({ waybill: mapped });
   } catch (e) {
+    console.error("PATCH /api/tenant/waybills/[id] ERROR:", e);
     return handleError(e);
   }
 }

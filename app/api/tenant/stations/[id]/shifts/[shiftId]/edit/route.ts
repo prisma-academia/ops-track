@@ -36,7 +36,11 @@ export async function PATCH(
       include: {
         nozzle: {
           include: {
-            pump: true,
+            pump: {
+              include: {
+                tank: true,
+              },
+            },
           },
         },
       },
@@ -63,26 +67,50 @@ export async function PATCH(
     }
 
     const litersSold = body.closingMeter - Number(shiftLog.openingMeter);
+    const oldLitersSold = Number(shiftLog.litersSold || 0);
+    const litersDifference = litersSold - oldLitersSold;
 
-    const updatedShiftLog = await prisma.shiftLog.update({
-      where: { id: shiftId },
-      data: {
-        closingMeter: body.closingMeter,
-        litersSold,
-        declaredCash: body.declaredCash,
-        declaredPos: body.declaredPos,
-        declaredTransfer: body.declaredTransfer,
-      },
-      include: {
-        attendant: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
+    const tankId = shiftLog.nozzle.pump.tank.id;
+    const tankCurrentLiters = Number(shiftLog.nozzle.pump.tank.currentLiters);
+
+    if (tankCurrentLiters - litersDifference < 0) {
+      throw new DomainError(
+        400,
+        "insufficient_tank_volume",
+        `Cannot edit shift: deducting an additional ${litersDifference.toLocaleString()} L would bring tank below 0 (current: ${tankCurrentLiters.toLocaleString()} L). Record a dipping first.`
+      );
+    }
+
+    const updatedShiftLog = await prisma.$transaction(async (tx) => {
+      const updated = await tx.shiftLog.update({
+        where: { id: shiftId },
+        data: {
+          closingMeter: body.closingMeter,
+          litersSold,
+          declaredCash: body.declaredCash,
+          declaredPos: body.declaredPos,
+          declaredTransfer: body.declaredTransfer,
+        },
+        include: {
+          attendant: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
           },
         },
-      },
+      });
+
+      if (litersDifference !== 0) {
+        await tx.tank.update({
+          where: { id: tankId },
+          data: { currentLiters: { decrement: litersDifference } },
+        });
+      }
+
+      return updated;
     });
 
     await audit({

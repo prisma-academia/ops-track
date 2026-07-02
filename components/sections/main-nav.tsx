@@ -36,6 +36,7 @@ import {
   AlertCircle,
   ChartNoAxesCombined,
   FileText,
+  Scale,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -60,6 +61,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number }>> = {
   AlertCircle,
   ChartNoAxesCombined,
   FileText,
+  Scale,
 };
 
 export type NavItem = {

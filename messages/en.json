@@ -26,6 +26,7 @@
     "customers": "B2B Customers",
     "prices": "Price Controls",
     "varianceAudit": "Variance Audit",
+    "reconciliationReport": "Reconciliation Report",
     "settings": "Settings"
   },
   "auth": {

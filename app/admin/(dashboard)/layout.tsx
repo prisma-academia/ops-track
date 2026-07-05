@@ -131,7 +131,7 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
       user={{ name: label, email: userWithStations.email }}
       roleLabel="Tenant Admin"
       logoutEndpoint="/api/auth/logout"
-      logoutRedirect="/admin/auth/login"
+      logoutRedirect="/"
       logoutContext="tenant-admin"
       stations={allowedStations}
       activeStationId={activeStationId}

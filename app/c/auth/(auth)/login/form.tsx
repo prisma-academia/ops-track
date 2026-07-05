@@ -49,10 +49,6 @@ export function ClientLoginForm() {
         {formState.isSubmitting ? "Signing in…" : "Sign in"}
       </Button>
       <p className="text-center text-xs text-stone-500">
-        <Link href="/auth/register" className="underline">
-          Create an account
-        </Link>
-        {" · "}
         <Link href="/auth/forgot-password" className="underline">
           Forgot password?
         </Link>

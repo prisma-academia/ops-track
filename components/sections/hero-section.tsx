@@ -43,7 +43,7 @@ const itemVariants: Variants = {
     },
 }
 
-export default function HeroSection({ slug, logoUrl }: { slug: string, logoUrl?: string | null }) {
+export default function HeroSection({ slug, name, logoUrl }: { slug: string, name?: string, logoUrl?: string | null }) {
     return (
         <>
             <HeroHeader slug={slug} logoUrl={logoUrl} />
@@ -106,8 +106,8 @@ export default function HeroSection({ slug, logoUrl }: { slug: string, logoUrl?:
                                     initial="hidden"
                                     animate="visible"
                                     variants={itemVariants}
-                                    className="mx-auto mt-8 max-w-4xl text-balance text-5xl max-md:font-semibold md:text-7xl lg:mt-16 xl:text-[5.25rem]">
-                                    Empower Operations with Modern Station Management
+                                    className="mx-auto mt-8 max-w-4xl text-balance text-5xl max-md:font-semibold md:text-7xl lg:mt-16 xl:text-[5.25rem] capitalize">
+                                    {name || slug}
                                 </motion.h1>
                                 <motion.p
                                     initial="hidden"

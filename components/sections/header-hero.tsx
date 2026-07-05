@@ -15,7 +15,7 @@ const menuItems = [
     { name: 'About', href: '#link' },
 ]
 
-export const HeroHeader = ({ slug = "App" }: { slug?: string }) => {
+export const HeroHeader = ({ slug = "App", logoUrl }: { slug?: string, logoUrl?: string | null }) => {
     const [menuState, setMenuState] = React.useState(false)
     const [isScrolled, setIsScrolled] = React.useState(false)
 
@@ -39,9 +39,13 @@ export const HeroHeader = ({ slug = "App" }: { slug?: string }) => {
                                 href="/"
                                 aria-label="home"
                                 className="flex items-center space-x-2">
-                                <span className="font-extrabold text-2xl tracking-tighter uppercase text-primary">
-                                    {slug}
-                                </span>
+                                {logoUrl ? (
+                                    <img src={logoUrl} alt={slug || "Logo"} className="h-8 w-auto object-contain rounded-md" />
+                                ) : (
+                                    <span className="font-extrabold text-2xl tracking-tighter uppercase text-primary">
+                                        {slug}
+                                    </span>
+                                )}
                             </Link>
 
                             <button

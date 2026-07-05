@@ -57,7 +57,7 @@ export function WorkspaceJumpForm() {
     }
     if (typeof window === "undefined") return;
     const { protocol, host } = window.location;
-    window.location.assign(`${protocol}//${slug}.${host}/admin/auth/login`);
+    window.location.assign(`${protocol}//${slug}.${host}/`);
   }
 
   const empty = !loading && workspaces.length === 0;

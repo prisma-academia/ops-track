@@ -43,10 +43,10 @@ const itemVariants: Variants = {
     },
 }
 
-export default function HeroSection({ slug }: { slug: string }) {
+export default function HeroSection({ slug, logoUrl }: { slug: string, logoUrl?: string | null }) {
     return (
         <>
-            <HeroHeader slug={slug} />
+            <HeroHeader slug={slug} logoUrl={logoUrl} />
             <main className="overflow-hidden">
                 <div
                     aria-hidden

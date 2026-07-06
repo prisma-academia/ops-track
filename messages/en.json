@@ -27,6 +27,13 @@
     "prices": "Price Controls",
     "varianceAudit": "Variance Audit",
     "reconciliationReport": "Reconciliation Report",
+    "fleet": "Fleet Management",
+    "transporters": "Transporters",
+    "trucks": "Trucks",
+    "drivers": "Drivers",
+    "orders": "Orders",
+    "transports": "Transports",
+    "transactions": "Ledger",
     "settings": "Settings"
   },
   "auth": {

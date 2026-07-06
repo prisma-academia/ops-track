@@ -43,6 +43,7 @@ const NAV: NavItemConfig[] = [
   { href: "/admin/customers", key: "customers", module: "customers" as ModuleKey, icon: "Users", permission: PERMISSIONS.TENANT_CUSTOMERS_READ.key },
   { href: "/admin/role-templates", key: "roles", module: "roles" as ModuleKey, icon: "Shield", permission: PERMISSIONS.TENANT_ROLES_READ.key },
   { href: "/admin/activity", key: "activity", module: "activity" as ModuleKey, icon: "Activity", permission: PERMISSIONS.TENANT_ACTIVITY_READ.key },
+  { href: "/admin/fleet", key: "fleet", module: "fleet" as ModuleKey, icon: "Truck", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/settings", key: "settings", module: null, icon: "Settings", permission: null },
 ];
 
@@ -87,13 +88,16 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: actor.tenantId },
-    select: { name: true, status: true, settingsJson: true },
+    select: { name: true, status: true, settingsJson: true, activeModules: true },
   });
   if (!tenant || tenant.status !== "ACTIVE") redirect("/maintenance");
 
   const tNav = await getTranslations("nav");
   const settings = parseTenantSettings(tenant?.settingsJson);
-  const enabled = settings.enabledModules;
+  const enabled = Array.from(new Set([
+    ...settings.enabledModules,
+    ...(tenant?.activeModules?.map(m => m.toLowerCase() as ModuleKey) || [])
+  ]));
   
   const logoUrl =
     settings.logoKey?.startsWith("http")

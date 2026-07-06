@@ -37,6 +37,11 @@ import {
   ChartNoAxesCombined,
   FileText,
   Scale,
+  LayoutDashboard,
+  ShoppingCart,
+  Route,
+  BadgeDollarSign,
+  Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -62,6 +67,11 @@ const iconMap: Record<string, React.ComponentType<{ size?: number }>> = {
   ChartNoAxesCombined,
   FileText,
   Scale,
+  LayoutDashboard,
+  ShoppingCart,
+  Route,
+  BadgeDollarSign,
+  Wallet,
 };
 
 export type NavItem = {

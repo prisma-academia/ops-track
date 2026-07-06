@@ -36,6 +36,8 @@ export const PERMISSIONS = {
   TENANT_PRICES_WRITE: { key: "tenant.prices:write", module: "tenant.prices", description: "Manage prices" },
   TENANT_EXPENSES_READ: { key: "tenant.expenses:read", module: "tenant.expenses", description: "View expenses" },
   TENANT_EXPENSES_WRITE: { key: "tenant.expenses:write", module: "tenant.expenses", description: "Manage expenses" },
+  TENANT_FLEET_READ: { key: "tenant.fleet:read", module: "tenant.fleet", description: "View fleet operations" },
+  TENANT_FLEET_WRITE: { key: "tenant.fleet:write", module: "tenant.fleet", description: "Manage fleet operations" },
   // Mobile app permissions
   MOBILE_TENANT_DIPPINGS_READ: { key: "mobile.tenant.dippings:read", module: "mobile.tenant.dippings", description: "Mobile app: View dippings" },
   MOBILE_TENANT_DIPPINGS_WRITE: { key: "mobile.tenant.dippings:write", module: "mobile.tenant.dippings", description: "Mobile app: Manage dippings" },
@@ -167,6 +169,14 @@ export const TENANT_BUILTIN_ROLES = [
       PERMISSIONS.MOBILE_TENANT_DIPPINGS_WRITE.key,
       PERMISSIONS.MOBILE_TENANT_SHIFTS_READ.key,
       PERMISSIONS.MOBILE_TENANT_SHIFTS_WRITE.key,
+    ] as PermissionKey[],
+    isSystem: true,
+  },
+  {
+    name: "Fleet Manager",
+    permissions: [
+      PERMISSIONS.TENANT_FLEET_READ.key,
+      PERMISSIONS.TENANT_FLEET_WRITE.key,
     ] as PermissionKey[],
     isSystem: true,
   },

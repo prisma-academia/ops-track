@@ -72,7 +72,7 @@ export default async function WaybillDetailsPage({
           </Link>
         </Button>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Waybill {waybill.number}</h1>
+          <h1 className="text-xl text-foreground font-semibold tracking-tight">Waybill {waybill.number}</h1>
           <p className="text-sm text-muted-foreground">
             Created by {waybill.recordedBy?.firstName} {waybill.recordedBy?.lastName} on {formatHumanReadableDate(waybill.dispatchedAt)}
           </p>
@@ -81,18 +81,18 @@ export default async function WaybillDetailsPage({
           {variance !== null && (
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Overall Variance:</span>
-              <span className={`flex items-center gap-1 font-semibold text-sm ${variance < 0 ? "text-rose-600" : variance > 0 ? "text-amber-500" : "text-emerald-600"}`}>
+              <span className={`flex items-center gap-1 font-semibold text-sm ${variance < 0 ? "text-rose-600 dark:text-rose-500" : variance > 0 ? "text-amber-600 dark:text-amber-500" : "text-emerald-600 dark:text-emerald-500"}`}>
                 {variance === 0 ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
                 {variance > 0 ? '+' : ''}{variance.toLocaleString()} L
               </span>
             </div>
           )}
           {allDelivered ? (
-             <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 uppercase font-semibold text-xs rounded-sm px-2">Fully Delivered</Badge>
+             <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/20 uppercase font-semibold text-xs rounded-sm px-2">Fully Delivered</Badge>
           ) : anyDelivered ? (
-             <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 uppercase font-semibold text-xs rounded-sm px-2">Partially Delivered</Badge>
+             <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/20 uppercase font-semibold text-xs rounded-sm px-2">Partially Delivered</Badge>
           ) : (
-             <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100 uppercase font-semibold text-xs rounded-sm px-2">Dispatched</Badge>
+             <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/20 uppercase font-semibold text-xs rounded-sm px-2">Dispatched</Badge>
           )}
         </div>
       </div>
@@ -247,7 +247,7 @@ export default async function WaybillDetailsPage({
                 </TableRow>
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={6} className="text-right text-muted-foreground pt-1">Variance</TableCell>
-                  <TableCell className={`text-right tabular-nums font-bold pt-1 ${(totalDischarged - Number(waybill.litersLoaded)) < 0 ? 'text-rose-600' : (totalDischarged - Number(waybill.litersLoaded)) > 0 ? 'text-amber-500' : 'text-emerald-600'}`}>
+                  <TableCell className={`text-right tabular-nums font-bold pt-1 ${(totalDischarged - Number(waybill.litersLoaded)) < 0 ? 'text-rose-600 dark:text-rose-500' : (totalDischarged - Number(waybill.litersLoaded)) > 0 ? 'text-amber-600 dark:text-amber-500' : 'text-emerald-600 dark:text-emerald-500'}`}>
                     {(totalDischarged - Number(waybill.litersLoaded)) > 0 ? '+' : ''}{(totalDischarged - Number(waybill.litersLoaded)).toLocaleString()}
                   </TableCell>
                 </TableRow>

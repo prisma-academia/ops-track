@@ -25,7 +25,6 @@ export default async function TenantActivityPage() {
     select: { id: true, firstName: true, lastName: true, email: true },
   });
   const userMap = new Map(users.map((u) => [u.id, u]));
-
   const stations = await prisma.station.findMany({
     where: { id: { in: stationIds } },
     select: { id: true, name: true, code: true },

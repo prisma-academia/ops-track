@@ -496,11 +496,11 @@ export function StationDetailsManager({
               <p className="text-xs text-muted-foreground">Storage tanks and dispensing pumps layout mapping</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={openAddTankDialog} className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800">
+              <Button size="sm" variant="outline" onClick={openAddTankDialog} className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800 text-foreground">
                 <Plus size={14} className="text-primary" />
                 Add Tank
               </Button>
-              <Button size="sm" variant="outline" onClick={openAddPumpDialog} className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800">
+              <Button size="sm" variant="outline" onClick={openAddPumpDialog} className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800 text-foreground">
                 <Plus size={14} className="text-primary" />
                 Add Pump / Dispenser
               </Button>
@@ -522,7 +522,7 @@ export function StationDetailsManager({
                     <Plus size={15} />
                     Add Storage Tank
                   </Button>
-                  <Button variant="outline" onClick={openAddPumpDialog} className="gap-2 text-xs h-9 bg-white dark:bg-stone-950 border-stone-200 dark:border-stone-800">
+                  <Button variant="outline" onClick={openAddPumpDialog} className="gap-2 text-xs h-9 bg-white dark:bg-stone-950 border-stone-200 dark:border-stone-800 text-foreground">
                     <Plus size={15} />
                     Add Pump / Dispenser
                   </Button>
@@ -573,7 +573,7 @@ export function StationDetailsManager({
                             size="sm" 
                             variant="outline" 
                             onClick={() => openAddPumpDialogForTank(tank.id)}
-                            className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-950 border-stone-200 dark:border-stone-800"
+                            className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-950 border-stone-200 dark:border-stone-800 text-foreground"
                           >
                             <Plus size={13} className="text-primary" />
                             Connect Pump
@@ -954,7 +954,7 @@ export function StationDetailsManager({
                             type="button"
                             variant="outline"
                             id="s_state"
-                            className="w-full justify-between font-normal bg-background"
+                            className="w-full justify-between font-normal bg-background text-foreground"
                           >
                             <span className="truncate">{selectedState || "Select State"}</span>
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -1007,7 +1007,7 @@ export function StationDetailsManager({
                             variant="outline"
                             id="s_lga"
                             disabled={!selectedState}
-                            className="w-full justify-between font-normal bg-background"
+                            className="w-full justify-between font-normal bg-background text-foreground"
                           >
                             <span className="truncate">{selectedLga || "Select LGA"}</span>
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -1051,7 +1051,7 @@ export function StationDetailsManager({
                             variant="outline"
                             id="s_ward"
                             disabled={!selectedLga}
-                            className="w-full justify-between font-normal bg-background"
+                            className="w-full justify-between font-normal bg-background text-foreground"
                           >
                             <span className="truncate">{selectedWard || "Select Ward"}</span>
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -1099,7 +1099,7 @@ export function StationDetailsManager({
                         <Button
                           type="button"
                           variant="outline"
-                          className="w-full justify-between font-normal bg-background"
+                          className="w-full justify-between font-normal bg-background text-foreground"
                         >
                           <span className="truncate">
                             {selectedManagerId === "" ? "Unassigned" : (
@@ -1194,7 +1194,7 @@ export function StationDetailsManager({
                   </FormField>
                   
                   <FormField label="Product Type" htmlFor="t_prod" error={tankForm.formState.errors.productType?.message}>
-                    <select id="t_prod" className="rounded border border-input bg-background px-3 py-2 text-sm w-full" {...tankForm.register("productType")}>
+                    <select id="t_prod" className="rounded border border-input bg-background text-foreground px-3 py-2 text-sm w-full" {...tankForm.register("productType")}>
                       <option value="PMS">PMS (Petrol)</option>
                       <option value="AGO">AGO (Diesel)</option>
                       <option value="DPK">DPK (Kerosene)</option>
@@ -1224,7 +1224,7 @@ export function StationDetailsManager({
                   </FormField>
 
                   <FormField label="Draws From Tank" htmlFor="p_tank" error={pumpForm.formState.errors.tankId?.message}>
-                    <select id="p_tank" className="rounded border border-input bg-background px-3 py-2 text-sm w-full" {...pumpForm.register("tankId")}>
+                    <select id="p_tank" className="rounded border border-input bg-background text-foreground px-3 py-2 text-sm w-full" {...pumpForm.register("tankId")}>
                       <option value="">Select tank...</option>
                       {station.tanks.map((t: any) => (
                         <option key={t.id} value={t.id}>{t.name} ({t.productType})</option>
@@ -1235,7 +1235,7 @@ export function StationDetailsManager({
                   <FormField label="Number of Nozzles" htmlFor="p_nozzle_count" error={pumpForm.formState.errors.nozzles?.message}>
                     <select
                       id="p_nozzle_count"
-                      className="rounded border border-input bg-background px-3 py-2 text-sm w-full font-medium"
+                      className="rounded border border-input bg-background text-foreground px-3 py-2 text-sm w-full font-medium"
                       value={nozzleCount}
                       onChange={(e) => handleNozzleCountChange(Number(e.target.value))}
                     >

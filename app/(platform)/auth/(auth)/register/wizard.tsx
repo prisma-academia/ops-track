@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/incompatible-library */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,6 +10,8 @@ import { apiPost, apiGet } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/form-field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 const AccountSchema = z
   .object({
@@ -43,7 +45,7 @@ const CompanySchema = z.object({
 type AccountValues = z.infer<typeof AccountSchema>;
 type CompanyValues = z.infer<typeof CompanySchema>;
 
-type Step = "account" | "company" | "otp";
+type Step = "account" | "company" | "preview" | "otp";
 
 export function RegisterWizard() {
   const [step, setStep] = useState<Step>("account");
@@ -53,6 +55,15 @@ export function RegisterWizard() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
+
+  useEffect(() => {
+    if (resendTimer > 0) {
+      const t = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [resendTimer]);
 
   return (
     <div>
@@ -71,68 +82,121 @@ export function RegisterWizard() {
           <CompanyForm
             initial={company}
             onBack={() => setStep("account")}
-            onSubmit={async (v) => {
-              if (!account) return;
-              setError(null);
-              setPending(true);
-              const res = await apiPost("/api/auth/register/start", { ...account, ...v });
-              setPending(false);
-              if (res.error) {
-                setError(res.error.message);
-                return;
-              }
+            onSubmit={(v) => {
               setCompany(v);
-              setInfo("We emailed a 6-digit code. Enter it below.");
-              setStep("otp");
+              setStep("preview");
             }}
             pending={pending}
             error={error}
           />
         ) : null}
-        {step === "otp" ? (
-          <div className="flex flex-col gap-4">
-            {info ? <p className="text-sm text-green-700">{info}</p> : null}
-            <FormField label="Verification code" htmlFor="code">
-              <Input
-                id="code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-              />
-            </FormField>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={pending}
-                onClick={() => {
-                  setError(null);
-                  setStep("company");
-                }}
-              >
+        {step === "preview" ? (
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-4 p-5 rounded-xl border bg-muted/30 text-sm">
+              <h3 className="font-medium text-foreground border-b border-border pb-2">Review your details</h3>
+              
+              <h4 className="font-medium text-foreground mt-2">Account</h4>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
+                <div><dt className="text-muted-foreground text-xs">Email</dt><dd className="font-medium mt-1 text-foreground">{account?.email}</dd></div>
+                <div><dt className="text-muted-foreground text-xs">Name</dt><dd className="font-medium mt-1 text-foreground">{account?.firstName} {account?.lastName} {account?.otherName}</dd></div>
+                {account?.phone && <div><dt className="text-muted-foreground text-xs">Phone</dt><dd className="font-medium mt-1 text-foreground">{account.phone}</dd></div>}
+              </dl>
+
+              <h4 className="font-medium text-foreground mt-2 border-t border-border pt-4">Company</h4>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
+                <div><dt className="text-muted-foreground text-xs">Name</dt><dd className="font-medium mt-1 text-foreground">{company?.name}</dd></div>
+                <div><dt className="text-muted-foreground text-xs">Slug</dt><dd className="font-medium mt-1 text-foreground">{company?.slug}</dd></div>
+                {company?.companyEmail && <div><dt className="text-muted-foreground text-xs">Company Email</dt><dd className="font-medium mt-1 text-foreground">{company.companyEmail}</dd></div>}
+                {company?.companyPhone && <div><dt className="text-muted-foreground text-xs">Company Phone</dt><dd className="font-medium mt-1 text-foreground">{company.companyPhone}</dd></div>}
+                {company?.website && <div><dt className="text-muted-foreground text-xs">Website</dt><dd className="font-medium mt-1 text-foreground">{company.website}</dd></div>}
+              </dl>
+            </div>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            <div className="flex justify-between mt-2">
+              <Button type="button" variant="outline" onClick={() => setStep("company")} disabled={pending}>
                 Back
               </Button>
-              <Button
-                disabled={pending || !/^\d{6}$/.test(code)}
+              <Button type="button" disabled={pending} onClick={async () => {
+                if (!account || !company) return;
+                setError(null);
+                setPending(true);
+                const res = await apiPost("/api/auth/register/start", { ...account, ...company });
+                setPending(false);
+                if (res.error) {
+                  setError(res.error.message);
+                  return;
+                }
+                setInfo("We emailed a 6-digit code. Enter it below.");
+                setResendTimer(30);
+                setStep("otp");
+              }}>
+                {pending ? "Sending…" : "Send verification code"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {step === "otp" ? (
+          <div className="flex flex-col items-center justify-center gap-6">
+            <p className="text-sm text-stone-600 text-center">
+              {info || "Enter the verification code we sent."}
+            </p>
+            <FormField label="Verification code" htmlFor="code">
+              <div className="flex justify-center">
+                <InputOTP maxLength={6} value={code} onChange={(val) => setCode(val)}>
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} />
+                    <InputOTPSlot index={1} />
+                    <InputOTPSlot index={2} />
+                    <InputOTPSlot index={3} />
+                    <InputOTPSlot index={4} />
+                    <InputOTPSlot index={5} />
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+            </FormField>
+            {error ? <p className="text-sm text-red-600 text-center">{error}</p> : null}
+            <Button
+              className="w-full max-w-sm"
+              disabled={pending || !/^\d{6}$/.test(code)}
+              onClick={async () => {
+                if (!account || !company) return;
+                setError(null);
+                setPending(true);
+                const res = await apiPost<{ redirectUrl: string }>(
+                  "/api/auth/register/verify",
+                  { ...account, ...company, code }
+                );
+                setPending(false);
+                if (res.error) {
+                  setError(res.error.message);
+                  return;
+                }
+                if (res.data?.redirectUrl) window.location.assign(res.data.redirectUrl);
+              }}
+            >
+              {pending ? "Verifying…" : "Create workspace"}
+            </Button>
+            <div className="flex flex-col gap-2 text-sm text-stone-500 mt-2">
+              <button
+                type="button"
+                className="text-center underline disabled:no-underline disabled:opacity-50"
+                disabled={pending || isResending || resendTimer > 0}
                 onClick={async () => {
                   if (!account || !company) return;
                   setError(null);
-                  setPending(true);
-                  const res = await apiPost<{ redirectUrl: string }>(
-                    "/api/auth/register/verify",
-                    { ...account, ...company, code }
-                  );
-                  setPending(false);
+                  setIsResending(true);
+                  const res = await apiPost("/api/auth/register/start", { ...account, ...company });
+                  setIsResending(false);
                   if (res.error) {
                     setError(res.error.message);
-                    return;
+                  } else {
+                    setInfo("A new 6-digit code has been sent.");
+                    setResendTimer(30);
                   }
-                  if (res.data?.redirectUrl) window.location.assign(res.data.redirectUrl);
                 }}
               >
-                {pending ? "Verifying…" : "Create workspace"}
-              </Button>
+                {resendTimer > 0 ? `Resend code in ${resendTimer}s` : (isResending ? "Resending..." : "Resend code")}
+              </button>
             </div>
           </div>
         ) : null}
@@ -143,9 +207,10 @@ export function RegisterWizard() {
 
 function Steps({ current }: { current: Step }) {
   const items: Array<{ key: Step; label: string }> = [
-    { key: "account", label: "1. Your account" },
-    { key: "company", label: "2. Your company" },
-    { key: "otp", label: "3. Verify email" },
+    { key: "account", label: "1. Account" },
+    { key: "company", label: "2. Company" },
+    { key: "preview", label: "3. Preview" },
+    { key: "otp", label: "4. Verify" },
   ];
   return (
     <div className="flex gap-2 text-xs">
@@ -192,10 +257,10 @@ function AccountForm({
       </FormField>
       <span />
       <FormField label="Password" htmlFor="pw" error={formState.errors.password?.message}>
-        <Input id="pw" type="password" autoComplete="new-password" {...register("password")} />
+        <PasswordInput id="pw" autoComplete="new-password" {...register("password")} />
       </FormField>
       <FormField label="Confirm password" htmlFor="cpw" error={formState.errors.confirmPassword?.message}>
-        <Input id="cpw" type="password" autoComplete="new-password" {...register("confirmPassword")} />
+        <PasswordInput id="cpw" autoComplete="new-password" {...register("confirmPassword")} />
       </FormField>
       <div className="col-span-2 flex justify-end">
         <Button type="submit">Continue</Button>
@@ -217,24 +282,33 @@ function CompanyForm({
   pending: boolean;
   error: string | null;
 }) {
-  const { register, handleSubmit, formState, watch, setError } = useForm<CompanyValues>({
+  const { register, handleSubmit, formState, watch, setError, clearErrors } = useForm<CompanyValues>({
     resolver: zodResolver(CompanySchema),
     defaultValues: initial ?? undefined,
   });
   const slug = watch("slug");
   const [slugStatus, setSlugStatus] = useState<string | null>(null);
+  const [isCheckingSlug, setIsCheckingSlug] = useState(false);
+
+  useEffect(() => {
+    setSlugStatus(null);
+  }, [slug]);
 
   async function checkSlug() {
     if (!slug || slug.length < 3) {
       setSlugStatus(null);
       return;
     }
+    setIsCheckingSlug(true);
     const res = await apiGet<{ available: boolean; reason?: string }>(
       `/api/platform/slugs/check?slug=${encodeURIComponent(slug)}`
     );
+    setIsCheckingSlug(false);
     if (!res.data) return;
-    if (res.data.available) setSlugStatus("Available.");
-    else {
+    if (res.data.available) {
+      setSlugStatus("Available.");
+      clearErrors("slug");
+    } else {
       setSlugStatus(`Unavailable (${res.data.reason ?? "taken"}).`);
       setError("slug", { type: "manual", message: `Unavailable (${res.data.reason ?? "taken"}).` });
     }
@@ -283,8 +357,8 @@ function CompanyForm({
         <Button type="button" variant="outline" onClick={onBack} disabled={pending}>
           Back
         </Button>
-        <Button type="submit" disabled={pending}>
-          {pending ? "Sending code…" : "Send verification code"}
+        <Button type="submit" disabled={pending || isCheckingSlug || slugStatus !== "Available."}>
+          Continue to preview
         </Button>
       </div>
     </form>

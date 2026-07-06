@@ -25,8 +25,8 @@ import { Input } from "@/components/ui/input"
 import {
   InputGroup,
   InputGroupAddon,
-  InputGroupInput,
 } from "@/components/ui/input-group"
+import { NumberInput } from "@/components/ui/number-input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -491,17 +491,17 @@ export function UpdatePricesManager({
                   <Label htmlFor={`price-${ft}`}>{FUEL_LABELS[ft]}</Label>
                   <InputGroup>
                     <InputGroupAddon>₦</InputGroupAddon>
-                    <InputGroupInput
+                    <NumberInput
                       id={`price-${ft}`}
-                      type="number"
-                      step="0.01"
+                      data-slot="input-group-control"
+                      className="flex-1 rounded-none border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0 aria-invalid:ring-0 dark:bg-transparent"
                       placeholder={
                         averages[ft]
                           ? `Current avg: ${averages[ft].toFixed(2)}`
                           : "0.00"
                       }
                       value={editingPrices[ft]}
-                      onChange={(e) => updatePrice(ft, e.target.value)}
+                      onChange={(val) => updatePrice(ft, val.toString())}
                     />
                   </InputGroup>
                 </div>

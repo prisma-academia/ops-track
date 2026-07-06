@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
@@ -11,6 +11,7 @@ import { FormField, TextInput } from "@/components/form-field";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { NumberInput } from "@/components/ui/number-input";
 import { CheckCircle2, Plus } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -57,8 +58,8 @@ export function ShiftsManager({
 
   const defaultStationId = activeStationId && activeStationId !== "all" ? activeStationId : "";
 
-  const startShiftForm = useForm({
-    resolver: zodResolver(StartShiftSchema),
+  const startShiftForm = useForm<z.infer<typeof StartShiftSchema>>({
+    resolver: zodResolver(StartShiftSchema) as any,
     defaultValues: {
       stationId: defaultStationId,
       pumpId: "",
@@ -69,8 +70,8 @@ export function ShiftsManager({
     },
   });
 
-  const closeShiftForm = useForm({
-    resolver: zodResolver(CloseShiftSchema),
+  const closeShiftForm = useForm<z.infer<typeof CloseShiftSchema>>({
+    resolver: zodResolver(CloseShiftSchema) as any,
     defaultValues: {
       closingMeter: 0,
       declaredCash: 0,
@@ -440,13 +441,31 @@ export function ShiftsManager({
 
               <div className="grid grid-cols-3 gap-2 border-t pt-3">
                 <FormField label="Cash (₦)" htmlFor="c_cash" error={closeShiftForm.formState.errors.declaredCash?.message}>
-                  <TextInput id="c_cash" type="number" {...closeShiftForm.register("declaredCash")} />
+                  <Controller
+                    control={closeShiftForm.control}
+                    name="declaredCash"
+                    render={({ field: { value, onChange, onBlur } }) => (
+                      <NumberInput id="c_cash" value={value} onChange={onChange} onBlur={onBlur} />
+                    )}
+                  />
                 </FormField>
                 <FormField label="POS (₦)" htmlFor="c_pos" error={closeShiftForm.formState.errors.declaredPos?.message}>
-                  <TextInput id="c_pos" type="number" {...closeShiftForm.register("declaredPos")} />
+                  <Controller
+                    control={closeShiftForm.control}
+                    name="declaredPos"
+                    render={({ field: { value, onChange, onBlur } }) => (
+                      <NumberInput id="c_pos" value={value} onChange={onChange} onBlur={onBlur} />
+                    )}
+                  />
                 </FormField>
                 <FormField label="Bank Trans. (₦)" htmlFor="c_trans" error={closeShiftForm.formState.errors.declaredTransfer?.message}>
-                  <TextInput id="c_trans" type="number" {...closeShiftForm.register("declaredTransfer")} />
+                  <Controller
+                    control={closeShiftForm.control}
+                    name="declaredTransfer"
+                    render={({ field: { value, onChange, onBlur } }) => (
+                      <NumberInput id="c_trans" value={value} onChange={onChange} onBlur={onBlur} />
+                    )}
+                  />
                 </FormField>
               </div>
 

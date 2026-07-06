@@ -17,7 +17,7 @@ export default async function AdminLoginPage() {
             <CardDescription className="text-sm text-muted-foreground font-normal">
               {tenant ? (
                 <>
-                  Sign in to manage the workspace <span className="font-semibold text-stone-900">{tenant.name}</span> (<span className="font-mono text-stone-500">{tenant.slug}</span>).
+                  Sign in to manage the workspace <span className="font-semibold text-white">{tenant.name}</span> (<span className="font-mono text-stone-500">{tenant.slug}</span>).
                 </>
               ) : (
                 "Use the credentials your administrator sent."

@@ -8,6 +8,7 @@ import Link from "next/link";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { FormField } from "@/components/form-field";
 
 const Schema = z
@@ -44,10 +45,10 @@ export function ResetPasswordForm({ token, backHref, backLabel }: { token: strin
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-6">
       <FormField label="New password" htmlFor="pw" error={formState.errors.password?.message}>
-        <Input id="pw" type="password" autoComplete="new-password" {...register("password")} />
+        <PasswordInput id="pw" autoComplete="new-password" {...register("password")} />
       </FormField>
-      <FormField label="Confirm password" htmlFor="cf" error={formState.errors.confirm?.message}>
-        <Input id="cf" type="password" autoComplete="new-password" {...register("confirm")} />
+      <FormField label="Confirm new password" htmlFor="cf" error={formState.errors.confirm?.message}>
+        <PasswordInput id="cf" autoComplete="new-password" {...register("confirm")} />
       </FormField>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <Button type="submit" disabled={formState.isSubmitting} className="w-full">

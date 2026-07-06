@@ -19,11 +19,11 @@ export type WaybillRow = {
   driverPhone: string | null;
   dispatchedAt: string;
   deliveredAt: string | null;
-  station: {
+  stations: {
     id: string;
     name: string;
     code: string;
-  };
+  }[];
 };
 
 export function WaybillsTable({
@@ -38,9 +38,11 @@ export function WaybillsTable({
   const columns: ColumnDef<WaybillRow>[] = [
     {
       accessorKey: "number",
-      header: "Waybill / Station",
+      header: "Waybill / Stations",
       cell: ({ row }) => {
         const w = row.original;
+        const stationNames = w.stations?.map(s => s.name).join(", ") || "No stations";
+        const stationCodes = w.stations?.map(s => s.code).join(", ") || "";
         return (
           <div className="flex items-center gap-3 py-1">
             <div className="size-10 flex items-center justify-center shrink-0">
@@ -54,8 +56,8 @@ export function WaybillsTable({
             </div>
             <div className="flex flex-col">
               <span className="font-semibold text-foreground">{w.number}</span>
-              <span className="text-xs text-muted-foreground font-mono">
-                {w.station.name} · {w.station.code}
+              <span className="text-xs text-muted-foreground font-mono truncate max-w-[200px]" title={`${stationNames} · ${stationCodes}`}>
+                {stationNames}
               </span>
             </div>
           </div>

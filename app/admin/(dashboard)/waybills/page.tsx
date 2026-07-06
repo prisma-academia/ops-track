@@ -6,25 +6,25 @@ import { WaybillsManager } from "./waybills-manager";
 export default async function WaybillsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_READ.key);
 
-  const allocations = await prisma.waybillAllocation.findMany({
+  const waybills = await prisma.waybill.findMany({
     where: { tenantId: actor.tenantId },
-    orderBy: { waybill: { dispatchedAt: "desc" } },
+    orderBy: { dispatchedAt: "desc" },
     include: {
-      station: {
-        select: {
-          id: true,
-          name: true,
-          code: true,
-        },
-      },
-      waybill: {
+      allocations: {
         include: {
-          recordedBy: {
+          station: {
             select: {
-              firstName: true,
-              lastName: true,
+              id: true,
+              name: true,
+              code: true,
             },
           },
+        },
+      },
+      recordedBy: {
+        select: {
+          firstName: true,
+          lastName: true,
         },
       },
     },
@@ -40,21 +40,30 @@ export default async function WaybillsPage() {
     orderBy: { name: "asc" },
   });
 
-  const rows = allocations.map((a) => ({
-    id: a.waybillId, // Keep waybillId as row ID so clicking navigates to the whole Waybill Details
-    allocationId: a.id,
-    number: a.waybill.number,
-    status: a.status as "DISPATCHED" | "DELIVERED" | "COMPLETED",
-    productType: a.waybill.productType,
-    litersLoaded: Number(a.litersToDispense), // Map this allocation volume as litersLoaded for backward compatibility in table component
-    litersReceived: a.litersReceived ? Number(a.litersReceived) : null,
-    truckPlate: a.waybill.truckPlate,
-    driverName: a.waybill.driverName,
-    driverPhone: a.waybill.driverPhone,
-    dispatchedAt: a.waybill.dispatchedAt.toISOString(),
-    deliveredAt: a.deliveredAt ? a.deliveredAt.toISOString() : null,
-    station: a.station,
-  }));
+  const rows = waybills.map((w) => {
+    const totalReceived = w.allocations.reduce((acc, a) => acc + (a.litersReceived ? Number(a.litersReceived) : 0), 0);
+    const anyDelivered = w.allocations.some(a => a.status === "DELIVERED");
+    const allDelivered = w.allocations.length > 0 && w.allocations.every(a => a.status === "DELIVERED");
+    
+    let combinedStatus = "DISPATCHED";
+    if (allDelivered) combinedStatus = "COMPLETED";
+    else if (anyDelivered) combinedStatus = "DELIVERED"; // In this system DELIVERED might mean partially delivered, or we can use "DELIVERED" for any and COMPLETED for all. Wait, type only allows "DISPATCHED" | "DELIVERED" | "COMPLETED"
+
+    return {
+      id: w.id,
+      number: w.number,
+      status: combinedStatus as any,
+      productType: w.productType,
+      litersLoaded: Number(w.litersLoaded),
+      litersReceived: anyDelivered ? totalReceived : null,
+      truckPlate: w.truckPlate,
+      driverName: w.driverName,
+      driverPhone: w.driverPhone,
+      dispatchedAt: w.dispatchedAt.toISOString(),
+      deliveredAt: null,
+      stations: w.allocations.map(a => a.station),
+    };
+  });
 
   const serializedStations = JSON.parse(JSON.stringify(stations));
 

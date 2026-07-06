@@ -7,6 +7,7 @@ import { z } from "zod";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { FormField } from "@/components/form-field";
 
 const Schema = z
@@ -44,13 +45,13 @@ export function ChangePasswordForm() {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-6">
       <FormField label="Current password" htmlFor="cur" error={formState.errors.currentPassword?.message}>
-        <Input id="cur" type="password" autoComplete="current-password" {...register("currentPassword")} />
+        <PasswordInput id="cur" autoComplete="current-password" {...register("currentPassword")} />
       </FormField>
       <FormField label="New password" htmlFor="new" error={formState.errors.newPassword?.message}>
-        <Input id="new" type="password" autoComplete="new-password" {...register("newPassword")} />
+        <PasswordInput id="new" autoComplete="new-password" {...register("newPassword")} />
       </FormField>
       <FormField label="Confirm new password" htmlFor="conf" error={formState.errors.confirm?.message}>
-        <Input id="conf" type="password" autoComplete="new-password" {...register("confirm")} />
+        <PasswordInput id="conf" autoComplete="new-password" {...register("confirm")} />
       </FormField>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <Button type="submit" disabled={formState.isSubmitting} className="w-full">

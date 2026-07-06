@@ -9,6 +9,7 @@ import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -437,12 +438,19 @@ export function ExpensesManager({
                 <Label htmlFor="e_amt" className={errors.amount ? "text-destructive" : ""}>
                   Amount *
                 </Label>
-                <Input
-                  id="e_amt"
-                  type="number"
-                  placeholder="e.g. 15000"
-                  {...register("amount")}
-                  className={errors.amount ? "border-destructive" : ""}
+                <Controller
+                  control={control}
+                  name="amount"
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <NumberInput
+                      id="e_amt"
+                      placeholder="e.g. 15000"
+                      value={value as number }
+                      onChange={onChange}
+                      onBlur={onBlur}
+                      className={errors.amount ? "border-destructive" : ""}
+                    />
+                  )}
                 />
                 {errors.amount && (
                   <p className="text-xs text-destructive">{errors.amount.message}</p>

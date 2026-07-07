@@ -22,9 +22,8 @@ const Schema = z.object({
   litersOrdered: z.coerce.number().positive("Liters ordered must be greater than 0"),
   supplier: z.string().optional().nullable(),
   sourceDepot: z.string().optional().nullable(),
-  orderCost: z.coerce.number().min(0).default(0),
+  pricePerLitre: z.coerce.number().min(0).default(0),
   loadingCost: z.coerce.number().min(0).default(0),
-  transportCost: z.coerce.number().min(0).default(0),
 });
 
 type Values = z.infer<typeof Schema>;
@@ -54,21 +53,19 @@ export function CreateOrderForm() {
     resolver: zodResolver(Schema),
     defaultValues: {
       reference: "",
-      productType: "PMS" as any,
-      litersOrdered: 45000,
+      productType: "" as any,
+      litersOrdered: 0,
       supplier: null as string | null,
       sourceDepot: null as string | null,
-      orderCost: 0,
+      pricePerLitre: 0,
       loadingCost: 0,
-      transportCost: 0,
     },
   });
 
   const watchProductType = watch("productType");
   const watchLitersOrdered = watch("litersOrdered") || 0;
-  const watchOrderCost = watch("orderCost") || 0;
+  const watchPricePerLitre = watch("pricePerLitre") || 0;
   const watchLoadingCost = watch("loadingCost") || 0;
-  const watchTransportCost = watch("transportCost") || 0;
   const watchSupplier = watch("supplier");
   const watchDepot = watch("sourceDepot");
   const watchReference = watch("reference");
@@ -204,10 +201,9 @@ export function CreateOrderForm() {
     </Popover>
   );
 
-  const productTotal = Number(watchOrderCost || 0) * Number(watchLitersOrdered || 0);
-  const transportTotal = Number(watchTransportCost || 0);
+  const productTotal = Number(watchPricePerLitre || 0) * Number(watchLitersOrdered || 0);
   const loadingTotal = Number(watchLoadingCost || 0);
-  const grandTotal = productTotal + transportTotal + loadingTotal;
+  const grandTotal = productTotal + loadingTotal;
 
   return (
     <>
@@ -338,15 +334,15 @@ export function CreateOrderForm() {
                 </div>
 
                 {/* Costs */}
-                <div className="grid grid-cols-3 gap-4 pt-4 border-t border-border/30">
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/30">
                   <div className="space-y-2">
-                    <Label htmlFor="orderCost" className={formState.errors.orderCost ? "text-destructive" : ""}>Cost Per Litre (₦)</Label>
+                    <Label htmlFor="pricePerLitre" className={formState.errors.pricePerLitre ? "text-destructive" : ""}>Price Per Litre (₦)</Label>
                     <Input 
-                      id="orderCost" 
+                      id="pricePerLitre" 
                       type="number"
                       placeholder="e.g. 950"
-                      {...register("orderCost")}
-                      className={formState.errors.orderCost ? "border-destructive" : ""}
+                      {...register("pricePerLitre")}
+                      className={formState.errors.pricePerLitre ? "border-destructive" : ""}
                     />
                   </div>
                   <div className="space-y-2">
@@ -357,16 +353,6 @@ export function CreateOrderForm() {
                       placeholder="e.g. 15000"
                       {...register("loadingCost")}
                       className={formState.errors.loadingCost ? "border-destructive" : ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="transportCost" className={formState.errors.transportCost ? "text-destructive" : ""}>Flat Transport Cost (₦)</Label>
-                    <Input 
-                      id="transportCost" 
-                      type="number"
-                      placeholder="e.g. 350000"
-                      {...register("transportCost")}
-                      className={formState.errors.transportCost ? "border-destructive" : ""}
                     />
                   </div>
                 </div>
@@ -427,10 +413,6 @@ export function CreateOrderForm() {
                 <div className="flex justify-between">
                   <span>Loading Fee:</span>
                   <span className="font-bold text-foreground">₦{loadingTotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Transport Fee:</span>
-                  <span className="font-bold text-foreground">₦{transportTotal.toLocaleString()}</span>
                 </div>
                 
                 <div className="flex justify-between border-t border-dashed pt-2 mt-2">

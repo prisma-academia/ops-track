@@ -12,7 +12,8 @@ const UpdateOrderSchema = z.object({
   litersOrdered: z.number().positive().optional(),
   supplier: z.string().optional().nullable(),
   sourceDepot: z.string().optional().nullable(),
-  orderCost: z.number().min(0).optional(),
+  pricePerLitre: z.number().min(0).optional(),
+  loadingCost: z.number().min(0).optional(),
 });
 
 export async function PATCH(
@@ -42,7 +43,8 @@ export async function PATCH(
         ...(body.litersOrdered && { litersOrdered: body.litersOrdered }),
         ...(body.supplier !== undefined && { supplier: body.supplier }),
         ...(body.sourceDepot !== undefined && { sourceDepot: body.sourceDepot }),
-        ...(body.orderCost !== undefined && { orderCost: body.orderCost }),
+        ...(body.pricePerLitre !== undefined && { pricePerLitre: body.pricePerLitre }),
+        ...(body.loadingCost !== undefined && { loadingCost: body.loadingCost }),
         ...(body.status === "CHANGED" && { status: "CHANGED" }),
       },
     });

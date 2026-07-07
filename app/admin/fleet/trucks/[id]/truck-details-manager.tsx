@@ -128,6 +128,7 @@ export function TruckDetailsManager({
           <TabsList className="h-4 px-1.5 py-2 justify-start md:w-auto gap-1">
             <TabsTrigger value="overview" className="px-6 py-4 text-[15px] font-semibold">Overview</TabsTrigger>
             <TabsTrigger value="transports" className="px-6 py-4 text-[15px] font-semibold">Transport History ({transports.length})</TabsTrigger>
+            <TabsTrigger value="maintenance" className="px-6 py-4 text-[15px] font-semibold">Maintenance History</TabsTrigger>
           </TabsList>
         </div>
 
@@ -176,6 +177,36 @@ export function TruckDetailsManager({
                             {t.status}
                           </Badge>
                         </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* ---------------- MAINTENANCE TAB ---------------- */}
+        <TabsContent value="maintenance" className="mt-0 animate-in fade-in duration-500">
+          <Card className="border-border/40 shadow-sm py-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-muted/30 border-b border-border/50">
+                  <tr>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Description</th>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Cost</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/30">
+                  {!truck.maintenanceHistory || truck.maintenanceHistory.length === 0 ? (
+                    <tr><td colSpan={3} className="px-6 py-8 text-center text-muted-foreground">No maintenance history recorded.</td></tr>
+                  ) : (
+                    truck.maintenanceHistory.map((m: any) => (
+                      <tr key={m.id} className="hover:bg-muted/10">
+                        <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(m.date)}</td>
+                        <td className="px-6 py-4 font-medium text-foreground whitespace-normal">{m.description}</td>
+                        <td className="px-6 py-4 text-right font-mono font-medium">₦ {Number(m.cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                     ))
                   )}

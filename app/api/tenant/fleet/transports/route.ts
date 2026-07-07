@@ -9,14 +9,15 @@ import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
 
 const CreateTransportSchema = z.object({
   orderId: z.string().min(1),
-  transporterId: z.string().min(1),
-  truckId: z.string().min(1),
-  driverId: z.string().optional().nullable(),
-  destination: z.string().min(1),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional().nullable(),
-  ratePerLiter: z.number().positive(),
-  litersCarried: z.number().positive(),
-  comment: z.string().optional().nullable(),
+  assignments: z.array(z.object({
+    transporterId: z.string().min(1),
+    truckId: z.string().min(1),
+    driverId: z.string().min(1),
+    destination: z.string().min(1),
+    ratePerLiter: z.number().positive(),
+    litersCarried: z.number().positive(),
+  })).min(1, "At least one truck assignment is required")
 });
 
 export async function GET(request: Request) {
@@ -56,43 +57,68 @@ export async function POST(request: Request) {
     const body = CreateTransportSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    const transport = await prisma.transport.create({
-      data: {
-        tenantId: actor.tenantId,
-        orderId: body.orderId,
-        transporterId: body.transporterId,
-        truckId: body.truckId,
-        driverId: body.driverId ?? null,
-        destination: body.destination,
-        productType: body.productType ?? null,
-        ratePerLiter: body.ratePerLiter,
-        litersCarried: body.litersCarried,
-        comment: body.comment ?? null,
-      },
-      include: {
-        transporter: { select: { id: true, name: true } },
-        truck: { select: { id: true, name: true } },
-        driver: { select: { id: true, firstName: true, lastName: true } },
-      },
+    const transports = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: body.orderId, tenantId: actor.tenantId },
+        include: { transports: { 
+          where: { status: { not: "CANCELLED" } },
+          select: { litersCarried: true } 
+        } }
+      });
+
+      if (!order) {
+        throw new Error("Order not found");
+      }
+
+      const existingLiters = order.transports.reduce((sum, t) => sum + Number(t.litersCarried), 0);
+      const newLiters = body.assignments.reduce((sum, a) => sum + a.litersCarried, 0);
+
+      if (existingLiters + newLiters > Number(order.litersOrdered)) {
+        throw new Error("Total dispatched liters cannot exceed the ordered quantity.");
+      }
+
+      const results = [];
+      for (const assignment of body.assignments) {
+        const t = await tx.transport.create({
+          data: {
+            tenantId: actor.tenantId,
+            orderId: body.orderId,
+            transporterId: assignment.transporterId,
+            truckId: assignment.truckId,
+            driverId: assignment.driverId,
+            destination: assignment.destination,
+            productType: body.productType ?? null,
+            ratePerLiter: assignment.ratePerLiter,
+            litersCarried: assignment.litersCarried,
+          },
+          include: {
+            transporter: { select: { name: true } },
+            truck: { select: { name: true } },
+          },
+        });
+        results.push(t);
+
+        await audit({
+          actorType: "TENANT_USER",
+          actorId: actor.userId,
+          action: "transport.create",
+          tenantId: actor.tenantId,
+          targetType: "Transport",
+          targetId: t.id,
+          after: {
+            destination: t.destination,
+            transporter: t.transporter.name,
+            truck: t.truck.name,
+            litersCarried: t.litersCarried
+          } as object,
+          ip: meta.ip,
+          userAgent: meta.userAgent,
+        });
+      }
+      return results;
     });
 
-    await audit({
-      actorType: "TENANT_USER",
-      actorId: actor.userId,
-      action: "transport.create",
-      tenantId: actor.tenantId,
-      targetType: "Transport",
-      targetId: transport.id,
-      after: {
-        destination: transport.destination,
-        transporter: transport.transporter.name,
-        truck: transport.truck.name,
-      } as object,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-    });
-
-    return ok({ transport });
+    return ok({ transports });
   } catch (e) {
     return handleError(e);
   }

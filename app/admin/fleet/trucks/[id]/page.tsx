@@ -26,6 +26,9 @@ export default async function TruckDetailPage({
           order: { select: { id: true, reference: true, productType: true } },
         },
       },
+      maintenanceHistory: {
+        orderBy: { date: "desc" },
+      },
     },
   });
 

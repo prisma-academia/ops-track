@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
@@ -10,21 +10,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save, ChevronsUpDown } from "lucide-react";
+import { ArrowLeft, Save, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 
 const Schema = z.object({
   orderId: z.string().min(1, "Order is required"),
-  transporterId: z.string().min(1, "Please select a transporter"),
-  truckId: z.string().min(1, "Please select a truck"),
-  driverId: z.string().optional().or(z.literal("")),
-  destination: z.string().min(1, "Destination is required"),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional().nullable(),
-  ratePerLiter: z.coerce.number().positive("Rate per liter must be > 0"),
-  litersCarried: z.coerce.number().positive("Liters carried must be > 0"),
-  comment: z.string().optional(),
+  assignments: z.array(z.object({
+    transporterId: z.string().min(1, "Please select a transporter"),
+    truckId: z.string().min(1, "Please select a truck"),
+    driverId: z.string().min(1, "Please select a driver"),
+    destination: z.string().min(1, "Destination is required"),
+    ratePerLiter: z.coerce.number().positive("Rate per liter must be > 0"),
+    litersCarried: z.coerce.number().positive("Liters carried must be > 0"),
+  })).min(1, "At least one truck assignment is required"),
 });
 
 const NIGERIAN_STATES = [
@@ -45,116 +46,103 @@ export function CreateTransportForm({
   transporters: { id: string; name: string }[];
   trucks: { id: string; name: string; transporterId: string }[];
   drivers: { id: string; firstName: string; lastName: string; transporterId: string }[];
-  orders: { id: string; reference: string | null; transportCost: any; productType: any }[];
+  orders: { id: string; reference: string | null; productType: any; litersOrdered: number | string; transports: { litersCarried: number | string }[] }[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  
   const [openOrderSelect, setOpenOrderSelect] = useState(false);
-  const [openTransporterSelect, setOpenTransporterSelect] = useState(false);
-  const [openTruckSelect, setOpenTruckSelect] = useState(false);
-  const [openDriverSelect, setOpenDriverSelect] = useState(false);
-  const [openDestinationSelect, setOpenDestinationSelect] = useState(false);
 
-  const { register, handleSubmit, formState, setValue, watch } = useForm({
+  const [openStates, setOpenStates] = useState<{ [key: string]: boolean }>({});
+
+  const togglePopover = (key: string, isOpen: boolean) => {
+    setOpenStates(prev => ({ ...prev, [key]: isOpen }));
+  };
+
+  const { register, handleSubmit, formState, setValue, watch, control } = useForm({
     resolver: zodResolver(Schema),
     defaultValues: {
       orderId: "",
-      transporterId: "",
-      truckId: "",
-      driverId: "",
-      destination: "",
       productType: "PMS" as any,
-      ratePerLiter: 0,
-      litersCarried: 45000,
-      comment: "",
+      assignments: [{
+        transporterId: "",
+        truckId: "",
+        driverId: "",
+        destination: "",
+        ratePerLiter: 0,
+        litersCarried: 45000,
+      }],
     },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "assignments",
   });
 
   const selectedOrderId = watch("orderId");
   const selectedOrder = orders.find((o) => o.id === selectedOrderId);
-  
-  const selectedTransporterId = watch("transporterId");
-  const selectedTransporter = transporters.find((t) => t.id === selectedTransporterId);
-  
-  const filteredTrucks = trucks.filter(t => t.transporterId === selectedTransporterId);
-  const selectedTruckId = watch("truckId");
-  const selectedTruck = filteredTrucks.find((t) => t.id === selectedTruckId);
-  
-  const filteredDrivers = drivers.filter(d => d.transporterId === selectedTransporterId);
-  const selectedDriverId = watch("driverId");
-  const selectedDriver = filteredDrivers.find((d) => d.id === selectedDriverId);
-  
   const selectedProductType = watch("productType");
+
+  const assignmentsWatch = watch("assignments");
+  
+  const totalOrdered = selectedOrder ? Number(selectedOrder.litersOrdered) : 0;
+  const previouslyTransported = selectedOrder ? selectedOrder.transports.reduce((sum, t) => sum + Number(t.litersCarried), 0) : 0;
+  const currentlyAllocated = assignmentsWatch.reduce((sum, a) => sum + (Number(a.litersCarried) || 0), 0);
+  const totalRequested = previouslyTransported + currentlyAllocated;
+  const isOverAllocated = selectedOrderId ? totalRequested > totalOrdered : false;
+  const remainingVolume = Math.max(0, totalOrdered - previouslyTransported - currentlyAllocated);
 
   useEffect(() => {
     if (selectedOrderId) {
-      const order = orders.find((o) => o.id === selectedOrderId);
-      if (order) {
-        if (order.transportCost) setValue("ratePerLiter", Number(order.transportCost), { shouldValidate: true });
-        if (order.productType) setValue("productType", order.productType, { shouldValidate: true });
+      if (selectedOrder) {
+        if (selectedOrder.productType) setValue("productType", selectedOrder.productType, { shouldValidate: true });
+        
+        const remaining = Number(selectedOrder.litersOrdered) - selectedOrder.transports.reduce((sum, t) => sum + Number(t.litersCarried), 0);
+        if (remaining > 0 && assignmentsWatch.length === 1 && assignmentsWatch[0].litersCarried === 45000) {
+           setValue(`assignments.0.litersCarried`, Math.min(45000, remaining), { shouldValidate: true });
+        }
       }
     }
   }, [selectedOrderId, orders, setValue]);
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
-    
-    const res = await apiPost<{ transport: { id: string } }>("/api/tenant/fleet/transports", values);
+    const res = await apiPost<{ transports: { id: string }[] }>("/api/tenant/fleet/transports", values);
     if (res.error) {
       setError(res.error.message);
       return;
     }
-    if (res.data?.transport.id) {
-      router.push(`/admin/fleet/transports`);
-      router.refresh();
-    }
+    router.push(`/admin/fleet/transports`);
+    router.refresh();
   });
 
   return (
     <form onSubmit={onSubmit} className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 rounded-full"
-            onClick={() => router.push("/admin/fleet/transports")}
-          >
+          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={() => router.push("/admin/fleet/transports")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h2 className="text-xl font-bold tracking-tight text-foreground uppercase tracking-widest">
-              Dispatch Transport
-            </h2>
-            <p className="text-xs text-muted-foreground">Create a new transport trip</p>
+            <h2 className="text-xl font-bold tracking-tight text-foreground uppercase tracking-widest">Dispatch Transport</h2>
+            <p className="text-xs text-muted-foreground">Assign multiple trucks to fulfill an order</p>
           </div>
         </div>
       </div>
 
-      <div className="max-w-3xl">
+      <div className="max-w-4xl space-y-6">
         <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-              Trip Details
-            </CardTitle>
+            <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Order Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="orderId" className={formState.errors.orderId ? "text-destructive" : ""}>Link to Order (Optional)</Label>
+                <Label htmlFor="orderId" className={formState.errors.orderId ? "text-destructive" : ""}>Link to Order*</Label>
                 <Popover open={openOrderSelect} onOpenChange={setOpenOrderSelect}>
                   <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      id="orderId"
-                      className={`w-full justify-between font-normal ${formState.errors.orderId ? "border-destructive" : ""}`}
-                    >
-                      <span className="truncate">
-                        {selectedOrder ? (selectedOrder.reference || "Unnamed Order") : "Select order..."}
-                      </span>
+                    <Button type="button" variant="outline" id="orderId" className={`w-full justify-between font-normal ${formState.errors.orderId ? "border-destructive" : ""}`}>
+                      <span className="truncate">{selectedOrder ? (selectedOrder.reference || "Unnamed Order") : "Select order..."}</span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
@@ -165,16 +153,8 @@ export function CreateTransportForm({
                         <CommandEmpty>No order found.</CommandEmpty>
                         <CommandGroup>
                           {orders.map((o) => (
-                            <CommandItem
-                              key={o.id}
-                              value={o.reference?.toLowerCase() || o.id}
-                              onSelect={() => {
-                                setValue("orderId", o.id, { shouldValidate: true });
-                                setOpenOrderSelect(false);
-                              }}
-                              data-checked={selectedOrderId === o.id}
-                            >
-                              {o.reference || "Unnamed Order"}
+                            <CommandItem key={o.id} value={o.reference?.toLowerCase() || o.id} onSelect={() => { setValue("orderId", o.id, { shouldValidate: true }); setOpenOrderSelect(false); }}>
+                              {o.reference || "Unnamed Order"} ({Number(o.litersOrdered).toLocaleString()}L)
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -182,187 +162,94 @@ export function CreateTransportForm({
                     </Command>
                   </PopoverContent>
                 </Popover>
-                <input type="hidden" {...register("orderId")} />
                 {formState.errors.orderId && <p className="text-xs text-destructive">{formState.errors.orderId.message}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="productType" className={formState.errors.productType ? "text-destructive" : ""}>Product Type</Label>
-                <Input 
-                  id="productType" 
-                  value={selectedProductType || ""}
-                  disabled
-                  className="bg-muted"
-                />
-                <input type="hidden" {...register("productType")} />
+                <Label>Product Type</Label>
+                <Input value={selectedProductType || ""} disabled className="bg-muted" />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="destination" className={formState.errors.destination ? "text-destructive" : ""}>Destination State*</Label>
-              <Popover open={openDestinationSelect} onOpenChange={setOpenDestinationSelect}>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    id="destination"
-                    className={`w-full justify-between font-normal ${formState.errors.destination ? "border-destructive" : ""}`}
-                  >
-                    <span className="truncate">
-                      {watch("destination") || "Select destination..."}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search state..." />
-                    <CommandList className="max-h-[200px] overflow-y-auto">
-                      <CommandEmpty>No state found.</CommandEmpty>
-                      <CommandGroup>
-                        {NIGERIAN_STATES.map((state) => (
-                          <CommandItem
-                            key={state}
-                            value={state.toLowerCase()}
-                            onSelect={() => {
-                              setValue("destination", state, { shouldValidate: true });
-                              setOpenDestinationSelect(false);
-                            }}
-                            data-checked={watch("destination") === state}
-                          >
-                            {state}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <input type="hidden" {...register("destination")} />
-              {formState.errors.destination && <p className="text-xs text-destructive">{formState.errors.destination.message}</p>}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="ratePerLiter" className={formState.errors.ratePerLiter ? "text-destructive" : ""}>Rate per Liter (₦)*</Label>
-                <Input 
-                  id="ratePerLiter" 
-                  type="number"
-                  placeholder="e.g. 15" 
-                  {...register("ratePerLiter")}
-                  className={formState.errors.ratePerLiter ? "border-destructive" : ""}
-                />
-                {formState.errors.ratePerLiter && <p className="text-xs text-destructive">{formState.errors.ratePerLiter.message}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="litersCarried" className={formState.errors.litersCarried ? "text-destructive" : ""}>Volume Carried (L)*</Label>
-                <Input 
-                  id="litersCarried" 
-                  type="number"
-                  placeholder="e.g. 45000" 
-                  {...register("litersCarried")}
-                  className={formState.errors.litersCarried ? "border-destructive" : ""}
-                />
-                {formState.errors.litersCarried && <p className="text-xs text-destructive">{formState.errors.litersCarried.message}</p>}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="comment" className={formState.errors.comment ? "text-destructive" : ""}>Comment / Notes (Optional)</Label>
-              <textarea 
-                id="comment" 
-                placeholder="Any additional notes about this trip..." 
-                {...register("comment")}
-                className={`flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${formState.errors.comment ? "border-destructive" : ""}`}
-              />
-              {formState.errors.comment && <p className="text-xs text-destructive">{formState.errors.comment.message}</p>}
-            </div>
-
-            <div className="pt-4 border-t border-border mt-6">
-              <h3 className="text-sm font-semibold mb-4">Assign Truck & Driver</h3>
-              
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="transporterId" className={formState.errors.transporterId ? "text-destructive" : ""}>Transporter*</Label>
-                  <Popover open={openTransporterSelect} onOpenChange={setOpenTransporterSelect}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        id="transporterId"
-                        className={`w-full justify-between font-normal ${formState.errors.transporterId ? "border-destructive" : ""}`}
-                      >
-                        <span className="truncate">
-                          {selectedTransporter ? selectedTransporter.name : "Select transporter..."}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search transporter..." />
-                        <CommandList className="max-h-[200px] overflow-y-auto">
-                          <CommandEmpty>No transporter found.</CommandEmpty>
-                          <CommandGroup>
-                            {transporters.map((t) => (
-                              <CommandItem
-                                key={t.id}
-                                value={t.name.toLowerCase()}
-                                onSelect={() => {
-                                  setValue("transporterId", t.id, { shouldValidate: true });
-                                  setValue("truckId", "", { shouldValidate: false });
-                                  setValue("driverId", "", { shouldValidate: false });
-                                  setOpenTransporterSelect(false);
-                                }}
-                                data-checked={selectedTransporterId === t.id}
-                              >
-                                {t.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <input type="hidden" {...register("transporterId")} />
-                  {formState.errors.transporterId && <p className="text-xs text-destructive">{formState.errors.transporterId.message}</p>}
+            {selectedOrderId && (
+              <div className="grid grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg border border-border/50 text-center">
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase mb-1">Total Ordered</div>
+                  <div className="font-mono font-bold">{totalOrdered.toLocaleString()}L</div>
                 </div>
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase mb-1">Prior Dispatched</div>
+                  <div className="font-mono font-bold text-blue-600 dark:text-blue-400">{previouslyTransported.toLocaleString()}L</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase mb-1">In This Form</div>
+                  <div className="font-mono font-bold text-amber-600 dark:text-amber-400">{currentlyAllocated.toLocaleString()}L</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase mb-1">Remaining</div>
+                  <div className={`font-mono font-bold ${remainingVolume === 0 ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>
+                    {remainingVolume.toLocaleString()}L
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-                <div className="grid grid-cols-2 gap-4">
+        {fields.map((field, index) => {
+          const transporterId = watch(`assignments.${index}.transporterId`);
+          const truckId = watch(`assignments.${index}.truckId`);
+          const driverId = watch(`assignments.${index}.driverId`);
+          const destination = watch(`assignments.${index}.destination`);
+          const rL = watch(`assignments.${index}.ratePerLiter`) || 0;
+          const lC = watch(`assignments.${index}.litersCarried`) || 0;
+          const rowCost = Number(rL) * Number(lC);
+
+          const fieldErrors = formState.errors.assignments?.[index];
+
+          const filteredTrucks = trucks.filter(t => t.transporterId === transporterId);
+          const filteredDrivers = drivers.filter(d => d.transporterId === transporterId);
+
+          return (
+            <Card key={field.id} className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs relative overflow-visible">
+              {fields.length > 1 && (
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="icon" 
+                  className="absolute top-2 right-2 h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => remove(index)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Truck Assignment #{index + 1}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="truckId" className={formState.errors.truckId ? "text-destructive" : ""}>Truck*</Label>
-                    <Popover open={openTruckSelect} onOpenChange={setOpenTruckSelect}>
+                    <Label className={fieldErrors?.transporterId ? "text-destructive" : ""}>Transporter*</Label>
+                    <Popover open={openStates[`transporter-${index}`]} onOpenChange={(val) => togglePopover(`transporter-${index}`, val)}>
                       <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          id="truckId"
-                          disabled={!selectedTransporterId}
-                          className={`w-full justify-between font-normal ${formState.errors.truckId ? "border-destructive" : ""}`}
-                        >
-                          <span className="truncate">
-                            {selectedTruck ? selectedTruck.name : "Select truck..."}
-                          </span>
+                        <Button type="button" variant="outline" className={`w-full justify-between font-normal ${fieldErrors?.transporterId ? "border-destructive" : ""}`}>
+                          <span className="truncate">{transporters.find(t => t.id === transporterId)?.name || "Select..."}</span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                         <Command>
-                          <CommandInput placeholder="Search truck..." />
+                          <CommandInput placeholder="Search..." />
                           <CommandList className="max-h-[200px] overflow-y-auto">
-                            <CommandEmpty>No truck found.</CommandEmpty>
+                            <CommandEmpty>No transporter found.</CommandEmpty>
                             <CommandGroup>
-                              {filteredTrucks.map((t) => (
-                                <CommandItem
-                                  key={t.id}
-                                  value={t.name.toLowerCase()}
-                                  onSelect={() => {
-                                    setValue("truckId", t.id, { shouldValidate: true });
-                                    setOpenTruckSelect(false);
-                                  }}
-                                  data-checked={selectedTruckId === t.id}
-                                >
+                              {transporters.map((t) => (
+                                <CommandItem key={t.id} value={t.name.toLowerCase()} onSelect={() => { 
+                                  setValue(`assignments.${index}.transporterId`, t.id, { shouldValidate: true }); 
+                                  setValue(`assignments.${index}.truckId`, "", { shouldValidate: false }); 
+                                  setValue(`assignments.${index}.driverId`, "", { shouldValidate: false }); 
+                                  togglePopover(`transporter-${index}`, false); 
+                                }}>
                                   {t.name}
                                 </CommandItem>
                               ))}
@@ -371,52 +258,54 @@ export function CreateTransportForm({
                         </Command>
                       </PopoverContent>
                     </Popover>
-                    <input type="hidden" {...register("truckId")} />
-                    {formState.errors.truckId && <p className="text-xs text-destructive">{formState.errors.truckId.message}</p>}
+                    {fieldErrors?.transporterId && <p className="text-xs text-destructive">{fieldErrors.transporterId.message}</p>}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="driverId" className={formState.errors.driverId ? "text-destructive" : ""}>Driver (Optional)</Label>
-                    <Popover open={openDriverSelect} onOpenChange={setOpenDriverSelect}>
+                    <Label className={fieldErrors?.truckId ? "text-destructive" : ""}>Truck*</Label>
+                    <Popover open={openStates[`truck-${index}`]} onOpenChange={(val) => togglePopover(`truck-${index}`, val)}>
                       <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          id="driverId"
-                          disabled={!selectedTransporterId}
-                          className={`w-full justify-between font-normal ${formState.errors.driverId ? "border-destructive" : ""}`}
-                        >
-                          <span className="truncate">
-                            {selectedDriver ? `${selectedDriver.firstName} ${selectedDriver.lastName}` : "Select driver..."}
-                          </span>
+                        <Button type="button" variant="outline" disabled={!transporterId} className={`w-full justify-between font-normal ${fieldErrors?.truckId ? "border-destructive" : ""}`}>
+                          <span className="truncate">{trucks.find(t => t.id === truckId)?.name || "Select truck..."}</span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                         <Command>
-                          <CommandInput placeholder="Search driver..." />
+                          <CommandInput placeholder="Search..." />
+                          <CommandList className="max-h-[200px] overflow-y-auto">
+                            <CommandEmpty>No truck found.</CommandEmpty>
+                            <CommandGroup>
+                              {filteredTrucks.map((t) => (
+                                <CommandItem key={t.id} value={t.name.toLowerCase()} onSelect={() => { setValue(`assignments.${index}.truckId`, t.id, { shouldValidate: true }); togglePopover(`truck-${index}`, false); }}>
+                                  {t.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {fieldErrors?.truckId && <p className="text-xs text-destructive">{fieldErrors.truckId.message}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className={fieldErrors?.driverId ? "text-destructive" : ""}>Driver*</Label>
+                    <Popover open={openStates[`driver-${index}`]} onOpenChange={(val) => togglePopover(`driver-${index}`, val)}>
+                      <PopoverTrigger asChild>
+                        <Button type="button" variant="outline" disabled={!transporterId} className={`w-full justify-between font-normal ${fieldErrors?.driverId ? "border-destructive" : ""}`}>
+                          <span className="truncate">{drivers.find(d => d.id === driverId) ? `${drivers.find(d => d.id === driverId)?.firstName} ${drivers.find(d => d.id === driverId)?.lastName}` : "Select driver..."}</span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search..." />
                           <CommandList className="max-h-[200px] overflow-y-auto">
                             <CommandEmpty>No driver found.</CommandEmpty>
                             <CommandGroup>
-                              <CommandItem
-                                value="none"
-                                onSelect={() => {
-                                  setValue("driverId", "", { shouldValidate: true });
-                                  setOpenDriverSelect(false);
-                                }}
-                              >
-                                None
-                              </CommandItem>
                               {filteredDrivers.map((d) => (
-                                <CommandItem
-                                  key={d.id}
-                                  value={`${d.firstName} ${d.lastName}`.toLowerCase()}
-                                  onSelect={() => {
-                                    setValue("driverId", d.id, { shouldValidate: true });
-                                    setOpenDriverSelect(false);
-                                  }}
-                                  data-checked={selectedDriverId === d.id}
-                                >
+                                <CommandItem key={d.id} value={`${d.firstName} ${d.lastName}`.toLowerCase()} onSelect={() => { setValue(`assignments.${index}.driverId`, d.id, { shouldValidate: true }); togglePopover(`driver-${index}`, false); }}>
                                   {`${d.firstName} ${d.lastName}`}
                                 </CommandItem>
                               ))}
@@ -425,43 +314,97 @@ export function CreateTransportForm({
                         </Command>
                       </PopoverContent>
                     </Popover>
-                    <input type="hidden" {...register("driverId")} />
-                    {formState.errors.driverId && <p className="text-xs text-destructive">{formState.errors.driverId.message}</p>}
+                    {fieldErrors?.driverId && <p className="text-xs text-destructive">{fieldErrors.driverId.message}</p>}
                   </div>
                 </div>
-              </div>
-            </div>
 
-          </CardContent>
-        </Card>
-      </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label className={fieldErrors?.destination ? "text-destructive" : ""}>Destination State*</Label>
+                    <Popover open={openStates[`dest-${index}`]} onOpenChange={(val) => togglePopover(`dest-${index}`, val)}>
+                      <PopoverTrigger asChild>
+                        <Button type="button" variant="outline" className={`w-full justify-between font-normal ${fieldErrors?.destination ? "border-destructive" : ""}`}>
+                          <span className="truncate">{destination || "Select state..."}</span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search..." />
+                          <CommandList className="max-h-[200px] overflow-y-auto">
+                            <CommandEmpty>No state found.</CommandEmpty>
+                            <CommandGroup>
+                              {NIGERIAN_STATES.map((state) => (
+                                <CommandItem key={state} value={state.toLowerCase()} onSelect={() => { setValue(`assignments.${index}.destination`, state, { shouldValidate: true }); togglePopover(`dest-${index}`, false); }}>
+                                  {state}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {fieldErrors?.destination && <p className="text-xs text-destructive">{fieldErrors.destination.message}</p>}
+                  </div>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+                  <div className="space-y-2">
+                    <Label className={fieldErrors?.litersCarried ? "text-destructive" : ""}>Volume (L)*</Label>
+                    <Input type="number" placeholder="45000" {...register(`assignments.${index}.litersCarried`)} className={fieldErrors?.litersCarried ? "border-destructive" : ""} />
+                    {fieldErrors?.litersCarried && <p className="text-xs text-destructive">{fieldErrors.litersCarried.message}</p>}
+                  </div>
 
-      <div className="flex items-center justify-end gap-3 pt-2 max-w-3xl">
+                  <div className="space-y-2">
+                    <Label className={fieldErrors?.ratePerLiter ? "text-destructive" : ""}>Rate (₦)*</Label>
+                    <Input type="number" placeholder="15" {...register(`assignments.${index}.ratePerLiter`)} className={fieldErrors?.ratePerLiter ? "border-destructive" : ""} />
+                    {fieldErrors?.ratePerLiter && <p className="text-xs text-destructive">{fieldErrors.ratePerLiter.message}</p>}
+                  </div>
+                </div>
+                
+                <div className="flex justify-end pt-2 text-sm text-muted-foreground border-t border-border mt-4">
+                  <span className="font-semibold mr-2 mt-2">Trip Transport Cost:</span>
+                  <span className="font-mono text-primary font-bold mt-2">₦{rowCost.toLocaleString()}</span>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+
         <Button 
           type="button" 
           variant="outline" 
-          onClick={() => router.push("/admin/fleet/transports")}
-          className="h-10 rounded-full px-5"
+          className="w-full border-dashed py-8 font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => append({
+            transporterId: "",
+            truckId: "",
+            driverId: "",
+            destination: "",
+            ratePerLiter: 0,
+            litersCarried: Math.min(45000, remainingVolume > 0 ? remainingVolume : 45000)
+          })}
         >
+          <Plus className="h-5 w-5 mr-2" />
+          Add Another Truck Assignment
+        </Button>
+      </div>
+
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {formState.errors.assignments?.root && <p className="text-sm text-red-600">{formState.errors.assignments.root.message}</p>}
+
+      {isOverAllocated && selectedOrderId && (
+        <div className="max-w-4xl p-3 text-sm font-medium rounded-md bg-destructive/15 text-destructive border border-destructive/20 flex items-center">
+          Total dispatched volume ({totalRequested.toLocaleString()}L) exceeds the ordered volume ({totalOrdered.toLocaleString()}L).
+        </div>
+      )}
+
+      <div className="flex items-center justify-end gap-3 pt-6 max-w-4xl border-t border-border mt-6">
+        <Button type="button" variant="outline" onClick={() => router.push("/admin/fleet/transports")} className="h-10 rounded-full px-5">
           Cancel
         </Button>
-        <Button
-          type="submit"
-          disabled={formState.isSubmitting}
-          className="h-10 rounded-full px-5 gap-2"
-        >
+        <Button type="submit" disabled={formState.isSubmitting || isOverAllocated} className="h-10 rounded-full px-5 gap-2">
           {formState.isSubmitting ? (
-            <>
-              <SpinnerEllipsis />
-              <span>Saving...</span>
-            </>
+            <><SpinnerEllipsis /><span>Saving...</span></>
           ) : (
-            <>
-              <Save className="h-4 w-4" />
-              <span>Dispatch Transport</span>
-            </>
+            <><Save className="h-4 w-4" /><span>Dispatch {fields.length} {fields.length === 1 ? 'Truck' : 'Trucks'}</span></>
           )}
         </Button>
       </div>

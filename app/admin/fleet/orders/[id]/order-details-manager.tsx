@@ -51,7 +51,8 @@ const EditOrderSchema = z.object({
   litersOrdered: z.coerce.number().positive(),
   supplier: z.string().optional().nullable(),
   sourceDepot: z.string().optional().nullable(),
-  orderCost: z.coerce.number().min(0),
+  pricePerLitre: z.coerce.number().min(0),
+  loadingCost: z.coerce.number().min(0),
 });
 
 type LookupItem = { id: string; name: string };
@@ -76,6 +77,10 @@ export function OrderDetailsManager({
   const [openDepotSelect, setOpenDepotSelect] = useState(false);
 
   const transports = order.transports || [];
+  const validTransports = transports.filter((t: any) => t.status !== "CANCELLED");
+  const totalTransportCost = validTransports.reduce((sum: number, t: any) => sum + (Number(t.ratePerLiter || 0) * Number(t.litersCarried || 0)), 0);
+  const totalTransportedLiters = validTransports.reduce((sum: number, t: any) => sum + Number(t.litersCarried || 0), 0);
+  const averageTransportCostPerLiter = totalTransportedLiters > 0 ? totalTransportCost / totalTransportedLiters : 0;
 
   // Edit Form
   const { register, handleSubmit, formState, setValue, watch, reset } = useForm({
@@ -85,20 +90,21 @@ export function OrderDetailsManager({
       litersOrdered: Number(order.litersOrdered),
       supplier: order.supplier,
       sourceDepot: order.sourceDepot,
-      orderCost: Number(order.orderCost),
+      pricePerLitre: Number(order.pricePerLitre),
+      loadingCost: Number(order.loadingCost) || 0,
     },
   });
 
   const watchProductType = watch("productType");
   const watchLitersOrdered = watch("litersOrdered") || 0;
-  const watchOrderCost = watch("orderCost") || 0;
+  const watchPricePerLitre = watch("pricePerLitre") || 0;
+  const watchLoadingCost = watch("loadingCost") || 0;
   const watchSupplier = watch("supplier");
   const watchDepot = watch("sourceDepot");
 
-  const productTotal = Number(watchOrderCost || 0) * Number(watchLitersOrdered || 0);
-  const loadingTotal = Number(order.loadingCost) || 0;
-  const transportTotal = Number(order.transportCost) || 0;
-  const grandTotal = productTotal + loadingTotal + transportTotal;
+  const productTotal = Number(watchPricePerLitre || 0) * Number(watchLitersOrdered || 0);
+  const loadingTotal = Number(watchLoadingCost) || 0;
+  const grandTotal = productTotal + loadingTotal;
 
   const onUpdateStatus = async (newStatus: string) => {
     setIsUpdatingStatus(true);
@@ -137,7 +143,7 @@ export function OrderDetailsManager({
     }
   };
 
-  const currentGrandTotal = (Number(order.orderCost) * Number(order.litersOrdered)) + Number(order.loadingCost) + Number(order.transportCost);
+  const currentGrandTotal = (Number(order.pricePerLitre) * Number(order.litersOrdered)) + Number(order.loadingCost) + totalTransportCost;
 
   return (
     <div className="space-y-6">
@@ -294,19 +300,22 @@ export function OrderDetailsManager({
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="flex justify-between border-b pb-1">
                     <span className="text-muted-foreground">Rate:</span>
-                    <span className="font-mono font-medium">₦{Number(order.orderCost).toLocaleString()}/L</span>
+                    <span className="font-mono font-medium">₦{Number(order.pricePerLitre).toLocaleString()}/L</span>
                   </div>
                   <div className="flex justify-between border-b pb-1">
                     <span className="text-muted-foreground">Product:</span>
-                    <span className="font-mono font-medium">₦{(Number(order.orderCost) * Number(order.litersOrdered)).toLocaleString()}</span>
+                    <span className="font-mono font-medium">₦{(Number(order.pricePerLitre) * Number(order.litersOrdered)).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between border-b pb-1">
                     <span className="text-muted-foreground">Loading:</span>
                     <span className="font-mono font-medium">₦{Number(order.loadingCost).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between border-b pb-1">
-                    <span className="text-muted-foreground">Transport:</span>
-                    <span className="font-mono font-medium">₦{Number(order.transportCost).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Logistics:</span>
+                    <span className="font-mono font-medium">
+                      ₦{totalTransportCost.toLocaleString()}
+                      {totalTransportedLiters > 0 && <span className="text-[10px] opacity-70 ml-1">(@ ₦{averageTransportCostPerLiter.toFixed(2)}/L avg)</span>}
+                    </span>
                   </div>
                   <div className="col-span-2 flex justify-between pt-1">
                     <span className="font-bold text-foreground">Total Value:</span>
@@ -361,6 +370,7 @@ export function OrderDetailsManager({
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Destination</th>
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Truck / Driver</th>
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Volume</th>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Cost</th>
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Status</th>
                   </tr>
                 </thead>
@@ -377,6 +387,9 @@ export function OrderDetailsManager({
                           {t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "—"}
                         </td>
                         <td className="px-6 py-4 text-right font-mono font-medium">{Number(t.litersCarried).toLocaleString()} L</td>
+                        <td className="px-6 py-4 text-right font-mono font-medium">
+                          ₦{(Number(t.ratePerLiter || 0) * Number(t.litersCarried || 0)).toLocaleString()}
+                        </td>
                         <td className="px-6 py-4 text-center">
                           <Badge variant="outline" className={
                             t.status === "COMPLETED" ? "text-emerald-600 bg-emerald-50 border-emerald-200" :
@@ -498,15 +511,21 @@ export function OrderDetailsManager({
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="orderCost">Product Cost Per Litre (₦)</Label>
-                <Input id="orderCost" type="number" {...register("orderCost")} />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="pricePerLitre">Product Cost Per Litre (₦)</Label>
+                  <Input id="pricePerLitre" type="number" {...register("pricePerLitre")} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="loadingCost">Flat Loading Fee (₦)</Label>
+                  <Input id="loadingCost" type="number" {...register("loadingCost")} />
+                </div>
               </div>
 
               {/* Live Calc summary inline */}
               <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-100 dark:border-blue-900 mt-4 space-y-2 text-sm">
                 <div className="flex justify-between font-medium"><span>Product Total:</span><span className="font-mono">₦{productTotal.toLocaleString()}</span></div>
-                <div className="flex justify-between text-muted-foreground"><span>Fixed Loading/Transport:</span><span className="font-mono">₦{(loadingTotal + transportTotal).toLocaleString()}</span></div>
+                <div className="flex justify-between text-muted-foreground"><span>Fixed Loading:</span><span className="font-mono">₦{loadingTotal.toLocaleString()}</span></div>
                 <div className="flex justify-between border-t border-blue-200 dark:border-blue-800 pt-2 font-bold text-blue-900 dark:text-blue-200">
                   <span>New Total Value:</span><span className="font-mono">₦{grandTotal.toLocaleString()}</span>
                 </div>

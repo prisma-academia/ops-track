@@ -26,7 +26,16 @@ export default async function NewTransportPage() {
   
   const orders = await prisma.order.findMany({
     where: { tenantId: actor.tenantId, status: { in: ["PENDING", "CONFIRMED"] } },
-    select: { id: true, reference: true, transportCost: true, productType: true },
+    select: { 
+      id: true, 
+      reference: true, 
+      productType: true,
+      litersOrdered: true,
+      transports: { 
+        where: { status: { not: "CANCELLED" } },
+        select: { litersCarried: true } 
+      }
+    },
     orderBy: { createdAt: "desc" },
   });
 

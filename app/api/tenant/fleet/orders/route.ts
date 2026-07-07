@@ -13,9 +13,8 @@ const CreateOrderSchema = z.object({
   litersOrdered: z.number().positive(),
   supplier: z.string().optional().nullable(),
   sourceDepot: z.string().optional().nullable(),
-  orderCost: z.number().min(0).default(0),
+  pricePerLitre: z.number().min(0).default(0),
   loadingCost: z.number().min(0).default(0),
-  transportCost: z.number().min(0).default(0),
 });
 
 export async function GET(request: Request) {
@@ -59,9 +58,8 @@ export async function POST(request: Request) {
         litersOrdered: body.litersOrdered,
         supplier: body.supplier ?? null,
         sourceDepot: body.sourceDepot ?? null,
-        orderCost: body.orderCost,
+        pricePerLitre: body.pricePerLitre,
         loadingCost: body.loadingCost,
-        transportCost: body.transportCost,
       },
     });
 

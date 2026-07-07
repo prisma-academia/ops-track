@@ -12,6 +12,7 @@ export type OrderRow = {
   productType: string;
   litersOrdered: number;
   sourceDepot: string;
+  pricePerLitre: number;
   totalCost: number;
   status: string;
   transportCount: number;
@@ -46,6 +47,14 @@ const columns: ColumnDef<OrderRow>[] = [
     accessorKey: "sourceDepot", 
     header: "Depot",
     cell: ({ row }) => row.original.sourceDepot
+  },
+  { 
+    accessorKey: "pricePerLitre", 
+    header: "Rate/L",
+    cell: ({ row }) => {
+      const rate = row.original.pricePerLitre;
+      return rate > 0 ? `₦${rate.toLocaleString()}` : "—";
+    }
   },
   { 
     accessorKey: "totalCost", 

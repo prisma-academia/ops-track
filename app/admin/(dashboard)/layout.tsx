@@ -21,17 +21,17 @@ interface NavItemConfig {
 // `module: null` = always shown (Overview, Settings).
 const NAV: NavItemConfig[] = [
   { href: "/admin/dashboard", key: "overview", module: null, icon: "PieChart", permission: null },
-  {
-    key: "analytics",
-    module: null,
-    icon: "TrendingUp",
-    permission: null,
-    children: [
-      { href: "/admin/dashboard/commercial", key: "commercial", module: null, permission: null },
-      { href: "/admin/dashboard/inventory", key: "inventory", module: null, permission: null },
-      { href: "/admin/dashboard/operations", key: "operations", module: null, permission: null },
-    ],
-  },
+  // {
+  //   key: "analytics",
+  //   module: null,
+  //   icon: "TrendingUp",
+  //   permission: null,
+  //   children: [
+  //     { href: "/admin/dashboard/commercial", key: "commercial", module: null, permission: null },
+  //     { href: "/admin/dashboard/inventory", key: "inventory", module: null, permission: null },
+  //     { href: "/admin/dashboard/operations", key: "operations", module: null, permission: null },
+  //   ],
+  // },
   { href: "/admin/users", key: "users", module: "users" as ModuleKey, icon: "CircleUserRound", permission: PERMISSIONS.TENANT_USERS_READ.key },
   { href: "/admin/stations", key: "stations", module: "stations" as ModuleKey, icon: "MapPin", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/expenses", key: "expenses", module: "operations" as ModuleKey, icon: "Coins", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },

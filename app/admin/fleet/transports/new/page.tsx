@@ -26,7 +26,7 @@ export default async function NewTransportPage() {
   
   const orders = await prisma.order.findMany({
     where: { tenantId: actor.tenantId, status: { in: ["PENDING", "CONFIRMED"] } },
-    select: { id: true, reference: true },
+    select: { id: true, reference: true, transportCost: true, productType: true },
     orderBy: { createdAt: "desc" },
   });
 
@@ -36,7 +36,7 @@ export default async function NewTransportPage() {
         transporters={transporters} 
         trucks={trucks} 
         drivers={drivers} 
-        orders={orders} 
+        orders={JSON.parse(JSON.stringify(orders))} 
       />
     </div>
   );

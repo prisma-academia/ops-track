@@ -8,14 +8,15 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
 
 const CreateTransportSchema = z.object({
-  orderId: z.string().optional().nullable(),
+  orderId: z.string().min(1),
   transporterId: z.string().min(1),
   truckId: z.string().min(1),
   driverId: z.string().optional().nullable(),
   destination: z.string().min(1),
-  transportType: z.enum(["EXTERNAL", "INTERNAL"]),
+  productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional().nullable(),
   ratePerLiter: z.number().positive(),
   litersCarried: z.number().positive(),
+  comment: z.string().optional().nullable(),
 });
 
 export async function GET(request: Request) {
@@ -58,14 +59,15 @@ export async function POST(request: Request) {
     const transport = await prisma.transport.create({
       data: {
         tenantId: actor.tenantId,
-        orderId: body.orderId ?? null,
+        orderId: body.orderId,
         transporterId: body.transporterId,
         truckId: body.truckId,
         driverId: body.driverId ?? null,
         destination: body.destination,
-        transportType: body.transportType,
+        productType: body.productType ?? null,
         ratePerLiter: body.ratePerLiter,
         litersCarried: body.litersCarried,
+        comment: body.comment ?? null,
       },
       include: {
         transporter: { select: { id: true, name: true } },

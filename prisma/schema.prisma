@@ -94,14 +94,15 @@ model Tenant {
   shiftLogs                  ShiftLog[]
   expenses                   Expense[]
 
-  activeModules String[]      @default(["STATION"])
-  transporters  Transporter[]
-  trucks        Truck[]
-  drivers       Driver[]
-  orders        Order[]
-  transports    Transport[]
-  sales         Sale[]
-  transactions  Transaction[]
+  activeModules     String[]           @default(["STATION"])
+  transporters      Transporter[]
+  trucks            Truck[]
+  drivers           Driver[]
+  orders            Order[]
+  transports        Transport[]
+  sales             Sale[]
+  transactions      Transaction[]
+  transportLossLogs TransportLossLog[]
 
   @@index([status])
 }
@@ -804,14 +805,17 @@ model TransportCompany {
 enum OrderStatus {
   PENDING
   CONFIRMED
+  LOADED
   CHANGED
   CANCELLED
+  COMPLETED
 }
 
 enum TransportStatus {
   IN_TRANSIT
   COMPLETED
   CANCELLED
+  LOSS
 }
 
 enum SaleStatus {
@@ -916,6 +920,7 @@ model Order {
   reference     String? // Optional Reference e.g. O-1001
   productType   ProductType
   litersOrdered Decimal     @db.Decimal(12, 2)
+  supplier      String?
   sourceDepot   String?
   orderCost     Decimal     @default(0.00) @db.Decimal(12, 2)
   loadingCost   Decimal     @default(0.00) @db.Decimal(12, 2)
@@ -934,8 +939,8 @@ model Transport {
   id            String      @id @default(uuid())
   tenantId      String
   tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  orderId       String?
-  order         Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId       String
+  order         Order       @relation(fields: [orderId], references: [id], onDelete: Restrict)
   transporterId String
   transporter   Transporter @relation(fields: [transporterId], references: [id], onDelete: Restrict)
   truckId       String
@@ -944,9 +949,9 @@ model Transport {
   driver        Driver?     @relation(fields: [driverId], references: [id], onDelete: Restrict)
 
   destination   String
-  transportType String // EXTERNAL / INTERNAL
-  ratePerLiter  Decimal @db.Decimal(10, 2)
-  litersCarried Decimal @db.Decimal(12, 2)
+  productType   ProductType?
+  ratePerLiter  Decimal      @db.Decimal(10, 2)
+  litersCarried Decimal      @db.Decimal(12, 2)
 
   subsequentLocs Json @default("[]") // Array of { location, rate, litersDelivered }
 
@@ -956,11 +961,13 @@ model Transport {
   totalDeduction      Decimal  @default(0.00) @db.Decimal(12, 2)
   netTransportFeePaid Decimal  @default(0.00) @db.Decimal(12, 2)
 
+  comment   String?         @db.Text
   status    TransportStatus @default(IN_TRANSIT)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
-  sales Sale[]
+  sales    Sale[]
+  lossLogs TransportLossLog[]
 
   @@index([tenantId])
   @@index([orderId])
@@ -968,6 +975,32 @@ model Transport {
   @@index([truckId])
   @@index([driverId])
   @@map("fleet_transports")
+}
+
+enum LossType {
+  THEFT
+  MAINTENANCE
+  ACCIDENT
+  OTHERS
+}
+
+model TransportLossLog {
+  id          String    @id @default(uuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transportId String
+  transport   Transport @relation(fields: [transportId], references: [id], onDelete: Cascade)
+
+  lossType         LossType
+  lostQuantity     Decimal  @db.Decimal(12, 2)
+  expensesIncurred Decimal  @db.Decimal(12, 2)
+  comment          String?  @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([transportId])
+  @@map("fleet_transport_loss_logs")
 }
 
 model Sale {

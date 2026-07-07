@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Decimal } from "@/lib/generated/prisma/runtime/library";
+
 import { prisma } from "@/lib/db/client";
 import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
@@ -19,7 +19,13 @@ const UpdateTransportSchema = z.object({
   addMaintenanceCost: z.number().min(0).optional(),
   addLitersLost: z.number().min(0).optional(),
   addDeposit: z.number().min(0).optional(),
-  status: z.enum(["IN_TRANSIT", "COMPLETED", "CANCELLED"]).optional(),
+  status: z.enum(["IN_TRANSIT", "COMPLETED", "CANCELLED", "LOSS"]).optional(),
+  lossLog: z.object({
+    lossType: z.enum(["THEFT", "MAINTENANCE", "ACCIDENT", "OTHERS"]),
+    lostQuantity: z.number().min(0),
+    expensesIncurred: z.number().min(0),
+    comment: z.string().optional()
+  }).optional(),
 });
 
 export async function GET(
@@ -100,6 +106,17 @@ export async function PATCH(
         totalDeduction,
         netTransportFeePaid,
         ...(body.status !== undefined && { status: body.status }),
+        ...(body.lossLog && {
+          lossLogs: {
+            create: {
+              tenantId: actor.tenantId,
+              lossType: body.lossLog.lossType,
+              lostQuantity: body.lossLog.lostQuantity,
+              expensesIncurred: body.lossLog.expensesIncurred,
+              comment: body.lossLog.comment,
+            }
+          }
+        })
       },
       include: {
         transporter: { select: { id: true, name: true } },

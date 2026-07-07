@@ -58,7 +58,7 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
     if (n.key === 'trucks') title = 'Trucks';
     if (n.key === 'drivers') title = 'Drivers';
     if (n.key === 'orders') title = 'Orders';
-    if (n.key === 'transports') title = 'Transports';
+    if (n.key === 'transports') title = 'Logistic Transport';
     if (n.key === 'sales') title = 'Sales';
     if (n.key === 'transactions') title = 'Ledger';
 

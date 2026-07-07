@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,15 +16,23 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 
 const Schema = z.object({
-  orderId: z.string().optional().or(z.literal("")),
+  orderId: z.string().min(1, "Order is required"),
   transporterId: z.string().min(1, "Please select a transporter"),
   truckId: z.string().min(1, "Please select a truck"),
   driverId: z.string().optional().or(z.literal("")),
   destination: z.string().min(1, "Destination is required"),
-  transportType: z.enum(["EXTERNAL", "INTERNAL"]),
+  productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional().nullable(),
   ratePerLiter: z.coerce.number().positive("Rate per liter must be > 0"),
   litersCarried: z.coerce.number().positive("Liters carried must be > 0"),
+  comment: z.string().optional(),
 });
+
+const NIGERIAN_STATES = [
+  "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
+  "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT - Abuja", "Gombe", "Imo",
+  "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa",
+  "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara"
+];
 
 type Values = z.infer<typeof Schema>;
 
@@ -37,7 +45,7 @@ export function CreateTransportForm({
   transporters: { id: string; name: string }[];
   trucks: { id: string; name: string; transporterId: string }[];
   drivers: { id: string; firstName: string; lastName: string; transporterId: string }[];
-  orders: { id: string; reference: string | null }[];
+  orders: { id: string; reference: string | null; transportCost: any; productType: any }[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +54,7 @@ export function CreateTransportForm({
   const [openTransporterSelect, setOpenTransporterSelect] = useState(false);
   const [openTruckSelect, setOpenTruckSelect] = useState(false);
   const [openDriverSelect, setOpenDriverSelect] = useState(false);
-  const [openTypeSelect, setOpenTypeSelect] = useState(false);
+  const [openDestinationSelect, setOpenDestinationSelect] = useState(false);
 
   const { register, handleSubmit, formState, setValue, watch } = useForm({
     resolver: zodResolver(Schema),
@@ -56,9 +64,10 @@ export function CreateTransportForm({
       truckId: "",
       driverId: "",
       destination: "",
-      transportType: "INTERNAL" as any,
+      productType: "PMS" as any,
       ratePerLiter: 0,
       litersCarried: 45000,
+      comment: "",
     },
   });
 
@@ -76,7 +85,17 @@ export function CreateTransportForm({
   const selectedDriverId = watch("driverId");
   const selectedDriver = filteredDrivers.find((d) => d.id === selectedDriverId);
   
-  const selectedType = watch("transportType");
+  const selectedProductType = watch("productType");
+
+  useEffect(() => {
+    if (selectedOrderId) {
+      const order = orders.find((o) => o.id === selectedOrderId);
+      if (order) {
+        if (order.transportCost) setValue("ratePerLiter", Number(order.transportCost), { shouldValidate: true });
+        if (order.productType) setValue("productType", order.productType, { shouldValidate: true });
+      }
+    }
+  }, [selectedOrderId, orders, setValue]);
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
@@ -145,15 +164,6 @@ export function CreateTransportForm({
                       <CommandList className="max-h-[200px] overflow-y-auto">
                         <CommandEmpty>No order found.</CommandEmpty>
                         <CommandGroup>
-                          <CommandItem
-                            value="none"
-                            onSelect={() => {
-                              setValue("orderId", "", { shouldValidate: true });
-                              setOpenOrderSelect(false);
-                            }}
-                          >
-                            None
-                          </CommandItem>
                           {orders.map((o) => (
                             <CommandItem
                               key={o.id}
@@ -177,56 +187,58 @@ export function CreateTransportForm({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="transportType" className={formState.errors.transportType ? "text-destructive" : ""}>Transport Type*</Label>
-                <Popover open={openTypeSelect} onOpenChange={setOpenTypeSelect}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      id="transportType"
-                      className={`w-full justify-between font-normal ${formState.errors.transportType ? "border-destructive" : ""}`}
-                    >
-                      <span className="truncate">
-                        {selectedType || "Select type..."}
-                      </span>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                    <Command>
-                      <CommandList className="max-h-[200px] overflow-y-auto">
-                        <CommandGroup>
-                          {["INTERNAL", "EXTERNAL"].map((t) => (
-                            <CommandItem
-                              key={t}
-                              value={t.toLowerCase()}
-                              onSelect={() => {
-                                setValue("transportType", t as any, { shouldValidate: true });
-                                setOpenTypeSelect(false);
-                              }}
-                              data-checked={selectedType === t}
-                            >
-                              {t}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                <input type="hidden" {...register("transportType")} />
-                {formState.errors.transportType && <p className="text-xs text-destructive">{formState.errors.transportType.message}</p>}
+                <Label htmlFor="productType" className={formState.errors.productType ? "text-destructive" : ""}>Product Type</Label>
+                <Input 
+                  id="productType" 
+                  value={selectedProductType || ""}
+                  disabled
+                  className="bg-muted"
+                />
+                <input type="hidden" {...register("productType")} />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="destination" className={formState.errors.destination ? "text-destructive" : ""}>Destination*</Label>
-              <Input 
-                id="destination" 
-                placeholder="e.g. Lagos Mainland Station" 
-                {...register("destination")}
-                className={formState.errors.destination ? "border-destructive" : ""}
-              />
+              <Label htmlFor="destination" className={formState.errors.destination ? "text-destructive" : ""}>Destination State*</Label>
+              <Popover open={openDestinationSelect} onOpenChange={setOpenDestinationSelect}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    id="destination"
+                    className={`w-full justify-between font-normal ${formState.errors.destination ? "border-destructive" : ""}`}
+                  >
+                    <span className="truncate">
+                      {watch("destination") || "Select destination..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search state..." />
+                    <CommandList className="max-h-[200px] overflow-y-auto">
+                      <CommandEmpty>No state found.</CommandEmpty>
+                      <CommandGroup>
+                        {NIGERIAN_STATES.map((state) => (
+                          <CommandItem
+                            key={state}
+                            value={state.toLowerCase()}
+                            onSelect={() => {
+                              setValue("destination", state, { shouldValidate: true });
+                              setOpenDestinationSelect(false);
+                            }}
+                            data-checked={watch("destination") === state}
+                          >
+                            {state}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <input type="hidden" {...register("destination")} />
               {formState.errors.destination && <p className="text-xs text-destructive">{formState.errors.destination.message}</p>}
             </div>
 
@@ -254,6 +266,17 @@ export function CreateTransportForm({
                 />
                 {formState.errors.litersCarried && <p className="text-xs text-destructive">{formState.errors.litersCarried.message}</p>}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="comment" className={formState.errors.comment ? "text-destructive" : ""}>Comment / Notes (Optional)</Label>
+              <textarea 
+                id="comment" 
+                placeholder="Any additional notes about this trip..." 
+                {...register("comment")}
+                className={`flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${formState.errors.comment ? "border-destructive" : ""}`}
+              />
+              {formState.errors.comment && <p className="text-xs text-destructive">{formState.errors.comment.message}</p>}
             </div>
 
             <div className="pt-4 border-t border-border mt-6">

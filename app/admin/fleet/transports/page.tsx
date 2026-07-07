@@ -31,7 +31,7 @@ export default async function TransportsPage() {
     driverName: t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "Unassigned",
     orderReference: t.order?.reference || "-",
     status: t.status,
-    transportType: t.transportType,
+    productType: t.productType || "-",
     salesCount: t._count.sales,
     litersCarried: Number(t.litersCarried),
     createdAt: t.createdAt.toISOString(),

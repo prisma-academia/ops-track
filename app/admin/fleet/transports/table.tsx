@@ -14,7 +14,7 @@ export type TransportRow = {
   driverName: string;
   orderReference: string;
   status: string;
-  transportType: string;
+  productType: string;
   salesCount: number;
   litersCarried: number;
   createdAt: string;
@@ -66,13 +66,13 @@ const columns: ColumnDef<TransportRow>[] = [
     }
   },
   { 
-    accessorKey: "transportType", 
-    header: "Type",
+    accessorKey: "productType", 
+    header: "Product",
     cell: ({ row }) => {
-      const tType = row.original.transportType;
+      const pType = row.original.productType;
       return (
-        <Badge variant={tType === "INTERNAL" ? "outline" : "default"}>
-          {tType}
+        <Badge variant={pType ? "outline" : "default"}>
+          {pType || "N/A"}
         </Badge>
       );
     }

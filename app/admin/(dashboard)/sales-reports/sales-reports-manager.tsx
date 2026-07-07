@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useMemo } from "react";
 import { DataTable } from "@/components/data-table";
@@ -34,6 +35,8 @@ interface SalesReportRow {
   tenantId: string;
   stationId: string;
   productType: string;
+  openingDip: number;
+  closingDip: number;
   litersSold: number;
   amountCash: number;
   amountPos: number;
@@ -107,8 +110,6 @@ export function SalesReportsManager({
     return { totalLiters, cash, digital };
   }, [filteredReports]);
 
-
-
   const EcommerceActions = [
     {
       title: "Transactions",
@@ -172,6 +173,24 @@ export function SalesReportsManager({
       ),
     },
     {
+      accessorKey: "openingDip",
+      header: () => <div className="text-right">Opening Dip</div>,
+      cell: ({ row }) => (
+        <div className="text-right font-medium text-muted-foreground">
+          {Number(row.original.openingDip || 0).toLocaleString()} L
+        </div>
+      ),
+    },
+    {
+      accessorKey: "closingDip",
+      header: () => <div className="text-right">Closing Dip</div>,
+      cell: ({ row }) => (
+        <div className="text-right font-medium text-muted-foreground">
+          {Number(row.original.closingDip || 0).toLocaleString()} L
+        </div>
+      ),
+    },
+    {
       accessorKey: "litersSold",
       header: () => <div className="text-right">Volume Sold</div>,
       cell: ({ row }) => (
@@ -227,20 +246,7 @@ export function SalesReportsManager({
         );
       },
     },
-    {
-      id: "recordedBy",
-      header: "Recorded By",
-      cell: ({ row }) => {
-        const user = row.original.recordedBy;
-        const name = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "Unknown";
-        return (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <User className="size-3" />
-            <span>{name}</span>
-          </div>
-        );
-      },
-    },
+
     {
       id: "actions",
       header: () => <div className="text-center">Action</div>,

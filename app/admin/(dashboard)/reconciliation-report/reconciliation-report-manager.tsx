@@ -220,17 +220,7 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
           </div>
         ),
       },
-      {
-        id: "deliveryQty",
-        accessorKey: "deliveryQty",
-        header: () => <div className="text-right whitespace-nowrap">Delivery / Station</div>,
-        size: 130,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums">
-            {fmtQty(row.original.deliveryQty)}
-          </div>
-        ),
-      },
+
       {
         id: "totalDelivery",
         accessorKey: "totalDelivery",
@@ -308,17 +298,7 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
           );
         },
       },
-      {
-        id: "reconciledStation",
-        accessorKey: "reconciledStation",
-        header: () => <div className="whitespace-nowrap">Reconciled Station</div>,
-        size: 140,
-        cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground whitespace-nowrap">
-            {row.original.reconciledStation}
-          </span>
-        ),
-      },
+
       {
         id: "reconciledQty",
         accessorKey: "reconciledQty",

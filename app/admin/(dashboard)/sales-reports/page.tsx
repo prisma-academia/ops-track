@@ -46,7 +46,67 @@ export default async function SalesReportsPage() {
     orderBy: { name: "asc" },
   });
 
-  const serializedReports = JSON.parse(JSON.stringify(salesReports));
+  // Calculate the date range of the fetched sales reports to scope the dippings query
+  let minDate: Date | undefined;
+  let maxDate: Date | undefined;
+
+  if (salesReports.length > 0) {
+    minDate = new Date(Math.min(...salesReports.map(r => r.logDate.getTime())));
+    maxDate = new Date(Math.max(...salesReports.map(r => r.logDate.getTime())));
+    // Extend maxDate to the end of the day
+    maxDate.setHours(23, 59, 59, 999);
+    // Extend minDate to start of the day
+    minDate.setHours(0, 0, 0, 0);
+  }
+
+  // Only fetch dippings if we have reports
+  const dippings = minDate && maxDate ? await prisma.tankDipping.findMany({
+    where: { 
+      tenantId: actor.tenantId,
+      recordedAt: {
+        gte: minDate,
+        lte: maxDate,
+      }
+    },
+    include: {
+      tank: {
+        select: {
+          productType: true,
+          stationId: true,
+        },
+      },
+    },
+  }) : [];
+
+  // Map the dippings directly into the sales reports server-side
+  const mappedReports = salesReports.map((report) => {
+    const logDateStr = report.logDate.toDateString();
+    let openingDip = 0;
+    let closingDip = 0;
+
+    dippings.forEach((dip) => {
+      if (
+        dip.tank?.stationId === report.stationId &&
+        dip.tank?.productType === report.productType
+      ) {
+        if (dip.recordedAt.toDateString() === logDateStr) {
+          if (dip.reason === "OPENING_DIP" || dip.shift === "MORNING") {
+            openingDip += Number(dip.dippingLiters);
+          } else if (dip.reason === "CLOSING_DIP" || dip.shift === "EVENING") {
+            closingDip += Number(dip.dippingLiters);
+          }
+        }
+      }
+    });
+
+    return {
+      ...report,
+      openingDip,
+      closingDip,
+    };
+  });
+
+  const serializedReports = JSON.parse(JSON.stringify(mappedReports));
   const serializedStations = JSON.parse(JSON.stringify(stations));
 
   return (

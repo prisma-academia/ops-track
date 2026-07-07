@@ -12,6 +12,7 @@ import { FormField } from "@/components/form-field";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { CountrySelect } from "@/components/ui/country-select";
 
 const AccountSchema = z
   .object({
@@ -45,7 +46,7 @@ const CompanySchema = z.object({
 type AccountValues = z.infer<typeof AccountSchema>;
 type CompanyValues = z.infer<typeof CompanySchema>;
 
-type Step = "account" | "company" | "preview" | "otp";
+type Step = "account" | "company" | "otp";
 
 export function RegisterWizard() {
   const [step, setStep] = useState<Step>("account");
@@ -82,15 +83,26 @@ export function RegisterWizard() {
           <CompanyForm
             initial={company}
             onBack={() => setStep("account")}
-            onSubmit={(v) => {
+            onSubmit={async (v) => {
+              if (!account) return;
+              setError(null);
+              setPending(true);
+              const res = await apiPost("/api/auth/register/start", { ...account, ...v });
+              setPending(false);
+              if (res.error) {
+                setError(res.error.message);
+                return;
+              }
               setCompany(v);
-              setStep("preview");
+              setInfo("We emailed a 6-digit code. Enter it below.");
+              setResendTimer(30);
+              setStep("otp");
             }}
             pending={pending}
             error={error}
           />
         ) : null}
-        {step === "preview" ? (
+        {/* {step === "preview" ? (
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-4 p-5 rounded-xl border bg-muted/30 text-sm">
               <h3 className="font-medium text-foreground border-b border-border pb-2">Review your details</h3>
@@ -134,7 +146,7 @@ export function RegisterWizard() {
               </Button>
             </div>
           </div>
-        ) : null}
+        ) : null} */}
         {step === "otp" ? (
           <div className="flex flex-col items-center justify-center gap-6">
             <p className="text-sm text-stone-600 text-center">
@@ -142,14 +154,14 @@ export function RegisterWizard() {
             </p>
             <FormField label="Verification code" htmlFor="code">
               <div className="flex justify-center">
-                <InputOTP maxLength={6} value={code} onChange={(val) => setCode(val)}>
+                <InputOTP placeholder="." maxLength={6} value={code} onChange={(val) => setCode(val)}>
                   <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
+                    <InputOTPSlot className="w-10 h-10" index={0} />
+                    <InputOTPSlot className="w-10 h-10" index={1} />
+                    <InputOTPSlot className="w-10 h-10" index={2} />
+                    <InputOTPSlot className="w-10 h-10" index={3} />
+                    <InputOTPSlot className="w-10 h-10" index={4} />
+                    <InputOTPSlot className="w-10 h-10" index={5} />
                   </InputOTPGroup>
                 </InputOTP>
               </div>
@@ -174,7 +186,7 @@ export function RegisterWizard() {
                 if (res.data?.redirectUrl) window.location.assign(res.data.redirectUrl);
               }}
             >
-              {pending ? "Verifying…" : "Create workspace"}
+              {pending ? "Verifying…" : "Verify code"}
             </Button>
             <div className="flex flex-col gap-2 text-sm text-stone-500 mt-2">
               <button
@@ -209,8 +221,8 @@ function Steps({ current }: { current: Step }) {
   const items: Array<{ key: Step; label: string }> = [
     { key: "account", label: "1. Account" },
     { key: "company", label: "2. Company" },
-    { key: "preview", label: "3. Preview" },
-    { key: "otp", label: "4. Verify" },
+    // { key: "preview", label: "3. Preview" },
+    { key: "otp", label: "3. Verify" },
   ];
   return (
     <div className="flex gap-2 text-xs">
@@ -282,11 +294,12 @@ function CompanyForm({
   pending: boolean;
   error: string | null;
 }) {
-  const { register, handleSubmit, formState, watch, setError, clearErrors } = useForm<CompanyValues>({
+  const { register, handleSubmit, formState, watch, setError, clearErrors, setValue } = useForm<CompanyValues>({
     resolver: zodResolver(CompanySchema),
     defaultValues: initial ?? undefined,
   });
   const slug = watch("slug");
+  const country = watch("country");
   const [slugStatus, setSlugStatus] = useState<string | null>(null);
   const [isCheckingSlug, setIsCheckingSlug] = useState(false);
 
@@ -349,8 +362,11 @@ function CompanyForm({
       <FormField label="Postal code" htmlFor="pc" error={formState.errors.postalCode?.message}>
         <Input id="pc" {...register("postalCode")} />
       </FormField>
-      <FormField label="Country (ISO-2)" htmlFor="ctry" error={formState.errors.country?.message}>
-        <Input id="ctry" placeholder="US" {...register("country")} />
+      <FormField label="Country" htmlFor="ctry" error={formState.errors.country?.message}>
+        <CountrySelect 
+          value={country} 
+          onChange={(val) => setValue("country", val, { shouldValidate: true })} 
+        />
       </FormField>
       {error ? <p className="col-span-2 text-sm text-red-600">{error}</p> : null}
       <div className="col-span-2 flex justify-between">
@@ -358,7 +374,7 @@ function CompanyForm({
           Back
         </Button>
         <Button type="submit" disabled={pending || isCheckingSlug || slugStatus !== "Available."}>
-          Continue to preview
+          {pending ? "Submitting..." : "Submit workspace"}
         </Button>
       </div>
     </form>

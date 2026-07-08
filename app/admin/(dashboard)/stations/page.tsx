@@ -7,28 +7,41 @@ import { StationsTable } from "./table";
 export default async function StationsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_STATIONS_READ.key);
 
-  const stations = await prisma.station.findMany({
-    where: { tenantId: actor.tenantId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      tanks: {
-        select: { productType: true, capacity: true },
-      },
-      dailySalesLogs: {
-        where: { status: "APPROVED" },
-        orderBy: { logDate: "desc" },
-        take: 1,
-        select: { amountCash: true, amountPos: true, amountTransfer: true },
-      },
-      waybillAllocations: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: { waybill: { select: { dispatchedAt: true } } },
-      },
-    },
-  });
+  const take = 25;
+  const skip = 0;
 
-  const rows = stations.map((s) => {
+  const [totalCount, rawRows] = await Promise.all([
+    prisma.station.count({
+      where: { tenantId: actor.tenantId },
+    }),
+    prisma.station.findMany({
+      where: { tenantId: actor.tenantId },
+      orderBy: { createdAt: "desc" },
+      take,
+      skip,
+      include: {
+        _count: {
+          select: { staff: true, tanks: true, pumps: true, tickets: true },
+        },
+        tanks: {
+          select: { productType: true, capacity: true },
+        },
+        dailySalesLogs: {
+          where: { status: "APPROVED" as const },
+          orderBy: { logDate: "desc" as const },
+          take: 1,
+          select: { amountCash: true, amountPos: true, amountTransfer: true },
+        },
+        waybillAllocations: {
+          orderBy: { createdAt: "desc" as const },
+          take: 1,
+          select: { waybill: { select: { dispatchedAt: true } } },
+        },
+      },
+    }),
+  ]);
+
+  const rows = rawRows.map((s) => {
     let pmsLiters = 0;
     let agoLiters = 0;
     let lpgLiters = 0;
@@ -58,6 +71,16 @@ export default async function StationsPage() {
     };
   });
 
+  const totalPages = Math.ceil(totalCount / take);
+  const initialMeta = {
+    page: 1,
+    pageSize: take,
+    totalCount,
+    totalPages,
+    hasNextPage: 1 < totalPages,
+    hasPreviousPage: false,
+  };
+
   return (
     <div>
       <DataTableToolbar
@@ -66,7 +89,7 @@ export default async function StationsPage() {
         createLabel="Add Station"
         description="Manage your retail outlet service stations, tanks, and pumps."
       />
-      <StationsTable data={rows} />
+      <StationsTable initialData={rows} initialMeta={initialMeta} />
     </div>
   );
 }

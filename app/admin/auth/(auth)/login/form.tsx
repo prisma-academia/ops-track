@@ -8,6 +8,7 @@ import { z } from "zod";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { FormField } from "@/components/form-field";
 
 const Schema = z.object({
@@ -39,7 +40,7 @@ export function AdminLoginForm() {
         <Input id="email" type="email" autoComplete="email" {...register("email")} />
       </FormField>
       <FormField label={t("password")} htmlFor="password" error={formState.errors.password?.message}>
-        <Input id="password" type="password" autoComplete="current-password" {...register("password")} />
+        <PasswordInput id="password" autoComplete="current-password" {...register("password")} />
       </FormField>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <Button type="submit" disabled={formState.isSubmitting} className="w-full">

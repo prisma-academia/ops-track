@@ -1,11 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
 import Image from 'next/image';
-import logo from '@/assets/logo.png';
-import { Store } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 
 export type StationRow = {
   id: string;
@@ -85,11 +85,25 @@ const columns: ColumnDef<StationRow>[] = [
   },
 ];
 
-export function StationsTable({ data }: { data: StationRow[] }) {
+export function StationsTable({ initialData, initialMeta }: { initialData: StationRow[], initialMeta: any }) {
+  const { data, meta, isLoading, setPage, setPageSize, setInitialData } = usePaginatedQuery<StationRow>({
+    baseUrl: "/api/tenant/stations",
+  });
+
+  useEffect(() => {
+    setInitialData(initialData, initialMeta);
+  }, [initialData, initialMeta, setInitialData]);
+
   return (
     <DataTable
       columns={columns}
-      data={data}
+      data={(data ?? []).length > 0 ? data : initialData}
+      isLoading={isLoading}
+      serverPagination={{
+        ...meta,
+        onPageChange: setPage,
+        onPageSizeChange: setPageSize,
+      }}
       rowHref={(s) => `/admin/stations/${s.id}`}
       filterColumnId="name"
       searchPlaceholder="Search by name…"

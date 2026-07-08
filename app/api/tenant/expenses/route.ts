@@ -5,7 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
+import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 
 const CreateExpenseSchema = z.object({
   stationId: z.string().min(1),
@@ -20,48 +20,76 @@ export async function GET(request: Request) {
   try {
     const actor = await requireTenantActor(PERMISSIONS.TENANT_EXPENSES_READ.key);
     const url = new URL(request.url);
-    const { cursor, take } = parsePagination(url.searchParams);
-    
+    const useOffset = url.searchParams.has("page");
     const stationId = url.searchParams.get("stationId") || undefined;
     const category = url.searchParams.get("category") || undefined;
 
-    const rows = await prisma.expense.findMany({
-      where: {
-        tenantId: actor.tenantId,
-        ...(stationId ? { stationId } : {}),
-        ...(category ? { category: category as any } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      take,
-      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-      include: {
-        station: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-          },
-        },
-        recordedBy: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        approvedBy: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
+    const include = {
+      station: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
         },
       },
-    });
+      recordedBy: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
+      approvedBy: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
+    };
 
-    return ok(rows, buildPageMeta(rows, take));
+    if (useOffset) {
+      const { page, take, skip } = parseOffsetPagination(url.searchParams);
+      const [totalCount, rows] = await Promise.all([
+        prisma.expense.count({
+          where: {
+            tenantId: actor.tenantId,
+            ...(stationId ? { stationId } : {}),
+            ...(category ? { category: category as any } : {}),
+          },
+        }),
+        prisma.expense.findMany({
+          where: {
+            tenantId: actor.tenantId,
+            ...(stationId ? { stationId } : {}),
+            ...(category ? { category: category as any } : {}),
+          },
+          orderBy: { createdAt: "desc" },
+          take,
+          skip,
+          include,
+        }),
+      ]);
+      return ok(rows, buildOffsetPageMeta(totalCount, page, take));
+    } else {
+      const { cursor, take } = parsePagination(url.searchParams);
+  
+      const rows = await prisma.expense.findMany({
+        where: {
+          tenantId: actor.tenantId,
+          ...(stationId ? { stationId } : {}),
+          ...(category ? { category: category as any } : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        take,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        include,
+      });
+  
+      return ok(rows, buildPageMeta(rows, take));
+    }
   } catch (e) {
     return handleError(e);
   }

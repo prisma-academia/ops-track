@@ -23,37 +23,10 @@ export default async function StationDetailPage({
           lastName: true,
         },
       },
-      tanks: {
-        include: {
-          dippings: {
-            orderBy: { recordedAt: "desc" },
-            take: 100,
-          },
-          waybillDippings: {
-            orderBy: { createdAt: "desc" },
-            take: 100,
-          },
-        },
-      },
+      tanks: true,
       pumps: {
         include: {
-          nozzles: {
-            include: {
-              shiftLogs: {
-                orderBy: { shiftDate: "desc" },
-                include: {
-                  attendant: {
-                    select: {
-                      id: true,
-                      firstName: true,
-                      lastName: true,
-                      email: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
+          nozzles: true,
           tank: true,
         },
       },
@@ -65,30 +38,6 @@ export default async function StationDetailPage({
         include: {
           raisedBy: { select: { firstName: true, lastName: true, email: true } },
           approvedBy: { select: { firstName: true, lastName: true, email: true } },
-        },
-      },
-      dailySalesLogs: {
-        orderBy: { logDate: "desc" },
-        take: 30,
-        include: {
-          recordedBy: { select: { firstName: true, lastName: true } },
-        },
-      },
-      waybillAllocations: {
-        orderBy: { createdAt: "desc" },
-        include: {
-          waybill: {
-            include: {
-              recordedBy: { select: { firstName: true, lastName: true } },
-            },
-          },
-        },
-      },
-      expenses: {
-        orderBy: { createdAt: "desc" },
-        include: {
-          recordedBy: { select: { firstName: true, lastName: true } },
-          approvedBy: { select: { firstName: true, lastName: true } },
         },
       },
     },

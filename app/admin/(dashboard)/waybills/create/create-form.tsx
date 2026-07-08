@@ -36,12 +36,13 @@ import {
 import { ChevronsUpDown, Check } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { cn } from "@/lib/utils";
+import { NumberInput } from "@/components/ui/number-input";
 
 const CreateWaybillSchema = z.object({
   number: z.string().min(1, "Waybill number is required"),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   litersLoaded: z.coerce.number().positive("Must be positive"),
-  truckPlate: z.string().min(1, "Truck plate is required"),
+  truckPlate: z.string().min(1, "Truck plate is required").toUpperCase(),
   driverName: z.string().min(1, "Driver name is required"),
   driverPhone: z.string().optional().nullable(),
   supplier: z.string().min(1, "Supplier is required"),
@@ -334,17 +335,18 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
 
             <div className="space-y-2">
               <Label className={form.formState.errors.litersLoaded ? "text-destructive" : ""}>Total Loaded Liters *</Label>
-              <Input
-                type="number"
-                placeholder="e.g. 33000"
-                {...form.register("litersLoaded")}
-                className={form.formState.errors.litersLoaded ? "border-destructive" : ""}
-                onInput={(e) => {
-                  const el = e.currentTarget;
-                  if (el.value.replace(".", "").length > 6) {
-                    el.value = el.value.slice(0, 6);
-                  }
-                }}
+              <Controller
+                control={form.control}
+                name="litersLoaded"
+                render={({ field }) => (
+                  <NumberInput
+                    placeholder="e.g. 33,000"
+                    value={field.value}
+                    onChange={field.onChange}
+                    maxDigits={6}
+                    className={form.formState.errors.litersLoaded ? "border-destructive" : ""}
+                  />
+                )}
               />
             </div>
           </div>
@@ -626,17 +628,24 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
                     {/* Volume allocation */}
                     <div className="space-y-2">
                       <Label className={errorForField?.litersToDispense ? "text-destructive" : ""}>Liters to Dispense *</Label>
-                      <Input
-                        type="number"
-                        placeholder="e.g. 15000"
-                        {...form.register(`allocations.${index}.litersToDispense`)}
-                        className={errorForField?.litersToDispense ? "border-destructive" : ""}
-                        onInput={(e) => {
-                          const el = e.currentTarget;
-                          if (el.value.replace(".", "").length > 5) {
-                            el.value = el.value.slice(0, 5);
-                          }
-                        }}
+                      <Controller
+                        control={form.control}
+                        name={`allocations.${index}.litersToDispense`}
+                        render={({ field }) => (
+                          <NumberInput
+                            placeholder="e.g. 15,000"
+                            value={field.value}
+                            onChange={(val: any) => {
+                              field.onChange(val);
+                              // Auto-calculate transport cost
+                              const cost = parseFloat(form.getValues(`allocations.${index}.costPerLiter`) as any) || 0;
+                              const liters = parseFloat(val) || 0;
+                              form.setValue(`allocations.${index}.transportationCost`, cost * liters, { shouldValidate: true });
+                            }}
+                            maxDigits={6}
+                            className={errorForField?.litersToDispense ? "border-destructive" : ""}
+                          />
+                        )}
                       />
                       {errorForField?.litersToDispense && (
                         <p className="text-xs text-destructive">{errorForField.litersToDispense.message}</p>
@@ -646,19 +655,24 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
                     {/* Cost per liter */}
                     <div className="space-y-2">
                       <Label className={errorForField?.costPerLiter ? "text-destructive" : ""}>Cost Per Liter (₦) *</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="e.g. 980.00"
-                        {...form.register(`allocations.${index}.costPerLiter`)}
-                        className={errorForField?.costPerLiter ? "border-destructive" : ""}
-                        onInput={(e) => {
-                          const el = e.currentTarget;
-                          const digits = el.value.replace(/[^0-9]/g, "");
-                          if (digits.length > 7) {
-                            el.value = el.value.slice(0, el.value.length - (digits.length - 7));
-                          }
-                        }}
+                      <Controller
+                        control={form.control}
+                        name={`allocations.${index}.costPerLiter`}
+                        render={({ field }) => (
+                          <NumberInput
+                            placeholder="e.g. 980.00"
+                            value={field.value}
+                            onChange={(val: any) => {
+                              field.onChange(val);
+                              // Auto-calculate transport cost
+                              const liters = parseFloat(form.getValues(`allocations.${index}.litersToDispense`) as any) || 0;
+                              const cost = parseFloat(val) || 0;
+                              form.setValue(`allocations.${index}.transportationCost`, cost * liters, { shouldValidate: true });
+                            }}
+                            maxDigits={7}
+                            className={errorForField?.costPerLiter ? "border-destructive" : ""}
+                          />
+                        )}
                       />
                       {errorForField?.costPerLiter && (
                         <p className="text-xs text-destructive">{errorForField.costPerLiter.message}</p>
@@ -668,19 +682,19 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
                     {/* Transportation Cost */}
                     <div className="space-y-2">
                       <Label className={errorForField?.transportationCost ? "text-destructive" : ""}>Trans. Cost (₦) *</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="e.g. 50000.00"
-                        {...form.register(`allocations.${index}.transportationCost`)}
-                        className={errorForField?.transportationCost ? "border-destructive" : ""}
-                        onInput={(e) => {
-                          const el = e.currentTarget;
-                          const digits = el.value.replace(/[^0-9]/g, "");
-                          if (digits.length > 7) {
-                            el.value = el.value.slice(0, el.value.length - (digits.length - 7));
-                          }
-                        }}
+                      <Controller
+                        control={form.control}
+                        name={`allocations.${index}.transportationCost`}
+                        render={({ field }) => (
+                          <NumberInput
+                            placeholder="Auto-calculated"
+                            value={field.value}
+                            onChange={field.onChange}
+                            disabled={true}
+                            maxDigits={10}
+                            className={cn("bg-muted/50 cursor-not-allowed", errorForField?.transportationCost ? "border-destructive" : "")}
+                          />
+                        )}
                       />
                       {errorForField?.transportationCost && (
                         <p className="text-xs text-destructive">{errorForField.transportationCost.message}</p>

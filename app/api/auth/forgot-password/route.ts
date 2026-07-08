@@ -159,7 +159,7 @@ export async function POST(request: Request) {
             lastName: client.lastName,
             email: client.email,
           }),
-          resetPath: "/auth/reset-password",
+          resetPath: "/c/auth/reset-password",
         });
         await audit({
           actorType: "SYSTEM",

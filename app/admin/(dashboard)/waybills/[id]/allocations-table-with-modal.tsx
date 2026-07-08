@@ -84,14 +84,14 @@ export function AllocationsTableWithModal({
                   <TableCell className="text-right font-mono">₦{Number(a.transportationCost).toLocaleString()}</TableCell>
                   <TableCell className="text-right font-mono">
                     {received !== null ? (
-                      <span className="font-bold text-emerald-600">{received.toLocaleString()} L</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-500">{received.toLocaleString()} L</span>
                     ) : (
                       <span className="text-muted-foreground italic">Pending</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right font-mono">
                     {variance !== null ? (
-                      <span className={`font-semibold ${variance < 0 ? "text-rose-600" : variance > 0 ? "text-amber-500" : "text-emerald-600"}`}>
+                      <span className={`font-semibold ${variance < 0 ? "text-rose-600 dark:text-rose-500" : variance > 0 ? "text-amber-500 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-500"}`}>
                         {variance > 0 ? "+" : ""}{variance.toLocaleString()} L
                       </span>
                     ) : (
@@ -100,7 +100,7 @@ export function AllocationsTableWithModal({
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className={
-                      a.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50" : "text-amber-600 border-amber-200 bg-amber-50"
+                      a.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20" : "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20"
                     }>
                       {a.status}
                     </Badge>
@@ -125,10 +125,10 @@ export function AllocationsTableWithModal({
               <TableCell className="font-bold">Total Summary</TableCell>
               <TableCell className="text-right font-bold">{totalExpected.toLocaleString()} L</TableCell>
               <TableCell colSpan={2} />
-              <TableCell className="text-right font-bold text-emerald-600">
+              <TableCell className="text-right font-bold text-emerald-600 dark:text-emerald-500">
                 {totalReceived > 0 ? `${totalReceived.toLocaleString()} L` : "0 L"}
               </TableCell>
-              <TableCell className={`text-right font-bold ${totalVariance < 0 ? "text-rose-600" : totalVariance > 0 ? "text-amber-500" : "text-emerald-600"}`}>
+              <TableCell className={`text-right font-bold ${totalVariance < 0 ? "text-rose-600 dark:text-rose-500" : totalVariance > 0 ? "text-amber-500 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-500"}`}>
                 {totalVariance > 0 ? "+" : ""}{totalVariance.toLocaleString()} L
               </TableCell>
               <TableCell colSpan={2} />
@@ -150,7 +150,7 @@ export function AllocationsTableWithModal({
             <div className="space-y-6 py-2">
               <div className="flex items-center justify-between border-b pb-2 text-xs">
                 <span className="text-muted-foreground font-mono">Code: {selectedAlloc.station.code}</span>
-                <Badge variant="outline" className={selectedAlloc.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50" : "text-amber-600 border-amber-200 bg-amber-50"}>
+                <Badge variant="outline" className={selectedAlloc.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20" : "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20"}>
                   {selectedAlloc.status}
                 </Badge>
               </div>
@@ -159,7 +159,7 @@ export function AllocationsTableWithModal({
               <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-muted-foreground/20">
                 {/* Step 1: Dispatched */}
                 <div className="relative">
-                  <span className="absolute -left-[27px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full border bg-emerald-50 border-emerald-300 text-emerald-600 text-[10px]">
+                  <span className="absolute -left-[27px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full border bg-emerald-50 border-emerald-300 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30 text-[10px]">
                     ✓
                   </span>
                   <div>
@@ -172,8 +172,8 @@ export function AllocationsTableWithModal({
                 <div className="relative">
                   <span className={`absolute -left-[27px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full border text-[10px] ${
                     selectedAlloc.status === "DELIVERED"
-                      ? "bg-emerald-50 border-emerald-300 text-emerald-600"
-                      : "bg-amber-50 border-amber-300 text-amber-600"
+                      ? "bg-emerald-50 border-emerald-300 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30"
+                      : "bg-amber-50 border-amber-300 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30"
                   }`}>
                     {selectedAlloc.status === "DELIVERED" ? "✓" : <Clock size={10} />}
                   </span>
@@ -189,7 +189,7 @@ export function AllocationsTableWithModal({
                 <div className="relative">
                   <span className={`absolute -left-[27px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full border text-[10px] ${
                     selectedAlloc.status === "DELIVERED"
-                      ? "bg-emerald-50 border-emerald-300 text-emerald-600"
+                      ? "bg-emerald-50 border-emerald-300 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30"
                       : "bg-muted border-muted-foreground/30 text-muted-foreground"
                   }`}>
                     {selectedAlloc.status === "DELIVERED" ? "✓" : "3"}
@@ -249,13 +249,13 @@ export function AllocationsTableWithModal({
               </div>
 
               {/* Verification Pictures */}
-              {selectedAlloc.status === "DELIVERED" && selectedAlloc.arrivalPictures && selectedAlloc.arrivalPictures.length > 0 && (
+              {selectedAlloc.status === "DELIVERED" && selectedAlloc.arrivalPictures?.length > 0 && (
                 <div className="border-t pt-3 space-y-1.5">
                   <div className="font-semibold text-muted-foreground uppercase text-[9px] tracking-wider">Verification Photos</div>
                   <div className="flex flex-wrap gap-1.5">
                     {selectedAlloc.arrivalPictures.map((pic, idx) => (
                       <div key={idx} className="relative size-12 rounded-lg overflow-hidden border bg-muted shadow-sm shrink-0">
-                        <Image src={pic} alt="Arrival verification" fill className="object-cover" />
+                        <img src={pic} alt="Arrival verification" className="w-full h-full object-cover" />
                       </div>
                     ))}
                   </div>

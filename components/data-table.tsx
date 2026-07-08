@@ -63,6 +63,19 @@ export interface DataTableProps<TData, TValue> {
   empty?: string;
   filterColumnId?: string;
   filterNode?: React.ReactNode;
+  serverPagination?: {
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (size: number) => void;
+  };
+  isLoading?: boolean;
+  onSearchChange?: (value: string) => void;
+  searchValue?: string;
 }
 
 export function DataTable<TData, TValue>({
@@ -78,6 +91,10 @@ export function DataTable<TData, TValue>({
   empty = "No results found.",
   filterColumnId,
   filterNode,
+  serverPagination,
+  isLoading = false,
+  onSearchChange,
+  searchValue,
 }: DataTableProps<TData, TValue>) {
   const router = useRouter();
   const [sorting, setSorting] = React.useState<SortingState>([]);
@@ -98,6 +115,8 @@ export function DataTable<TData, TValue>({
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    manualPagination: !!serverPagination,
+    pageCount: serverPagination?.totalPages ?? -1,
     initialState: {
       pagination: {
         pageSize: pageSize,
@@ -127,10 +146,14 @@ export function DataTable<TData, TValue>({
               <InputGroup className="max-w-xs">
                 <InputGroupInput
                   placeholder={searchPlaceholder}
-                  value={(table.getColumn(effectiveSearchKey)?.getFilterValue() as string) ?? ""}
-                  onChange={(event) =>
-                    table.getColumn(effectiveSearchKey)?.setFilterValue(event.target.value)
-                  }
+                  value={searchValue !== undefined ? searchValue : ((table.getColumn(effectiveSearchKey)?.getFilterValue() as string) ?? "")}
+                  onChange={(event) => {
+                    if (onSearchChange) {
+                      onSearchChange(event.target.value);
+                    } else {
+                      table.getColumn(effectiveSearchKey)?.setFilterValue(event.target.value);
+                    }
+                  }}
                   className="text-sm"
                 />
                 <InputGroupAddon>
@@ -177,7 +200,17 @@ export function DataTable<TData, TValue>({
               </TableHeader>
 
               <TableBody className="divide-y divide-border/30">
-                {table.getRowModel().rows?.length ? (
+                {isLoading ? (
+                  Array.from({ length: serverPagination?.pageSize || pageSize }).map((_, index) => (
+                    <TableRow key={`skeleton-${index}`}>
+                      {columns.map((column, colIndex) => (
+                        <TableCell key={`cell-${colIndex}`} className="px-4 py-3">
+                          <div className="h-5 bg-muted/50 rounded animate-pulse w-full"></div>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : table.getRowModel().rows?.length ? (
                   table.getRowModel().rows.map((row) => {
                     const href = rowHref ? rowHref(row.original) : null;
                     return (
@@ -217,15 +250,19 @@ export function DataTable<TData, TValue>({
                 <span>Rows per page</span>
                 <Select
                   onValueChange={(value) => {
-                    table.setPageSize(Number(value))
+                    if (serverPagination) {
+                      serverPagination.onPageSizeChange(Number(value));
+                    } else {
+                      table.setPageSize(Number(value))
+                    }
                   }}
-                  value={table.getState().pagination.pageSize.toString()}
+                  value={serverPagination ? serverPagination.pageSize.toString() : table.getState().pagination.pageSize.toString()}
                 >
                   <SelectTrigger className="h-8 w-[70px] bg-transparent border-border/40">
-                    <SelectValue placeholder={table.getState().pagination.pageSize} />
+                    <SelectValue placeholder={serverPagination ? serverPagination.pageSize : table.getState().pagination.pageSize} />
                   </SelectTrigger>
                   <SelectContent align="end">
-                    {[5, 10, 20, 30, 40, 50].map((pageSizeOpt) => (
+                    {[5, 10, 20, 25, 30, 40, 50, 100].map((pageSizeOpt) => (
                       <SelectItem key={pageSizeOpt} value={pageSizeOpt.toString()}>
                         {pageSizeOpt}
                       </SelectItem>
@@ -234,7 +271,9 @@ export function DataTable<TData, TValue>({
                 </Select>
               </div>
               <div className="hidden sm:block">
-                Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} - {Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, table.getFilteredRowModel().rows.length)} of {table.getFilteredRowModel().rows.length}
+                Showing {serverPagination 
+                  ? `${(serverPagination.page - 1) * serverPagination.pageSize + 1} - ${Math.min(serverPagination.page * serverPagination.pageSize, serverPagination.totalCount)} of ${serverPagination.totalCount}`
+                  : `${table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} - ${Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, table.getFilteredRowModel().rows.length)} of ${table.getFilteredRowModel().rows.length}`}
               </div>
             </div>
 
@@ -246,8 +285,8 @@ export function DataTable<TData, TValue>({
                       variant="outline"
                       size="icon"
                       className="h-8 w-8 bg-transparent border-border/40 hover:bg-muted"
-                      onClick={() => table.firstPage()}
-                      disabled={!table.getCanPreviousPage()}
+                      onClick={() => serverPagination ? serverPagination.onPageChange(1) : table.firstPage()}
+                      disabled={serverPagination ? !serverPagination.hasPreviousPage : !table.getCanPreviousPage()}
                     >
                       <ChevronFirstIcon size={16} />
                     </Button>
@@ -257,22 +296,22 @@ export function DataTable<TData, TValue>({
                       variant="outline"
                       size="icon"
                       className="h-8 w-8 bg-transparent border-border/40 hover:bg-muted"
-                      onClick={() => table.previousPage()}
-                      disabled={!table.getCanPreviousPage()}
+                      onClick={() => serverPagination ? serverPagination.onPageChange(serverPagination.page - 1) : table.previousPage()}
+                      disabled={serverPagination ? !serverPagination.hasPreviousPage : !table.getCanPreviousPage()}
                     >
                       <ChevronLeftIcon size={16} />
                     </Button>
                   </PaginationItem>
                   <div className="text-xs px-2 text-muted-foreground">
-                    Page {table.getState().pagination.pageIndex + 1} of {Math.max(1, table.getPageCount())}
+                    Page {serverPagination ? serverPagination.page : table.getState().pagination.pageIndex + 1} of {Math.max(1, serverPagination ? serverPagination.totalPages : table.getPageCount())}
                   </div>
                   <PaginationItem>
                     <Button
                       variant="outline"
                       size="icon"
                       className="h-8 w-8 bg-transparent border-border/40 hover:bg-muted"
-                      onClick={() => table.nextPage()}
-                      disabled={!table.getCanNextPage()}
+                      onClick={() => serverPagination ? serverPagination.onPageChange(serverPagination.page + 1) : table.nextPage()}
+                      disabled={serverPagination ? !serverPagination.hasNextPage : !table.getCanNextPage()}
                     >
                       <ChevronRightIcon size={16} />
                     </Button>
@@ -282,8 +321,8 @@ export function DataTable<TData, TValue>({
                       variant="outline"
                       size="icon"
                       className="h-8 w-8 bg-transparent border-border/40 hover:bg-muted"
-                      onClick={() => table.lastPage()}
-                      disabled={!table.getCanNextPage()}
+                      onClick={() => serverPagination ? serverPagination.onPageChange(serverPagination.totalPages) : table.lastPage()}
+                      disabled={serverPagination ? !serverPagination.hasNextPage : !table.getCanNextPage()}
                     >
                       <ChevronLastIcon size={16} />
                     </Button>

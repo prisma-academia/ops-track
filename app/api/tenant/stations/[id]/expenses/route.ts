@@ -5,6 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 
 const CreateExpenseSchema = z.object({
   category: z.enum(["FUEL_FOR_GEN", "MAINTENANCE", "UTILITIES", "STATIONERY", "OTHER"]),
@@ -20,7 +21,9 @@ export async function GET(
 ) {
   try {
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(); // Need baseline access, will check PERMISSIONS.TENANT_EXPENSES_READ if it existed, but we'll allow station staff to read it.
+    const actor = await requireTenantActor();
+    const url = new URL(request.url);
+    const useOffset = url.searchParams.has("page");
 
     const station = await prisma.station.findUnique({
       where: { id: stationId },
@@ -31,8 +34,28 @@ export async function GET(
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
+    const where = { stationId, tenantId: actor.tenantId };
+
+    if (useOffset) {
+      const { page, take, skip } = parseOffsetPagination(url.searchParams);
+      const [totalCount, rows] = await Promise.all([
+        prisma.expense.count({ where }),
+        prisma.expense.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          take,
+          skip,
+          include: {
+            recordedBy: { select: { firstName: true, lastName: true } },
+            approvedBy: { select: { firstName: true, lastName: true } },
+          },
+        }),
+      ]);
+      return ok(rows, buildOffsetPageMeta(totalCount, page, take));
+    }
+
     const expenses = await prisma.expense.findMany({
-      where: { stationId, tenantId: actor.tenantId },
+      where,
       orderBy: { createdAt: "desc" },
     });
 

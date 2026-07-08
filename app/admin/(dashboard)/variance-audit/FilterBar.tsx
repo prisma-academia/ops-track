@@ -64,14 +64,14 @@ export function FilterBar({ stations, currentStationId, currentDate }: FilterBar
     <Card className="shadow-sm">
       <CardContent className="flex flex-col sm:flex-row gap-4 p-4 items-end">
         <div className="flex-1 space-y-1.5 w-full flex flex-col">
-          <label className="text-sm font-medium text-slate-700">Station</label>
+          <label className="text-sm font-medium text-foreground">Station</label>
           <Popover open={stationOpen} onOpenChange={setStationOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 role="combobox"
                 aria-expanded={stationOpen}
-                className="w-full justify-between bg-white hover:bg-slate-50"
+                className="w-full justify-between bg-background hover:bg-accent"
               >
                 {currentStation ? currentStation.name : "Select station..."}
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -106,13 +106,13 @@ export function FilterBar({ stations, currentStationId, currentDate }: FilterBar
         </div>
 
         <div className="flex-1 space-y-1.5 w-full flex flex-col">
-          <label className="text-sm font-medium text-slate-700">Audit Date</label>
+          <label className="text-sm font-medium text-foreground">Audit Date</label>
           <Popover open={dateOpen} onOpenChange={setDateOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant={"outline"}
                 className={cn(
-                  "w-full justify-start text-left font-normal bg-white hover:bg-slate-50",
+                  "w-full justify-start text-left font-normal bg-background hover:bg-accent",
                   !dateObj && "text-muted-foreground"
                 )}
               >

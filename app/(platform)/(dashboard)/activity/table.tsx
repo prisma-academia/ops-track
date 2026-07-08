@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
+import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 
 export type ActivityRow = {
   id: string;
@@ -51,11 +53,25 @@ const columns: ColumnDef<ActivityRow>[] = [
   { accessorKey: "ip", header: "IP", cell: (info) => (info.getValue() as string) ?? "—" },
 ];
 
-export function ActivityTable({ data }: { data: ActivityRow[] }) {
+export function ActivityTable({ initialData, initialMeta }: { initialData: ActivityRow[], initialMeta: any }) {
+  const { data, meta, isLoading, setPage, setPageSize, setInitialData } = usePaginatedQuery<ActivityRow>({
+    baseUrl: "/api/tenant/activity-logs",
+  });
+
+  useEffect(() => {
+    setInitialData(initialData, initialMeta);
+  }, [initialData, initialMeta, setInitialData]);
+
   return (
     <DataTable
       columns={columns}
-      data={data}
+      data={data.length > 0 ? data : initialData}
+      isLoading={isLoading}
+      serverPagination={{
+        ...meta,
+        onPageChange: setPage,
+        onPageSizeChange: setPageSize,
+      }}
       filterColumnId="action"
       searchPlaceholder="Search by action…"
     />

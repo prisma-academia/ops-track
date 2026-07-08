@@ -51,7 +51,7 @@ const EditOrderSchema = z.object({
   litersOrdered: z.coerce.number().positive(),
   supplier: z.string().optional().nullable(),
   sourceDepot: z.string().optional().nullable(),
-  pricePerLitre: z.coerce.number().min(0),
+  pricePerLitre: z.coerce.number().positive("Price per litre is required"),
   loadingCost: z.coerce.number().min(0),
 });
 
@@ -433,7 +433,13 @@ export function OrderDetailsManager({
                         <CommandList>
                           <CommandGroup>
                             {["PMS", "AGO", "DPK", "LPG"].map((p) => (
-                              <CommandItem key={p} value={p.toLowerCase()} onSelect={() => { setValue("productType", p as any); setOpenProductSelect(false); }}>
+                              <CommandItem key={p} value={p.toLowerCase()} onSelect={() => { 
+                                if (watchProductType !== p) {
+                                  setValue("pricePerLitre", "" as any);
+                                }
+                                setValue("productType", p as any); 
+                                setOpenProductSelect(false); 
+                              }}>
                                 {p} {watchProductType === p && <Check className="ml-auto h-4 w-4" />}
                               </CommandItem>
                             ))}
@@ -513,8 +519,11 @@ export function OrderDetailsManager({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="pricePerLitre">Product Cost Per Litre (₦)</Label>
+                  <Label htmlFor="pricePerLitre">Product Cost Per Litre (₦)*</Label>
                   <Input id="pricePerLitre" type="number" {...register("pricePerLitre")} />
+                  {formState.errors.pricePerLitre && (
+                    <p className="text-xs text-red-500">{formState.errors.pricePerLitre.message as string}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="loadingCost">Flat Loading Fee (₦)</Label>

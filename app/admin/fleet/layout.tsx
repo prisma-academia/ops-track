@@ -16,6 +16,7 @@ const FLEET_NAV = [
   { href: "/admin/fleet/orders", key: "orders", icon: "ShoppingCart", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/fleet/transports", key: "transports", icon: "Route", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/fleet/sales", key: "customers", icon: "BadgeDollarSign", permission: PERMISSIONS.TENANT_FLEET_READ.key },
+  { href: "/admin/fleet/payments", key: "payments", icon: "CreditCard", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/fleet/ledger", key: "transactions", icon: "Wallet", permission: PERMISSIONS.TENANT_FLEET_READ.key },
 ];
 
@@ -38,8 +39,6 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
   if (!tenant.activeModules.includes("FLEET")) {
     redirect("/admin/dashboard");
   }
-
-  const tNav = await getTranslations("nav");
   const settings = parseTenantSettings(tenant.settingsJson);
   
   const logoUrl =
@@ -53,13 +52,14 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
     (n) => (!n.permission || hasPermission(actor, n.permission as any))
   ).map(n => {
     let title = n.key;
-    try { title = tNav(n.key as any); } catch(e) {}
+    if (n.key === 'overview') title = 'Overview';
     if (n.key === 'transporters') title = 'Transporters';
     if (n.key === 'trucks') title = 'Trucks';
     if (n.key === 'drivers') title = 'Drivers';
     if (n.key === 'orders') title = 'Orders';
     if (n.key === 'transports') title = 'Logistic Transport';
-    if (n.key === 'sales') title = 'Sales';
+    if (n.key === 'customers') title = 'Sales';
+    if (n.key === 'payments') title = 'Payments';
     if (n.key === 'transactions') title = 'Ledger';
 
     return {
@@ -72,7 +72,7 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
   const label = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email;
   return (
     <DashboardLayoutShell
-      title={`${tenant.name} - Fleet`}
+      title={tenant.name ?? "Tenant"}
       logoUrl={logoUrl}
       navItems={nav}
       user={{ name: label, email: user.email }}

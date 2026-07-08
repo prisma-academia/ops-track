@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { requirePlatformPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { PageHeader, Card } from "@/components/shell";
-import { TenantActions } from "./actions";
+import { TenantActions, TenantModuleToggle } from "./actions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -121,6 +121,21 @@ export default async function TenantDrilldownPage({
               <dt className="text-stone-500">Created At</dt>
               <dd>{tenant.createdAt.toLocaleString()}</dd>
             </dl>
+          </Card>
+
+          <Card>
+            <h2 className="text-sm font-semibold uppercase text-stone-500 mb-4">Modules</h2>
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <p className="text-sm font-medium">Fleet Management</p>
+                <p className="text-xs text-stone-500">Enable fleet, trucks, and order management features.</p>
+              </div>
+              <TenantModuleToggle 
+                tenantId={tenant.id} 
+                module="FLEET" 
+                enabled={tenant.activeModules.includes("FLEET")} 
+              />
+            </div>
           </Card>
         </TabsContent>
 

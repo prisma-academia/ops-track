@@ -836,6 +836,13 @@ enum TransactionCategory {
   OTHER
 }
 
+enum PaymentType {
+  ADVANCE_DEPOSIT
+  PART_PAYMENT
+  FULL_SETTLEMENT
+  DEBT_CLEARANCE
+}
+
 model Transporter {
   id                 String      @id @default(uuid())
   tenantId           String
@@ -860,6 +867,7 @@ model Transporter {
   trucks     Truck[]
   drivers    Driver[]
   transports Transport[]
+  transactions Transaction[]
 
   @@index([tenantId])
   @@map("fleet_transporters")
@@ -885,6 +893,7 @@ model Truck {
 
   transports         Transport[]
   maintenanceHistory TruckMaintenanceHistory[]
+  transactions       Transaction[]
 
   @@index([tenantId])
   @@index([transporterId])
@@ -944,6 +953,7 @@ model Order {
   updatedAt     DateTime    @updatedAt
 
   transports Transport[]
+  transactions Transaction[]
 
   @@index([tenantId])
   @@map("fleet_orders")
@@ -982,6 +992,7 @@ model Transport {
 
   sales    Sale[]
   lossLogs TransportLossLog[]
+  transactions Transaction[]
 
   @@index([tenantId])
   @@index([orderId])
@@ -1050,8 +1061,10 @@ model Transaction {
   tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   type           TransactionType
   category       TransactionCategory
+  paymentType    PaymentType?
   amount         Decimal             @db.Decimal(12, 2)
   paymentPurpose String?
+  description    String?             @db.Text
   reference      String?
   paymentMethod  String? // Bank Transfer, Cash, Cheque
   receiptUrl     String?
@@ -1059,10 +1072,26 @@ model Transaction {
   saleId String?
   sale   Sale?   @relation(fields: [saleId], references: [id], onDelete: SetNull)
 
+  transporterId String?
+  transporter   Transporter? @relation(fields: [transporterId], references: [id], onDelete: SetNull)
+
+  transportId String?
+  transport   Transport? @relation(fields: [transportId], references: [id], onDelete: SetNull)
+
+  truckId String?
+  truck   Truck? @relation(fields: [truckId], references: [id], onDelete: SetNull)
+
+  orderId String?
+  order   Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([saleId])
+  @@index([transporterId])
+  @@index([transportId])
+  @@index([truckId])
+  @@index([orderId])
   @@map("fleet_transactions")
 }

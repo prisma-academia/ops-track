@@ -5,6 +5,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,8 +24,8 @@ const Schema = z.object({
     truckId: z.string().min(1, "Please select a truck"),
     driverId: z.string().min(1, "Please select a driver"),
     destination: z.string().min(1, "Destination is required"),
-    ratePerLiter: z.coerce.number().positive("Rate per liter must be > 0"),
-    litersCarried: z.coerce.number().positive("Liters carried must be > 0"),
+    ratePerLiter: z.coerce.number().min(1, "Rate is required"),
+    litersCarried: z.coerce.number().min(1, "Volume is required"),
   })).min(1, "At least one truck assignment is required"),
 });
 
@@ -68,8 +69,8 @@ export function CreateTransportForm({
         truckId: "",
         driverId: "",
         destination: "",
-        ratePerLiter: 0,
-        litersCarried: 45000,
+        ratePerLiter: "" as any,
+        litersCarried: "" as any,
       }],
     },
   });
@@ -350,13 +351,13 @@ export function CreateTransportForm({
                   <div className="space-y-2">
                     <Label className={fieldErrors?.litersCarried ? "text-destructive" : ""}>Volume (L)*</Label>
                     <Input type="number" placeholder="45000" {...register(`assignments.${index}.litersCarried`)} className={fieldErrors?.litersCarried ? "border-destructive" : ""} />
-                    {fieldErrors?.litersCarried && <p className="text-xs text-destructive">{fieldErrors.litersCarried.message}</p>}
+                    {fieldErrors?.litersCarried && <p className="text-xs text-destructive">{String(fieldErrors.litersCarried.message)}</p>}
                   </div>
 
                   <div className="space-y-2">
                     <Label className={fieldErrors?.ratePerLiter ? "text-destructive" : ""}>Rate (₦)*</Label>
                     <Input type="number" placeholder="15" {...register(`assignments.${index}.ratePerLiter`)} className={fieldErrors?.ratePerLiter ? "border-destructive" : ""} />
-                    {fieldErrors?.ratePerLiter && <p className="text-xs text-destructive">{fieldErrors.ratePerLiter.message}</p>}
+                    {fieldErrors?.ratePerLiter && <p className="text-xs text-destructive">{String(fieldErrors.ratePerLiter.message)}</p>}
                   </div>
                 </div>
                 
@@ -373,14 +374,20 @@ export function CreateTransportForm({
           type="button" 
           variant="outline" 
           className="w-full border-dashed py-8 font-semibold text-muted-foreground hover:text-foreground transition-colors"
-          onClick={() => append({
-            transporterId: "",
-            truckId: "",
-            driverId: "",
-            destination: "",
-            ratePerLiter: 0,
-            litersCarried: Math.min(45000, remainingVolume > 0 ? remainingVolume : 45000)
-          })}
+          onClick={() => {
+            if (selectedOrderId && remainingVolume <= 0) {
+              toast.error("Cannot add another truck: Order volume has been fully allocated.");
+              return;
+            }
+            append({
+              transporterId: "",
+              truckId: "",
+              driverId: "",
+              destination: "",
+              ratePerLiter: "" as any,
+              litersCarried: (remainingVolume > 0 ? Math.min(45000, remainingVolume) : "") as any
+            });
+          }}
         >
           <Plus className="h-5 w-5 mr-2" />
           Add Another Truck Assignment

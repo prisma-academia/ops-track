@@ -38,3 +38,33 @@ export function TenantActions({ tenantId, status }: { tenantId: string; status: 
     </div>
   );
 }
+
+export function TenantModuleToggle({ tenantId, module, enabled }: { tenantId: string; module: string; enabled: boolean }) {
+  const [pending, setPending] = useState(false);
+
+  async function toggle() {
+    setPending(true);
+    const res = await apiPatch(`/api/platform/tenants/${tenantId}`, { 
+      action: "toggle_module", 
+      module, 
+      enabled: !enabled 
+    });
+    setPending(false);
+    if (res.error) {
+      alert(res.error.message);
+      return;
+    }
+    window.location.reload();
+  }
+
+  return (
+    <Button 
+      variant={enabled ? "default" : "outline"} 
+      size="sm" 
+      disabled={pending} 
+      onClick={toggle}
+    >
+      {pending ? "…" : enabled ? "Enabled" : "Disabled"}
+    </Button>
+  );
+}

@@ -1,18 +1,20 @@
 "use client";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sidebar, SidebarContent, SidebarHeader } from "@/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
-import { Building2, CheckCircle, ChevronDown, Truck } from "lucide-react";
+import { Building2, CheckCircle, ChevronsUpDown, Truck } from "lucide-react";
 import { NavItem, NavMain } from "./main-nav";
 import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -25,55 +27,72 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel }: AppSidebarProps) {
+  const { isMobile } = useSidebar();
+  const pathname = usePathname();
+  const isFleet = pathname?.startsWith("/admin/fleet");
+  const moduleName = isFleet ? "Fleet Management" : "Station Management";
+
   return (
     <Sidebar className="px-0 h-full [&_[data-slot=sidebar-inner]]:h-full">
       <div className="flex flex-col gap-4">
         {/* ---------------- Header ---------------- */}
-        <SidebarHeader className="px-4">
-          <DropdownMenu>
-            <DropdownMenuTrigger className="w-full border rounded-md bg-muted/20 hover:bg-muted/40 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20">
-              <div className="flex items-center gap-3 overflow-hidden p-2">
-                <div className="flex items-center justify-center size-10 rounded-lg text-primary shrink-0">
-                  {logoUrl ? (
-                    <img
-                      src={logoUrl}
-                      alt={`${title} Logo`}
-                      className="size-10 rounded-md object-contain bg-white"
-                    />
-                  ) : (
-                    <Image
-                      src="/assets/icons/asa-oil-logo.png"
-                      alt="ASA Oil Logo"
-                      width={40}
-                      height={40}
-                      className="rounded-md"
-                    />
-                  )}
-                </div>
-                <div className="flex flex-col items-start truncate min-w-0 flex-1">
-                  <span className="text-sm font-semibold font-heading truncate w-full text-left">{title}</span>
-    
-                </div>
-                <ChevronDown className="size-4 text-muted-foreground shrink-0 mr-1" />
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
-              <DropdownMenuLabel className="text-xs text-muted-foreground uppercase tracking-wider">Modules</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <Link href="/admin/dashboard" className="w-full">
-                <DropdownMenuItem className="cursor-pointer">
-                  <Image src="/assets/icons/gps.png" alt="Fleet" width={30} height={30} />
-                  <span>Station Management</span>
-                </DropdownMenuItem>
-              </Link>
-              <Link href="/admin/fleet" className="w-full">
-                <DropdownMenuItem className="cursor-pointer">
-                  <Image src="/assets/icons/gas-truck.png" alt="Fleet" width={30} height={30} />
-                  <span>Fleet Management</span>
-                </DropdownMenuItem>
-              </Link>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <SidebarHeader>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <SidebarMenuButton
+                    size="lg"
+                    className="bg-muted/40 hover:bg-muted/60 dark:bg-muted/20 dark:hover:bg-muted/30 border border-border/50 transition-colors data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                  >
+                    {logoUrl && (
+                      <div className="flex aspect-square size-8 items-center justify-center overflow-hidden">
+                        <img
+                          src={logoUrl}
+                          alt={`${title} Logo`}
+                          className="size-8 object-contain"
+                        />
+                      </div>
+                    )}
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-medium">{title}</span>
+                      <span className="truncate text-xs text-muted-foreground">{moduleName}</span>
+                    </div>
+                    <ChevronsUpDown className="ml-auto size-4" />
+                  </SidebarMenuButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56 rounded-lg"
+                  align="start"
+                  side={isMobile ? "bottom" : "right"}
+                  sideOffset={4}
+                >
+                  <DropdownMenuLabel className="text-xs text-muted-foreground uppercase tracking-wider">
+                    Features
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <Link href="/admin/dashboard" className="w-full">
+                    <DropdownMenuItem className="cursor-pointer gap-2 p-2">
+                      <div className="flex size-6 items-center justify-center rounded-md border">
+                        <Image src="/assets/icons/gps.png" alt="Station" width={14} height={14} className="shrink-0" />
+                      </div>
+                      Station Management
+                      <DropdownMenuShortcut>⌘1</DropdownMenuShortcut>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/admin/fleet" className="w-full">
+                    <DropdownMenuItem className="cursor-pointer gap-2 p-2">
+                      <div className="flex size-6 items-center justify-center rounded-md border">
+                        <Image src="/assets/icons/gas-truck.png" alt="Fleet" width={14} height={14} className="shrink-0" />
+                      </div>
+                      Fleet Management
+                      <DropdownMenuShortcut>⌘2</DropdownMenuShortcut>
+                    </DropdownMenuItem>
+                  </Link>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </SidebarMenuItem>
+          </SidebarMenu>
         </SidebarHeader>
 
         {/* ---------------- Content ---------------- */}

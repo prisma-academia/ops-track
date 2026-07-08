@@ -42,7 +42,7 @@ const CreateWaybillSchema = z.object({
   number: z.string().min(1, "Waybill number is required"),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   litersLoaded: z.coerce.number().positive("Must be positive"),
-  truckPlate: z.string().min(1, "Truck plate is required"),
+  truckPlate: z.string().min(1, "Truck plate is required").toUpperCase(),
   driverName: z.string().min(1, "Driver name is required"),
   driverPhone: z.string().optional().nullable(),
   supplier: z.string().min(1, "Supplier is required"),

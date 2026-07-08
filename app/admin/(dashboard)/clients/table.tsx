@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
+import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 
 export type ClientRow = {
   id: string;
@@ -32,11 +34,25 @@ const columns: ColumnDef<ClientRow>[] = [
   },
 ];
 
-export function ClientsTable({ data }: { data: ClientRow[] }) {
+export function ClientsTable({ initialData, initialMeta }: { initialData: ClientRow[], initialMeta: any }) {
+  const { data, meta, isLoading, setPage, setPageSize, setInitialData } = usePaginatedQuery<ClientRow>({
+    baseUrl: "/api/tenant/clients",
+  });
+
+  useEffect(() => {
+    setInitialData(initialData, initialMeta);
+  }, [initialData, initialMeta, setInitialData]);
+
   return (
     <DataTable
       columns={columns}
-      data={data}
+      data={data.length > 0 ? data : initialData}
+      isLoading={isLoading}
+      serverPagination={{
+        ...meta,
+        onPageChange: setPage,
+        onPageSizeChange: setPageSize,
+      }}
       rowHref={(c) => `/admin/clients/${c.id}`}
       filterColumnId="email"
       searchPlaceholder="Search by email…"

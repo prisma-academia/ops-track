@@ -5,7 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
+import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 
 const CreateBody = z.object({
   email: z.email(),
@@ -19,14 +19,30 @@ export async function GET(request: Request) {
   try {
     const actor = await requireTenantActor(PERMISSIONS.TENANT_CLIENTS_READ.key);
     const url = new URL(request.url);
-    const { cursor, take } = parsePagination(url.searchParams);
-    const rows = await prisma.client.findMany({
-      where: { tenantId: actor.tenantId },
-      orderBy: { createdAt: "desc" },
-      take,
-      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-    });
-    return ok(rows, buildPageMeta(rows, take));
+    const useOffset = url.searchParams.has("page");
+    
+    if (useOffset) {
+      const { page, take, skip } = parseOffsetPagination(url.searchParams);
+      const [totalCount, rows] = await Promise.all([
+        prisma.client.count({ where: { tenantId: actor.tenantId } }),
+        prisma.client.findMany({
+          where: { tenantId: actor.tenantId },
+          orderBy: { createdAt: "desc" },
+          take,
+          skip,
+        }),
+      ]);
+      return ok(rows, buildOffsetPageMeta(totalCount, page, take));
+    } else {
+      const { cursor, take } = parsePagination(url.searchParams);
+      const rows = await prisma.client.findMany({
+        where: { tenantId: actor.tenantId },
+        orderBy: { createdAt: "desc" },
+        take,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      });
+      return ok(rows, buildPageMeta(rows, take));
+    }
   } catch (e) {
     return handleError(e);
   }

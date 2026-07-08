@@ -2,33 +2,39 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { WaybillsManager } from "./waybills-manager";
+import { buildOffsetPageMeta } from "@/lib/api/pagination";
 
 export default async function WaybillsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_READ.key);
+  const take = 25;
 
-  const waybills = await prisma.waybill.findMany({
-    where: { tenantId: actor.tenantId },
-    orderBy: { dispatchedAt: "desc" },
-    include: {
-      allocations: {
-        include: {
-          station: {
-            select: {
-              id: true,
-              name: true,
-              code: true,
+  const [totalCount, waybills] = await Promise.all([
+    prisma.waybill.count({ where: { tenantId: actor.tenantId } }),
+    prisma.waybill.findMany({
+      where: { tenantId: actor.tenantId },
+      orderBy: { dispatchedAt: "desc" },
+      take,
+      include: {
+        allocations: {
+          include: {
+            station: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
             },
           },
         },
-      },
-      recordedBy: {
-        select: {
-          firstName: true,
-          lastName: true,
+        recordedBy: {
+          select: {
+            firstName: true,
+            lastName: true,
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
 
   const stations = await prisma.station.findMany({
     where: { tenantId: actor.tenantId },
@@ -47,7 +53,7 @@ export default async function WaybillsPage() {
     
     let combinedStatus = "DISPATCHED";
     if (allDelivered) combinedStatus = "COMPLETED";
-    else if (anyDelivered) combinedStatus = "DELIVERED"; // In this system DELIVERED might mean partially delivered, or we can use "DELIVERED" for any and COMPLETED for all. Wait, type only allows "DISPATCHED" | "DELIVERED" | "COMPLETED"
+    else if (anyDelivered) combinedStatus = "DELIVERED";
 
     return {
       id: w.id,
@@ -65,11 +71,13 @@ export default async function WaybillsPage() {
     };
   });
 
+  const initialMeta = buildOffsetPageMeta(totalCount, 1, take);
   const serializedStations = JSON.parse(JSON.stringify(stations));
 
   return (
     <WaybillsManager
       initialWaybills={rows}
+      initialMeta={initialMeta}
       stations={serializedStations}
     />
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -8,13 +8,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
 import { z } from "zod";
 import { apiPost, apiPatch } from "@/lib/client/api";
+import { DataTable } from "@/components/data-table";
+import type { ColumnDef } from "@tanstack/react-table";
+import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { FormField, TextInput } from "@/components/form-field";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -304,25 +307,297 @@ export function StationDetailsManager({
     openAddTankDialog();
   };
 
-  // Flatten and sort data
-  const regularDippings = station.tanks
-    .flatMap((t: any) => t.dippings.map((d: any) => ({ ...d, tank: t, reason: d.reason || "ROUTINE" })));
+  // ── Server-paginated queries for each tab ──
+  const dippingsQuery = usePaginatedQuery<any>({
+    baseUrl: `/api/tenant/stations/${station.id}/dippings`,
+    syncWithUrl: false,
+    enabled: activeTab === "dippings",
+  });
+  const shiftsQuery = usePaginatedQuery<any>({
+    baseUrl: `/api/tenant/stations/${station.id}/shifts`,
+    syncWithUrl: false,
+    enabled: activeTab === "shifts",
+  });
+  const waybillsQuery = usePaginatedQuery<any>({
+    baseUrl: `/api/tenant/stations/${station.id}/waybills`,
+    syncWithUrl: false,
+    enabled: activeTab === "waybills",
+  });
+  const expensesQuery = usePaginatedQuery<any>({
+    baseUrl: `/api/tenant/stations/${station.id}/expenses`,
+    syncWithUrl: false,
+    enabled: activeTab === "expenses",
+  });
+  const salesQuery = usePaginatedQuery<any>({
+    baseUrl: `/api/tenant/stations/${station.id}/sales-logs`,
+    syncWithUrl: false,
+    enabled: activeTab === "sales",
+  });
 
-  const waybillDips = station.tanks
-    .flatMap((t: any) => (t.waybillDippings || []).map((d: any) => ({
-      ...d,
-      tank: t,
-      recordedAt: d.createdAt,
-      dippingLiters: d.afterLiters !== null ? Number(d.afterLiters) - Number(d.beforeLiters) : 0,
-      reason: "WAYBILL DISCHARGE"
-    })));
+  // ── Column definitions ──
+  const dippingsColumns: ColumnDef<any>[] = [
+    {
+      accessorKey: "recorded_at",
+      header: "Date & Time",
+      cell: ({ row }) => <span className="text-foreground/90">{formatHumanReadableDate(row.original.recorded_at || row.original.recordedAt)}</span>,
+    },
+    {
+      id: "tank_name",
+      header: "Tank",
+      cell: ({ row }) => <span className="font-medium text-foreground">{row.original.tank_name || row.original.tank?.name || "—"}</span>,
+    },
+    {
+      id: "product_type",
+      header: "Product",
+      cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.product_type || row.original.tank?.productType || "—"}</span>,
+    },
+    {
+      id: "reason",
+      header: () => <div className="text-center">Reason</div>,
+      cell: ({ row }) => (
+        <div className="text-center">
+          <Badge variant="outline" className="text-[10px] font-semibold">{row.original.reason || "ROUTINE"}</Badge>
+        </div>
+      ),
+    },
+    {
+      id: "volume",
+      header: () => <div className="text-right">Volume Recorded</div>,
+      cell: ({ row }) => {
+        const liters = Number(row.original.dipping_liters ?? row.original.dippingLiters ?? 0);
+        const productType = row.original.product_type || row.original.tank?.productType;
+        return <div className="text-right font-mono font-medium text-foreground">{liters.toLocaleString()} {productType === "LPG" ? "KG" : "L"}</div>;
+      },
+    },
+  ];
 
-  const allDippings = [...regularDippings, ...waybillDips]
-    .sort((a: any, b: any) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
+  const shiftsColumns: ColumnDef<any>[] = [
+    {
+      accessorKey: "shiftDate",
+      header: "Date",
+      cell: ({ row }) => <span className="text-foreground/90">{formatHumanReadableDate(row.original.shiftDate)}</span>,
+    },
+    {
+      id: "attendant",
+      header: "Attendant",
+      cell: ({ row }) => {
+        const a = row.original.attendant;
+        return <span className="font-medium text-foreground">{a ? `${a.firstName ?? ""} ${a.lastName ?? ""}`.trim() : "Unknown"}</span>;
+      },
+    },
+    {
+      id: "dispenser",
+      header: "Dispenser",
+      cell: ({ row }) => {
+        const nozzle = row.original.nozzle;
+        const pump = nozzle?.pump;
+        return <span className="text-muted-foreground">{pump?.name ?? "—"} - {nozzle?.name ?? "—"}</span>;
+      },
+    },
+    {
+      id: "meters",
+      header: () => <div className="text-right">Meters (Op / Cl)</div>,
+      cell: ({ row }) => {
+        const active = row.original.closingMeter === null;
+        return (
+          <div className="text-right font-mono text-xs text-muted-foreground">
+            {Number(row.original.openingMeter).toLocaleString()} / {active ? "—" : Number(row.original.closingMeter).toLocaleString()}
+          </div>
+        );
+      },
+    },
+    {
+      id: "volume_sold",
+      header: () => <div className="text-right">Volume Sold</div>,
+      cell: ({ row }) => {
+        const active = row.original.closingMeter === null;
+        return <div className="text-right font-semibold text-foreground">{active ? "—" : `${Number(row.original.litersSold).toLocaleString()} L`}</div>;
+      },
+    },
+    {
+      id: "status",
+      header: () => <div className="text-center">Status</div>,
+      cell: ({ row }) => {
+        const active = row.original.closingMeter === null;
+        const reconciled = !!row.original.reconciledAt;
+        return (
+          <div className="text-center">
+            {active ? (
+              <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900">Active</Badge>
+            ) : reconciled ? (
+              <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900">Reconciled</Badge>
+            ) : (
+              <Badge variant="outline" className="text-stone-600 border-stone-200 bg-stone-50 dark:bg-stone-900/30 dark:border-stone-800">Closed</Badge>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
 
-  const allShiftLogs = station.pumps
-    .flatMap((p: any) => p.nozzles.flatMap((n: any) => n.shiftLogs.map((log: any) => ({ ...log, nozzle: n, pump: p }))))
-    .sort((a: any, b: any) => new Date(b.shiftDate).getTime() - new Date(a.shiftDate).getTime());
+  const waybillsColumns: ColumnDef<any>[] = [
+    {
+      id: "date",
+      header: "Date",
+      cell: ({ row }) => <span className="text-foreground/90">{formatHumanReadableDate(row.original.waybill?.dispatchedAt)}</span>,
+    },
+    {
+      id: "number",
+      header: "Waybill No.",
+      cell: ({ row }) => <span className="font-mono text-xs font-semibold">{row.original.waybill?.number}</span>,
+    },
+    {
+      id: "driver",
+      header: "Driver / Truck",
+      cell: ({ row }) => <span className="text-muted-foreground text-xs">{row.original.waybill?.driverName} • {row.original.waybill?.truckPlate}</span>,
+    },
+    {
+      id: "volume_dispatched",
+      header: () => <div className="text-right">Volume Dispatched</div>,
+      cell: ({ row }) => <div className="text-right font-mono font-medium">{Number(row.original.litersToDispense || 0).toLocaleString()} L</div>,
+    },
+    {
+      id: "variance",
+      header: () => <div className="text-right">Variance</div>,
+      cell: ({ row }) => {
+        const dispatched = Number(row.original.litersToDispense) || 0;
+        const received = row.original.litersReceived ? Number(row.original.litersReceived) : null;
+        const variance = received !== null ? received - dispatched : null;
+        return (
+          <div className="text-right font-mono font-medium">
+            {variance === null ? <span className="text-muted-foreground">—</span> : (
+              <span className={variance < 0 ? "text-rose-600" : "text-emerald-600"}>
+                {variance > 0 ? "+" : ""}{variance.toLocaleString()} L
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: "status",
+      header: () => <div className="text-center">Status</div>,
+      cell: ({ row }) => (
+        <div className="text-center">
+          <Badge variant="outline" className={
+            row.original.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" :
+            row.original.status === "IN_TRANSIT" ? "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/30" : ""
+          }>{row.original.status}</Badge>
+        </div>
+      ),
+    },
+  ];
+
+  const expensesColumns: ColumnDef<any>[] = [
+    {
+      accessorKey: "createdAt",
+      header: "Date",
+      cell: ({ row }) => <span className="text-foreground/90">{formatHumanReadableDate(row.original.createdAt)}</span>,
+    },
+    {
+      accessorKey: "category",
+      header: "Category",
+      cell: ({ row }) => <Badge variant="secondary" className="text-[10px] font-medium">{row.original.category}</Badge>,
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+      cell: ({ row }) => <span className="text-muted-foreground truncate max-w-xs block">{row.original.description}</span>,
+    },
+    {
+      id: "amount",
+      header: () => <div className="text-right">Amount</div>,
+      cell: ({ row }) => <div className="text-right font-medium">₦{Number(row.original.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>,
+    },
+    {
+      accessorKey: "status",
+      header: () => <div className="text-center">Status</div>,
+      cell: ({ row }) => (
+        <div className="text-center">
+          <Badge variant="outline" className={
+            row.original.status === "APPROVED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" :
+            row.original.status === "REJECTED" ? "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30" :
+            "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30"
+          }>{row.original.status}</Badge>
+        </div>
+      ),
+    },
+  ];
+
+  const salesColumns: ColumnDef<any>[] = [
+    {
+      accessorKey: "logDate",
+      header: "Date",
+      cell: ({ row }) => {
+        const parts = formatHumanReadableDate(row.original.logDate).split(" ");
+        return <span className="text-foreground/90">{parts.slice(0, 3).join(" ")}</span>;
+      },
+    },
+    {
+      accessorKey: "productType",
+      header: "Product",
+      cell: ({ row }) => <Badge variant="secondary" className="text-[10px] font-medium font-mono">{row.original.productType}</Badge>,
+    },
+    {
+      id: "volume_sold",
+      header: () => <div className="text-right">Volume Sold</div>,
+      cell: ({ row }) => <div className="text-right font-medium">{Number(row.original.litersSold).toLocaleString()} L</div>,
+    },
+    {
+      id: "cash",
+      header: () => <div className="text-right">Cash</div>,
+      cell: ({ row }) => <div className="text-right text-muted-foreground">₦{Number(row.original.amountCash).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>,
+    },
+    {
+      id: "digital",
+      header: () => <div className="text-right">POS / Transfer</div>,
+      cell: ({ row }) => {
+        const digital = Number(row.original.amountPos) + Number(row.original.amountTransfer);
+        return <div className="text-right text-muted-foreground">₦{digital.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>;
+      },
+    },
+    {
+      id: "total",
+      header: () => <div className="text-right">Total Revenue</div>,
+      cell: ({ row }) => {
+        const total = Number(row.original.amountCash) + Number(row.original.amountPos) + Number(row.original.amountTransfer);
+        return <div className="text-right font-bold text-foreground">₦{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>;
+      },
+    },
+    {
+      accessorKey: "status",
+      header: () => <div className="text-center">Status</div>,
+      cell: ({ row }) => {
+        const flags: string[] = [];
+        if (row.original.flaggedAmount) flags.push("Amount");
+        if (row.original.flaggedLiters) flags.push("Liters");
+        if (row.original.flaggedReceipt) flags.push("Receipt");
+        return (
+          <div className="flex flex-col items-center gap-1">
+            {row.original.status === "APPROVED" ? (
+              <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 text-[10px] font-semibold">Approved</Badge>
+            ) : row.original.status === "REJECTED" ? (
+              <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50 text-[10px] font-semibold">Rejected</Badge>
+            ) : (
+              <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 text-[10px] font-semibold">Pending</Badge>
+            )}
+            {flags.length > 0 && (
+              <span className="text-[9px] text-rose-500 font-semibold leading-none">Flagged: {flags.join(", ")}</span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: "recorded_by",
+      header: () => <div className="text-center">Recorded By</div>,
+      cell: ({ row }) => {
+        const r = row.original.recordedBy;
+        const recorder = r ? `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() : "Unknown";
+        return <div className="text-center text-muted-foreground">{recorder}</div>;
+      },
+    },
+  ];
 
   // Derive manager from staff (take first or show none)
   const manager = station.staff && station.staff.length > 0 ? station.staff[0] : null;
@@ -662,265 +937,77 @@ export function StationDetailsManager({
 
         {/* ---------------- DIPPINGS TAB ---------------- */}
         <TabsContent value="dippings" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm py-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-muted/30 border-b border-border/50">
-                  <tr>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Date & Time</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Tank</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Product</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Reason</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Volume Recorded</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {allDippings.length === 0 ? (
-                    <tr><td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">No dipping records found.</td></tr>
-                  ) : (
-                    allDippings.map((dip: any) => (
-                      <tr key={dip.id} className="hover:bg-muted/10">
-                        <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(dip.recordedAt)}</td>
-                        <td className="px-6 py-4 font-medium text-foreground">{dip.tank.name}</td>
-                        <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{dip.tank.productType}</td>
-                        <td className="px-6 py-4 text-center">
-                          <Badge variant="outline" className="text-[10px] font-semibold">{dip.reason || "ROUTINE"}</Badge>
-                        </td>
-                        <td className="px-6 py-4 text-right font-mono font-medium text-foreground">{Number(dip.dippingLiters).toLocaleString()} {dip.tank.productType === "LPG" ? "KG" : "L"}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <DataTable
+            columns={dippingsColumns}
+            data={(dippingsQuery.data ?? [])}
+            isLoading={dippingsQuery.isLoading}
+            serverPagination={{
+              ...dippingsQuery.meta,
+              onPageChange: dippingsQuery.setPage,
+              onPageSizeChange: dippingsQuery.setPageSize,
+            }}
+            empty="No dipping records found."
+          />
         </TabsContent>
 
         {/* ---------------- SHIFTS TAB ---------------- */}
         <TabsContent value="shifts" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm py-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-muted/30 border-b border-border/50">
-                  <tr>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Attendant</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Dispenser</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Meters (Op / Cl)</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Volume Sold</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {allShiftLogs.length === 0 ? (
-                    <tr><td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">No shift logs found.</td></tr>
-                  ) : (
-                    allShiftLogs.map((log: any) => {
-                      const reconciled = !!log.reconciledAt;
-                      const active = log.closingMeter === null;
-                      
-                      return (
-                         <tr key={log.id} className="hover:bg-muted/10">
-                          <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(log.shiftDate)}</td>
-                          <td className="px-6 py-4 font-medium text-foreground">
-                            {log.attendant ? `${log.attendant.firstName ?? ""} ${log.attendant.lastName ?? ""}`.trim() : "Unknown"}
-                          </td>
-                          <td className="px-6 py-4 text-muted-foreground">
-                            {log.pump.name} - {log.nozzle.name}
-                          </td>
-                          <td className="px-6 py-4 text-right font-mono text-xs text-muted-foreground">
-                            {Number(log.openingMeter).toLocaleString()} / {active ? "—" : Number(log.closingMeter).toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4 text-right font-semibold text-foreground">
-                            {active ? "—" : `${Number(log.litersSold).toLocaleString()} L`}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            {active ? (
-                              <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900">Active</Badge>
-                            ) : reconciled ? (
-                              <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900">Reconciled</Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-stone-600 border-stone-200 bg-stone-50 dark:bg-stone-900/30 dark:border-stone-800">Closed</Badge>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <DataTable
+            columns={shiftsColumns}
+            data={(shiftsQuery.data ?? [])}
+            isLoading={shiftsQuery.isLoading}
+            serverPagination={{
+              ...shiftsQuery.meta,
+              onPageChange: shiftsQuery.setPage,
+              onPageSizeChange: shiftsQuery.setPageSize,
+            }}
+            empty="No shift logs found."
+          />
         </TabsContent>
 
         {/* ---------------- WAYBILLS TAB ---------------- */}
         <TabsContent value="waybills" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm py-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-muted/30 border-b border-border/50">
-                  <tr>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Waybill No.</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Driver / Truck</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Volume Dispatched</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Variance</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {(!station.waybillAllocations || station.waybillAllocations.length === 0) ? (
-                    <tr><td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">No waybill records found.</td></tr>
-                  ) : (
-                    station.waybillAllocations.map((a: any) => {
-                      const w = a.waybill;
-                      const dispatched = Number(a.litersToDispense) || 0;
-                      const received = a.litersReceived ? Number(a.litersReceived) : null;
-                      const variance = received !== null ? received - dispatched : null;
-                      
-                      return (
-                        <tr key={a.id} className="hover:bg-muted/10">
-                          <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(w.dispatchedAt)}</td>
-                          <td className="px-6 py-4 font-mono text-xs font-semibold">{w.number}</td>
-                          <td className="px-6 py-4 text-muted-foreground text-xs">{w.driverName} • {w.truckPlate}</td>
-                          <td className="px-6 py-4 text-right font-mono font-medium">{dispatched.toLocaleString()} L</td>
-                          <td className="px-6 py-4 text-right font-mono font-medium">
-                            {variance === null ? (
-                              <span className="text-muted-foreground">—</span>
-                            ) : (
-                              <span className={variance < 0 ? "text-rose-600" : "text-emerald-600"}>
-                                {variance > 0 ? "+" : ""}{variance.toLocaleString()} L
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <Badge variant="outline" className={
-                              a.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" : 
-                              a.status === "IN_TRANSIT" ? "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/30" : ""
-                            }>
-                              {a.status}
-                            </Badge>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <DataTable
+            columns={waybillsColumns}
+            data={(waybillsQuery.data ?? [])}
+            isLoading={waybillsQuery.isLoading}
+            serverPagination={{
+              ...waybillsQuery.meta,
+              onPageChange: waybillsQuery.setPage,
+              onPageSizeChange: waybillsQuery.setPageSize,
+            }}
+            empty="No waybill records found."
+          />
         </TabsContent>
 
         {/* ---------------- EXPENSES TAB ---------------- */}
         <TabsContent value="expenses" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm py-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-muted/30 border-b border-border/50">
-                  <tr>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Category</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Description</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Amount</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {(!station.expenses || station.expenses.length === 0) ? (
-                    <tr><td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">No expense records found.</td></tr>
-                  ) : (
-                    station.expenses.map((e: any) => (
-                      <tr key={e.id} className="hover:bg-muted/10">
-                        <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(e.createdAt)}</td>
-                        <td className="px-6 py-4">
-                          <Badge variant="secondary" className="text-[10px] font-medium">{e.category}</Badge>
-                        </td>
-                        <td className="px-6 py-4 text-muted-foreground truncate max-w-xs">{e.description}</td>
-                        <td className="px-6 py-4 text-right font-medium">₦{Number(e.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td className="px-6 py-4 text-center">
-                          <Badge variant="outline" className={
-                            e.status === "APPROVED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" : 
-                            e.status === "REJECTED" ? "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30" : 
-                            "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30"
-                          }>
-                            {e.status}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <DataTable
+            columns={expensesColumns}
+            data={(expensesQuery.data ?? [])}
+            isLoading={expensesQuery.isLoading}
+            serverPagination={{
+              ...expensesQuery.meta,
+              onPageChange: expensesQuery.setPage,
+              onPageSizeChange: expensesQuery.setPageSize,
+            }}
+            empty="No expense records found."
+          />
         </TabsContent>
 
         {/* ---------------- SALES TAB ---------------- */}
         <TabsContent value="sales" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm py-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-muted/30 border-b border-border/50">
-                  <tr>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Product</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Volume Sold</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Cash</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">POS / Transfer</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Total Revenue</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Status</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Recorded By</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {(!station.dailySalesLogs || station.dailySalesLogs.length === 0) ? (
-                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">No sales records found.</td></tr>
-                  ) : (
-                    station.dailySalesLogs.map((log: any) => {
-                      const totalRevenue = Number(log.amountCash) + Number(log.amountPos) + Number(log.amountTransfer);
-                      const digitalRevenue = Number(log.amountPos) + Number(log.amountTransfer);
-                      const recorder = log.recordedBy ? `${log.recordedBy.firstName ?? ""} ${log.recordedBy.lastName ?? ""}`.trim() : "Unknown";
-
-                      const flags = [];
-                      if (log.flaggedAmount) flags.push("Amount");
-                      if (log.flaggedLiters) flags.push("Liters");
-                      if (log.flaggedReceipt) flags.push("Receipt");
-
-                      return (
-                        <tr key={log.id} className="hover:bg-muted/10">
-                          <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(log.logDate).split(" ")[0] + " " + formatHumanReadableDate(log.logDate).split(" ")[1] + " " + formatHumanReadableDate(log.logDate).split(" ")[2]}</td>
-                          <td className="px-6 py-4">
-                            <Badge variant="secondary" className="text-[10px] font-medium font-mono">{log.productType}</Badge>
-                          </td>
-                          <td className="px-6 py-4 text-right font-medium">{Number(log.litersSold).toLocaleString()} L</td>
-                          <td className="px-6 py-4 text-right text-muted-foreground">₦{Number(log.amountCash).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="px-6 py-4 text-right text-muted-foreground">₦{digitalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="px-6 py-4 text-right font-bold text-foreground">₦{totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="px-6 py-4 text-center">
-                            <div className="flex flex-col items-center gap-1">
-                              {log.status === "APPROVED" ? (
-                                <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 text-[10px] font-semibold">Approved</Badge>
-                              ) : log.status === "REJECTED" ? (
-                                <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50 text-[10px] font-semibold">Rejected</Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 text-[10px] font-semibold">Pending</Badge>
-                              )}
-                              {flags.length > 0 && (
-                                <span className="text-[9px] text-rose-500 font-semibold leading-none">
-                                  Flagged: {flags.join(", ")}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-center text-muted-foreground">{recorder}</td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <DataTable
+            columns={salesColumns}
+            data={(salesQuery.data ?? [])}
+            isLoading={salesQuery.isLoading}
+            serverPagination={{
+              ...salesQuery.meta,
+              onPageChange: salesQuery.setPage,
+              onPageSizeChange: salesQuery.setPageSize,
+            }}
+            empty="No sales records found."
+          />
         </TabsContent>
 
       </Tabs>

@@ -5,6 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 
 const CreateSalesLogSchema = z.object({
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
@@ -24,19 +25,41 @@ export async function GET(
   try {
     const { id: stationId } = await params;
     const actor = await requireTenantActor();
+    const url = new URL(request.url);
+    const useOffset = url.searchParams.has("page");
 
     const station = await prisma.station.findUnique({
       where: { id: stationId },
-      include: { staff: true },
     });
     
     if (!station || station.tenantId !== actor.tenantId) {
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
+    const where = { stationId, tenantId: actor.tenantId };
+    const include = {
+      recordedBy: { select: { firstName: true, lastName: true } },
+    };
+
+    if (useOffset) {
+      const { page, take, skip } = parseOffsetPagination(url.searchParams);
+      const [totalCount, rows] = await Promise.all([
+        prisma.dailySalesLog.count({ where }),
+        prisma.dailySalesLog.findMany({
+          where,
+          orderBy: { logDate: "desc" },
+          take,
+          skip,
+          include,
+        }),
+      ]);
+      return ok(rows, buildOffsetPageMeta(totalCount, page, take));
+    }
+
     const salesLogs = await prisma.dailySalesLog.findMany({
-      where: { stationId, tenantId: actor.tenantId },
+      where,
       orderBy: { logDate: "desc" },
+      include,
     });
 
     return ok(salesLogs);

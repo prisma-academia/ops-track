@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,20 +19,85 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, User, DollarSign } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
+import { usePaginatedQuery } from "@/hooks/use-paginated-query";
+import { DataTable } from "@/components/data-table";
+import type { ColumnDef } from "@tanstack/react-table";
 
 const CreateCustomerSchema = z.object({
   name: z.string().min(2).max(100),
   outstandingBalance: z.coerce.number().default(0),
 });
 
+export type CustomerRow = {
+  id: string;
+  name: string;
+  outstandingBalance: number | string;
+  createdAt: string;
+};
+
+const columns: ColumnDef<CustomerRow>[] = [
+  {
+    accessorKey: "name",
+    header: "Customer Name",
+    cell: ({ row }) => (
+      <div className="flex items-center gap-3">
+        <div className="size-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-500">
+          <User size={16} />
+        </div>
+        <span className="font-semibold text-stone-800">{row.original.name}</span>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "outstandingBalance",
+    header: () => <div className="text-right">Outstanding Balance</div>,
+    cell: ({ row }) => {
+      const bal = Number(row.original.outstandingBalance);
+      return (
+        <div className={`text-right font-mono font-bold text-sm ${bal > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+          {bal.toLocaleString()}
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "createdAt",
+    header: "Date Created",
+    cell: ({ row }) => (
+      <span className="text-xs text-stone-500">
+        {new Date(row.original.createdAt).toLocaleDateString()}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "id",
+    header: "Customer ID",
+    cell: ({ row }) => (
+      <span className="text-xs text-stone-400 font-mono">
+        {row.original.id}
+      </span>
+    ),
+  },
+];
+
 export function CustomersManager({
   initialCustomers,
+  initialMeta,
 }: {
   initialCustomers: any[];
+  initialMeta: any;
 }) {
   const router = useRouter();
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+
+  const { data, meta, isLoading, setPage, setPageSize, setInitialData } = usePaginatedQuery<CustomerRow>({
+    baseUrl: "/api/tenant/customers",
+  });
+
+  useEffect(() => {
+    setInitialData(initialCustomers, initialMeta);
+  }, [initialCustomers, initialMeta, setInitialData]);
 
   const form = useForm({
     resolver: zodResolver(CreateCustomerSchema),
@@ -69,51 +134,18 @@ export function CustomersManager({
       />
 
       <Card className="overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-stone-50 border-b">
-              <tr>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Customer Name</th>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase text-right">Outstanding Balance</th>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Date Created</th>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Customer ID</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {initialCustomers.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-6 text-center text-stone-500">
-                    No B2B customer accounts created yet.
-                  </td>
-                </tr>
-              ) : (
-                initialCustomers.map((c) => (
-                  <tr key={c.id} className="hover:bg-stone-50/50">
-                    <td className="px-6 py-3 whitespace-nowrap">
-                      <div className="flex items-center gap-3">
-                        <div className="size-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-500">
-                          <User size={16} />
-                        </div>
-                        <span className="font-semibold text-stone-800">{c.name}</span>
-                      </div>
-                    </td>
-                    <td className={`px-6 py-3 text-right font-mono font-bold text-sm ${
-                      Number(c.outstandingBalance) > 0 ? "text-rose-600" : "text-emerald-600"
-                    }`}>
-                      {Number(c.outstandingBalance).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-3 text-xs text-stone-500">
-                      {new Date(c.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-3 text-xs text-stone-400 font-mono">
-                      {c.id}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={columns}
+          data={data.length > 0 ? data : initialCustomers}
+          isLoading={isLoading}
+          serverPagination={{
+            ...meta,
+            onPageChange: setPage,
+            onPageSizeChange: setPageSize,
+          }}
+          filterColumnId="name"
+          searchPlaceholder="Search by name…"
+        />
       </Card>
 
       {/* ==========================================

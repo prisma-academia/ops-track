@@ -6,14 +6,22 @@ import { ActivityTable } from "@/app/(platform)/(dashboard)/activity/table";
 
 export default async function TenantActivityPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_ACTIVITY_READ.key);
-  const rows = await prisma.activityLog.findMany({
-    where: { tenantId: actor.tenantId },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    include: {
-      tenant: { select: { name: true } },
-    }
-  });
+  
+  const take = 25;
+  const skip = 0;
+
+  const [totalCount, rows] = await Promise.all([
+    prisma.activityLog.count({ where: { tenantId: actor.tenantId } }),
+    prisma.activityLog.findMany({
+      where: { tenantId: actor.tenantId },
+      orderBy: { createdAt: "desc" },
+      take,
+      skip,
+      include: {
+        tenant: { select: { name: true } },
+      }
+    }),
+  ]);
 
   // Collect unique actor IDs and target IDs
   const tenantUserIds = Array.from(new Set(rows.filter((r) => r.actorType === "TENANT_USER" && r.actorId).map((r) => r.actorId as string)));
@@ -75,10 +83,20 @@ export default async function TenantActivityPage() {
     };
   });
 
+  const totalPages = Math.ceil(totalCount / take);
+  const initialMeta = {
+    page: 1,
+    pageSize: take,
+    totalCount,
+    totalPages,
+    hasNextPage: 1 < totalPages,
+    hasPreviousPage: false,
+  };
+
   return (
     <div>
       <PageHeader title="Activity" />
-      <ActivityTable data={data} />
+      <ActivityTable initialData={data} initialMeta={initialMeta} />
     </div>
   );
 }

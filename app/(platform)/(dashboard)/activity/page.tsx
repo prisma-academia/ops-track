@@ -24,7 +24,7 @@ export default async function PlatformActivityPage() {
   return (
     <div>
       <PageHeader title="System activity" />
-      <ActivityTable data={data} />
+      <ActivityTable initialData={data} initialMeta={null} />
     </div>
   );
 }

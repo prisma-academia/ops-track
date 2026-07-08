@@ -30,10 +30,14 @@ export function WaybillsTable({
   data,
   filterNode,
   headerAction,
+  serverPagination,
+  isLoading,
 }: {
   data: WaybillRow[];
   filterNode?: React.ReactNode;
   headerAction?: React.ReactNode;
+  serverPagination?: any;
+  isLoading?: boolean;
 }) {
   const columns: ColumnDef<WaybillRow>[] = [
     {
@@ -160,6 +164,8 @@ export function WaybillsTable({
         rowHref={(row) => `/admin/waybills/${row.id}`}
         filterNode={filterNode}
         headerAction={headerAction}
+        serverPagination={serverPagination}
+        isLoading={isLoading}
       />
     </TooltipProvider>
   );

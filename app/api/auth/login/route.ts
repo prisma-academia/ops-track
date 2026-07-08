@@ -177,6 +177,7 @@ async function loginTenant(slug: string, email: string, password: string, meta: 
       name: `${user.firstName} ${user.lastName}`,
       email: user.email,
       role: user.isOwner ? "Owner" : "Admin",
+      permissions: user.permissions,
       stations: user.isOwner 
         ? await prisma.station.findMany({ where: { tenantId: tenant.id } })
         : user.stations,

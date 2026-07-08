@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { CreateWaybillForm } from "./create-form";
 
 export default async function CreateWaybillPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_OPERATIONS_WRITE.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
 
   const stations = await prisma.station.findMany({
     where: { tenantId: actor.tenantId },

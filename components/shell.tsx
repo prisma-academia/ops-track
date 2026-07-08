@@ -52,10 +52,19 @@ export function AppShell({
   );
 }
 
-export function PageHeader({ title, action }: { title: string; action?: ReactNode }) {
+import { ArrowLeft } from "lucide-react";
+
+export function PageHeader({ title, action, backHref }: { title: string; action?: ReactNode; backHref?: string }) {
   return (
     <div className="mb-6 flex items-center justify-between">
-      <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+      <div className="flex items-center gap-4">
+        {backHref && (
+          <Link href={backHref} className="flex h-9 w-9 items-center justify-center rounded-md border border-stone-200 dark:border-stone-800 bg-transparent hover:bg-stone-100 dark:hover:bg-stone-800 shrink-0">
+            <ArrowLeft className="size-4" />
+          </Link>
+        )}
+        <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+      </div>
       {action ? <div>{action}</div> : null}
     </div>
   );

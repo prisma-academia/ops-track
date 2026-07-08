@@ -20,7 +20,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id: stationId, shiftId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_SHIFTS_WRITE.key);
     const body = CloseShiftSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -36,7 +36,11 @@ export async function POST(
       include: {
         nozzle: {
           include: {
-            pump: true,
+            pump: {
+              include: {
+                tank: true,
+              },
+            },
           },
         },
       },
@@ -60,25 +64,46 @@ export async function POST(
 
     const litersSold = body.closingMeter - Number(shiftLog.openingMeter);
 
-    const updatedShiftLog = await prisma.shiftLog.update({
-      where: { id: shiftId },
-      data: {
-        closingMeter: body.closingMeter,
-        litersSold,
-        declaredCash: body.declaredCash,
-        declaredPos: body.declaredPos,
-        declaredTransfer: body.declaredTransfer,
-      },
-      include: {
-        attendant: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
+    const tankId = shiftLog.nozzle.pump.tank.id;
+    const tankCurrentLiters = Number(shiftLog.nozzle.pump.tank.currentLiters);
+
+    if (tankCurrentLiters - litersSold < 0) {
+      throw new DomainError(
+        400,
+        "insufficient_tank_volume",
+        `Cannot close shift: deducting ${litersSold.toLocaleString()} L would bring tank below 0 (current: ${tankCurrentLiters.toLocaleString()} L). Record a dipping first.`
+      );
+    }
+
+    const updatedShiftLog = await prisma.$transaction(async (tx) => {
+      const updated = await tx.shiftLog.update({
+        where: { id: shiftId },
+        data: {
+          closingMeter: body.closingMeter,
+          litersSold,
+          declaredCash: body.declaredCash,
+          declaredPos: body.declaredPos,
+          declaredTransfer: body.declaredTransfer,
+          closedAt: new Date(),
+        },
+        include: {
+          attendant: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
           },
         },
-      },
+      });
+
+      await tx.tank.update({
+        where: { id: tankId },
+        data: { currentLiters: { decrement: litersSold } },
+      });
+
+      return updated;
     });
 
     await audit({

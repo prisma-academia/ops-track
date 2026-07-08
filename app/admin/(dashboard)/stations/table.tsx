@@ -60,7 +60,7 @@ const columns: ColumnDef<StationRow>[] = [
   },
   { 
     accessorKey: "lastSalesAmount", 
-    header: "Last Sales Amount",
+    header: "Last Approved Sales",
     cell: ({ row }) => {
       const amount = row.original.lastSalesAmount;
       return amount > 0 ? `₦${amount.toLocaleString()}` : "—";

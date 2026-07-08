@@ -15,14 +15,15 @@ export default async function StationsPage() {
         select: { productType: true, capacity: true },
       },
       dailySalesLogs: {
+        where: { status: "APPROVED" },
         orderBy: { logDate: "desc" },
         take: 1,
         select: { amountCash: true, amountPos: true, amountTransfer: true },
       },
-      waybills: {
-        orderBy: { dispatchedAt: "desc" },
+      waybillAllocations: {
+        orderBy: { createdAt: "desc" },
         take: 1,
-        select: { dispatchedAt: true },
+        select: { waybill: { select: { dispatchedAt: true } } },
       },
     },
   });
@@ -43,7 +44,7 @@ export default async function StationsPage() {
       ? Number(lastSales.amountCash) + Number(lastSales.amountPos) + Number(lastSales.amountTransfer)
       : 0;
 
-    const lastWaybillDate = s.waybills[0]?.dispatchedAt?.toISOString() || null;
+    const lastWaybillDate = s.waybillAllocations[0]?.waybill?.dispatchedAt?.toISOString() || null;
 
     return {
       id: s.id,

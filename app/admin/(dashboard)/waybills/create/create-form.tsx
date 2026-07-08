@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { apiPost } from "@/lib/client/api";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -32,25 +33,39 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { ChevronsUpDown, CalendarIcon, CircleCheckIcon } from "lucide-react";
+import { ChevronsUpDown, Check } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
-import { Calendar } from "@/components/ui/calendar";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 const CreateWaybillSchema = z.object({
-  stationId: z.string().min(1, "Station is required"),
   number: z.string().min(1, "Waybill number is required"),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   litersLoaded: z.coerce.number().positive("Must be positive"),
   truckPlate: z.string().min(1, "Truck plate is required"),
   driverName: z.string().min(1, "Driver name is required"),
   driverPhone: z.string().optional().nullable(),
-  supplier: z.string().optional().nullable(),
+  supplier: z.string().min(1, "Supplier is required"),
   depot: z.string().optional().nullable(),
   transportCompany: z.string().optional().nullable(),
   deliveryDatetime: z.string().optional().nullable(),
+  allocations: z.array(z.object({
+    stationId: z.string().min(1, "Station is required"),
+    litersToDispense: z.coerce.number().positive("Must be positive"),
+    costPerLiter: z.coerce.number().positive("Must be positive"),
+    transportationCost: z.coerce.number().nonnegative("Must be non-negative"),
+  })).min(1, "At least one station assignment is required"),
+}).refine((data) => {
+  const sum = data.allocations.reduce((acc, a) => acc + Number(a.litersToDispense), 0);
+  return Math.abs(sum - data.litersLoaded) < 0.01;
+}, {
+  message: "The sum of station allocations must equal the total liters loaded.",
+  path: ["litersLoaded"]
+}).refine((data) => {
+  const ids = data.allocations.map(a => a.stationId);
+  return new Set(ids).size === ids.length;
+}, {
+  message: "Each station can only be assigned once per waybill.",
+  path: ["allocations"]
 });
 
 type LookupItem = { id: string; name: string };
@@ -58,7 +73,6 @@ type LookupItem = { id: string; name: string };
 export function CreateWaybillForm({ stations }: { stations: { id: string; name: string; code: string }[] }) {
   const router = useRouter();
   const [apiError, setApiError] = useState<string | null>(null);
-  const [openStationSelect, setOpenStationSelect] = useState(false);
 
   // Lookups State
   const [suppliers, setSuppliers] = useState<LookupItem[]>([]);
@@ -70,21 +84,67 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
   const [newLookupName, setNewLookupName] = useState("");
   const [isAddingLookup, setIsAddingLookup] = useState(false);
 
-  // DatePicker State
-  const [date, setDate] = useState<Date | undefined>(undefined);
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [openDatePicker, setOpenDatePicker] = useState(false);
-
   // Lookup Combobox State
   const [openSupplier, setOpenSupplier] = useState(false);
   const [openDepot, setOpenDepot] = useState(false);
   const [openTransport, setOpenTransport] = useState(false);
 
+  // Per-allocation station combobox open state
+  const [openStationIndex, setOpenStationIndex] = useState<number | null>(null);
+
   const form = useForm<z.infer<typeof CreateWaybillSchema>>({
     resolver: zodResolver(CreateWaybillSchema) as any,
+    defaultValues: {
+      productType: "PMS",
+      litersLoaded: 0,
+      allocations: [
+        { stationId: "", litersToDispense: 0, costPerLiter: 0, transportationCost: 0 }
+      ]
+    }
   });
 
-  const watchStationId = form.watch("stationId");
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "allocations",
+  });
+
+  const watchAllocations = form.watch("allocations");
+  const watchProductType = form.watch("productType");
+  const watchLitersLoaded = form.watch("litersLoaded");
+
+  // Derived allocation totals (real-time)
+  const totalAllocated = (watchAllocations ?? []).reduce(
+    (acc, curr) => acc + (parseFloat(curr?.litersToDispense as any) || 0), 0
+  );
+  const remaining = (parseFloat(watchLitersLoaded as any) || 0) - totalAllocated;
+  const isOverAllocated = remaining < -0.01;
+  const isExactMatch = Math.abs(remaining) < 0.01 && totalAllocated > 0;
+
+  // Derived summary calculations
+  const summaryProductCost = (watchAllocations ?? []).reduce(
+    (acc, curr) => acc + ((parseFloat(curr?.litersToDispense as any) || 0) * (parseFloat(curr?.costPerLiter as any) || 0)),
+    0
+  );
+  const summaryTransCost = (watchAllocations ?? []).reduce(
+    (acc, curr) => acc + (parseFloat(curr?.transportationCost as any) || 0),
+    0
+  );
+  const summaryGrandTotal = summaryProductCost + summaryTransCost;
+
+  const litersLoadedError = form.formState.errors.litersLoaded?.message;
+  const allocationsError = form.formState.errors.allocations?.message;
+
+  useEffect(() => {
+    if (litersLoadedError) {
+      toast.error(litersLoadedError);
+    }
+  }, [litersLoadedError]);
+
+  useEffect(() => {
+    if (allocationsError) {
+      toast.error(allocationsError);
+    }
+  }, [allocationsError]);
 
   // Fetch Lookups
   useEffect(() => {
@@ -104,29 +164,20 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
     fetchLookups();
   }, []);
 
-  // Auto-generate Waybill Number
-  useEffect(() => {
-    if (watchStationId) {
-      const station = stations.find((s) => s.id === watchStationId);
-      if (station) {
-        const today = new Date().toISOString().split("T")[0].replace(/-/g, "");
-        const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
-        form.setValue("number", `WB-${station.code}-${today}-${randomStr}`, { shouldValidate: true });
-      }
-    }
-  }, [watchStationId, stations, form]);
+  // Auto-generate Waybill Number from the first station code
+  const firstStationId = watchAllocations?.[0]?.stationId;
 
-  // Handle Date/Time Change
   useEffect(() => {
-    if (date && selectedTime) {
-      const [hours, minutes] = selectedTime.split(":").map(Number);
-      const newDate = new Date(date);
-      newDate.setHours(hours, minutes, 0, 0);
-      form.setValue("deliveryDatetime", newDate.toISOString());
-    } else {
-      form.setValue("deliveryDatetime", null);
+    if (watchProductType) {
+      const station = stations.find((s) => s.id === firstStationId);
+      const rawCode = station ? station.code : "DISP";
+      // Strip trailing numeric segment (e.g. HOT-001 → HOT)
+      const prefix = rawCode.replace(/-?\d+$/, "");
+      const today = new Date().toISOString().split("T")[0].replace(/-/g, "");
+      const randomNum = Math.floor(Math.random() * 900) + 100;
+      form.setValue("number", `WB-${prefix}-${today}-${watchProductType}-${randomNum}`, { shouldValidate: true });
     }
-  }, [date, selectedTime, form]);
+  }, [firstStationId, watchProductType, stations, form]);
 
   const handleAddLookup = async () => {
     if (!lookupDialog || !newLookupName.trim()) return;
@@ -142,13 +193,13 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
         const created = result.data;
         if (lookupDialog.type === "supplier") {
           setSuppliers([...suppliers, created]);
-          form.setValue("supplier", created.name);
+          form.setValue("supplier", created.name, { shouldValidate: true });
         } else if (lookupDialog.type === "depot") {
           setDepots([...depots, created]);
-          form.setValue("depot", created.name);
+          form.setValue("depot", created.name, { shouldValidate: true });
         } else if (lookupDialog.type === "transportCompany") {
           setTransportCompanies([...transportCompanies, created]);
-          form.setValue("transportCompany", created.name);
+          form.setValue("transportCompany", created.name, { shouldValidate: true });
         }
         setLookupDialog(null);
         setNewLookupName("");
@@ -171,13 +222,6 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
     }
   };
 
-  const timeSlots = Array.from({ length: 48 }, (_, i) => {
-    const totalMinutes = i * 30; // 30 min intervals
-    const hour = Math.floor(totalMinutes / 60);
-    const minute = totalMinutes % 60;
-    return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
-  });
-
   const renderLookupSelect = (
     fieldValue: string | null | undefined,
     onChange: (value: string) => void,
@@ -186,7 +230,8 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
     type: "supplier" | "depot" | "transportCompany",
     label: string,
     openState: boolean,
-    setOpenState: (o: boolean) => void
+    setOpenState: (o: boolean) => void,
+    hasError?: boolean
   ) => {
     return (
       <Popover open={openState} onOpenChange={setOpenState}>
@@ -194,7 +239,7 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
           <Button
             type="button"
             variant="outline"
-            className={`w-full justify-between font-normal ${!fieldValue ? "text-muted-foreground" : ""}`}
+            className={`w-full justify-between font-normal ${!fieldValue ? "text-muted-foreground" : ""} ${hasError ? "border-destructive" : ""}`}
           >
             <span className="truncate">{fieldValue || placeholder}</span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -222,9 +267,9 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
               </CommandGroup>
             </CommandList>
             <div className="border-t p-1">
-              <Button 
+              <Button
                 type="button"
-                variant="ghost" 
+                variant="ghost"
                 className="w-full justify-start text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-8 px-2 text-sm font-medium"
                 onClick={() => {
                   setLookupDialog({ isOpen: true, type, label });
@@ -243,76 +288,18 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
   return (
     <div className="w-full">
       <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-        
+
         {/* Column 1: General Info */}
-        <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm space-y-8">
-          <h3 className="font-semibold text-lg border-b pb-4 text-foreground">General Information</h3>
+        <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm space-y-6">
+          <div className="flex items-center justify-between border-b pb-4">
+            <h3 className="font-semibold text-lg text-foreground">General Information</h3>
+            {form.watch("number") && (
+              <span className="text-sm font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full">{form.watch("number")}</span>
+            )}
+          </div>
 
-          {/* Station Selection */}
-        <div className="space-y-2">
-          <Label className={form.formState.errors.stationId ? "text-destructive" : ""}>
-            Receiving Station *
-          </Label>
-          <Controller
-            control={form.control}
-            name="stationId"
-            render={({ field }) => {
-              const selectedStation = stations.find((s) => s.id === field.value);
-              const displayLabel = selectedStation
-                ? `${selectedStation.name} (${selectedStation.code})`
-                : "Select a station...";
-              return (
-                <Popover open={openStationSelect} onOpenChange={setOpenStationSelect}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={`w-full justify-between font-normal ${
-                        form.formState.errors.stationId ? "border-destructive" : ""
-                      }`}
-                    >
-                      <span className="truncate">{displayLabel}</span>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                    <Command>
-                      <CommandInput placeholder="Search station..." />
-                      <CommandList>
-                        <CommandEmpty>No station found.</CommandEmpty>
-                        <CommandGroup>
-                          {stations.map((s) => {
-                            const label = `${s.name} (${s.code})`;
-                            return (
-                              <CommandItem
-                                key={s.id}
-                                value={label.toLowerCase()}
-                                onSelect={() => {
-                                  form.setValue("stationId", s.id, { shouldValidate: true });
-                                  setOpenStationSelect(false);
-                                }}
-                                data-checked={field.value === s.id}
-                              >
-                                {label}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              );
-            }}
-          />
-          {form.formState.errors.stationId && (
-            <p className="text-xs text-destructive">{form.formState.errors.stationId.message}</p>
-          )}
-        </div>
-
-        {/* Waybill & Product */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="col-span-2 space-y-2">
+          {/* Waybill Number — full width */}
+          <div className="space-y-2">
             <Label className={form.formState.errors.number ? "text-destructive" : ""}>Waybill Number *</Label>
             <Input
               placeholder="e.g. WB-998811"
@@ -320,202 +307,407 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
               {...form.register("number")}
               className={form.formState.errors.number ? "border-destructive" : ""}
             />
-            <p className="text-xs text-muted-foreground">Auto-generated</p>
           </div>
 
-          <div className="space-y-2">
-            <Label className={form.formState.errors.productType ? "text-destructive" : ""}>Product Type *</Label>
-            <Controller
-              control={form.control}
-              name="productType"
-              render={({ field }) => (
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <SelectTrigger className={form.formState.errors.productType ? "border-destructive w-full" : "w-full"}>
-                    <SelectValue placeholder="Select Product" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PMS">PMS (Petrol)</SelectItem>
-                    <SelectItem value="AGO">AGO (Diesel)</SelectItem>
-                    <SelectItem value="DPK">DPK (Kerosene)</SelectItem>
-                    <SelectItem value="LPG">LPG (Gas)</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
-        </div>
+          {/* Product Type + Total Liters — same row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className={form.formState.errors.productType ? "text-destructive" : ""}>Product Type *</Label>
+              <Controller
+                control={form.control}
+                name="productType"
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger className={form.formState.errors.productType ? "border-destructive w-full" : "w-full"}>
+                      <SelectValue placeholder="Select Product" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PMS">PMS (Petrol)</SelectItem>
+                      <SelectItem value="AGO">AGO (Diesel)</SelectItem>
+                      <SelectItem value="DPK">DPK (Kerosene)</SelectItem>
+                      <SelectItem value="LPG">LPG (Gas)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
 
-        {/* Liters & Truck */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Liters Dispatched *</Label>
-            <Input
-              type="number"
-              placeholder="e.g. 33000"
-              {...form.register("litersLoaded")}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Truck Plate Number *</Label>
-            <Input
-              placeholder="e.g. LAG-901-AA"
-              {...form.register("truckPlate")}
-            />
-          </div>
-        </div>
-
-        {/* Driver */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Driver Name *</Label>
-            <Input
-              placeholder="e.g. Alabi Kazeem"
-              {...form.register("driverName")}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Driver Phone Number</Label>
-            <Input
-              placeholder="e.g. +2348012345678"
-              {...form.register("driverPhone")}
-            />
-          </div>
-        </div>
-
-        </div>
-
-        {/* Column 2: Logistics & Submit */}
-        <div className="space-y-8">
-          <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm space-y-8">
-            <h3 className="font-semibold text-lg border-b pb-4 text-foreground">Logistics & Supply Information</h3>
-
-        {/* Lookups */}
-        <div className="grid grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <Label>Supplier</Label>
-            <Controller
-              control={form.control}
-              name="supplier"
-              render={({ field }) => renderLookupSelect(field.value, field.onChange, suppliers, "Select Supplier", "supplier", "Supplier", openSupplier, setOpenSupplier)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Depot</Label>
-            <Controller
-              control={form.control}
-              name="depot"
-              render={({ field }) => renderLookupSelect(field.value, field.onChange, depots, "Select Depot", "depot", "Depot", openDepot, setOpenDepot)}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <Label>Transport Company</Label>
-            <Controller
-              control={form.control}
-              name="transportCompany"
-              render={({ field }) => renderLookupSelect(field.value, field.onChange, transportCompanies, "Select Transporter", "transportCompany", "Transport Company", openTransport, setOpenTransport)}
-            />
+            <div className="space-y-2">
+              <Label className={form.formState.errors.litersLoaded ? "text-destructive" : ""}>Total Loaded Liters *</Label>
+              <Input
+                type="number"
+                placeholder="e.g. 33000"
+                {...form.register("litersLoaded")}
+                className={form.formState.errors.litersLoaded ? "border-destructive" : ""}
+                onInput={(e) => {
+                  const el = e.currentTarget;
+                  if (el.value.replace(".", "").length > 6) {
+                    el.value = el.value.slice(0, 6);
+                  }
+                }}
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Expected Delivery Date/Time</Label>
-            <Popover open={openDatePicker} onOpenChange={setOpenDatePicker}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !date && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {date && selectedTime ? (
-                    `${date.toLocaleDateString("en-GB")} at ${selectedTime}`
-                  ) : (
-                    <span>Pick date & time</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Card className="gap-0 p-0 border-0 shadow-none w-full max-w-none">
-                  <CardHeader className="flex h-max items-center justify-start border-b px-4 py-3">
-                    <CardTitle className="text-sm">Select Delivery Time</CardTitle>
-                  </CardHeader>
-                  <CardContent className="relative p-0 flex flex-col md:flex-row h-64">
-                    <div className="p-4 flex-1">
-                      <Calendar
-                        mode="single"
-                        selected={date}
-                        onSelect={setDate}
-                        defaultMonth={date}
-                        showOutsideDays={false}
-                      />
+          {/* Receipt-style Waybill Summary */}
+          <div className="border-t-2 border-dashed border-muted/80 pt-6 mt-6 space-y-4">
+            <h4 className="font-semibold text-sm text-foreground uppercase tracking-wider">Waybill Summary Receipt</h4>
+            
+            <div className="bg-muted/30 rounded-xl p-4 border border-dashed border-muted-foreground/20 space-y-3 font-mono text-xs text-muted-foreground">
+              <div className="flex justify-between border-b border-dashed pb-2">
+                <span>Product Type:</span>
+                <span className="font-bold text-foreground">{watchProductType}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total Loaded:</span>
+                <span className="font-bold text-foreground">{(parseFloat(watchLitersLoaded as any) || 0).toLocaleString()} L</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total Allocated:</span>
+                <span className="font-bold text-foreground">{totalAllocated.toLocaleString()} L</span>
+              </div>
+
+              <div className="border-t border-dashed my-2 pt-2 space-y-2">
+                <div className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider pb-1">Allocations Breakdown:</div>
+                {(watchAllocations ?? []).map((alloc, idx) => {
+                  const station = stations.find(s => s.id === alloc.stationId);
+                  const volume = parseFloat(alloc.litersToDispense as any) || 0;
+                  const cost = parseFloat(alloc.costPerLiter as any) || 0;
+                  const trans = parseFloat(alloc.transportationCost as any) || 0;
+                  const subtotal = (volume * cost) + trans;
+
+                  return (
+                    <div key={idx} className="flex justify-between items-start text-[11px] gap-4">
+                      <span className="truncate max-w-[150px]">
+                        {station ? station.name : `Station #${idx + 1}`}
+                      </span>
+                      <span className="text-foreground text-right shrink-0">
+                        {volume.toLocaleString()}L @ ₦{cost.toFixed(2)} + ₦{trans.toLocaleString()} = <span className="font-semibold">₦{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </span>
                     </div>
-                    <div className="border-t md:border-t-0 md:border-l w-full md:w-32 h-full flex-shrink-0">
-                      <ScrollArea className="h-full">
-                        <div className="flex flex-col gap-2 p-2">
-                          {timeSlots.map((time) => (
-                            <Button
-                              key={time}
-                              variant={selectedTime === time ? "default" : "ghost"}
-                              onClick={() => setSelectedTime(time)}
-                              className="w-full text-xs shadow-none justify-center"
-                            >
-                              {time}
-                            </Button>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex flex-col gap-2 border-t px-4 py-3">
-                    <div className="flex w-full items-center gap-2 text-xs">
-                      {date && selectedTime ? (
-                        <>
-                          <CircleCheckIcon className="size-4 shrink-0 text-emerald-500" />
-                          <span className="text-xs">
-                            Expected: <span className="font-medium">{date.toLocaleDateString("en-GB")} {selectedTime}</span>
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-muted-foreground">Select date and time</span>
-                      )}
-                    </div>
-                    <Button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setOpenDatePicker(false);
-                      }}
-                      disabled={!date || !selectedTime}
-                      className="w-full"
-                      size="sm"
-                    >
-                      Confirm
-                    </Button>
-                  </CardFooter>
-                </Card>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
+                  );
+                })}
+              </div>
 
-          </div>
-
-          <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm space-y-6">
-            {apiError && <p className="text-sm text-red-600 font-medium">{apiError}</p>}
-
-            <div className="flex items-center justify-end gap-4">
-              <Button type="button" variant="ghost" onClick={() => router.push("/admin/waybills")}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting} className="min-w-32">
-                {form.formState.isSubmitting ? <SpinnerEllipsis /> : "Create Dispatch"}
-              </Button>
+              <div className="border-t-2 border-double border-muted-foreground/30 pt-3 space-y-1.5 text-sm">
+                <div className="flex justify-between text-xs">
+                  <span>Product Cost:</span>
+                  <span className="font-semibold text-foreground">₦{summaryProductCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span>Transport Cost:</span>
+                  <span className="font-semibold text-foreground">₦{summaryTransCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between text-base font-bold text-primary pt-1 border-t border-dashed border-muted-foreground/20">
+                  <span>GRAND TOTAL:</span>
+                  <span>₦{summaryGrandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Column 2: Supplier / Depot / Transport */}
+        <div className="space-y-6">
+          <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm space-y-6">
+            <h3 className="font-semibold text-lg border-b pb-4 text-foreground">Supply Information</h3>
+
+            {/* Supplier & Depot */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className={form.formState.errors.supplier ? "text-destructive" : ""}>Supplier *</Label>
+                <Controller
+                  control={form.control}
+                  name="supplier"
+                  render={({ field }) => renderLookupSelect(field.value, field.onChange, suppliers, "Select Supplier", "supplier", "Supplier", openSupplier, setOpenSupplier, !!form.formState.errors.supplier)}
+                />
+                {form.formState.errors.supplier && (
+                  <p className="text-xs text-destructive">{form.formState.errors.supplier.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Depot</Label>
+                <Controller
+                  control={form.control}
+                  name="depot"
+                  render={({ field }) => renderLookupSelect(field.value, field.onChange, depots, "Select Depot", "depot", "Depot", openDepot, setOpenDepot)}
+                />
+              </div>
+            </div>
+
+            {/* Transport Company — full width */}
+            <div className="space-y-2">
+              <Label>Transport Company</Label>
+              <Controller
+                control={form.control}
+                name="transportCompany"
+                render={({ field }) => renderLookupSelect(field.value, field.onChange, transportCompanies, "Select Transporter", "transportCompany", "Transport Company", openTransport, setOpenTransport)}
+              />
+            </div>
+          </div>
+
+          {/* Logistic Information — truck, driver, arrival */}
+          <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm space-y-6">
+            <h3 className="font-semibold text-lg border-b pb-4 text-foreground">Logistic Information</h3>
+
+            {/* Truck Plate + Driver Name */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className={form.formState.errors.truckPlate ? "text-destructive" : ""}>Truck Plate Number *</Label>
+                <Input
+                  placeholder="e.g. LAG-901-AA"
+                  {...form.register("truckPlate")}
+                  className={form.formState.errors.truckPlate ? "border-destructive" : ""}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className={form.formState.errors.driverName ? "text-destructive" : ""}>Driver Name *</Label>
+                <Input
+                  placeholder="e.g. Alabi Kazeem"
+                  {...form.register("driverName")}
+                  className={form.formState.errors.driverName ? "border-destructive" : ""}
+                />
+              </div>
+            </div>
+
+            {/* Driver Phone + Expected Arrival — same row */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Driver Phone Number</Label>
+                <Input
+                  placeholder="e.g. +2348012345678"
+                  {...form.register("driverPhone")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="deliveryDatetime">Expected Arrival Date/Time</Label>
+                <Input
+                  id="deliveryDatetime"
+                  type="datetime-local"
+                  onChange={(e) => {
+                    form.setValue(
+                      "deliveryDatetime",
+                      e.target.value ? new Date(e.target.value).toISOString() : null
+                    );
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Allocations Block — full width */}
+        <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm space-y-6 lg:col-span-2">
+          <div className="flex items-center justify-between border-b pb-4">
+            <h3 className="font-semibold text-lg text-foreground">Station Assignments & Volume Allocation</h3>
+            <div className="flex items-center gap-4">
+              {/* Live allocation meter */}
+              {(parseFloat(watchLitersLoaded as any) || 0) > 0 && (
+                <div className={`flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-lg border ${
+                  isOverAllocated
+                    ? "bg-rose-50 border-rose-200 text-rose-700"
+                    : isExactMatch
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                    : "bg-amber-50 border-amber-200 text-amber-700"
+                }`}>
+                  <span>
+                    {totalAllocated.toLocaleString()} / {(parseFloat(watchLitersLoaded as any) || 0).toLocaleString()} L
+                  </span>
+                  <span className="text-xs opacity-75">
+                    {isOverAllocated
+                      ? `▲ ${Math.abs(remaining).toLocaleString()} over`
+                      : isExactMatch
+                      ? "✓ Exact"
+                      : `${remaining.toLocaleString()} remaining`}
+                  </span>
+                </div>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => append({ stationId: "", litersToDispense: 0, costPerLiter: 0, transportationCost: 0 })}
+              >
+                + Add Station
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {fields.map((field, index) => {
+              const errorForField = form.formState.errors.allocations?.[index];
+              const isStationOpen = openStationIndex === index;
+              const currentStationId = watchAllocations?.[index]?.stationId;
+              const selectedStation = stations.find(s => s.id === currentStationId);
+
+              return (
+                <div key={field.id} className="relative p-5 border rounded-xl bg-muted/20 space-y-4">
+                  {fields.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute top-2 right-2 text-destructive hover:text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
+                      onClick={() => remove(index)}
+                    >
+                      ✕
+                    </Button>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr] gap-4 items-start">
+                    {/* Station — Command combobox with search */}
+                    <div className="space-y-2">
+                      <Label className={errorForField?.stationId ? "text-destructive" : ""}>
+                        Station *
+                      </Label>
+                      <Controller
+                        control={form.control}
+                        name={`allocations.${index}.stationId`}
+                        render={({ field: stationField }) => (
+                          <Popover
+                            open={isStationOpen}
+                            onOpenChange={(open) => setOpenStationIndex(open ? index : null)}
+                          >
+                            <PopoverTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-between font-normal",
+                                  !stationField.value && "text-muted-foreground",
+                                  errorForField?.stationId && "border-destructive"
+                                )}
+                              >
+                                <span className="truncate">
+                                  {selectedStation
+                                    ? `${selectedStation.name} (${selectedStation.code})`
+                                    : "Search station..."}
+                                </span>
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder="Search station by name or code..." />
+                                <CommandList className="max-h-[220px]">
+                                  <CommandEmpty>No station found.</CommandEmpty>
+                                  <CommandGroup>
+                                    {stations.map((s) => (
+                                      <CommandItem
+                                        key={s.id}
+                                        value={`${s.name} ${s.code}`.toLowerCase()}
+                                        onSelect={() => {
+                                          stationField.onChange(s.id);
+                                          setOpenStationIndex(null);
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4 shrink-0",
+                                            stationField.value === s.id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <span className="font-medium">{s.name}</span>
+                                        <span className="ml-1.5 text-xs text-muted-foreground font-mono">({s.code})</span>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      />
+                      {errorForField?.stationId && (
+                        <p className="text-xs text-destructive">{errorForField.stationId.message}</p>
+                      )}
+                    </div>
+
+                    {/* Volume allocation */}
+                    <div className="space-y-2">
+                      <Label className={errorForField?.litersToDispense ? "text-destructive" : ""}>Liters to Dispense *</Label>
+                      <Input
+                        type="number"
+                        placeholder="e.g. 15000"
+                        {...form.register(`allocations.${index}.litersToDispense`)}
+                        className={errorForField?.litersToDispense ? "border-destructive" : ""}
+                        onInput={(e) => {
+                          const el = e.currentTarget;
+                          if (el.value.replace(".", "").length > 5) {
+                            el.value = el.value.slice(0, 5);
+                          }
+                        }}
+                      />
+                      {errorForField?.litersToDispense && (
+                        <p className="text-xs text-destructive">{errorForField.litersToDispense.message}</p>
+                      )}
+                    </div>
+
+                    {/* Cost per liter */}
+                    <div className="space-y-2">
+                      <Label className={errorForField?.costPerLiter ? "text-destructive" : ""}>Cost Per Liter (₦) *</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="e.g. 980.00"
+                        {...form.register(`allocations.${index}.costPerLiter`)}
+                        className={errorForField?.costPerLiter ? "border-destructive" : ""}
+                        onInput={(e) => {
+                          const el = e.currentTarget;
+                          const digits = el.value.replace(/[^0-9]/g, "");
+                          if (digits.length > 7) {
+                            el.value = el.value.slice(0, el.value.length - (digits.length - 7));
+                          }
+                        }}
+                      />
+                      {errorForField?.costPerLiter && (
+                        <p className="text-xs text-destructive">{errorForField.costPerLiter.message}</p>
+                      )}
+                    </div>
+
+                    {/* Transportation Cost */}
+                    <div className="space-y-2">
+                      <Label className={errorForField?.transportationCost ? "text-destructive" : ""}>Trans. Cost (₦) *</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="e.g. 50000.00"
+                        {...form.register(`allocations.${index}.transportationCost`)}
+                        className={errorForField?.transportationCost ? "border-destructive" : ""}
+                        onInput={(e) => {
+                          const el = e.currentTarget;
+                          const digits = el.value.replace(/[^0-9]/g, "");
+                          if (digits.length > 7) {
+                            el.value = el.value.slice(0, el.value.length - (digits.length - 7));
+                          }
+                        }}
+                      />
+                      {errorForField?.transportationCost && (
+                        <p className="text-xs text-destructive">{errorForField.transportationCost.message}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
+
+        {/* Submit Block */}
+        <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm space-y-6 lg:col-span-2">
+          {apiError && <p className="text-sm text-red-600 font-medium">{apiError}</p>}
+
+          <div className="flex items-center justify-end gap-4">
+            <Button type="button" variant="ghost" onClick={() => router.push("/admin/waybills")}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={form.formState.isSubmitting} className="min-w-32">
+              {form.formState.isSubmitting ? <SpinnerEllipsis /> : "Create Dispatch"}
+            </Button>
+          </div>
+        </div>
+
       </form>
 
       {/* Add Lookup Modal */}

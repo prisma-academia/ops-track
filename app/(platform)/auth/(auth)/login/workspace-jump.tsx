@@ -16,9 +16,9 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowDown01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 
 type Workspace = { slug: string; name: string };
 
@@ -57,7 +57,7 @@ export function WorkspaceJumpForm() {
     }
     if (typeof window === "undefined") return;
     const { protocol, host } = window.location;
-    window.location.assign(`${protocol}//${slug}.${host}/admin/auth/login`);
+    window.location.assign(`${protocol}//${slug}.${host}/`);
   }
 
   const empty = !loading && workspaces.length === 0;
@@ -72,10 +72,7 @@ export function WorkspaceJumpForm() {
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className={cn(
-                "w-full justify-between bg-input/30 font-normal",
-                !slug && "text-muted-foreground"
-              )}
+              className="w-full justify-between"
               disabled={loading || empty}
             >
               {slug
@@ -85,13 +82,10 @@ export function WorkspaceJumpForm() {
                 : empty
                 ? "No workspaces available"
                 : "Select workspace..."}
-              <HugeiconsIcon
-                icon={ArrowDown01Icon}
-                className="size-4 shrink-0 text-muted-foreground opacity-50"
-              />
+              <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} className="opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+          <PopoverContent className="p-0" style={{ width: 'var(--radix-popover-trigger-width)' }}>
             <Command>
               <CommandInput placeholder="Search workspace..." />
               <CommandList>
@@ -100,14 +94,23 @@ export function WorkspaceJumpForm() {
                   {workspaces.map((w) => (
                     <CommandItem
                       key={w.slug}
-                      value={`${w.name} ${w.slug}`}
-                      onSelect={() => {
-                        setSlug(w.slug);
+                      value={w.slug}
+                      keywords={[w.name]}
+                      onSelect={(currentValue) => {
+                        setSlug(currentValue === slug ? "" : currentValue);
                         setError(null);
                         setOpen(false);
                       }}
                     >
                       {w.name}
+                      <HugeiconsIcon
+                        icon={Tick02Icon}
+                        strokeWidth={2}
+                        className={cn(
+                          "ml-auto",
+                          slug === w.slug ? "opacity-100" : "opacity-0"
+                        )}
+                      />
                     </CommandItem>
                   ))}
                 </CommandGroup>

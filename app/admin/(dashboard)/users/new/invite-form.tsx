@@ -9,17 +9,20 @@ import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { Save } from "lucide-react";
+import { Save, ChevronsUpDown, Check } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 const Schema = z.object({
   firstName: z.string().min(1, "First name is required").max(100),
@@ -47,6 +50,7 @@ export function InviteTenantUserForm({
     defaultValues: { permissions: [] },
   });
   const [error, setError] = useState<string | null>(null);
+  const [openRoleSelect, setOpenRoleSelect] = useState(false);
 
   const roleTemplateId = useWatch({ control, name: "roleTemplateId" });
 
@@ -89,10 +93,97 @@ export function InviteTenantUserForm({
   }, {} as Record<string, { moduleName: string, perms: typeof PERMISSIONS[keyof typeof PERMISSIONS][] }>);
 
   const modulesList = Object.values(groupedPermissions);
+  const webModulesList = modulesList.filter((m) => !m.moduleName.startsWith("mobile."));
+  const mobileModulesList = modulesList.filter((m) => m.moduleName.startsWith("mobile."));
 
   const getModuleName = (module: string) => {
-    return module.replace("tenant.", "").split(".").map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
+    return module.replace("mobile.tenant.", "").replace("tenant.", "").split(".").map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
   };
+
+  const renderPermissionsCard = (
+    list: typeof modulesList,
+    title: string,
+    description: string
+  ) => (
+    <Card className="border-border/40 shadow-sm overflow-hidden p-0 gap-0">
+      <CardHeader className="bg-muted/10 border-b border-border/40 pt-2">
+        <CardTitle className="text-lg font-semibold text-foreground">
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          {/* Column headers */}
+          <div className="grid grid-cols-6 border-b border-border/40 bg-muted/30 px-6 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">
+            <div className="col-span-3">Permissions Module</div>
+            {allActions.map((action) => (
+              <div key={action} className="text-center">{action}</div>
+            ))}
+          </div>
+
+          {/* Rows */}
+          {list.map((mod, index) => {
+            const readPerm = mod.perms.find(p => p.key.endsWith(':read'));
+            const writePerm = mod.perms.find(p => p.key.endsWith(':write'));
+            const approvePerm = mod.perms.find(p => p.key.endsWith(':approve'));
+            
+            // Construct a helpful combined description
+            const desc = [readPerm?.description, writePerm?.description].filter(Boolean).join(" • ");
+
+            return (
+              <div
+                key={mod.moduleName}
+                className={`grid grid-cols-6 items-center px-6 py-4 text-sm hover:bg-muted/5 transition-colors ${
+                  index !== list.length - 1 ? "border-b border-border/30" : ""
+                }`}
+              >
+                <div className="col-span-3 pr-4">
+                  <p className="font-medium text-foreground">{getModuleName(mod.moduleName)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{desc}</p>
+                </div>
+                <div className="flex justify-center">
+                  {readPerm ? (
+                    <Checkbox
+                      id={`perm-${readPerm.key}`}
+                      checked={selectedPermissions.has(readPerm.key)}
+                      onCheckedChange={() => togglePermission(readPerm.key)}
+                      className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                    />
+                  ) : (
+                    <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
+                  )}
+                </div>
+                <div className="flex justify-center">
+                  {writePerm ? (
+                    <Checkbox
+                      id={`perm-${writePerm.key}`}
+                      checked={selectedPermissions.has(writePerm.key)}
+                      onCheckedChange={() => togglePermission(writePerm.key)}
+                      className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                    />
+                  ) : (
+                    <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
+                  )}
+                </div>
+                <div className="flex justify-center">
+                  {approvePerm ? (
+                    <Checkbox
+                      id={`perm-${approvePerm.key}`}
+                      checked={selectedPermissions.has(approvePerm.key)}
+                      onCheckedChange={() => togglePermission(approvePerm.key)}
+                      className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                    />
+                  ) : (
+                    <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <form onSubmit={onSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -134,22 +225,57 @@ export function InviteTenantUserForm({
               {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="role" className={errors.roleTemplateId ? "text-destructive" : ""}>Role Template *</Label>
+              <Label className={errors.roleTemplateId ? "text-destructive" : ""}>Role Template *</Label>
               <Controller
                 control={control}
                 name="roleTemplateId"
-                render={({ field }) => (
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <SelectTrigger id="role" className={errors.roleTemplateId ? "border-destructive" : "" + "w-full"}>
-                      <SelectValue placeholder="Select a role..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {roles.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                render={({ field }) => {
+                  const selectedRole = roles.find((r) => r.id === field.value);
+                  const displayLabel = selectedRole ? selectedRole.name : "Select a role...";
+                  return (
+                    <Popover open={openRoleSelect} onOpenChange={setOpenRoleSelect}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-between font-normal",
+                            errors.roleTemplateId && "border-destructive"
+                          )}
+                        >
+                          <span className="truncate">{displayLabel}</span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search role..." />
+                          <CommandList>
+                            <CommandEmpty>No role found.</CommandEmpty>
+                            <CommandGroup>
+                              {roles.map((r) => (
+                                <CommandItem
+                                  key={r.id}
+                                  value={r.name.toLowerCase()}
+                                  onSelect={() => {
+                                    field.onChange(r.id);
+                                    setOpenRoleSelect(false);
+                                  }}
+                                  className="flex items-center justify-between cursor-pointer"
+                                >
+                                  <span>{r.name}</span>
+                                  {field.value === r.id && (
+                                    <Check className="h-4 w-4 text-primary" />
+                                  )}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  );
+                }}
               />
               {errors.roleTemplateId && <p className="text-xs text-destructive">{errors.roleTemplateId.message}</p>}
             </div>
@@ -167,88 +293,17 @@ export function InviteTenantUserForm({
       </div>
 
       {/* Permissions Matrix - Right Column */}
-      <div className="lg:col-span-2">
-        <Card className="border-border/40 shadow-sm overflow-hidden p-0">
-          {/* <CardHeader className="bg-muted/10 pb-4 border-b border-border/40">
-            <CardTitle className="text-lg font-semibold text-foreground">
-              Permissions Matrix
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Granular access control. Selecting a role on the left will automatically apply predefined templates here.
-            </CardDescription>
-          </CardHeader> */}
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              {/* Column headers */}
-              <div className="grid grid-cols-6 border-b border-border/40 bg-muted/30 px-6 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">
-                <div className="col-span-3">Permissions Module</div>
-                {allActions.map((action) => (
-                  <div key={action} className="text-center">{action}</div>
-                ))}
-              </div>
-
-              {/* Rows */}
-              {modulesList.map((mod, index) => {
-                const readPerm = mod.perms.find(p => p.key.endsWith(':read'));
-                const writePerm = mod.perms.find(p => p.key.endsWith(':write'));
-                const approvePerm = mod.perms.find(p => p.key.endsWith(':approve'));
-                
-                // Construct a helpful combined description
-                const desc = [readPerm?.description, writePerm?.description].filter(Boolean).join(" • ");
-
-                return (
-                  <div
-                    key={mod.moduleName}
-                    className={`grid grid-cols-6 items-center px-6 py-4 text-sm hover:bg-muted/5 transition-colors ${
-                      index !== modulesList.length - 1 ? "border-b border-border/30" : ""
-                    }`}
-                  >
-                    <div className="col-span-3 pr-4">
-                      <p className="font-medium text-foreground">{getModuleName(mod.moduleName)}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{desc}</p>
-                    </div>
-                    <div className="flex justify-center">
-                      {readPerm ? (
-                        <Checkbox
-                          id={`perm-${readPerm.key}`}
-                          checked={selectedPermissions.has(readPerm.key)}
-                          onCheckedChange={() => togglePermission(readPerm.key)}
-                          className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                        />
-                      ) : (
-                        <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
-                      )}
-                    </div>
-                    <div className="flex justify-center">
-                      {writePerm ? (
-                        <Checkbox
-                          id={`perm-${writePerm.key}`}
-                          checked={selectedPermissions.has(writePerm.key)}
-                          onCheckedChange={() => togglePermission(writePerm.key)}
-                          className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                        />
-                      ) : (
-                        <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
-                      )}
-                    </div>
-                    <div className="flex justify-center">
-                      {approvePerm ? (
-                        <Checkbox
-                          id={`perm-${approvePerm.key}`}
-                          checked={selectedPermissions.has(approvePerm.key)}
-                          onCheckedChange={() => togglePermission(approvePerm.key)}
-                          className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                        />
-                      ) : (
-                        <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="lg:col-span-2 space-y-6">
+        {renderPermissionsCard(
+          webModulesList,
+          "Web Portal Permissions",
+          "Access control for the web admin dashboard. Selecting a role on the left will automatically apply predefined templates."
+        )}
+        {renderPermissionsCard(
+          mobileModulesList,
+          "Mobile App Permissions",
+          "Access control for the mobile field client. These govern offline and field operations."
+        )}
       </div>
     </form>
   );

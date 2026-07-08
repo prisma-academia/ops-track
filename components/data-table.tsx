@@ -62,6 +62,7 @@ export interface DataTableProps<TData, TValue> {
   rowHref?: (row: TData) => string | null;
   empty?: string;
   filterColumnId?: string;
+  filterNode?: React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -76,6 +77,7 @@ export function DataTable<TData, TValue>({
   rowHref,
   empty = "No results found.",
   filterColumnId,
+  filterNode,
 }: DataTableProps<TData, TValue>) {
   const router = useRouter();
   const [sorting, setSorting] = React.useState<SortingState>([]);
@@ -105,7 +107,7 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-6">
-      {(title || effectiveSearchKey || headerAction) && (
+      {(title || effectiveSearchKey || headerAction || filterColumnId || filterNode) && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0">
           <div className="space-y-1">
             {title && (
@@ -120,6 +122,7 @@ export function DataTable<TData, TValue>({
             )}
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+            {filterNode}
             {effectiveSearchKey && (
               <InputGroup className="max-w-xs">
                 <InputGroupInput

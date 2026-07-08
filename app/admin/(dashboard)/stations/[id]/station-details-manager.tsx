@@ -2,15 +2,19 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { cn, formatHumanReadableDate } from "@/lib/utils";
 import { z } from "zod";
 import { apiPost, apiPatch } from "@/lib/client/api";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { FormField, TextInput } from "@/components/form-field";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -44,10 +48,12 @@ import {
   Cloud,
   Pencil,
   ChevronsUpDown,
-  Check
+  Check,
+  ArrowLeft
 } from "lucide-react";
 import { AssetTank } from "@/app/admin/(dashboard)/dashboard/Tank";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
+import nigerianLocations from "@/constant/nigerian-locations.json";
 
 const AddTankSchema = z.object({
   name: z.string().min(1, "Please enter a tank name").max(50),
@@ -64,43 +70,16 @@ const AddPumpSchema = z.object({
 const EditStationSchema = z.object({
   name: z.string().min(2, "Station name must be at least 2 characters"),
   code: z.string().min(2, "Station code must be at least 2 characters"),
-  region: z.string().optional(),
+  state: z.string().min(2, "Please select a state"),
+  lga: z.string().min(2, "Please select an LGA"),
+  ward: z.string().min(2, "Please select a ward"),
   location: z.string().optional().nullable(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
+  altitude: z.number().nullable().optional(),
 });
 
-function formatHumanReadableDate(dateInput: string | Date | null | undefined): string {
-  if (!dateInput) return "—";
-  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
-  if (isNaN(date.getTime())) return "—";
 
-  const months = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-  ];
-  
-  const month = months[date.getMonth()];
-  const day = date.getDate();
-  const year = date.getFullYear();
-  
-  let hours = date.getHours();
-  const minutes = date.getMinutes();
-  const ampm = hours >= 12 ? "pm" : "am";
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  const minutesStr = minutes < 10 ? "0" + minutes : minutes;
-
-  const getOrdinalSuffix = (day: number) => {
-    if (day > 3 && day < 21) return "th";
-    switch (day % 10) {
-      case 1:  return "st";
-      case 2:  return "nd";
-      case 3:  return "rd";
-      default: return "th";
-    }
-  };
-
-  return `${month} ${day}${getOrdinalSuffix(day)} ${year} ${hours}:${minutesStr}${ampm}`;
-}
 
 const PRODUCT_ICONS: Record<string, React.ReactNode> = {
   PMS: <Flame size={14} className="text-rose-500" />,
@@ -138,6 +117,8 @@ export function StationDetailsManager({
   station: any;
   users: any[];
 }) {
+  console.log("Station Details Data:", station);
+
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
@@ -162,10 +143,43 @@ export function StationDetailsManager({
     defaultValues: {
       name: station.name || "",
       code: station.code || "",
-      region: station.region || "",
+      state: station.state || "",
+      lga: station.lga || "",
+      ward: station.ward || "",
       location: station.location || "",
+      latitude: station.latitude != null ? Number(station.latitude) : null,
+      longitude: station.longitude != null ? Number(station.longitude) : null,
+      altitude: station.altitude != null ? Number(station.altitude) : null,
     }
   });
+
+  const [openStateSelect, setOpenStateSelect] = useState(false);
+  const [openLgaSelect, setOpenLgaSelect] = useState(false);
+  const [openWardSelect, setOpenWardSelect] = useState(false);
+
+  const selectedState = editStationForm.watch("state");
+  const selectedLga = editStationForm.watch("lga");
+  const selectedWard = editStationForm.watch("ward");
+
+  const availableLgas = selectedState
+    ? nigerianLocations.find((loc) => loc.state === selectedState)?.lgas || []
+    : [];
+
+  const availableWards = selectedLga
+    ? availableLgas.find((l) => l.name === selectedLga)?.wards || []
+    : [];
+
+  const handleWardSelect = (wardName: string) => {
+    editStationForm.setValue("ward", wardName, { shouldValidate: true });
+    const wardObj = availableWards.find((w) => w.name === wardName);
+    if (wardObj) {
+      editStationForm.setValue("latitude", wardObj.latitude);
+      editStationForm.setValue("longitude", wardObj.longitude);
+    } else {
+      editStationForm.setValue("latitude", null);
+      editStationForm.setValue("longitude", null);
+    }
+  };
 
   const handleNozzleCountChange = (count: number) => {
     setNozzleCount(count);
@@ -224,13 +238,71 @@ export function StationDetailsManager({
 
   const handleEditStation = editStationForm.handleSubmit(async (values) => {
     setApiError(null);
-    const res = await apiPatch(`/api/tenant/stations/${station.id}`, values);
+    const res = await apiPatch(`/api/tenant/stations/${station.id}`, {
+      ...values,
+      staffUserIds: selectedManagerId ? [selectedManagerId] : [],
+    });
     if (res.error) {
       setApiError(res.error.message);
     } else {
       closeDialog();
     }
   });
+
+  const openEditStation = () => {
+    setSelectedManagerId(station.staff && station.staff.length > 0 ? station.staff[0].id : "");
+    editStationForm.reset({
+      name: station.name || "",
+      code: station.code || "",
+      state: station.state || "",
+      lga: station.lga || "",
+      ward: station.ward || "",
+      location: station.location || "",
+      latitude: station.latitude != null ? Number(station.latitude) : null,
+      longitude: station.longitude != null ? Number(station.longitude) : null,
+      altitude: station.altitude != null ? Number(station.altitude) : null,
+    });
+    setActiveDialog("edit-station");
+  };
+
+  const [configTab, setConfigTab] = useState<string>("addTank");
+
+  const openAddTankDialog = () => {
+    const nextTankIndex = (station.tanks?.length || 0) + 1;
+    tankForm.reset({
+      name: `TANK ${nextTankIndex}`,
+      productType: "PMS",
+      capacity: 0
+    });
+    setConfigTab("addTank");
+    setActiveDialog("config");
+  };
+
+  const openAddPumpDialog = () => {
+    const nextPumpIndex = (station.pumps?.length || 0) + 1;
+    pumpForm.reset({
+      name: `PUMP ${nextPumpIndex}`,
+      tankId: "",
+      nozzles: [{ name: "Nozzle A" }]
+    });
+    setConfigTab("addPump");
+    setActiveDialog("config");
+  };
+
+  const openAddPumpDialogForTank = (tankId: string) => {
+    const nextPumpIndex = (station.pumps?.length || 0) + 1;
+    pumpForm.reset({
+      name: `PUMP ${nextPumpIndex}`,
+      tankId: tankId,
+      nozzles: [{ name: "Nozzle A" }]
+    });
+    setConfigTab("addPump");
+    setActiveDialog("config");
+  };
+
+  const openConfigDialog = () => {
+    openAddTankDialog();
+  };
 
   // Flatten and sort data
   const regularDippings = station.tanks
@@ -241,7 +313,7 @@ export function StationDetailsManager({
       ...d,
       tank: t,
       recordedAt: d.createdAt,
-      dippingLiters: d.afterLiters !== null ? d.afterLiters : d.beforeLiters,
+      dippingLiters: d.afterLiters !== null ? Number(d.afterLiters) - Number(d.beforeLiters) : 0,
       reason: "WAYBILL DISCHARGE"
     })));
 
@@ -271,117 +343,194 @@ export function StationDetailsManager({
   return (
     <div className="space-y-6">
       {/* ---------------- FULL WIDTH HEADER CARD ---------------- */}
-      <Card className="border-border/50 shadow-sm bg-card">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 gap-6">
-          <div className="flex items-center gap-5 flex-1">
-            <div className="size-14 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center text-primary">
-              <Store size={26} strokeWidth={1.5} />
-            </div>
-            <div className="space-y-1.5 flex-1">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-semibold tracking-tight text-foreground">{station.name}</h1>
-                  <Badge variant="outline" className="font-mono text-xs bg-muted/50 text-muted-foreground border-border/50">{station.code}</Badge>
-                  <button onClick={() => setActiveDialog("edit-station")} className="inline-flex items-center justify-center rounded-full bg-primary/10 hover:bg-primary/20 text-primary p-1.5 transition-colors ml-2" title="Edit Station Info">
-                    <Pencil size={14} />
-                  </button>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                  <MapPin size={14} strokeWidth={2} />
-                  <span>{station.location ? `${station.location}, ` : ""}{station.region} Region</span>
-                </div>
-                <div 
-                  className="flex items-center gap-1.5 group cursor-pointer hover:bg-muted/50 p-1 -ml-1 rounded-md transition-colors" 
-                  onClick={() => { setSelectedManagerId(station.staff && station.staff.length > 0 ? station.staff[0].id : ""); setActiveDialog("manager"); }}
-                >
-                  <User size={14} strokeWidth={2} className="text-muted-foreground group-hover:text-primary transition-colors" />
-                  <span className="text-muted-foreground group-hover:text-foreground transition-colors">
-                    Manager: <span className="font-medium text-foreground">{managerName}</span>
-                  </span>
-                  <div className="opacity-50 group-hover:opacity-100 transition-opacity ml-1 bg-primary/10 text-primary p-1 rounded-full">
-                    <Pencil size={12} />
-                  </div>
-                </div>
-              </div>
+      <Card>
+        <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" size="icon" asChild className="h-10 w-10 shrink-0">
+              <Link href="/admin/stations">
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+            <div>
+              <CardTitle className="text-xl">Station Overview</CardTitle>
             </div>
           </div>
+          <CardAction className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={openEditStation} className="gap-2">
+              <Pencil className="h-4 w-4" />
+              Edit Station
+            </Button>
+            <Button onClick={openConfigDialog} className="gap-2">
+              <Settings className="h-4 w-4" />
+              Config
+            </Button>
+          </CardAction>
+        </CardHeader>
+      </Card>
 
-          <div className="flex items-start gap-4">
-            {/* Prices Grid */}
-            {Object.keys(latestPrices).length === 0 ? (
-              <div className="text-sm text-muted-foreground italic px-4 py-2 border border-dashed rounded-xl flex items-center justify-center min-h-[60px]">
-                No prices configured
+      {/* ---------------- STATION INFO & PRICES GRID ---------------- */}
+      <div className="grid gap-6 md:grid-cols-2 items-stretch">
+        {/* Station Information Card */}
+        <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Store size={16} className="text-primary" />
+              Station Information
+            </CardTitle>
+            <CardDescription className="text-xs">Operational status and location details</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 flex flex-col justify-between">
+            <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+              <div className="col-span-2 flex items-center gap-3">
+                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <User size={16} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Station Manager</p>
+                  <p className="font-semibold text-foreground">{managerName}</p>
+                </div>
               </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 w-full md:w-auto">
-                {Object.entries(latestPrices).map(([product, price]) => (
-                  <div key={product} className="flex items-center gap-3 px-3 py-2 bg-muted/20 border border-border/50 rounded-xl min-w-[140px]">
-                    <div className="p-1.5 bg-background border border-border/50 rounded-md">
+              
+              <div className="flex items-start gap-3">
+                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-0.5">
+                  <Store size={16} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Station Code</p>
+                  <Badge variant="outline" className="font-mono text-[10px] px-2 py-0.5 h-5 bg-background">{station.code}</Badge>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-0.5">
+                  <MapPin size={16} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Location / Ward / LGA</p>
+                  <p className="font-semibold text-foreground text-xs leading-tight">
+                    {station.ward ? `${station.ward}, ` : ""}{station.lga ? `${station.lga}, ` : ""}{station.state || "N/A"}
+                  </p>
+                  {station.location && (
+                    <p className="text-[11px] text-muted-foreground mt-1 line-clamp-1">{station.location}</p>
+                  )}
+                </div>
+              </div>
+
+              {((station.latitude != null) || (station.longitude != null) || (station.altitude != null)) && (
+                <div className="col-span-2 flex items-center gap-3 border-t border-dashed border-stone-200 dark:border-stone-800 pt-3 mt-1">
+                  <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">GPS Coordinates</div>
+                  <div className="flex gap-4 text-xs font-mono">
+                    {station.latitude != null && (
+                      <div><span className="text-muted-foreground">LAT:</span> <span className="font-medium text-foreground">{Number(station.latitude).toFixed(6)}</span></div>
+                    )}
+                    {station.longitude != null && (
+                      <div><span className="text-muted-foreground">LON:</span> <span className="font-medium text-foreground">{Number(station.longitude).toFixed(6)}</span></div>
+                    )}
+                    {station.altitude != null && (
+                      <div><span className="text-muted-foreground">ALT:</span> <span className="font-medium text-foreground">{Number(station.altitude).toFixed(1)}m</span></div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Consolidated Prices Card */}
+        <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Fuel size={16} className="text-primary" />
+              Product Prices
+            </CardTitle>
+            <CardDescription className="text-xs">Active retail fuel prices per unit</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1">
+            <div className="grid grid-cols-2 gap-3">
+              {["PMS", "AGO", "DPK", "LPG"].map((product) => {
+                const price = latestPrices[product];
+                return (
+                  <div key={product} className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
+                    <div className="p-2 bg-primary/10 text-primary rounded-lg shrink-0">
                       {PRODUCT_ICONS[product] || <Flame size={14} />}
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-medium text-muted-foreground">{PRODUCT_NAMES[product] || product}</span>
-                      <span className="text-sm font-bold text-foreground leading-tight">₦{Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <div className="overflow-hidden">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate">
+                        {PRODUCT_NAMES[product] ? PRODUCT_NAMES[product].split(" ")[0] : product}
+                      </p>
+                      <p className="text-base font-bold text-foreground font-mono mt-0.5 truncate">
+                        {price != null ? (
+                          `₦${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        ) : (
+                          "—"
+                        )}
+                      </p>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </Card>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* ---------------- TABS NAVIGATION ---------------- */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="dippings">Dippings</TabsTrigger>
-            <TabsTrigger value="shifts">Shift Logs</TabsTrigger>
-            <TabsTrigger value="waybills">Waybills</TabsTrigger>
-            <TabsTrigger value="expenses">Expenses</TabsTrigger>
-            <TabsTrigger value="sales">Sales</TabsTrigger>
+        <div className="flex items-center justify-between mb-4">
+          <TabsList className="h-4 px-1.5 py-2 justify-start md:w-auto gap-1">
+            <TabsTrigger value="overview" className="px-6 py-4 text-[15px] font-semibold">Overview</TabsTrigger>
+            <TabsTrigger value="dippings" className="px-6 py-4 text-[15px] font-semibold">Dippings</TabsTrigger>
+            <TabsTrigger value="shifts" className="px-6 py-4 text-[15px] font-semibold">Shift Logs</TabsTrigger>
+            <TabsTrigger value="waybills" className="px-6 py-4 text-[15px] font-semibold">Waybills</TabsTrigger>
+            <TabsTrigger value="expenses" className="px-6 py-4 text-[15px] font-semibold">Expenses</TabsTrigger>
+            <TabsTrigger value="sales" className="px-6 py-4 text-[15px] font-semibold">Sales</TabsTrigger>
           </TabsList>
-          <Button variant="outline" size="sm" onClick={() => setActiveDialog("config")} className="h-9 shrink-0 gap-2">
-            <Settings size={14} />
-            <span>Config</span>
-          </Button>
         </div>
 
         {/* ---------------- OVERVIEW TAB ---------------- */}
         <TabsContent value="overview" className="mt-0 space-y-6 animate-in fade-in duration-500">
           
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold tracking-tight text-foreground">Infrastructure Overview</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 dark:border-stone-800 pb-3">
+            <div>
+              <h2 className="text-base font-bold text-foreground">Infrastructure Overview</h2>
+              <p className="text-xs text-muted-foreground">Storage tanks and dispensing pumps layout mapping</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={openAddTankDialog} className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800">
+                <Plus size={14} className="text-primary" />
+                Add Tank
+              </Button>
+              <Button size="sm" variant="outline" onClick={openAddPumpDialog} className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800">
+                <Plus size={14} className="text-primary" />
+                Add Pump / Dispenser
+              </Button>
+            </div>
           </div>
           
           <div className="flex flex-col gap-12 lg:gap-16">
             {station.tanks.length === 0 ? (
-              <div className="w-full py-8 text-center border rounded-xl border-dashed">
-                <p className="text-muted-foreground text-sm">No infrastructure configured.</p>
+              <div className="w-full flex flex-col items-center justify-center py-16 px-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-2xl bg-stone-50/50 dark:bg-stone-900/10 text-center">
+                <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-4">
+                  <Droplet size={24} />
+                </div>
+                <h3 className="text-base font-bold text-foreground mb-1">No Infrastructure Configured</h3>
+                <p className="text-xs text-muted-foreground max-w-sm mb-6">
+                  Get started by adding storage fuel tanks and pump dispensers to map out this retail station's physical layout.
+                </p>
+                <div className="flex items-center gap-3">
+                  <Button onClick={openAddTankDialog} className="gap-2 shadow-xs text-xs h-9">
+                    <Plus size={15} />
+                    Add Storage Tank
+                  </Button>
+                  <Button variant="outline" onClick={openAddPumpDialog} className="gap-2 text-xs h-9 bg-white dark:bg-stone-950 border-stone-200 dark:border-stone-800">
+                    <Plus size={15} />
+                    Add Pump / Dispenser
+                  </Button>
+                </div>
               </div>
             ) : (
               station.tanks.map((tank: any) => {
-                const lastDip = tank.dippings?.[0];
-                const lastWaybillDip = tank.waybillDippings?.[0];
-                
-                let currentLitres = 0;
-                let latestDate = 0;
-
-                if (lastDip) {
-                  currentLitres = Number(lastDip.dippingLiters);
-                  latestDate = new Date(lastDip.recordedAt).getTime();
-                }
-
-                if (lastWaybillDip) {
-                  const waybillDate = new Date(lastWaybillDip.createdAt).getTime();
-                  if (waybillDate > latestDate) {
-                    currentLitres = lastWaybillDip.afterLiters !== null ? Number(lastWaybillDip.afterLiters) : Number(lastWaybillDip.beforeLiters);
-                    latestDate = waybillDate;
-                  }
-                }
+                const currentLitres = Number(tank.currentLiters || 0);
 
                 const capacity = Number(tank.capacity);
                 const tankPumps = station.pumps.filter((p: any) => p.tankId === tank.id);
@@ -417,8 +566,18 @@ export function StationDetailsManager({
                     {/* PUMPS CONTAINER */}
                     <div className="flex-1 w-full relative ml-4 lg:ml-8 pt-6 lg:pt-0 flex flex-col justify-center">
                       {tankPumps.length === 0 ? (
-                        <div className="text-xs text-muted-foreground italic bg-muted/30 px-4 py-3 rounded-xl border border-dashed border-border/50 lg:ml-8 text-center lg:text-left">
-                          No dispensers connected to this tank
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-2xl bg-stone-50/50 dark:bg-stone-900/10 lg:ml-8">
+                          <p className="text-xs text-muted-foreground italic">No dispensers connected to this tank</p>
+                          <Button 
+                            type="button" 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => openAddPumpDialogForTank(tank.id)}
+                            className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-950 border-stone-200 dark:border-stone-800"
+                          >
+                            <Plus size={13} className="text-primary" />
+                            Connect Pump
+                          </Button>
                         </div>
                       ) : (
                         <div className="space-y-5">
@@ -503,7 +662,7 @@ export function StationDetailsManager({
 
         {/* ---------------- DIPPINGS TAB ---------------- */}
         <TabsContent value="dippings" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm">
+          <Card className="border-border/40 shadow-sm py-0">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-muted/30 border-b border-border/50">
@@ -539,7 +698,7 @@ export function StationDetailsManager({
 
         {/* ---------------- SHIFTS TAB ---------------- */}
         <TabsContent value="shifts" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm">
+          <Card className="border-border/40 shadow-sm py-0">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-muted/30 border-b border-border/50">
@@ -596,7 +755,7 @@ export function StationDetailsManager({
 
         {/* ---------------- WAYBILLS TAB ---------------- */}
         <TabsContent value="waybills" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm">
+          <Card className="border-border/40 shadow-sm py-0">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-muted/30 border-b border-border/50">
@@ -610,16 +769,17 @@ export function StationDetailsManager({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/30">
-                  {(!station.waybills || station.waybills.length === 0) ? (
+                  {(!station.waybillAllocations || station.waybillAllocations.length === 0) ? (
                     <tr><td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">No waybill records found.</td></tr>
                   ) : (
-                    station.waybills.map((w: any) => {
-                      const dispatched = Number(w.litersLoaded) || 0;
-                      const received = w.litersReceived ? Number(w.litersReceived) : null;
+                    station.waybillAllocations.map((a: any) => {
+                      const w = a.waybill;
+                      const dispatched = Number(a.litersToDispense) || 0;
+                      const received = a.litersReceived ? Number(a.litersReceived) : null;
                       const variance = received !== null ? received - dispatched : null;
                       
                       return (
-                        <tr key={w.id} className="hover:bg-muted/10">
+                        <tr key={a.id} className="hover:bg-muted/10">
                           <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(w.dispatchedAt)}</td>
                           <td className="px-6 py-4 font-mono text-xs font-semibold">{w.number}</td>
                           <td className="px-6 py-4 text-muted-foreground text-xs">{w.driverName} • {w.truckPlate}</td>
@@ -635,10 +795,10 @@ export function StationDetailsManager({
                           </td>
                           <td className="px-6 py-4 text-center">
                             <Badge variant="outline" className={
-                              w.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" : 
-                              w.status === "IN_TRANSIT" ? "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/30" : ""
+                              a.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" : 
+                              a.status === "IN_TRANSIT" ? "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/30" : ""
                             }>
-                              {w.status}
+                              {a.status}
                             </Badge>
                           </td>
                         </tr>
@@ -653,7 +813,7 @@ export function StationDetailsManager({
 
         {/* ---------------- EXPENSES TAB ---------------- */}
         <TabsContent value="expenses" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm">
+          <Card className="border-border/40 shadow-sm py-0">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-muted/30 border-b border-border/50">
@@ -697,7 +857,7 @@ export function StationDetailsManager({
 
         {/* ---------------- SALES TAB ---------------- */}
         <TabsContent value="sales" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm">
+          <Card className="border-border/40 shadow-sm py-0">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-muted/30 border-b border-border/50">
@@ -708,17 +868,23 @@ export function StationDetailsManager({
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Cash</th>
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">POS / Transfer</th>
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Total Revenue</th>
+                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Status</th>
                     <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Recorded By</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/30">
                   {(!station.dailySalesLogs || station.dailySalesLogs.length === 0) ? (
-                    <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No sales records found.</td></tr>
+                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">No sales records found.</td></tr>
                   ) : (
                     station.dailySalesLogs.map((log: any) => {
                       const totalRevenue = Number(log.amountCash) + Number(log.amountPos) + Number(log.amountTransfer);
                       const digitalRevenue = Number(log.amountPos) + Number(log.amountTransfer);
                       const recorder = log.recordedBy ? `${log.recordedBy.firstName ?? ""} ${log.recordedBy.lastName ?? ""}`.trim() : "Unknown";
+
+                      const flags = [];
+                      if (log.flaggedAmount) flags.push("Amount");
+                      if (log.flaggedLiters) flags.push("Liters");
+                      if (log.flaggedReceipt) flags.push("Receipt");
 
                       return (
                         <tr key={log.id} className="hover:bg-muted/10">
@@ -730,6 +896,22 @@ export function StationDetailsManager({
                           <td className="px-6 py-4 text-right text-muted-foreground">₦{Number(log.amountCash).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td className="px-6 py-4 text-right text-muted-foreground">₦{digitalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td className="px-6 py-4 text-right font-bold text-foreground">₦{totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="px-6 py-4 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              {log.status === "APPROVED" ? (
+                                <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 text-[10px] font-semibold">Approved</Badge>
+                              ) : log.status === "REJECTED" ? (
+                                <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50 text-[10px] font-semibold">Rejected</Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 text-[10px] font-semibold">Pending</Badge>
+                              )}
+                              {flags.length > 0 && (
+                                <span className="text-[9px] text-rose-500 font-semibold leading-none">
+                                  Flagged: {flags.join(", ")}
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-6 py-4 text-center text-muted-foreground">{recorder}</td>
                         </tr>
                       );
@@ -743,127 +925,244 @@ export function StationDetailsManager({
 
       </Tabs>
 
-      {/* Assign Manager Dialog */}
-      {activeDialog === "manager" && (
+      {/* Edit Station & Assign Manager Dialog */}
+      {activeDialog === "edit-station" && (
         <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent>
+          <DialogContent className="sm:max-w-3xl">
             <DialogHeader>
-              <DialogTitle>Assign Station Manager</DialogTitle>
+              <DialogTitle>Edit Station & Management</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleAssignManager} className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Select Manager</label>
-                <Popover open={openManagerSelect} onOpenChange={setOpenManagerSelect}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full justify-between font-normal bg-background"
-                    >
-                      <span className="truncate">
-                        {selectedManagerId === "" ? "Unassigned" : (
-                          users.find(u => u.id === selectedManagerId)
-                            ? (() => {
-                                const u = users.find(u => u.id === selectedManagerId)!;
-                                return u.firstName || u.lastName
-                                  ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-                                  : u.email;
-                              })()
-                            : "Select..."
-                        )}
-                      </span>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                    <Command>
-                      <CommandInput placeholder="Search users..." />
-                      <CommandList>
-                        <CommandEmpty>No user found.</CommandEmpty>
-                        <CommandGroup>
-                          <CommandItem
-                            value="unassigned"
-                            onSelect={() => {
-                              setSelectedManagerId("");
-                              setOpenManagerSelect(false);
-                            }}
+            <form onSubmit={handleEditStation} className="pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Left Column: Station Details */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold border-b pb-2 mb-4">Station Details</h3>
+                  
+                  {/* Station Name - Full Width */}
+                  <FormField label="Station Name" htmlFor="s_name" error={editStationForm.formState.errors.name?.message}>
+                    <Input id="s_name" {...editStationForm.register("name")} />
+                  </FormField>
+
+                  {/* State and Station Code - Same Row */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* State */}
+                    <FormField label="State" htmlFor="s_state" error={editStationForm.formState.errors.state?.message}>
+                      <Popover open={openStateSelect} onOpenChange={setOpenStateSelect}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            id="s_state"
+                            className="w-full justify-between font-normal bg-background"
                           >
-                            Unassigned
-                            {selectedManagerId === "" && <Check className="ml-auto h-4 w-4" />}
-                          </CommandItem>
-                          {users.map((u) => {
-                            const label = u.firstName || u.lastName
-                              ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-                              : u.email;
-                            return (
+                            <span className="truncate">{selectedState || "Select State"}</span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search state..." />
+                            <CommandList className="max-h-[200px] overflow-y-auto">
+                              <CommandEmpty>No state found.</CommandEmpty>
+                              <CommandGroup>
+                                {nigerianLocations.map((loc) => (
+                                  <CommandItem
+                                    key={loc.state}
+                                    value={loc.state.toLowerCase()}
+                                    onSelect={() => {
+                                      editStationForm.setValue("state", loc.state, { shouldValidate: true });
+                                      editStationForm.setValue("lga", "");
+                                      editStationForm.setValue("ward", "");
+                                      editStationForm.setValue("latitude", null);
+                                      editStationForm.setValue("longitude", null);
+                                      setOpenStateSelect(false);
+                                    }}
+                                  >
+                                    {loc.state}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <input type="hidden" {...editStationForm.register("state")} />
+                    </FormField>
+
+                    {/* Station Code */}
+                    <FormField label="Station Code" htmlFor="s_code" error={editStationForm.formState.errors.code?.message}>
+                      <Input id="s_code" {...editStationForm.register("code")} />
+                    </FormField>
+                  </div>
+
+                  {/* LGA and Ward - Same Row */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* LGA */}
+                    <FormField label="LGA" htmlFor="s_lga" error={editStationForm.formState.errors.lga?.message}>
+                      <Popover open={openLgaSelect} onOpenChange={setOpenLgaSelect}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            id="s_lga"
+                            disabled={!selectedState}
+                            className="w-full justify-between font-normal bg-background"
+                          >
+                            <span className="truncate">{selectedLga || "Select LGA"}</span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search LGA..." />
+                            <CommandList className="max-h-[200px] overflow-y-auto">
+                              <CommandEmpty>No LGA found.</CommandEmpty>
+                              <CommandGroup>
+                                {availableLgas.map((lga: any) => (
+                                  <CommandItem
+                                    key={lga.name}
+                                    value={lga.name.toLowerCase()}
+                                    onSelect={() => {
+                                      editStationForm.setValue("lga", lga.name, { shouldValidate: true });
+                                      editStationForm.setValue("ward", "");
+                                      editStationForm.setValue("latitude", null);
+                                      editStationForm.setValue("longitude", null);
+                                      setOpenLgaSelect(false);
+                                    }}
+                                  >
+                                    {lga.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <input type="hidden" {...editStationForm.register("lga")} />
+                    </FormField>
+
+                    {/* Ward */}
+                    <FormField label="Ward" htmlFor="s_ward" error={editStationForm.formState.errors.ward?.message}>
+                      <Popover open={openWardSelect} onOpenChange={setOpenWardSelect}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            id="s_ward"
+                            disabled={!selectedLga}
+                            className="w-full justify-between font-normal bg-background"
+                          >
+                            <span className="truncate">{selectedWard || "Select Ward"}</span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search ward..." />
+                            <CommandList className="max-h-[200px] overflow-y-auto">
+                              <CommandEmpty>No ward found.</CommandEmpty>
+                              <CommandGroup>
+                                {availableWards.map((ward: any) => (
+                                  <CommandItem
+                                    key={ward.name}
+                                    value={ward.name.toLowerCase()}
+                                    onSelect={() => {
+                                      handleWardSelect(ward.name);
+                                      setOpenWardSelect(false);
+                                    }}
+                                  >
+                                    {ward.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <input type="hidden" {...editStationForm.register("ward")} />
+                    </FormField>
+                  </div>
+
+                  <FormField label="Location / Address" htmlFor="s_location" error={editStationForm.formState.errors.location?.message}>
+                    <Input id="s_location" {...editStationForm.register("location")} />
+                  </FormField>
+                </div>
+
+                {/* Right Column: Manager Assignment */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold border-b pb-2 mb-4">Management</h3>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Select Manager</label>
+                    <Popover open={openManagerSelect} onOpenChange={setOpenManagerSelect}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-between font-normal bg-background"
+                        >
+                          <span className="truncate">
+                            {selectedManagerId === "" ? "Unassigned" : (
+                              users.find(u => u.id === selectedManagerId)
+                                ? (() => {
+                                    const u = users.find(u => u.id === selectedManagerId)!;
+                                    return u.firstName || u.lastName
+                                      ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                                      : u.email;
+                                  })()
+                                : "Select..."
+                            )}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search users..." />
+                          <CommandList>
+                            <CommandEmpty>No user found.</CommandEmpty>
+                            <CommandGroup>
                               <CommandItem
-                                key={u.id}
-                                value={`${label} ${u.email}`.toLowerCase()}
+                                value="unassigned"
                                 onSelect={() => {
-                                  setSelectedManagerId(u.id);
+                                  setSelectedManagerId("");
                                   setOpenManagerSelect(false);
                                 }}
                               >
-                                {label} ({u.email})
-                                {selectedManagerId === u.id && <Check className="ml-auto h-4 w-4" />}
+                                Unassigned
+                                {selectedManagerId === "" && <Check className="ml-auto h-4 w-4" />}
                               </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                              {users.map((u) => {
+                                const label = u.firstName || u.lastName
+                                  ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                                  : u.email;
+                                return (
+                                  <CommandItem
+                                    key={u.id}
+                                    value={`${label} ${u.email}`.toLowerCase()}
+                                    onSelect={() => {
+                                      setSelectedManagerId(u.id);
+                                      setOpenManagerSelect(false);
+                                    }}
+                                  >
+                                    {label} ({u.email})
+                                    {selectedManagerId === u.id && <Check className="ml-auto h-4 w-4" />}
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
               </div>
 
-              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+              {apiError && <p className="text-xs text-red-600 mt-4">{apiError}</p>}
 
-              <DialogFooter className="mt-4">
-                <Button type="button" variant="outline" onClick={closeDialog} disabled={isAssigningManager}>Cancel</Button>
-                <Button type="submit" disabled={isAssigningManager} className="gap-2">
-                  {isAssigningManager ? <><SpinnerEllipsis /><span>Saving...</span></> : "Save Changes"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Edit Station Dialog */}
-      {activeDialog === "edit-station" && (
-        <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Station Information</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleEditStation} className="space-y-4 pt-4">
-              <FormField label="Station Name" htmlFor="s_name" error={editStationForm.formState.errors.name?.message}>
-                <TextInput id="s_name" {...editStationForm.register("name")} />
-              </FormField>
-
-              <FormField label="Station Code" htmlFor="s_code" error={editStationForm.formState.errors.code?.message}>
-                <TextInput id="s_code" {...editStationForm.register("code")} />
-              </FormField>
-
-              <FormField label="Region" htmlFor="s_region" error={editStationForm.formState.errors.region?.message}>
-                <select id="s_region" className="rounded border border-input bg-background px-3 py-2 text-sm w-full" {...editStationForm.register("region")}>
-                  <option value="">Select Region</option>
-                  <option value="South-West">South-West</option>
-                  <option value="South-East">South-East</option>
-                  <option value="North-Central">North-Central</option>
-                  <option value="North-West">North-West</option>
-                  <option value="North-East">North-East</option>
-                  <option value="South-South">South-South</option>
-                </select>
-              </FormField>
-
-              <FormField label="Location" htmlFor="s_location" error={editStationForm.formState.errors.location?.message}>
-                <TextInput id="s_location" {...editStationForm.register("location")} />
-              </FormField>
-
-              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
-
-              <DialogFooter className="mt-4">
+              <DialogFooter className="mt-6">
                 <Button type="button" variant="outline" onClick={closeDialog} disabled={editStationForm.formState.isSubmitting}>Cancel</Button>
                 <Button type="submit" disabled={editStationForm.formState.isSubmitting} className="gap-2">
                   {editStationForm.formState.isSubmitting ? <><SpinnerEllipsis /><span>Saving...</span></> : "Save Changes"}
@@ -882,7 +1181,7 @@ export function StationDetailsManager({
               <DialogTitle>Station Configuration & Assets</DialogTitle>
             </DialogHeader>
             
-            <Tabs defaultValue="addTank" className="w-full mt-4">
+            <Tabs value={configTab} onValueChange={setConfigTab} className="w-full mt-4">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="addTank">Add Storage Tank</TabsTrigger>
                 <TabsTrigger value="addPump">Add Dispenser / Pump</TabsTrigger>

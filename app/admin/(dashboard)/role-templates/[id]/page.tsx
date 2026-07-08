@@ -18,7 +18,7 @@ export default async function TenantRoleDetailPage({
   }
   return (
     <div>
-      <PageHeader title={role.name} />
+      <PageHeader title={role.name} backHref="/admin/role-templates" />
       <Card>
         <RoleDetailEditor
           id={role.id}

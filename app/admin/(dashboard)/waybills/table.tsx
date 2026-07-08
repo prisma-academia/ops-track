@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 export type WaybillRow = {
   id: string;
   number: string;
-  status: "DISPATCHED" | "DELIVERED";
+  status: "DISPATCHED" | "DELIVERED" | "COMPLETED";
   productType: string;
   litersLoaded: number;
   litersReceived: number | null;
@@ -28,15 +28,17 @@ export type WaybillRow = {
 
 export function WaybillsTable({
   data,
-  onViewDetails,
+  filterNode,
+  headerAction,
 }: {
   data: WaybillRow[];
-  onViewDetails: (waybill: WaybillRow) => void;
+  filterNode?: React.ReactNode;
+  headerAction?: React.ReactNode;
 }) {
   const columns: ColumnDef<WaybillRow>[] = [
     {
       accessorKey: "number",
-      header: "Waybill",
+      header: "Waybill / Station",
       cell: ({ row }) => {
         const w = row.original;
         return (
@@ -144,25 +146,6 @@ export function WaybillsTable({
           year: "numeric",
         }),
     },
-    {
-      id: "actions",
-      header: () => <div className="text-center">Action</div>,
-      cell: ({ row }) => {
-        const w = row.original;
-        return (
-          <div className="flex items-center gap-2 justify-center" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onViewDetails(w)}
-              className="flex items-center gap-1 h-8 px-3 rounded-4xl"
-            >
-              <Eye className="size-3.5" /> Details
-            </Button>
-          </div>
-        );
-      },
-    },
   ];
 
   return (
@@ -172,6 +155,9 @@ export function WaybillsTable({
         data={data}
         filterColumnId="number"
         searchPlaceholder="Search by waybill number…"
+        rowHref={(row) => `/admin/waybills/${row.id}`}
+        filterNode={filterNode}
+        headerAction={headerAction}
       />
     </TooltipProvider>
   );

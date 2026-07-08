@@ -36,6 +36,7 @@ import {
   AlertCircle,
   ChartNoAxesCombined,
   FileText,
+  Scale,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -60,6 +61,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number }>> = {
   AlertCircle,
   ChartNoAxesCombined,
   FileText,
+  Scale,
 };
 
 export type NavItem = {
@@ -164,7 +166,7 @@ function NavMainItem({
                     setIsOpen(!isOpen);
                   }}
                   className={cn(
-                    "rounded-none text-sm font-medium px-3 py-4 h-10 transition-colors cursor-pointer",
+                    "rounded-md text-sm font-medium px-3 py-4 h-10 transition-colors cursor-pointer",
                     isParentActive ? "bg-primary! text-primary-foreground!" : ""
                   )}
                 >
@@ -216,7 +218,7 @@ function NavMainItem({
                 setActiveChild(null);
               }}
               className={cn(
-                "rounded-none text-sm font-medium px-3 py-4 h-10 transition-colors cursor-pointer",
+                "rounded-md text-sm font-medium px-3 py-4 h-10 transition-colors cursor-pointer",
                 isParentActive ? "bg-primary! text-primary-foreground!" : ""
               )}
             >
@@ -261,7 +263,7 @@ function NavMainSubItem({
           <CollapsibleTrigger asChild>
             <SidebarMenuSubButton
               id={`nav-sub-trigger-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
-              className="rounded-none text-sm font-medium px-3 py-2 h-9"
+              className="rounded-md text-sm font-medium px-3 py-2 h-9"
             >
               {Icon && <Icon />}
               <span>{item.title}</span>
@@ -300,7 +302,7 @@ function NavMainSubItem({
           asChild
           id={`nav-sub-button-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
           className={cn(
-            "w-full rounded-none py-5 h-10 transition-colors",
+            "w-full rounded-md py-5 h-10 transition-colors",
             activeChild === item.title ? "bg-muted! text-foreground!" : ""
           )}
           isActive={activeChild === item.title}

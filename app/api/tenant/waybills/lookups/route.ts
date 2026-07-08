@@ -5,7 +5,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 
 export async function GET(req: Request) {
   try {
-    await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+    await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_READ.key);
 
     const suppliers = await prisma.supplier.findMany({ orderBy: { name: "asc" } });
     const depots = await prisma.depot.findMany({ orderBy: { name: "asc" } });
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_WRITE.key);
+    await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
 
     const body = await req.json();
     const { type, name } = body;

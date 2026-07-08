@@ -21,7 +21,7 @@ export async function GET(
 ) {
   try {
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_SHIFTS_READ.key);
     const url = new URL(request.url);
     const { cursor, take } = parsePagination(url.searchParams);
 
@@ -85,7 +85,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_SHIFTS_WRITE.key);
     const body = RecordShiftSchema.parse(await request.json());
     const meta = requestMeta(request);
 

@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { DippingsManager } from "./dippings-manager";
 
 export default async function DippingsPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_DIPPINGS_READ.key);
 
   const userWithStations = await prisma.tenantUser.findUnique({
     where: { id: actor.userId },

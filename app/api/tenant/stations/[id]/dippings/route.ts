@@ -20,7 +20,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_WRITE.key);
     const body = CreateDippingSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -79,6 +79,19 @@ export async function POST(
 
     // Execute actions
     const result = await prisma.$transaction(async (tx) => {
+      // Validate capacity inside transaction to prevent race conditions
+      const latestTank = await tx.tank.findUnique({
+        where: { id: body.tankId },
+      });
+      if (!latestTank) {
+         throw new DomainError(404, "not_found", "Tank not found.");
+      }
+      
+      const newLevel = body.dippingLiters;
+      if (newLevel > Number(latestTank.capacity)) {
+        throw new DomainError(400, "capacity_exceeded", `Dipping volume (${body.dippingLiters} L) would push tank "${latestTank.name}" to ${newLevel.toLocaleString()} L, exceeding capacity of ${Number(latestTank.capacity).toLocaleString()} L.`);
+      }
+
       // If pricePerLiter is provided, create a new PriceControl entry
       if (body.pricePerLiter !== undefined) {
         await tx.priceControl.create({
@@ -101,6 +114,12 @@ export async function POST(
           reason: body.reason,
           recordedAt: new Date(),
         },
+      });
+
+      // Update tank currentLiters atomically to match the physical dip
+      await tx.tank.update({
+        where: { id: body.tankId },
+        data: { currentLiters: body.dippingLiters },
       });
 
       return dipping;
@@ -135,7 +154,7 @@ export async function GET(
 ) {
   try {
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_READ.key);
 
     const station = await prisma.station.findUnique({
       where: { id: stationId },

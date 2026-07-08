@@ -5,7 +5,7 @@ import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { PricesManager } from "./prices-manager";
 
 export default async function PricesPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_OPERATIONS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_PRICES_READ.key);
 
   const stations = await prisma.station.findMany({
     where: { tenantId: actor.tenantId },
@@ -13,7 +13,9 @@ export default async function PricesPage() {
       id: true,
       name: true,
       code: true,
-      region: true,
+      state: true,
+      lga: true,
+      ward: true,
       location: true,
     },
     orderBy: { name: "asc" },
@@ -45,7 +47,9 @@ export default async function PricesPage() {
     <div className="space-y-6">
       <DataTableToolbar
         title="Fuel Prices Management"
-        description="Monitor and update fuel prices across all stations."
+        description="Monitor fuel prices across all stations."
+        createHref="/admin/prices/update"
+        createLabel="Update Prices"
       />
       <PricesManager
         stations={serializedStations}

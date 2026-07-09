@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, MapPin, Truck, AlertTriangle, CheckCircle, PackageOpen, MoreVertical } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
@@ -20,15 +21,19 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
   
   const [openStatusDialog, setOpenStatusDialog] = useState(false);
   const [openSubsequentDialog, setOpenSubsequentDialog] = useState(false);
+  const [openIncidentDialog, setOpenIncidentDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Status form state
   const [newStatus, setNewStatus] = useState(transport.status);
+  
+  // Incident form state
   const [lossType, setLossType] = useState("THEFT");
   const [lostQuantity, setLostQuantity] = useState("");
   const [expensesIncurred, setExpensesIncurred] = useState("");
   const [lossComment, setLossComment] = useState("");
+  const [terminateTrip, setTerminateTrip] = useState(false);
 
   // Subsequent Destination state
   const [subLocation, setSubLocation] = useState("");
@@ -40,19 +45,6 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
     setError(null);
 
     const payload: any = { status: newStatus };
-    if (newStatus === "LOSS") {
-      if (!lossType || !lostQuantity) {
-        setError("Loss Type and Lost Quantity are required");
-        setIsSubmitting(false);
-        return;
-      }
-      payload.lossLog = {
-        lossType,
-        lostQuantity: Number(lostQuantity),
-        expensesIncurred: Number(expensesIncurred || 0),
-        comment: lossComment
-      };
-    }
 
     const res = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, payload);
     setIsSubmitting(false);
@@ -61,6 +53,47 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
       setError(res.error.message);
     } else {
       setOpenStatusDialog(false);
+      router.refresh();
+    }
+  };
+
+  const handleLogIncident = async () => {
+    setIsSubmitting(true);
+    setError(null);
+
+    if (!lossType || !lostQuantity) {
+      setError("Loss Type and Lost Quantity are required");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const payload: any = {
+      lossLog: {
+        lossType,
+        lostQuantity: Number(lostQuantity),
+        expensesIncurred: Number(expensesIncurred || 0),
+        comment: lossComment
+      },
+      addLitersLost: Number(lostQuantity),
+      addMaintenanceCost: Number(expensesIncurred || 0)
+    };
+
+    if (terminateTrip) {
+      payload.status = "LOSS";
+    }
+
+    const res = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, payload);
+    setIsSubmitting(false);
+
+    if (res.error) {
+      setError(res.error.message);
+    } else {
+      setOpenIncidentDialog(false);
+      setLossType("THEFT");
+      setLostQuantity("");
+      setExpensesIncurred("");
+      setLossComment("");
+      setTerminateTrip(false);
       router.refresh();
     }
   };
@@ -125,6 +158,10 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
         </div>
         
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setOpenIncidentDialog(true)} className="text-red-600 dark:text-red-400 border-red-200 dark:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/30">
+            <AlertTriangle className="h-4 w-4 mr-2" />
+            Log Incident
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setOpenSubsequentDialog(true)}>
             <MapPin className="h-4 w-4 mr-2" />
             Add Destination
@@ -301,61 +338,88 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
             <div className="space-y-2">
               <Label>Status</Label>
               <Select value={newStatus} onValueChange={setNewStatus}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="IN_TRANSIT">In Transit</SelectItem>
                   <SelectItem value="COMPLETED">Completed</SelectItem>
                   <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                  <SelectItem value="LOSS" className="text-destructive font-semibold">Mark as Loss</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
-            {newStatus === "LOSS" && (
-              <div className="space-y-4 pt-4 border-t border-destructive/20 animate-in slide-in-from-top-2">
-                <h4 className="text-sm font-semibold text-destructive uppercase tracking-widest">Loss Details</h4>
-                
-                <div className="space-y-2">
-                  <Label>Loss Type</Label>
-                  <Select value={lossType} onValueChange={setLossType}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="THEFT">Theft</SelectItem>
-                      <SelectItem value="MAINTENANCE">Maintenance Issue</SelectItem>
-                      <SelectItem value="ACCIDENT">Accident</SelectItem>
-                      <SelectItem value="OTHERS">Others</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Lost Quantity (L)*</Label>
-                    <Input type="number" value={lostQuantity} onChange={(e) => setLostQuantity(e.target.value)} placeholder="0" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Expenses (₦)</Label>
-                    <Input type="number" value={expensesIncurred} onChange={(e) => setExpensesIncurred(e.target.value)} placeholder="0" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Notes</Label>
-                  <Textarea value={lossComment} onChange={(e) => setLossComment(e.target.value)} placeholder="Explain the incident..." />
-                </div>
-              </div>
-            )}
             
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpenStatusDialog(false)}>Cancel</Button>
-            <Button onClick={handleUpdateStatus} disabled={isSubmitting} variant={newStatus === "LOSS" ? "destructive" : "default"}>
+            <Button onClick={handleUpdateStatus} disabled={isSubmitting}>
               {isSubmitting ? <SpinnerEllipsis /> : "Save Status"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Log Incident Dialog */}
+      <Dialog open={openIncidentDialog} onOpenChange={setOpenIncidentDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Log Incident or Loss
+            </DialogTitle>
+            <DialogDescription>
+              Record any spills, accidents, or theft. This will automatically deduct the lost volume from the transport earnings.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Incident Type</Label>
+              <Select value={lossType} onValueChange={setLossType}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="THEFT">Theft</SelectItem>
+                  <SelectItem value="MAINTENANCE">Maintenance </SelectItem>
+                  <SelectItem value="ACCIDENT">Accident</SelectItem>
+                  <SelectItem value="OTHERS">Others</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Lost Quantity (L)*</Label>
+                <Input type="number" value={lostQuantity} onChange={(e) => setLostQuantity(e.target.value)} placeholder="0" />
+              </div>
+              <div className="space-y-2">
+                <Label>Direct Expenses (₦)</Label>
+                <Input type="number" value={expensesIncurred} onChange={(e) => setExpensesIncurred(e.target.value)} placeholder="0" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea value={lossComment} onChange={(e) => setLossComment(e.target.value)} placeholder="Explain what happened..." />
+            </div>
+
+            <div className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow-sm bg-destructive/5 border-destructive/20 mt-4">
+              <Checkbox id="terminateTrip" checked={terminateTrip} onCheckedChange={(c) => setTerminateTrip(!!c)} />
+              <div className="space-y-1 leading-none">
+                <Label htmlFor="terminateTrip" className="font-semibold text-destructive">Terminate Trip (Total Loss)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Check this if the transport cannot proceed. The status will be marked as LOSS.
+                </p>
+              </div>
+            </div>
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenIncidentDialog(false)}>Cancel</Button>
+            <Button onClick={handleLogIncident} disabled={isSubmitting} variant="destructive">
+              {isSubmitting ? <SpinnerEllipsis /> : "Submit Incident"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -4,6 +4,8 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { Building2, Truck, Users, Route } from "lucide-react";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePickerWithRange } from "@/components/date-range-picker";
+import { TransportVolumeChart } from "@/components/fleet/charts/transport-volume-chart";
+import { TransportStatusChart } from "@/components/fleet/charts/transport-status-chart";
 
 export default async function FleetOverviewPage() {
   const actor = await requireTenantPage();
@@ -15,6 +17,26 @@ export default async function FleetOverviewPage() {
     prisma.driver.count({ where: { tenantId: actor.tenantId } }),
     prisma.transport.count({ where: { tenantId: actor.tenantId, status: "IN_TRANSIT" } }),
   ]);
+
+  const volumeRaw = await prisma.transport.groupBy({
+    by: ["productType"],
+    where: { tenantId: actor.tenantId, productType: { not: null } },
+    _sum: { litersCarried: true }
+  });
+  const volumeData = volumeRaw.map(v => ({
+    productType: v.productType as string,
+    volume: Number(v._sum.litersCarried) || 0
+  }));
+
+  const statusRaw = await prisma.transport.groupBy({
+    by: ["status"],
+    where: { tenantId: actor.tenantId },
+    _count: { _all: true }
+  });
+  const statusData = statusRaw.map(s => ({
+    status: s.status,
+    count: s._count._all
+  }));
 
   const stats = [
     { title: "Total Transporters", value: transportersCount, description: "Active transporters", icon: Building2 },
@@ -61,21 +83,19 @@ export default async function FleetOverviewPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Overview Map</CardTitle>
+            <CardTitle>Transport Volume by Product</CardTitle>
           </CardHeader>
           <CardContent className="pl-2 flex h-[350px] items-center justify-center text-muted-foreground">
-            {/* Placeholder for future charts or maps */}
-            Map or Chart integration goes here
+            <TransportVolumeChart data={volumeData} />
           </CardContent>
         </Card>
         
         <Card className="col-span-3">
           <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
+            <CardTitle>Transport Status</CardTitle>
           </CardHeader>
           <CardContent className="flex h-[350px] items-center justify-center text-muted-foreground">
-            {/* Placeholder for recent activity feed */}
-            Recent Fleet Activity goes here
+            <TransportStatusChart data={statusData} />
           </CardContent>
         </Card>
       </div>

@@ -7,7 +7,7 @@ export default async function NewSalePage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
 
   const customers = await prisma.customer.findMany({
-    where: { tenantId: actor.tenantId, status: "ACTIVE" },
+    where: { tenantId: actor.tenantId },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

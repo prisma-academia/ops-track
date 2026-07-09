@@ -124,10 +124,10 @@ export default function OutgoingPaymentForm() {
             value={category} 
             onValueChange={(val) => setCategory(val as any)}
           >
-            <SelectTrigger className="bg-muted/50 border-primary/20 font-medium">
+            <SelectTrigger className="bg-muted/50 border-primary/20 font-medium w-full">
               <SelectValue placeholder="Select Category" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               <SelectItem value="PERSONAL_EXPENSE">Personal / Administrative Expenses</SelectItem>
               <SelectItem value="FLEET_EXPENSE">Fleet-Related Expenses</SelectItem>
               <SelectItem value="TRANSPORT_FEE">Transport Fee Payment</SelectItem>
@@ -143,13 +143,17 @@ export default function OutgoingPaymentForm() {
               onValueChange={(val) => setFormData({ ...formData, transportId: val })}
               required
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Transport Trip..." />
               </SelectTrigger>
-              <SelectContent>
-                {metadata?.transports?.map((t: any) => (
-                  <SelectItem key={t.id} value={t.id}>{t.id.substring(0,8)} - {t.destination}</SelectItem>
-                ))}
+              <SelectContent position="popper">
+                {metadata?.transports?.length > 0 ? (
+                  metadata.transports.map((t: any) => (
+                    <SelectItem key={t.id} value={t.id}>{t.id.substring(0,8)} - {t.destination}</SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="none" disabled>No transports found</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -163,13 +167,17 @@ export default function OutgoingPaymentForm() {
               onValueChange={(val) => setFormData({ ...formData, transporterId: val })}
               required={category === "TRANSPORT_FEE"}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Transporter..." />
               </SelectTrigger>
-              <SelectContent>
-                {metadata?.transporters?.map((t: any) => (
-                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                ))}
+              <SelectContent position="popper">
+                {metadata?.transporters?.length > 0 ? (
+                  metadata.transporters.map((t: any) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="none" disabled>No transporters found</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -183,13 +191,17 @@ export default function OutgoingPaymentForm() {
                 value={formData.truckId} 
                 onValueChange={(val) => setFormData({ ...formData, truckId: val })}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Truck..." />
                 </SelectTrigger>
-                <SelectContent>
-                  {metadata?.trucks?.map((t: any) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name} - {t.truckNumber}</SelectItem>
-                  ))}
+                <SelectContent position="popper">
+                  {metadata?.trucks?.length > 0 ? (
+                    metadata.trucks.map((t: any) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name} - {t.truckNumber}</SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none" disabled>No trucks found</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -199,13 +211,17 @@ export default function OutgoingPaymentForm() {
                 value={formData.orderId} 
                 onValueChange={(val) => setFormData({ ...formData, orderId: val })}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Order..." />
                 </SelectTrigger>
-                <SelectContent>
-                  {metadata?.orders?.map((o: any) => (
-                    <SelectItem key={o.id} value={o.id}>{o.reference || o.id.substring(0,8)}</SelectItem>
-                  ))}
+                <SelectContent position="popper">
+                  {metadata?.orders?.length > 0 ? (
+                    metadata.orders.map((o: any) => (
+                      <SelectItem key={o.id} value={o.id}>{o.reference || o.id.substring(0,8)}</SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none" disabled>No orders found</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -235,10 +251,10 @@ export default function OutgoingPaymentForm() {
             onValueChange={(val) => setFormData({ ...formData, paymentMethod: val })}
             required
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select Payment Method" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
               <SelectItem value="Cash">Cash</SelectItem>
               <SelectItem value="Cheque">Cheque</SelectItem>

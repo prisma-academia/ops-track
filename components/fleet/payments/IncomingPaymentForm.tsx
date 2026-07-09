@@ -80,13 +80,17 @@ export default function IncomingPaymentForm() {
             onValueChange={(val) => setFormData({ ...formData, customerId: val })}
             required
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select Client" />
             </SelectTrigger>
-            <SelectContent>
-              {metadata?.customers?.map((c: any) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-              ))}
+            <SelectContent position="popper">
+              {metadata?.customers?.length > 0 ? (
+                metadata.customers.map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))
+              ) : (
+                <SelectItem value="none" disabled>No clients found</SelectItem>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -121,10 +125,10 @@ export default function IncomingPaymentForm() {
             onValueChange={(val) => setFormData({ ...formData, paymentType: val })}
             required
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select Payment Type" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               <SelectItem value="ADVANCE_DEPOSIT">Advance Deposit</SelectItem>
               <SelectItem value="PART_PAYMENT">Part Payment</SelectItem>
               <SelectItem value="FULL_SETTLEMENT">Full Settlement</SelectItem>
@@ -140,10 +144,10 @@ export default function IncomingPaymentForm() {
             onValueChange={(val) => setFormData({ ...formData, paymentMethod: val })}
             required
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select Payment Method" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
               <SelectItem value="Cash">Cash</SelectItem>
               <SelectItem value="Cheque">Cheque</SelectItem>

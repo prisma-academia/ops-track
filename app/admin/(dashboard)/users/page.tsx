@@ -6,28 +6,48 @@ import { TenantUsersTable } from "./table";
 
 export default async function TenantUsersPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_USERS_READ.key);
-  const users = await prisma.tenantUser.findMany({
-    where: { tenantId: actor.tenantId },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    select: {
-      id: true,
-      email: true,
-      firstName: true,
-      lastName: true,
-      isOwner: true,
-      status: true,
-      lastLoginAt: true,
-    },
-  });
+  
+  const take = 25;
+  const skip = 0;
+
+  const [totalCount, users] = await Promise.all([
+    prisma.tenantUser.count({ where: { tenantId: actor.tenantId } }),
+    prisma.tenantUser.findMany({
+      where: { tenantId: actor.tenantId },
+      orderBy: { createdAt: "desc" },
+      take,
+      skip,
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        isOwner: true,
+        status: true,
+        lastLoginAt: true,
+      },
+    }),
+  ]);
+
   const rows = users.map((u) => ({
     ...u,
     lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
   }));
+
+  const totalPages = Math.ceil(totalCount / take);
+  const initialMeta = {
+    page: 1,
+    pageSize: take,
+    totalCount,
+    totalPages,
+    hasNextPage: 1 < totalPages,
+    hasPreviousPage: false,
+  };
+
   return (
     <div>
       <DataTableToolbar title="Users" createHref="/admin/users/new" createLabel="Invite user" />
-      <TenantUsersTable data={rows} />
+      <TenantUsersTable initialData={rows} initialMeta={initialMeta} />
     </div>
   );
 }

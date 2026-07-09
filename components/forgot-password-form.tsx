@@ -9,7 +9,7 @@ import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/form-field";
-
+import {PasswordInput} from "@/components/ui/password-input";
 const Schema = z.object({ email: z.email() });
 type Values = z.infer<typeof Schema>;
 
@@ -49,7 +49,7 @@ export function ForgotPasswordForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-6">
       <FormField label="Email" htmlFor="email" error={formState.errors.email?.message}>
-        <Input id="email" type="email" autoComplete="email" {...register("email")} />
+        <PasswordInput id="email" type="email" autoComplete="email" {...register("email")} />
       </FormField>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <Button type="submit" disabled={formState.isSubmitting} className="w-full">

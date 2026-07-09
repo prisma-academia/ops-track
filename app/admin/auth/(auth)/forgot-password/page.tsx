@@ -16,7 +16,7 @@ export default async function AdminForgotPasswordPage() {
             </CardTitle>
             <CardDescription className="text-sm text-muted-foreground font-normal">
               {tenant ? (
-                <>We&apos;ll email you a link to reset your admin password for <span className="font-semibold text-stone-900">{tenant.name}</span> (<span className="font-mono text-stone-500">{tenant.slug}</span>).</>
+                <>We&apos;ll email you a link to reset your admin password for <span className="font-semibold text-white">{tenant.name}</span> (<span className="font-mono text-stone-500">{tenant.slug}</span>).</>
               ) : (
                 "We'll email you a link to reset your admin password."
               )}

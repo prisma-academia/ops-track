@@ -191,8 +191,8 @@ export default async function VarianceAuditPage({
   return (
     <div className="flex-1 p-6 sm:p-8 md:p-10 max-w-7xl mx-auto w-full space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Variance Audit</h1>
-        <p className="text-slate-500 mt-2">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Variance Audit</h1>
+        <p className="text-muted-foreground mt-2">
           Monitor physical stock variances, pump meter anomalies, and financial shortages.
         </p>
       </div>

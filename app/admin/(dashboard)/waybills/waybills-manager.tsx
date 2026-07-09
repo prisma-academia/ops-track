@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -37,6 +37,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, CheckCircle2, AlertCircle, Truck, User, Eye, ChevronsUpDown } from "lucide-react";
 import { WaybillsTable, type WaybillRow } from "./table";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
+import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 
 const CreateWaybillSchema = z.object({
   stationId: z.string().min(1),
@@ -57,15 +58,27 @@ const CreateWaybillSchema = z.object({
 
 export function WaybillsManager({
   initialWaybills,
+  initialMeta,
   stations,
   canCreate = false,
 }: {
   initialWaybills: WaybillRow[];
+  initialMeta: any;
   stations: { id: string; name: string; code: string }[];
   canCreate?: boolean;
 }) {
   const router = useRouter();
-  const waybills = initialWaybills;
+  
+  const query = usePaginatedQuery<WaybillRow>({
+    baseUrl: "/api/tenant/waybills/list",
+    syncWithUrl: true,
+  });
+
+  useEffect(() => {
+    query.setInitialData(initialWaybills, initialMeta);
+  }, []);
+
+  const waybills = query.data;
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [selectedWaybill, setSelectedWaybill] = useState<WaybillRow | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -125,6 +138,12 @@ export function WaybillsManager({
 
       <WaybillsTable
         data={waybills}
+        isLoading={query.isLoading}
+        serverPagination={{
+          ...query.meta,
+          onPageChange: query.setPage,
+          onPageSizeChange: query.setPageSize,
+        }}
       />
 
       {/* ==========================================

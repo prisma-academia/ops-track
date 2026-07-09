@@ -5,7 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
+import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 
 const RecordShiftSchema = z.object({
   id: z.string().optional(),
@@ -23,7 +23,7 @@ export async function GET(
     const { id: stationId } = await params;
     const actor = await requireTenantActor(PERMISSIONS.TENANT_SHIFTS_READ.key);
     const url = new URL(request.url);
-    const { cursor, take } = parsePagination(url.searchParams);
+    const useOffset = url.searchParams.has("page");
 
     // Verify station ownership
     const station = await prisma.station.findUnique({ where: { id: stationId } });
@@ -31,48 +31,88 @@ export async function GET(
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
-    const rows = await prisma.shiftLog.findMany({
-      where: {
-        tenantId: actor.tenantId,
-        nozzle: {
+    const include = {
+      nozzle: {
+        include: {
           pump: {
-            stationId,
-          },
-        },
-      },
-      orderBy: { shiftDate: "desc" },
-      take,
-      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-      include: {
-        nozzle: {
-          include: {
-            pump: {
-              include: {
-                tank: true,
-              },
+            include: {
+              tank: true,
             },
           },
         },
-        attendant: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        reconciledBy: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
+      },
+      attendant: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
         },
       },
-    });
+      reconciledBy: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
+    };
 
-    return ok(rows, buildPageMeta(rows, take));
+    let rows: any[] = [];
+    let meta: any = {};
+
+    if (useOffset) {
+      const { page, take, skip } = parseOffsetPagination(url.searchParams);
+      const [totalCount, rawRows] = await Promise.all([
+        prisma.shiftLog.count({
+          where: {
+            tenantId: actor.tenantId,
+            nozzle: {
+              pump: {
+                stationId,
+              },
+            },
+          },
+        }),
+        prisma.shiftLog.findMany({
+          where: {
+            tenantId: actor.tenantId,
+            nozzle: {
+              pump: {
+                stationId,
+              },
+            },
+          },
+          orderBy: { shiftDate: "desc" },
+          take,
+          skip,
+          include,
+        }),
+      ]);
+      rows = rawRows;
+      meta = buildOffsetPageMeta(totalCount, page, take);
+    } else {
+      const { cursor, take } = parsePagination(url.searchParams);
+      
+      rows = await prisma.shiftLog.findMany({
+        where: {
+          tenantId: actor.tenantId,
+          nozzle: {
+            pump: {
+              stationId,
+            },
+          },
+        },
+        orderBy: { shiftDate: "desc" },
+        take,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        include,
+      });
+      meta = buildPageMeta(rows, take);
+    }
+
+    return ok(rows, meta);
   } catch (e) {
     return handleError(e);
   }

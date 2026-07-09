@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,6 +9,7 @@ import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -51,6 +52,7 @@ import { cn, formatHumanReadableDate } from "@/lib/utils";
 import { Plus, CheckCircle2, AlertCircle, Eye, Check, User, ChevronsUpDown } from "lucide-react";
 import Image from "next/image";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
+import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 
 interface ExpenseUser {
   id: string;
@@ -107,19 +109,28 @@ const PAYMENT_METHOD_MAP = {
 
 export function ExpensesManager({
   initialExpenses,
+  initialMeta,
   stations,
 }: {
   initialExpenses: ExpenseRow[];
+  initialMeta: any;
   stations: { id: string; name: string; code: string }[];
 }) {
   const router = useRouter();
-  const expenses = initialExpenses;
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [openStationSelect, setOpenStationSelect] = useState(false);
   const [approvingExpenseId, setApprovingExpenseId] = useState<string | null>(null);
   const [approveConfirmOpenId, setApproveConfirmOpenId] = useState<string | null>(null);
+
+  const { data: expenses, meta, isLoading, setPage, setPageSize, setInitialData } = usePaginatedQuery<ExpenseRow>({
+    baseUrl: "/api/tenant/expenses",
+  });
+
+  useEffect(() => {
+    setInitialData(initialExpenses, initialMeta);
+  }, [initialExpenses, initialMeta, setInitialData]);
 
   const form = useForm({
     resolver: zodResolver(RecordExpenseSchema),
@@ -159,8 +170,10 @@ export function ExpensesManager({
     router.refresh();
   };
 
+  const activeExpenses = expenses.length > 0 ? expenses : initialExpenses;
+
   const currentSelectedExpense = selectedExpense
-    ? expenses.find((e) => e.id === selectedExpense.id) || selectedExpense
+    ? activeExpenses.find((e) => e.id === selectedExpense.id) || selectedExpense
     : null;
 
   const columns: ColumnDef<ExpenseRow>[] = [
@@ -297,7 +310,13 @@ export function ExpensesManager({
     <div className="space-y-6">
       <DataTable
         columns={columns}
-        data={expenses}
+        data={activeExpenses}
+        isLoading={isLoading}
+        serverPagination={{
+          ...meta,
+          onPageChange: setPage,
+          onPageSizeChange: setPageSize,
+        }}
         title="Station Expenses"
         description="Monitor and approve local station cash expenditures and payouts."
         filterColumnId="station_name"
@@ -437,12 +456,19 @@ export function ExpensesManager({
                 <Label htmlFor="e_amt" className={errors.amount ? "text-destructive" : ""}>
                   Amount *
                 </Label>
-                <Input
-                  id="e_amt"
-                  type="number"
-                  placeholder="e.g. 15000"
-                  {...register("amount")}
-                  className={errors.amount ? "border-destructive" : ""}
+                <Controller
+                  control={control}
+                  name="amount"
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <NumberInput
+                      id="e_amt"
+                      placeholder="e.g. 15000"
+                      value={value as number }
+                      onChange={onChange}
+                      onBlur={onBlur}
+                      className={errors.amount ? "border-destructive" : ""}
+                    />
+                  )}
                 />
                 {errors.amount && (
                   <p className="text-xs text-destructive">{errors.amount.message}</p>

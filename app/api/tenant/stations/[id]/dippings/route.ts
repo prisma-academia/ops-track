@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
+import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
@@ -156,6 +157,10 @@ export async function GET(
     const { id: stationId } = await params;
     const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_READ.key);
 
+    const url = new URL(request.url);
+    const useOffset = url.searchParams.has("page");
+    const { page, take, skip } = parseOffsetPagination(url.searchParams);
+
     const station = await prisma.station.findUnique({
       where: { id: stationId },
       include: { tanks: true },
@@ -167,32 +172,81 @@ export async function GET(
 
     const tankIds = station.tanks.map((t) => t.id);
 
-    // Fetch routine tank dippings
-    const dippings = await prisma.tankDipping.findMany({
-      where: {
-        tankId: { in: tankIds },
-        tenantId: actor.tenantId,
-      },
-      include: {
-        tank: true,
-      },
-      orderBy: { recordedAt: "desc" },
-    });
+    if (tankIds.length === 0) {
+      if (useOffset) {
+        return ok([], buildOffsetPageMeta(0, page, take));
+      }
+      return ok({ dippings: [], waybillDippings: [] });
+    }
 
-    // Fetch waybill dippings
-    const waybillDippings = await prisma.waybillDipping.findMany({
-      where: {
-        tankId: { in: tankIds },
-        tenantId: actor.tenantId,
-      },
-      include: {
-        tank: true,
-        waybill: true,
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    if (useOffset) {
+      const [tankDips, waybillDips] = await Promise.all([
+        prisma.tankDipping.findMany({
+          where: { tankId: { in: tankIds }, tenantId: actor.tenantId },
+        }),
+        prisma.waybillDipping.findMany({
+          where: { tankId: { in: tankIds }, tenantId: actor.tenantId },
+        })
+      ]);
 
-    return ok({ dippings, waybillDippings });
+      const allDippings = [
+        ...tankDips.map(d => ({
+          id: d.id,
+          tankId: d.tankId,
+          dippingLiters: Number(d.dippingLiters),
+          reason: d.reason,
+          recordedAt: d.recordedAt,
+          type: 'routine' as const
+        })),
+        ...waybillDips.map(d => ({
+          id: d.id,
+          tankId: d.tankId,
+          dippingLiters: Number(d.afterLiters ?? 0) - Number(d.beforeLiters ?? 0),
+          reason: 'WAYBILL DISCHARGE',
+          recordedAt: d.createdAt,
+          type: 'waybill' as const
+        }))
+      ].sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime());
+
+      const totalCount = allDippings.length;
+      const mappedRows = allDippings.slice(skip, skip + take).map(row => {
+        const tank = station.tanks.find(t => t.id === row.tankId);
+        return {
+          ...row,
+          tank_name: tank?.name,
+          product_type: tank?.productType
+        };
+      });
+
+      return ok(mappedRows, buildOffsetPageMeta(totalCount, page, take));
+    } else {
+      // Fetch routine tank dippings
+      const dippings = await prisma.tankDipping.findMany({
+        where: {
+          tankId: { in: tankIds },
+          tenantId: actor.tenantId,
+        },
+        include: {
+          tank: true,
+        },
+        orderBy: { recordedAt: "desc" },
+      });
+  
+      // Fetch waybill dippings
+      const waybillDippings = await prisma.waybillDipping.findMany({
+        where: {
+          tankId: { in: tankIds },
+          tenantId: actor.tenantId,
+        },
+        include: {
+          tank: true,
+          waybill: true,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+  
+      return ok({ dippings, waybillDippings });
+    }
   } catch (e) {
     return handleError(e);
   }

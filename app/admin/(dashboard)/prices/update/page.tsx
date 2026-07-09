@@ -3,6 +3,9 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { UpdatePricesManager } from "./update-prices-manager";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 export default async function UpdatePricesPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_PRICES_WRITE.key);
@@ -45,10 +48,17 @@ export default async function UpdatePricesPage() {
 
   return (
     <div className="space-y-6">
-      <DataTableToolbar
-        title="Update Fuel Prices"
-        description="Set new fuel prices for your selected stations."
-      />
+      <div className="flex items-center gap-4">
+        <Button variant="outline" size="icon" asChild className="shrink-0 h-9 w-9">
+          <Link href="/admin/prices">
+            <ArrowLeft className="size-4" />
+          </Link>
+        </Button>
+        <DataTableToolbar
+          title="Update Fuel Prices"
+          description="Set new fuel prices for your selected stations."
+        />
+      </div>
       <UpdatePricesManager
         stations={serializedStations}
         currentPrices={serializedPrices}

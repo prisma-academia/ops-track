@@ -44,7 +44,7 @@ export default async function AdminResetPasswordPage({
             </CardTitle>
             {tenant && (
               <CardDescription className="text-sm text-muted-foreground font-normal">
-                Workspace: <span className="font-semibold text-stone-900">{tenant.name}</span> (<span className="font-mono text-stone-500">{tenant.slug}</span>)
+                Workspace: <span className="font-semibold text-white">{tenant.name}</span> (<span className="font-mono text-stone-500">{tenant.slug}</span>)
               </CardDescription>
             )}
           </div>

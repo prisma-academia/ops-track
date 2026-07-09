@@ -70,7 +70,7 @@ const CreateWaybillSchema = z.object({
 
 type LookupItem = { id: string; name: string };
 
-export function CreateWaybillForm({ stations }: { stations: { id: string; name: string; code: string }[] }) {
+export function CreateWaybillForm({ stations, prefillRequests }: { stations: { id: string; name: string; code: string }[], prefillRequests?: any[] }) {
   const router = useRouter();
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -92,14 +92,30 @@ export function CreateWaybillForm({ stations }: { stations: { id: string; name: 
   // Per-allocation station combobox open state
   const [openStationIndex, setOpenStationIndex] = useState<number | null>(null);
 
+  const initialAllocations = prefillRequests && prefillRequests.length > 0
+    ? prefillRequests.map(r => ({
+        stationId: r.stationId,
+        stationRequestId: r.id,
+        litersToDispense: Number(r.requestedLiters),
+        costPerLiter: 0,
+        transportationCost: 0,
+      }))
+    : [{ stationId: "", litersToDispense: 0, costPerLiter: 0, transportationCost: 0 }];
+
+  const initialLiters = prefillRequests && prefillRequests.length > 0
+    ? prefillRequests.reduce((sum, r) => sum + Number(r.requestedLiters), 0)
+    : 0;
+
+  const initialProduct = prefillRequests && prefillRequests.length > 0
+    ? prefillRequests[0].productType
+    : "PMS";
+
   const form = useForm<z.infer<typeof CreateWaybillSchema>>({
     resolver: zodResolver(CreateWaybillSchema) as any,
     defaultValues: {
-      productType: "PMS",
-      litersLoaded: 0,
-      allocations: [
-        { stationId: "", litersToDispense: 0, costPerLiter: 0, transportationCost: 0 }
-      ]
+      productType: initialProduct,
+      litersLoaded: initialLiters,
+      allocations: initialAllocations
     }
   });
 

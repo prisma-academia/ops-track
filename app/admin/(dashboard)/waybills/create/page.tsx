@@ -3,8 +3,28 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { CreateWaybillForm } from "./create-form";
 
-export default async function CreateWaybillPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
+export default async function CreateWaybillPage(
+  props: {
+    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  let requestIds: string[] = [];
+  if (searchParams?.requestId) {
+    requestIds = Array.isArray(searchParams.requestId) ? searchParams.requestId : [searchParams.requestId];
+  }
+
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
+
+  const prefillRequests = await prisma.stationSupplyRequest.findMany({
+    where: {
+      id: { in: requestIds },
+      tenantId: actor.tenantId,
+    },
+    include: {
+      station: true,
+    }
+  });
 
   const stations = await prisma.station.findMany({
     where: { tenantId: actor.tenantId },
@@ -25,7 +45,7 @@ export default async function CreateWaybillPage() {
         </p>
       </div>
 
-      <CreateWaybillForm stations={stations} />
+      <CreateWaybillForm stations={stations} prefillRequests={prefillRequests} />
     </div>
   );
 }

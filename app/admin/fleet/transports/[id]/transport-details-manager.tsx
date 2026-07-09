@@ -112,7 +112,7 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
             </Link>
           </Button>
           <div>
-            <h2 className="text-xl font-bold uppercase tracking-widest flex items-center gap-2">
+            <h2 className="text-xl font-bold uppercase tracking-widest flex items-center gap-2 text-foreground">
               Trip to {transport.destination}
               <Badge variant={transport.status === "COMPLETED" ? "default" : transport.status === "LOSS" ? "destructive" : transport.status === "CANCELLED" ? "secondary" : "outline"}>
                 {transport.status}
@@ -137,22 +137,22 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
-          <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="w-full justify-start h-14 bg-white/50 dark:bg-stone-900/50 backdrop-blur-xs p-1 rounded-2xl border border-stone-200 dark:border-stone-800">
-              <TabsTrigger value="overview" className="px-6 py-4 text-[15px] font-semibold">Overview</TabsTrigger>
-              <TabsTrigger value="destinations" className="px-6 py-4 text-[15px] font-semibold">Destinations ({subsequentLocs.length})</TabsTrigger>
-              <TabsTrigger value="losses" className="px-6 py-4 text-[15px] font-semibold text-red-600 dark:text-red-400">Loss Logs ({lossLogs.length})</TabsTrigger>
+          <Tabs defaultValue="overview" className="w-full h-10">
+            <TabsList className="w-full justify-start h-14 bg-muted/50 backdrop-blur-xs rounded-3xl border border-border">
+              <TabsTrigger value="overview" className="text-[15px] font-semibold">Overview</TabsTrigger>
+              <TabsTrigger value="destinations" className="text-[15px] font-semibold">Destinations ({subsequentLocs.length})</TabsTrigger>
+              <TabsTrigger value="losses" className="text-[15px] font-semibold text-red-600 dark:text-red-400">Loss Logs ({lossLogs.length})</TabsTrigger>
             </TabsList>
             
             <TabsContent value="overview" className="mt-6 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-5 rounded-2xl border bg-card">
                   <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Volume Carried</p>
-                  <p className="text-2xl font-bold">{Number(transport.litersCarried).toLocaleString()} L</p>
+                  <p className="text-2xl font-bold text-foreground">{Number(transport.litersCarried).toLocaleString()} L</p>
                 </div>
                 <div className="p-5 rounded-2xl border bg-card">
                   <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Rate per Liter</p>
-                  <p className="text-2xl font-bold">₦{Number(transport.ratePerLiter).toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-foreground">₦{Number(transport.ratePerLiter).toLocaleString()}</p>
                 </div>
                 <div className="p-5 rounded-2xl border bg-card">
                   <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total Loss Deductions</p>
@@ -160,14 +160,14 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
                 </div>
                 <div className="p-5 rounded-2xl border bg-card">
                   <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Net Transport Fee</p>
-                  <p className="text-2xl font-bold text-green-600">₦{Number(transport.netTransportFeePaid).toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">₦{Number(transport.netTransportFeePaid).toLocaleString()}</p>
                 </div>
               </div>
 
               {transport.comment && (
                 <div className="p-5 rounded-2xl border bg-card">
                   <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-2">Trip Notes</p>
-                  <p className="text-sm">{transport.comment}</p>
+                  <p className="text-sm text-foreground">{transport.comment}</p>
                 </div>
               )}
             </TabsContent>
@@ -176,23 +176,23 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
               <div className="border rounded-2xl overflow-hidden bg-card">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="text-left py-3 px-4 font-semibold">Location</th>
-                      <th className="text-right py-3 px-4 font-semibold">Rate (₦)</th>
-                      <th className="text-right py-3 px-4 font-semibold">Liters Delivered</th>
+                    <tr className="border-b border-border/50 bg-muted/50">
+                      <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Location</th>
+                      <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Rate (₦)</th>
+                      <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Liters Delivered</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-b">
-                      <td className="py-3 px-4 font-medium">{transport.destination} (Primary)</td>
-                      <td className="text-right py-3 px-4">{Number(transport.ratePerLiter).toLocaleString()}</td>
-                      <td className="text-right py-3 px-4">{Number(transport.litersCarried).toLocaleString()} L</td>
+                    <tr className="border-b border-border/50">
+                      <td className="py-3 px-4 font-medium text-foreground">{transport.destination} (Primary)</td>
+                      <td className="text-right py-3 px-4 text-foreground/90">{Number(transport.ratePerLiter).toLocaleString()}</td>
+                      <td className="text-right py-3 px-4 text-foreground/90">{Number(transport.litersCarried).toLocaleString()} L</td>
                     </tr>
                     {subsequentLocs.map((loc: any, idx: number) => (
-                      <tr key={idx} className="border-b last:border-0">
-                        <td className="py-3 px-4">{loc.location}</td>
-                        <td className="text-right py-3 px-4">{Number(loc.rate).toLocaleString()}</td>
-                        <td className="text-right py-3 px-4">{Number(loc.litersDelivered).toLocaleString()} L</td>
+                      <tr key={idx} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
+                        <td className="py-3 px-4 text-foreground/90">{loc.location}</td>
+                        <td className="text-right py-3 px-4 text-foreground/90">{Number(loc.rate).toLocaleString()}</td>
+                        <td className="text-right py-3 px-4 text-foreground/90">{Number(loc.litersDelivered).toLocaleString()} L</td>
                       </tr>
                     ))}
                   </tbody>
@@ -224,7 +224,7 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
                       </div>
                     </div>
                     {log.comment && (
-                      <p className="text-sm bg-white dark:bg-black/40 p-3 rounded-lg border border-red-100 dark:border-red-900/30">
+                      <p className="text-sm bg-background/50 dark:bg-background/40 p-3 rounded-lg border border-red-100 dark:border-red-900/30">
                         {log.comment}
                       </p>
                     )}
@@ -241,12 +241,12 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
             
             <div>
               <p className="text-xs text-muted-foreground">Driver</p>
-              <p className="font-medium">{transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : "Unassigned"}</p>
+              <p className="font-medium text-foreground">{transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : "Unassigned"}</p>
             </div>
             
             <div>
               <p className="text-xs text-muted-foreground">Order Reference</p>
-              <p className="font-medium">
+              <p className="font-medium text-foreground">
                 {transport.order?.reference ? (
                   <Link href={`/admin/fleet/orders/${transport.order.id}`} className="text-primary hover:underline">
                     {transport.order.reference}

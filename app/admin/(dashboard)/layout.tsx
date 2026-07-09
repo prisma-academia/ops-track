@@ -35,6 +35,7 @@ const NAV: NavItemConfig[] = [
   { href: "/admin/users", key: "users", module: "users" as ModuleKey, icon: "CircleUserRound", permission: PERMISSIONS.TENANT_USERS_READ.key },
   { href: "/admin/stations", key: "stations", module: "stations" as ModuleKey, icon: "MapPin", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/expenses", key: "expenses", module: "operations" as ModuleKey, icon: "Coins", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },
+  { href: "/admin/station/requests", key: "stationRequests", module: "operations" as ModuleKey, icon: "ClipboardList", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/waybills", key: "waybills", module: "operations" as ModuleKey, icon: "Truck", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   { href: "/admin/prices", key: "prices", module: "operations" as ModuleKey, icon: "ChartNoAxesCombined", permission: PERMISSIONS.TENANT_PRICES_READ.key },
   { href: "/admin/sales-reports", key: "salesReports", module: "operations" as ModuleKey, icon: "FileText", permission: PERMISSIONS.TENANT_SHIFTS_READ.key },
@@ -43,7 +44,6 @@ const NAV: NavItemConfig[] = [
   { href: "/admin/customers", key: "customers", module: "customers" as ModuleKey, icon: "Users", permission: PERMISSIONS.TENANT_CUSTOMERS_READ.key },
   { href: "/admin/role-templates", key: "roles", module: "roles" as ModuleKey, icon: "Shield", permission: PERMISSIONS.TENANT_ROLES_READ.key },
   { href: "/admin/activity", key: "activity", module: "activity" as ModuleKey, icon: "Activity", permission: PERMISSIONS.TENANT_ACTIVITY_READ.key },
-  { href: "/admin/fleet", key: "fleet", module: "fleet" as ModuleKey, icon: "Truck", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/settings", key: "settings", module: null, icon: "Settings", permission: null },
 ];
 

@@ -58,9 +58,11 @@ const CreateWaybillSchema = z.object({
 export function WaybillsManager({
   initialWaybills,
   stations,
+  canCreate = false,
 }: {
   initialWaybills: WaybillRow[];
   stations: { id: string; name: string; code: string }[];
+  canCreate?: boolean;
 }) {
   const router = useRouter();
   const waybills = initialWaybills;
@@ -98,9 +100,11 @@ export function WaybillsManager({
         title="Dispatches"
         description="Track fuel distribution movements from depots to retail stations."
         action={
-          <Button onClick={() => router.push("/admin/waybills/create")}>
-            <Plus size={16} className="mr-1" /> New Dispatch
-          </Button>
+          canCreate ? (
+            <Button onClick={() => router.push("/admin/waybills/create")}>
+              <Plus size={16} className="mr-1" /> New Dispatch
+            </Button>
+          ) : undefined
         }
       />
 

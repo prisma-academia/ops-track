@@ -62,6 +62,7 @@ export default async function WaybillsPage() {
     <WaybillsManager
       initialWaybills={rows}
       stations={serializedStations}
+      canCreate={actor.permissions.has(PERMISSIONS.TENANT_FLEET_WRITE.key)}
     />
   );
 }

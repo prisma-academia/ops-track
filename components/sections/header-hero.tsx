@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import React from 'react'
 import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription, DialogHeader } from "@/components/ui/dialog"
-import { ClientLoginForm } from "@/app/c/auth/(auth)/login/form"
+import { AdminLoginForm } from "@/app/admin/auth/(auth)/login/form"
 import { ClientRegisterForm } from "@/app/c/auth/(auth)/register/client-register-form"
 
 const menuItems = [
@@ -15,7 +15,7 @@ const menuItems = [
     { name: 'About', href: '#link' },
 ]
 
-export const HeroHeader = ({ slug = "App" }: { slug?: string }) => {
+export const HeroHeader = ({ slug = "App", logoUrl }: { slug?: string, logoUrl?: string | null }) => {
     const [menuState, setMenuState] = React.useState(false)
     const [isScrolled, setIsScrolled] = React.useState(false)
 
@@ -39,9 +39,13 @@ export const HeroHeader = ({ slug = "App" }: { slug?: string }) => {
                                 href="/"
                                 aria-label="home"
                                 className="flex items-center space-x-2">
-                                <span className="font-extrabold text-2xl tracking-tighter uppercase text-primary">
-                                    {slug}
-                                </span>
+                                {logoUrl ? (
+                                    <img src={logoUrl} alt={slug || "Logo"} className="h-8 w-auto object-contain rounded-md" />
+                                ) : (
+                                    <span className="font-extrabold text-2xl tracking-tighter uppercase text-primary">
+                                        {slug}
+                                    </span>
+                                )}
                             </Link>
 
                             <button
@@ -86,7 +90,7 @@ export const HeroHeader = ({ slug = "App" }: { slug?: string }) => {
                                     <DialogTrigger asChild>
                                         <Button
                                             variant="outline"
-                                            size="sm"
+                                            size="default"
                                             className={cn(isScrolled && 'lg:hidden')}>
                                             <span>Login</span>
                                         </Button>
@@ -96,13 +100,18 @@ export const HeroHeader = ({ slug = "App" }: { slug?: string }) => {
                                             <DialogTitle className="text-2xl font-medium">Sign in</DialogTitle>
                                             <DialogDescription>Use your email and password to access your account.</DialogDescription>
                                         </DialogHeader>
-                                        <div className="py-4">
-                                            <ClientLoginForm />
+                                        <div className="py-4 flex flex-col gap-6">
+                                            <AdminLoginForm />
+                                            <p className="text-xs text-stone-500 text-center">
+                                                <Link href="/admin/auth/forgot-password" className="underline">
+                                                    Forgot password?
+                                                </Link>
+                                            </p>
                                         </div>
                                     </DialogContent>
                                 </Dialog>
 
-                                <Dialog>
+                                {/* <Dialog>
                                     <DialogTrigger asChild>
                                         <Button
                                             size="sm"
@@ -119,7 +128,7 @@ export const HeroHeader = ({ slug = "App" }: { slug?: string }) => {
                                             <ClientRegisterForm />
                                         </div>
                                     </DialogContent>
-                                </Dialog>
+                                </Dialog> */}
                             </div>
                         </div>
                     </div>

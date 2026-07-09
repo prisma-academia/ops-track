@@ -43,10 +43,10 @@ const itemVariants: Variants = {
     },
 }
 
-export default function HeroSection({ slug }: { slug: string }) {
+export default function HeroSection({ slug, name, logoUrl }: { slug: string, name?: string, logoUrl?: string | null }) {
     return (
         <>
-            <HeroHeader slug={slug} />
+            <HeroHeader slug={slug} logoUrl={logoUrl} />
             <main className="overflow-hidden">
                 <div
                     aria-hidden
@@ -106,8 +106,8 @@ export default function HeroSection({ slug }: { slug: string }) {
                                     initial="hidden"
                                     animate="visible"
                                     variants={itemVariants}
-                                    className="mx-auto mt-8 max-w-4xl text-balance text-5xl max-md:font-semibold md:text-7xl lg:mt-16 xl:text-[5.25rem]">
-                                    Empower Operations with Modern Station Management
+                                    className="mx-auto mt-8 max-w-4xl text-balance text-5xl max-md:font-semibold md:text-7xl lg:mt-16 xl:text-[5.25rem] capitalize">
+                                    {name || slug}
                                 </motion.h1>
                                 <motion.p
                                     initial="hidden"

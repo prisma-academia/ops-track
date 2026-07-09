@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
@@ -14,43 +14,66 @@ import { ArrowLeft, Save, ChevronsUpDown } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const Schema = z.object({
-  customerId: z.string().min(1, "Please select a customer"),
+  recipientType: z.enum(["CUSTOMER", "STATION"]),
+  customerId: z.string().optional(),
+  stationId: z.string().optional(),
+  transportCostBorneBy: z.enum(["CLIENT", "COMPANY"]),
   transportId: z.string().optional().or(z.literal("")),
   litersDespatched: z.coerce.number().positive("Liters despatched must be > 0"),
   litersReceived: z.coerce.number().optional(),
   amountPerLiter: z.coerce.number().positive("Amount per liter must be > 0"),
+}).superRefine((data, ctx) => {
+  if (data.recipientType === "CUSTOMER" && !data.customerId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a customer", path: ["customerId"] });
+  }
+  if (data.recipientType === "STATION" && !data.stationId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a station", path: ["stationId"] });
+  }
 });
 
 type Values = z.infer<typeof Schema>;
 
 export function CreateSaleForm({
   customers,
+  stations,
   transports,
+  preselectedTransportId,
 }: {
   customers: { id: string; name: string }[];
+  stations: { id: string; name: string; code: string }[];
   transports: { id: string; destination: string; truck: { name: string }; transporter: { name: string } }[];
+  preselectedTransportId?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   
   const [openCustomerSelect, setOpenCustomerSelect] = useState(false);
+  const [openStationSelect, setOpenStationSelect] = useState(false);
   const [openTransportSelect, setOpenTransportSelect] = useState(false);
 
-  const { register, handleSubmit, formState, setValue, watch } = useForm({
-    resolver: zodResolver(Schema),
+  const { register, handleSubmit, formState, setValue, watch, control } = useForm<Values>({
+    resolver: zodResolver(Schema) as any,
     defaultValues: {
+      recipientType: "CUSTOMER",
       customerId: "",
-      transportId: "",
+      stationId: "",
+      transportCostBorneBy: "CLIENT",
+      transportId: preselectedTransportId || "",
       litersDespatched: 0,
-      litersReceived: undefined as unknown as number,
+      litersReceived: undefined,
       amountPerLiter: 0,
     },
   });
 
+  const recipientType = watch("recipientType");
   const selectedCustomerId = watch("customerId");
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
+  
+  const selectedStationId = watch("stationId");
+  const selectedStation = stations.find((s) => s.id === selectedStationId);
   
   const selectedTransportId = watch("transportId");
   const selectedTransport = transports.find((t) => t.id === selectedTransportId);
@@ -58,11 +81,12 @@ export function CreateSaleForm({
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     
-    // Convert empty string/undefined back to what backend expects if needed, 
-    // zod handles coerce for numbers, but we want to ensure litersReceived is either number or null/undefined
     const payload = {
       ...values,
-      litersReceived: isNaN(values.litersReceived) ? undefined : values.litersReceived,
+      litersReceived: Number.isNaN(values.litersReceived) ? undefined : values.litersReceived,
+      // Clear out the unused relation
+      customerId: values.recipientType === "CUSTOMER" ? values.customerId : undefined,
+      stationId: values.recipientType === "STATION" ? values.stationId : undefined,
     };
     
     const res = await apiPost<{ sale: { id: string } }>("/api/tenant/fleet/sales", payload);
@@ -71,7 +95,12 @@ export function CreateSaleForm({
       return;
     }
     if (res.data?.sale.id) {
-      router.push(`/admin/fleet/sales`);
+      if (preselectedTransportId) {
+        // Go back to transport details
+        router.push(`/admin/fleet/transports/${preselectedTransportId}`);
+      } else {
+        router.push(`/admin/fleet/sales`);
+      }
       router.refresh();
     }
   });
@@ -85,15 +114,15 @@ export function CreateSaleForm({
             variant="ghost"
             size="icon"
             className="h-9 w-9 rounded-full"
-            onClick={() => router.push("/admin/fleet/sales")}
+            onClick={() => router.back()}
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
             <h2 className="text-xl font-bold tracking-tight text-foreground uppercase tracking-widest">
-              Log Sale
+              Log Distribution / Sale
             </h2>
-            <p className="text-xs text-muted-foreground">Create a new B2B fuel delivery/sale record</p>
+            <p className="text-xs text-muted-foreground">Record fuel distribution to stations or external clients.</p>
           </div>
         </div>
       </div>
@@ -102,54 +131,128 @@ export function CreateSaleForm({
         <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-              Sale Details
+              Distribution Details
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-6">
+            {/* Recipient Type Toggle */}
+            <div className="space-y-3">
+              <Label>Recipient Type</Label>
+              <Controller
+                control={control}
+                name="recipientType"
+                render={({ field }) => (
+                  <RadioGroup 
+                    onValueChange={(val) => {
+                      field.onChange(val);
+                      // Auto-set transport cost logic
+                      if (val === "STATION") setValue("transportCostBorneBy", "COMPANY");
+                      if (val === "CUSTOMER") setValue("transportCostBorneBy", "CLIENT");
+                    }} 
+                    defaultValue={field.value} 
+                    className="flex flex-row gap-4"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="CUSTOMER" id="r-customer" />
+                      <Label htmlFor="r-customer" className="font-normal cursor-pointer">External Client</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="STATION" id="r-station" />
+                      <Label htmlFor="r-station" className="font-normal cursor-pointer">Owned Station</Label>
+                    </div>
+                  </RadioGroup>
+                )}
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="customerId" className={formState.errors.customerId ? "text-destructive" : ""}>Customer / Client*</Label>
-                <Popover open={openCustomerSelect} onOpenChange={setOpenCustomerSelect}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      id="customerId"
-                      className={`w-full justify-between font-normal ${formState.errors.customerId ? "border-destructive" : ""}`}
-                    >
-                      <span className="truncate">
-                        {selectedCustomer ? selectedCustomer.name : "Select customer..."}
-                      </span>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                    <Command>
-                      <CommandInput placeholder="Search customer..." />
-                      <CommandList className="max-h-[200px] overflow-y-auto">
-                        <CommandEmpty>No customer found.</CommandEmpty>
-                        <CommandGroup>
-                          {customers.map((c) => (
-                            <CommandItem
-                              key={c.id}
-                              value={c.name.toLowerCase()}
-                              onSelect={() => {
-                                setValue("customerId", c.id, { shouldValidate: true });
-                                setOpenCustomerSelect(false);
-                              }}
-                              data-checked={selectedCustomerId === c.id}
-                            >
-                              {c.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                <input type="hidden" {...register("customerId")} />
-                {formState.errors.customerId && <p className="text-xs text-destructive">{formState.errors.customerId.message}</p>}
-              </div>
+              {recipientType === "CUSTOMER" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="customerId" className={formState.errors.customerId ? "text-destructive" : ""}>Client*</Label>
+                  <Popover open={openCustomerSelect} onOpenChange={setOpenCustomerSelect}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        id="customerId"
+                        className={`w-full justify-between font-normal ${formState.errors.customerId ? "border-destructive" : ""}`}
+                      >
+                        <span className="truncate">
+                          {selectedCustomer ? selectedCustomer.name : "Select client..."}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search client..." />
+                        <CommandList className="max-h-[200px] overflow-y-auto">
+                          <CommandEmpty>No client found.</CommandEmpty>
+                          <CommandGroup>
+                            {customers.map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.name.toLowerCase()}
+                                onSelect={() => {
+                                  setValue("customerId", c.id, { shouldValidate: true });
+                                  setOpenCustomerSelect(false);
+                                }}
+                                data-checked={selectedCustomerId === c.id}
+                              >
+                                {c.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {formState.errors.customerId && <p className="text-xs text-destructive">{formState.errors.customerId.message}</p>}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="stationId" className={formState.errors.stationId ? "text-destructive" : ""}>Station*</Label>
+                  <Popover open={openStationSelect} onOpenChange={setOpenStationSelect}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        id="stationId"
+                        className={`w-full justify-between font-normal ${formState.errors.stationId ? "border-destructive" : ""}`}
+                      >
+                        <span className="truncate">
+                          {selectedStation ? `${selectedStation.name} (${selectedStation.code})` : "Select station..."}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search station..." />
+                        <CommandList className="max-h-[200px] overflow-y-auto">
+                          <CommandEmpty>No station found.</CommandEmpty>
+                          <CommandGroup>
+                            {stations.map((s) => (
+                              <CommandItem
+                                key={s.id}
+                                value={s.name.toLowerCase()}
+                                onSelect={() => {
+                                  setValue("stationId", s.id, { shouldValidate: true });
+                                  setOpenStationSelect(false);
+                                }}
+                                data-checked={selectedStationId === s.id}
+                              >
+                                {s.name} ({s.code})
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {formState.errors.stationId && <p className="text-xs text-destructive">{formState.errors.stationId.message}</p>}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="transportId" className={formState.errors.transportId ? "text-destructive" : ""}>Link to Transport Trip (Optional)</Label>
@@ -200,7 +303,6 @@ export function CreateSaleForm({
                     </Command>
                   </PopoverContent>
                 </Popover>
-                <input type="hidden" {...register("transportId")} />
                 {formState.errors.transportId && <p className="text-xs text-destructive">{formState.errors.transportId.message}</p>}
               </div>
             </div>
@@ -232,16 +334,42 @@ export function CreateSaleForm({
               </div>
             </div>
 
-            <div className="space-y-2 w-1/2 pr-2">
-              <Label htmlFor="amountPerLiter" className={formState.errors.amountPerLiter ? "text-destructive" : ""}>Selling Price per Liter (₦)*</Label>
-              <Input 
-                id="amountPerLiter" 
-                type="number"
-                placeholder="e.g. 1200" 
-                {...register("amountPerLiter")}
-                className={formState.errors.amountPerLiter ? "border-destructive" : ""}
-              />
-              {formState.errors.amountPerLiter && <p className="text-xs text-destructive">{formState.errors.amountPerLiter.message}</p>}
+            <div className="grid grid-cols-2 gap-4 border-t border-border/50 pt-5 mt-2">
+              <div className="space-y-2">
+                <Label htmlFor="amountPerLiter" className={formState.errors.amountPerLiter ? "text-destructive" : ""}>Selling Price per Liter (₦)*</Label>
+                <Input 
+                  id="amountPerLiter" 
+                  type="number"
+                  placeholder="e.g. 1200" 
+                  {...register("amountPerLiter")}
+                  className={formState.errors.amountPerLiter ? "border-destructive" : ""}
+                />
+                {formState.errors.amountPerLiter && <p className="text-xs text-destructive">{formState.errors.amountPerLiter.message}</p>}
+              </div>
+
+              <div className="space-y-3">
+                <Label>Transport Cost Borne By</Label>
+                <Controller
+                  control={control}
+                  name="transportCostBorneBy"
+                  render={({ field }) => (
+                    <RadioGroup 
+                      onValueChange={field.onChange} 
+                      value={field.value} 
+                      className="flex flex-row gap-4 h-10 items-center"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="CLIENT" id="tc-client" />
+                        <Label htmlFor="tc-client" className="font-normal cursor-pointer">Client</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="COMPANY" id="tc-company" />
+                        <Label htmlFor="tc-company" className="font-normal cursor-pointer">Company</Label>
+                      </div>
+                    </RadioGroup>
+                  )}
+                />
+              </div>
             </div>
 
           </CardContent>
@@ -254,7 +382,7 @@ export function CreateSaleForm({
         <Button 
           type="button" 
           variant="outline" 
-          onClick={() => router.push("/admin/fleet/sales")}
+          onClick={() => router.back()}
           className="h-10 rounded-full px-5"
         >
           Cancel
@@ -262,7 +390,7 @@ export function CreateSaleForm({
         <Button
           type="submit"
           disabled={formState.isSubmitting}
-          className="h-10 rounded-full px-5 gap-2"
+          className="h-10 rounded-full px-5 gap-2 min-w-[120px]"
         >
           {formState.isSubmitting ? (
             <>

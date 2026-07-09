@@ -96,13 +96,12 @@ export function WaybillsManager({
   return (
     <div className="space-y-6">
       <DataTableToolbar
-        
-        title="Dispatches"
-        description="Track fuel distribution movements from depots to retail stations."
+        title="Waybills"
+        description="Monitor incoming and completed waybills across your stations."
         action={
           canCreate ? (
             <Button onClick={() => router.push("/admin/waybills/create")}>
-              <Plus size={16} className="mr-1" /> New Dispatch
+              <Plus size={16} className="mr-1" /> New Waybill
             </Button>
           ) : undefined
         }

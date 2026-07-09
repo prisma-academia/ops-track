@@ -19,7 +19,7 @@ export default async function TransportDetailsPage({ params }: { params: Promise
         orderBy: { createdAt: "desc" }
       },
       sales: {
-        include: { customer: true }
+        include: { customer: true, station: true }
       }
     },
   });

@@ -3,16 +3,26 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
-import { handleError } from "@/lib/api/errors";
+import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
 
 const CreateSaleSchema = z.object({
-  customerId: z.string().min(1),
+  recipientType: z.enum(["CUSTOMER", "STATION"]),
+  customerId: z.string().optional(),
+  stationId: z.string().optional(),
+  transportCostBorneBy: z.enum(["CLIENT", "COMPANY"]).optional(),
   transportId: z.string().optional().nullable(),
   litersDespatched: z.number().positive(),
   litersReceived: z.number().min(0).optional().nullable(),
   amountPerLiter: z.number().positive(),
+}).superRefine((data, ctx) => {
+  if (data.recipientType === "CUSTOMER" && !data.customerId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a customer", path: ["customerId"] });
+  }
+  if (data.recipientType === "STATION" && !data.stationId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a station", path: ["stationId"] });
+  }
 });
 
 export async function GET(request: Request) {
@@ -32,6 +42,7 @@ export async function GET(request: Request) {
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       include: {
         customer: { select: { id: true, name: true } },
+        station: { select: { id: true, name: true } },
         transport: {
           select: {
             id: true,
@@ -55,22 +66,89 @@ export async function POST(request: Request) {
     const body = CreateSaleSchema.parse(await request.json());
     const meta = requestMeta(request);
 
+    // XOR validation
+    if (body.customerId && body.stationId) {
+      throw new DomainError(400, "invalid_input", "A sale cannot belong to both a customer and a station.");
+    }
+
     const litersReceived = body.litersReceived ?? 0;
     const totalExpectedAmount = litersReceived * body.amountPerLiter;
+    
+    // Default transport cost rule if not provided (Company for own station, Client for external)
+    let transportCostBorneBy = body.transportCostBorneBy;
+    if (!transportCostBorneBy) {
+      transportCostBorneBy = body.stationId ? "COMPANY" : "CLIENT";
+    }
 
-    const sale = await prisma.sale.create({
-      data: {
-        tenantId: actor.tenantId,
-        customerId: body.customerId,
-        transportId: body.transportId ?? null,
-        litersDespatched: body.litersDespatched,
-        litersReceived: body.litersReceived ?? null,
-        amountPerLiter: body.amountPerLiter,
-        totalExpectedAmount,
-      },
-      include: {
-        customer: { select: { id: true, name: true } },
-      },
+    const sale = await prisma.$transaction(async (tx) => {
+      const s = await tx.sale.create({
+        data: {
+          tenantId: actor.tenantId,
+          customerId: body.customerId ?? null,
+          stationId: body.stationId ?? null,
+          transportId: body.transportId ?? null,
+          transportCostBorneBy: transportCostBorneBy,
+          litersDespatched: body.litersDespatched,
+          litersReceived: body.litersReceived ?? null,
+          amountPerLiter: body.amountPerLiter,
+          totalExpectedAmount,
+        },
+        include: {
+          customer: { select: { id: true, name: true } },
+          station: { select: { id: true, name: true } }
+        },
+      });
+
+      // Auto-generate Waybill if this distribution targets a station and comes from a transport
+      if (s.stationId && s.transportId) {
+        const t = await tx.transport.findUnique({
+          where: { id: s.transportId },
+          include: {
+            truck: true,
+            driver: true,
+            transporter: true,
+            order: true,
+          }
+        });
+
+        if (t) {
+          const station = await tx.station.findUnique({
+            where: { id: s.stationId },
+            select: { code: true }
+          });
+          const rawCode = station ? station.code : "DISP";
+          const prefix = rawCode.replace(/-?\d+$/, "");
+          const today = new Date().toISOString().split("T")[0].replace(/-/g, "");
+          const randomNum = Math.floor(Math.random() * 900) + 100;
+          const wbNumber = `WB-${prefix}-${today}-${t.productType ?? "PMS"}-${randomNum}`;
+
+          await tx.waybill.create({
+            data: {
+              tenantId: actor.tenantId,
+              number: wbNumber,
+              productType: (t.productType as any) ?? "PMS",
+              litersLoaded: s.litersDespatched,
+              truckPlate: t.truck?.plateNumber || t.truck?.name || "N/A",
+              driverName: t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "Unknown Driver",
+              driverPhone: t.driver?.phone ?? null,
+              supplier: t.order?.supplier || "Fleet Management",
+              transportCompany: t.transporter?.name ?? null,
+              recordedById: actor.userId,
+              allocations: {
+                create: [{
+                  tenantId: actor.tenantId,
+                  stationId: s.stationId,
+                  litersToDispense: s.litersDespatched,
+                  costPerLiter: s.amountPerLiter,
+                  transportationCost: 0,
+                }]
+              }
+            }
+          });
+        }
+      }
+
+      return s;
     });
 
     await audit({
@@ -80,7 +158,11 @@ export async function POST(request: Request) {
       tenantId: actor.tenantId,
       targetType: "Sale",
       targetId: sale.id,
-      after: { customer: sale.customer.name, totalExpected: totalExpectedAmount } as object,
+      after: { 
+        recipient: sale.customer ? sale.customer.name : (sale.station ? sale.station.name : 'Unknown'), 
+        totalExpected: totalExpectedAmount,
+        transportCostBorneBy
+      } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });

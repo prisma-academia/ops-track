@@ -15,11 +15,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { StationStockSummary, StationStockData } from "@/components/station-stock-summary";
 
 export function StationRequestsManager({
   initialRequests,
+  stockData,
 }: {
   initialRequests: any[];
+  stockData: StationStockData[];
 }) {
   const router = useRouter();
 
@@ -35,11 +38,14 @@ export function StationRequestsManager({
         }
       />
 
+      <StationStockSummary data={stockData} />
+
       <div className="bg-card text-card-foreground rounded-xl border overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50 hover:bg-muted/50">
               <TableHead>Date</TableHead>
+              <TableHead>Batch</TableHead>
               <TableHead>Station</TableHead>
               <TableHead>Product</TableHead>
               <TableHead>Volume Requested</TableHead>
@@ -50,18 +56,27 @@ export function StationRequestsManager({
           <TableBody>
             {initialRequests.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
+                <TableCell colSpan={7} className="h-24 text-center">
                   No requests found.
                 </TableCell>
               </TableRow>
             ) : (
               initialRequests.map((req) => (
                 <TableRow key={req.id}>
-                  <TableCell className="whitespace-nowrap">
+                  <TableCell className="whitespace-nowrap text-sm">
                     {format(new Date(req.createdAt), "MMM d, yyyy HH:mm")}
                   </TableCell>
                   <TableCell>
-                    <div className="font-medium">{req.station.name}</div>
+                    {req.batch?.reference ? (
+                      <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                        {req.batch.reference}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium text-sm">{req.station.name}</div>
                     <div className="text-xs text-muted-foreground">{req.station.code}</div>
                   </TableCell>
                   <TableCell>
@@ -91,6 +106,10 @@ export function StationRequestsManager({
                     {req.waybillAllocation ? (
                       <span className="text-sm font-mono text-muted-foreground">
                         {req.waybillAllocation.waybill.number}
+                      </span>
+                    ) : req.transport ? (
+                      <span className="text-sm font-mono text-muted-foreground">
+                        via Transport
                       </span>
                     ) : (
                       <span className="text-muted-foreground">-</span>

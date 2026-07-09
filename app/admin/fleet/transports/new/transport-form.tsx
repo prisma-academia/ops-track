@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
@@ -11,10 +11,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, ChevronsUpDown, Plus, Trash2, SplitSquareHorizontal, Truck } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
+
+const StationAllocationSchema = z.object({
+  requestId: z.string().min(1, "Request is required"),
+  stationId: z.string().min(1, "Station is required"),
+  allocatedLiters: z.coerce.number().positive("Volume must be positive"),
+});
 
 const Schema = z.object({
   orderId: z.string().min(1, "Order is required"),
@@ -26,6 +33,7 @@ const Schema = z.object({
     destination: z.string().min(1, "Destination is required"),
     ratePerLiter: z.coerce.number().min(1, "Rate is required"),
     litersCarried: z.coerce.number().min(1, "Volume is required"),
+    stationAllocations: z.array(StationAllocationSchema).optional().default([]),
   })).min(1, "At least one truck assignment is required"),
 });
 
@@ -43,24 +51,41 @@ export function CreateTransportForm({
   trucks,
   drivers,
   orders,
+  requests,
+  preselectedRequestIds,
 }: {
   transporters: { id: string; name: string }[];
   trucks: { id: string; name: string; transporterId: string }[];
   drivers: { id: string; firstName: string; lastName: string; transporterId: string }[];
   orders: { id: string; reference: string | null; productType: any; litersOrdered: number | string; transports: { litersCarried: number | string }[] }[];
+  requests: { id: string; requestedLiters: number | string; productType: string; stationId: string; station: { name: string; code: string; } }[];
+  preselectedRequestIds: string[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [openOrderSelect, setOpenOrderSelect] = useState(false);
-
   const [openStates, setOpenStates] = useState<{ [key: string]: boolean }>({});
 
   const togglePopover = (key: string, isOpen: boolean) => {
     setOpenStates(prev => ({ ...prev, [key]: isOpen }));
   };
 
-  const { register, handleSubmit, formState, setValue, watch, control } = useForm({
-    resolver: zodResolver(Schema),
+  // Setup initial allocations based on preselected requests
+  const initialAllocations = preselectedRequestIds
+    .map(id => {
+      const req = requests.find(r => r.id === id);
+      return req ? {
+        requestId: req.id,
+        stationId: req.stationId,
+        allocatedLiters: Number(req.requestedLiters),
+      } : null;
+    })
+    .filter(Boolean) as z.infer<typeof StationAllocationSchema>[];
+
+  const initialLitersCarried = initialAllocations.reduce((sum, a) => sum + a.allocatedLiters, 0);
+
+  const { register, handleSubmit, formState, setValue, watch, control } = useForm<Values>({
+    resolver: zodResolver(Schema) as any,
     defaultValues: {
       orderId: "",
       productType: "PMS" as any,
@@ -70,7 +95,8 @@ export function CreateTransportForm({
         driverId: "",
         destination: "",
         ratePerLiter: "" as any,
-        litersCarried: "" as any,
+        litersCarried: initialLitersCarried > 0 ? initialLitersCarried : ("" as any),
+        stationAllocations: initialAllocations,
       }],
     },
   });
@@ -98,9 +124,12 @@ export function CreateTransportForm({
       if (selectedOrder) {
         if (selectedOrder.productType) setValue("productType", selectedOrder.productType, { shouldValidate: true });
         
-        const remaining = Number(selectedOrder.litersOrdered) - selectedOrder.transports.reduce((sum, t) => sum + Number(t.litersCarried), 0);
-        if (remaining > 0 && assignmentsWatch.length === 1 && assignmentsWatch[0].litersCarried === 45000) {
-           setValue(`assignments.0.litersCarried`, Math.min(45000, remaining), { shouldValidate: true });
+        // Only auto-fill if not using preselected requests
+        if (initialAllocations.length === 0) {
+          const remaining = Number(selectedOrder.litersOrdered) - selectedOrder.transports.reduce((sum, t) => sum + Number(t.litersCarried), 0);
+          if (remaining > 0 && assignmentsWatch.length === 1 && (assignmentsWatch[0].litersCarried === 45000 || !assignmentsWatch[0].litersCarried)) {
+            setValue(`assignments.0.litersCarried`, Math.min(45000, remaining), { shouldValidate: true });
+          }
         }
       }
     }
@@ -108,17 +137,18 @@ export function CreateTransportForm({
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
-    const res = await apiPost<{ transports: { id: string }[] }>("/api/tenant/fleet/transports", values);
+    const res = await apiPost<{ transports: { id: string }[] }>("/api/tenant/fleet/transports/fulfill", values);
     if (res.error) {
       setError(res.error.message);
       return;
     }
+    toast.success("Transport(s) dispatched successfully");
     router.push(`/admin/fleet/transports`);
     router.refresh();
   });
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6 animate-in fade-in duration-500">
+    <form onSubmit={onSubmit} className="space-y-6 animate-in fade-in duration-500 pb-20">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button type="button" variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={() => router.push("/admin/fleet/transports")}>
@@ -126,7 +156,7 @@ export function CreateTransportForm({
           </Button>
           <div>
             <h2 className="text-xl font-bold tracking-tight text-foreground uppercase tracking-widest">Dispatch Transport</h2>
-            <p className="text-xs text-muted-foreground">Assign multiple trucks to fulfill an order</p>
+            <p className="text-xs text-muted-foreground">Assign trucks and optionally fulfill station requests.</p>
           </div>
         </div>
       </div>
@@ -134,7 +164,7 @@ export function CreateTransportForm({
       <div className="max-w-4xl space-y-6">
         <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Order Details</CardTitle>
+            <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Source Order</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid grid-cols-2 gap-4">
@@ -155,7 +185,7 @@ export function CreateTransportForm({
                         <CommandGroup>
                           {orders.map((o) => (
                             <CommandItem key={o.id} value={o.reference?.toLowerCase() || o.id} onSelect={() => { setValue("orderId", o.id, { shouldValidate: true }); setOpenOrderSelect(false); }}>
-                              {o.reference || "Unnamed Order"} ({Number(o.litersOrdered).toLocaleString()}L)
+                              {o.reference || "Unnamed Order"} ({Number(o.litersOrdered).toLocaleString()}L) - {o.productType}
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -225,9 +255,12 @@ export function CreateTransportForm({
                 </Button>
               )}
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Truck Assignment #{index + 1}</CardTitle>
+                <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                  <Truck className="h-4 w-4" />
+                  Truck Assignment #{index + 1}
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-6">
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label className={fieldErrors?.transporterId ? "text-destructive" : ""}>Transporter*</Label>
@@ -321,7 +354,7 @@ export function CreateTransportForm({
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label className={fieldErrors?.destination ? "text-destructive" : ""}>Destination State*</Label>
+                    <Label className={fieldErrors?.destination ? "text-destructive" : ""}>Primary Destination State*</Label>
                     <Popover open={openStates[`dest-${index}`]} onOpenChange={(val) => togglePopover(`dest-${index}`, val)}>
                       <PopoverTrigger asChild>
                         <Button type="button" variant="outline" className={`w-full justify-between font-normal ${fieldErrors?.destination ? "border-destructive" : ""}`}>
@@ -349,21 +382,117 @@ export function CreateTransportForm({
                   </div>
 
                   <div className="space-y-2">
-                    <Label className={fieldErrors?.litersCarried ? "text-destructive" : ""}>Volume (L)*</Label>
+                    <Label className={fieldErrors?.litersCarried ? "text-destructive" : ""}>Total Truck Volume (L)*</Label>
                     <Input type="number" placeholder="45000" {...register(`assignments.${index}.litersCarried`)} className={fieldErrors?.litersCarried ? "border-destructive" : ""} />
                     {fieldErrors?.litersCarried && <p className="text-xs text-destructive">{String(fieldErrors.litersCarried.message)}</p>}
                   </div>
 
                   <div className="space-y-2">
-                    <Label className={fieldErrors?.ratePerLiter ? "text-destructive" : ""}>Rate (₦)*</Label>
+                    <Label className={fieldErrors?.ratePerLiter ? "text-destructive" : ""}>Transport Rate (₦/L)*</Label>
                     <Input type="number" placeholder="15" {...register(`assignments.${index}.ratePerLiter`)} className={fieldErrors?.ratePerLiter ? "border-destructive" : ""} />
                     {fieldErrors?.ratePerLiter && <p className="text-xs text-destructive">{String(fieldErrors.ratePerLiter.message)}</p>}
                   </div>
                 </div>
+
+                {/* Station Requests Fulfillment Section */}
+                <div className="pt-4 pb-2 border-t border-border mt-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-base flex items-center gap-2">
+                        <SplitSquareHorizontal className="h-4 w-4" />
+                        Station Request Fulfillment
+                      </Label>
+                      <p className="text-xs text-muted-foreground">Select station requests to fulfill and split this truck's volume.</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-muted/30 rounded-lg border overflow-hidden">
+                    {requests.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-muted-foreground">No pending requests available.</div>
+                    ) : (
+                      <div className="divide-y divide-border/50 max-h-64 overflow-y-auto">
+                        {requests.map((req) => {
+                          const stationAllocations = watch(`assignments.${index}.stationAllocations`) || [];
+                          const isSelected = stationAllocations.some(a => a.requestId === req.id);
+                          const allocationIndex = stationAllocations.findIndex(a => a.requestId === req.id);
+                          const allocation = isSelected ? stationAllocations[allocationIndex] : null;
+
+                          return (
+                            <div key={req.id} className={`p-3 flex flex-col gap-3 transition-colors ${isSelected ? "bg-primary/5" : "hover:bg-muted/50"}`}>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={(checked) => {
+                                      const currentAllocations = watch(`assignments.${index}.stationAllocations`) || [];
+                                      if (checked) {
+                                        setValue(`assignments.${index}.stationAllocations`, [
+                                          ...currentAllocations,
+                                          { requestId: req.id, stationId: req.stationId, allocatedLiters: Number(req.requestedLiters) }
+                                        ], { shouldValidate: true });
+                                        // Auto-update truck volume if possible
+                                        const newTotal = currentAllocations.reduce((s, a) => s + a.allocatedLiters, 0) + Number(req.requestedLiters);
+                                        if (newTotal > Number(watch(`assignments.${index}.litersCarried`) || 0)) {
+                                          setValue(`assignments.${index}.litersCarried`, newTotal, { shouldValidate: true });
+                                        }
+                                      } else {
+                                        setValue(`assignments.${index}.stationAllocations`, currentAllocations.filter(a => a.requestId !== req.id), { shouldValidate: true });
+                                      }
+                                    }}
+                                  />
+                                  <div>
+                                    <div className="font-medium text-sm">{req.station.name}</div>
+                                    <div className="text-xs text-muted-foreground">Req: {Number(req.requestedLiters).toLocaleString()}L {req.productType}</div>
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <div className="flex items-center gap-2">
+                                    <Label className="text-xs text-muted-foreground">Allocate (L):</Label>
+                                    <Input
+                                      type="number"
+                                      className="h-8 w-28 text-sm"
+                                      value={allocation?.allocatedLiters || ""}
+                                      onChange={(e) => {
+                                        const val = Number(e.target.value);
+                                        const currentAllocations = [...(watch(`assignments.${index}.stationAllocations`) || [])];
+                                        if (allocationIndex !== -1) {
+                                          currentAllocations[allocationIndex].allocatedLiters = val;
+                                          setValue(`assignments.${index}.stationAllocations`, currentAllocations, { shouldValidate: true });
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {fieldErrors?.stationAllocations && <p className="text-xs text-destructive mt-2">{fieldErrors.stationAllocations.message}</p>}
+                </div>
                 
-                <div className="flex justify-end pt-2 text-sm text-muted-foreground border-t border-border mt-4">
-                  <span className="font-semibold mr-2 mt-2">Trip Transport Cost:</span>
-                  <span className="font-mono text-primary font-bold mt-2">₦{rowCost.toLocaleString()}</span>
+                <div className="flex justify-between items-center pt-2 text-sm text-muted-foreground border-t border-border mt-4">
+                  <div>
+                    {(() => {
+                      const allocations = watch(`assignments.${index}.stationAllocations`) || [];
+                      const allocatedSum = allocations.reduce((sum, a) => sum + a.allocatedLiters, 0);
+                      const tCapacity = Number(watch(`assignments.${index}.litersCarried`) || 0);
+                      const isOverTruckCapacity = allocatedSum > tCapacity;
+
+                      return (
+                        <div className="flex flex-col">
+                          <span className="text-xs font-medium">Allocated to Stations: {allocatedSum.toLocaleString()}L / {tCapacity.toLocaleString()}L</span>
+                          {isOverTruckCapacity && <span className="text-xs text-destructive font-semibold">Exceeds truck capacity!</span>}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="font-semibold text-xs">Trip Transport Cost:</span>
+                    <span className="font-mono text-primary font-bold">₦{rowCost.toLocaleString()}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -385,7 +514,8 @@ export function CreateTransportForm({
               driverId: "",
               destination: "",
               ratePerLiter: "" as any,
-              litersCarried: (remainingVolume > 0 ? Math.min(45000, remainingVolume) : "") as any
+              litersCarried: (remainingVolume > 0 ? Math.min(45000, remainingVolume) : "") as any,
+              stationAllocations: []
             });
           }}
         >
@@ -403,17 +533,33 @@ export function CreateTransportForm({
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-3 pt-6 max-w-4xl border-t border-border mt-6">
-        <Button type="button" variant="outline" onClick={() => router.push("/admin/fleet/transports")} className="h-10 rounded-full px-5">
-          Cancel
-        </Button>
-        <Button type="submit" disabled={formState.isSubmitting || isOverAllocated} className="h-10 rounded-full px-5 gap-2">
-          {formState.isSubmitting ? (
-            <><SpinnerEllipsis /><span>Saving...</span></>
-          ) : (
-            <><Save className="h-4 w-4" /><span>Dispatch {fields.length} {fields.length === 1 ? 'Truck' : 'Trucks'}</span></>
-          )}
-        </Button>
+      {(() => {
+        // Validation: Station allocations shouldn't exceed truck volume
+        const assignmentErrors = assignmentsWatch.some(a => {
+          const sum = (a.stationAllocations || []).reduce((acc, alloc) => acc + Number(alloc.allocatedLiters || 0), 0);
+          return sum > Number(a.litersCarried || 0);
+        });
+
+        return assignmentErrors && (
+          <div className="max-w-4xl p-3 text-sm font-medium rounded-md bg-destructive/15 text-destructive border border-destructive/20 flex items-center">
+            One or more trucks have station allocations exceeding the truck's carried volume.
+          </div>
+        );
+      })()}
+
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t z-10 flex justify-end gap-3 lg:pl-64">
+        <div className="max-w-4xl w-full flex justify-end gap-3 mx-auto">
+          <Button type="button" variant="outline" onClick={() => router.push("/admin/fleet/transports")} className="h-10 rounded-full px-5">
+            Cancel
+          </Button>
+          <Button type="submit" disabled={formState.isSubmitting || isOverAllocated} className="h-10 rounded-full px-5 gap-2 min-w-[140px]">
+            {formState.isSubmitting ? (
+              <><SpinnerEllipsis /><span>Saving...</span></>
+            ) : (
+              <><Save className="h-4 w-4" /><span>Dispatch {fields.length} {fields.length === 1 ? 'Truck' : 'Trucks'}</span></>
+            )}
+          </Button>
+        </div>
       </div>
     </form>
   );

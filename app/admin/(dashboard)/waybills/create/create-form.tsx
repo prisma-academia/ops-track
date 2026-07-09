@@ -719,7 +719,7 @@ export function CreateWaybillForm({ stations, prefillRequests }: { stations: { i
               Cancel
             </Button>
             <Button type="submit" disabled={form.formState.isSubmitting} className="min-w-32">
-              {form.formState.isSubmitting ? <SpinnerEllipsis /> : "Create Dispatch"}
+              {form.formState.isSubmitting ? <SpinnerEllipsis /> : "Create Waybill"}
             </Button>
           </div>
         </div>

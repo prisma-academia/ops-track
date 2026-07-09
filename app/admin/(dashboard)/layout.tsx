@@ -40,7 +40,7 @@ const NAV: NavItemConfig[] = [
   { href: "/admin/prices", key: "prices", module: "operations" as ModuleKey, icon: "ChartNoAxesCombined", permission: PERMISSIONS.TENANT_PRICES_READ.key },
   { href: "/admin/sales-reports", key: "salesReports", module: "operations" as ModuleKey, icon: "FileText", permission: PERMISSIONS.TENANT_SHIFTS_READ.key },
   { href: "/admin/reconciliation-report", key: "reconciliationReport", module: "operations" as ModuleKey, icon: "FileSpreadsheet", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
-  { href: "/admin/variance-audit", key: "varianceAudit", module: "operations" as ModuleKey, icon: "Scale", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+  // { href: "/admin/variance-audit", key: "varianceAudit", module: "operations" as ModuleKey, icon: "Scale", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   { href: "/admin/customers", key: "customers", module: "customers" as ModuleKey, icon: "Users", permission: PERMISSIONS.TENANT_CUSTOMERS_READ.key },
   { href: "/admin/role-templates", key: "roles", module: "roles" as ModuleKey, icon: "Shield", permission: PERMISSIONS.TENANT_ROLES_READ.key },
   { href: "/admin/activity", key: "activity", module: "activity" as ModuleKey, icon: "Activity", permission: PERMISSIONS.TENANT_ACTIVITY_READ.key },
@@ -139,6 +139,7 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
       logoutContext="tenant-admin"
       stations={allowedStations}
       activeStationId={activeStationId}
+      enabledModules={enabled}
     >
       <UnauthorizedToast />
       {children}

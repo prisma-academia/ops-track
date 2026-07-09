@@ -29,8 +29,8 @@ export default function PaymentsPage({ params }: { params: { tenant: string } })
       </div>
 
       <div className="mt-6">
-        {activeTab === "INCOMING" && <IncomingPaymentForm tenant={params.tenant} />}
-        {activeTab === "OUTGOING" && <OutgoingPaymentForm tenant={params.tenant} />}
+        {activeTab === "INCOMING" && <IncomingPaymentForm />}
+        {activeTab === "OUTGOING" && <OutgoingPaymentForm />}
       </div>
     </div>
   );

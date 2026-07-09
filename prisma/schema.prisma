@@ -94,6 +94,7 @@ model Tenant {
   shiftLogs                  ShiftLog[]
   expenses                   Expense[]
   supplyRequests             StationSupplyRequest[]
+  supplyRequestBatches       SupplyRequestBatch[]
 
   activeModules     String[]           @default(["STATION"])
   transporters      Transporter[]
@@ -158,6 +159,7 @@ model TenantUser {
   approvedExpenses        Expense[]        @relation("ExpenseApprovedBy")
   recordedWaybillDippings WaybillDipping[]
   supplyRequests          StationSupplyRequest[]
+  supplyRequestBatches    SupplyRequestBatch[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -428,6 +430,7 @@ model Station {
   pumps              Pump[]
   expenses           Expense[]
   supplyRequests     StationSupplyRequest[]
+  stationSales       Sale[]              @relation("StationSales")
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -668,6 +671,22 @@ enum SupplyRequestStatus {
   CANCELLED
 }
 
+model SupplyRequestBatch {
+  id            String     @id @default(uuid())
+  tenantId      String
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reference     String?    // Auto-generated batch reference e.g. "RB-20260709-001"
+  notes         String?    @db.Text
+  requestedById String
+  requestedBy   TenantUser @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+  createdAt     DateTime   @default(now())
+
+  requests StationSupplyRequest[]
+
+  @@index([tenantId])
+  @@map("supply_request_batches")
+}
+
 model StationSupplyRequest {
   id                  String              @id @default(uuid())
   tenantId            String
@@ -685,12 +704,21 @@ model StationSupplyRequest {
   waybillAllocationId String?             @unique
   waybillAllocation   WaybillAllocation?  @relation(fields: [waybillAllocationId], references: [id], onDelete: SetNull)
 
+  batchId             String?
+  batch               SupplyRequestBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  transportId         String?
+  transport           Transport?          @relation(fields: [transportId], references: [id], onDelete: SetNull)
+  allocatedLiters     Decimal?            @db.Decimal(12, 2)
+
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
   @@index([tenantId])
   @@index([stationId])
   @@index([requestedById])
+  @@index([batchId])
+  @@index([transportId])
   @@map("station_supply_requests")
 }
 
@@ -1030,9 +1058,10 @@ model Transport {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
-  sales    Sale[]
-  lossLogs TransportLossLog[]
-  transactions Transaction[]
+  sales          Sale[]
+  lossLogs       TransportLossLog[]
+  transactions   Transaction[]
+  supplyRequests StationSupplyRequest[]
 
   @@index([tenantId])
   @@index([orderId])
@@ -1072,8 +1101,10 @@ model Sale {
   id          String     @id @default(uuid())
   tenantId    String
   tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customerId  String
-  customer    Customer   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  customerId  String?
+  customer    Customer?  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  stationId   String?
+  station     Station?   @relation("StationSales", fields: [stationId], references: [id], onDelete: Restrict)
   transportId String?
   transport   Transport? @relation(fields: [transportId], references: [id], onDelete: SetNull)
 
@@ -1083,6 +1114,10 @@ model Sale {
   totalExpectedAmount Decimal  @default(0.00) @db.Decimal(12, 2)
   paymentReceived     Decimal  @default(0.00) @db.Decimal(12, 2)
 
+  transportRate        Decimal? @db.Decimal(10, 2) // ₦/L for sub-destination transport
+  transportCost        Decimal  @default(0.00) @db.Decimal(12, 2) // Total transport cost for this allocation
+  transportCostBorneBy String   @default("CLIENT") // "CLIENT" | "COMPANY"
+
   status    SaleStatus @default(UNPAID)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
@@ -1091,6 +1126,7 @@ model Sale {
 
   @@index([tenantId])
   @@index([customerId])
+  @@index([stationId])
   @@index([transportId])
   @@map("fleet_sales")
 }

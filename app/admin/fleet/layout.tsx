@@ -15,10 +15,10 @@ const FLEET_NAV = [
   { href: "/admin/fleet/drivers", key: "drivers", icon: "Users", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/fleet/orders", key: "orders", icon: "ShoppingCart", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/fleet/transports", key: "transports", icon: "Route", permission: PERMISSIONS.TENANT_FLEET_READ.key },
+  { href: "/admin/fleet/requests", key: "requests", icon: "ClipboardList", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/fleet/sales", key: "customers", icon: "BadgeDollarSign", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/fleet/payments", key: "payments", icon: "CreditCard", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/fleet/ledger", key: "transactions", icon: "Wallet", permission: PERMISSIONS.TENANT_FLEET_READ.key },
-  { href: "/admin/fleet/requests", key: "requests", icon: "ClipboardList", permission: PERMISSIONS.TENANT_FLEET_READ.key },
 ];
 
 export default async function FleetDashboardLayout({ children }: { children: React.ReactNode }) {
@@ -82,6 +82,10 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
       logoutEndpoint="/api/auth/logout"
       logoutRedirect="/admin/auth/login"
       logoutContext="tenant-admin"
+      enabledModules={Array.from(new Set([
+        ...settings.enabledModules,
+        ...(tenant.activeModules?.map((m: string) => m.toLowerCase()) || [])
+      ]))}
     >
       <UnauthorizedToast />
       {children}

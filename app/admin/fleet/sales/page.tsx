@@ -12,6 +12,7 @@ export default async function SalesPage() {
     orderBy: { createdAt: "desc" },
     include: {
       customer: { select: { id: true, name: true } },
+      station: { select: { id: true, name: true } },
       transport: {
         select: {
           id: true,
@@ -29,7 +30,7 @@ export default async function SalesPage() {
 
   const rows = sales.map((s) => ({
     id: s.id,
-    customerName: s.customer.name,
+    customerName: s.customer ? s.customer.name : (s.station ? s.station.name : "Unknown"),
     transportDetails: s.transport ? `${s.transport.truck.name} to ${s.transport.destination}` : "None",
     litersDespatched: Number(s.litersDespatched),
     litersReceived: s.litersReceived ? Number(s.litersReceived) : null,

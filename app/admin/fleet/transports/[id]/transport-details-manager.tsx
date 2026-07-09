@@ -157,47 +157,54 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
           </div>
         </div>
         
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setOpenIncidentDialog(true)} className="text-red-600 dark:text-red-400 border-red-200 dark:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/30">
-            <AlertTriangle className="h-4 w-4 mr-2" />
-            Log Incident
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setOpenSubsequentDialog(true)}>
-            <MapPin className="h-4 w-4 mr-2" />
-            Add Destination
-          </Button>
-          <Button size="sm" onClick={() => setOpenStatusDialog(true)}>
-            Update Status
-          </Button>
-        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
           <Tabs defaultValue="overview" className="w-full h-10">
             <TabsList className="w-full justify-start h-14 bg-muted/50 backdrop-blur-xs rounded-3xl border border-border">
               <TabsTrigger value="overview" className="text-[15px] font-semibold">Overview</TabsTrigger>
               <TabsTrigger value="destinations" className="text-[15px] font-semibold">Destinations ({subsequentLocs.length})</TabsTrigger>
+              <TabsTrigger value="distribution" className="text-[15px] font-semibold">Distribution ({transport.sales?.length || 0})</TabsTrigger>
               <TabsTrigger value="losses" className="text-[15px] font-semibold text-red-600 dark:text-red-400">Loss Logs ({lossLogs.length})</TabsTrigger>
             </TabsList>
             
             <TabsContent value="overview" className="mt-6 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-5 rounded-2xl border bg-card">
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Volume Carried</p>
-                  <p className="text-2xl font-bold text-foreground">{Number(transport.litersCarried).toLocaleString()} L</p>
+              {(() => {
+                const carriedVolume = Number(transport.litersCarried) || 0;
+                const distributedVolume = (transport.sales || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
+                const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
+
+                return (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="p-4 rounded-2xl border bg-card">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total Truck Volume</p>
+                      <p className="text-xl font-bold text-foreground">{carriedVolume.toLocaleString()} L</p>
+                    </div>
+                    <div className="p-4 rounded-2xl border bg-card">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Distributed</p>
+                      <p className="text-xl font-bold text-foreground">{distributedVolume.toLocaleString()} L</p>
+                    </div>
+                    <div className="p-4 rounded-2xl border bg-card">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Remaining Volume</p>
+                      <p className="text-xl font-bold text-foreground">{remainingVolume.toLocaleString()} L</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 rounded-2xl border bg-card">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Rate per Liter</p>
+                  <p className="text-xl font-bold text-foreground">₦{Number(transport.ratePerLiter).toLocaleString()}</p>
                 </div>
-                <div className="p-5 rounded-2xl border bg-card">
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Rate per Liter</p>
-                  <p className="text-2xl font-bold text-foreground">₦{Number(transport.ratePerLiter).toLocaleString()}</p>
+                <div className="p-4 rounded-2xl border bg-card">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total Loss Deductions</p>
+                  <p className="text-xl font-bold text-destructive">₦{Number(transport.totalDeduction).toLocaleString()}</p>
                 </div>
-                <div className="p-5 rounded-2xl border bg-card">
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total Loss Deductions</p>
-                  <p className="text-2xl font-bold text-destructive">₦{Number(transport.totalDeduction).toLocaleString()}</p>
-                </div>
-                <div className="p-5 rounded-2xl border bg-card">
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Net Transport Fee</p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">₦{Number(transport.netTransportFeePaid).toLocaleString()}</p>
+                <div className="p-4 rounded-2xl border bg-card">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Net Transport Fee</p>
+                  <p className="text-xl font-bold text-green-600 dark:text-green-400">₦{Number(transport.netTransportFeePaid).toLocaleString()}</p>
                 </div>
               </div>
 
@@ -207,6 +214,31 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
                   <p className="text-sm text-foreground">{transport.comment}</p>
                 </div>
               )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl border bg-card space-y-3">
+                  <h3 className="font-semibold uppercase tracking-widest text-[10px] text-muted-foreground border-b pb-2">Trip Personnel</h3>
+                  
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Driver</p>
+                    <p className="text-sm font-medium text-foreground">{transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : "Unassigned"}</p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl border bg-card space-y-3">
+                  <h3 className="font-semibold uppercase tracking-widest text-[10px] text-muted-foreground border-b pb-2">Related Order</h3>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Order Reference</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {transport.order?.reference ? (
+                        <Link href={`/admin/fleet/orders/${transport.order.id}`} className="text-primary hover:underline">
+                          {transport.order.reference}
+                        </Link>
+                      ) : "No Order Linked"}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </TabsContent>
 
             <TabsContent value="destinations" className="mt-6">
@@ -232,6 +264,54 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
                         <td className="text-right py-3 px-4 text-foreground/90">{Number(loc.litersDelivered).toLocaleString()} L</td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="distribution" className="mt-6">
+              <div className="border rounded-2xl overflow-hidden bg-card">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/50 bg-muted/50">
+                      <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Date</th>
+                      <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Recipient</th>
+                      <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Volume</th>
+                      <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Amount (₦)</th>
+                      <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Transport Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(!transport.sales || transport.sales.length === 0) ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                          No sales/distribution recorded for this trip.
+                        </td>
+                      </tr>
+                    ) : (
+                      transport.sales.map((sale: any) => (
+                        <tr key={sale.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
+                          <td className="py-3 px-4 text-foreground/90 whitespace-nowrap">
+                            {new Date(sale.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-medium text-foreground">
+                              {sale.customer ? sale.customer.name : sale.station ? sale.station.name : 'Unknown'}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground uppercase">
+                              {sale.customer ? 'EXTERNAL CLIENT' : 'OWNED STATION'}
+                            </div>
+                          </td>
+                          <td className="text-right py-3 px-4 text-foreground/90 font-medium">{Number(sale.litersDespatched || sale.litersSold).toLocaleString()} L</td>
+                          <td className="text-right py-3 px-4 text-foreground/90 font-medium">{Number(sale.totalExpectedAmount || sale.totalAmount).toLocaleString()}</td>
+                          <td className="text-right py-3 px-4 text-foreground/90">
+                            <Badge variant={sale.transportCostBorneBy === 'COMPANY' ? 'secondary' : 'default'} className="text-[10px]">
+                              {sale.transportCostBorneBy === 'COMPANY' ? 'COMPANY' : 'CLIENT'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -273,23 +353,28 @@ export function TransportDetailsManager({ transport }: { transport: any }) {
         </div>
 
         <div className="space-y-6">
-          <div className="p-5 rounded-2xl border bg-card space-y-4">
-            <h3 className="font-semibold uppercase tracking-widest text-xs text-muted-foreground border-b pb-2">Trip Personnel</h3>
+          <div className="p-4 rounded-2xl border bg-card space-y-3">
+            <h3 className="font-semibold uppercase tracking-widest text-[10px] text-muted-foreground border-b pb-2 mb-3">Trip Actions</h3>
             
-            <div>
-              <p className="text-xs text-muted-foreground">Driver</p>
-              <p className="font-medium text-foreground">{transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : "Unassigned"}</p>
-            </div>
-            
-            <div>
-              <p className="text-xs text-muted-foreground">Order Reference</p>
-              <p className="font-medium text-foreground">
-                {transport.order?.reference ? (
-                  <Link href={`/admin/fleet/orders/${transport.order.id}`} className="text-primary hover:underline">
-                    {transport.order.reference}
-                  </Link>
-                ) : "No Order Linked"}
-              </p>
+            <div className="flex flex-col gap-3">
+              <Button variant="outline" className="w-full justify-start h-11" asChild>
+                <Link href={`/admin/fleet/sales/new?transportId=${transport.id}`}>
+                  <PackageOpen className="h-4 w-4 mr-3" />
+                  Record Sale / Distribution
+                </Link>
+              </Button>
+              <Button variant="outline" className="w-full justify-start h-11" onClick={() => setOpenSubsequentDialog(true)}>
+                <MapPin className="h-4 w-4 mr-3" />
+                Add Subsequent Destination
+              </Button>
+              <Button variant="outline" className="w-full justify-start h-11" onClick={() => setOpenStatusDialog(true)}>
+                <CheckCircle className="h-4 w-4 mr-3" />
+                Update Trip Status
+              </Button>
+              <Button variant="outline" className="w-full justify-start h-11 text-red-600 dark:text-red-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950" onClick={() => setOpenIncidentDialog(true)}>
+                <AlertTriangle className="h-4 w-4 mr-3" />
+                Log Incident or Loss
+              </Button>
             </div>
           </div>
         </div>

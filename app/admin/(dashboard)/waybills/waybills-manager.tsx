@@ -111,13 +111,6 @@ export function WaybillsManager({
       <DataTableToolbar
         title="Waybills"
         description="Monitor incoming and completed waybills across your stations."
-        action={
-          canCreate ? (
-            <Button onClick={() => router.push("/admin/waybills/create")}>
-              <Plus size={16} className="mr-1" /> New Waybill
-            </Button>
-          ) : undefined
-        }
       />
 
       <div className="flex items-center gap-6 text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg border mb-4">

@@ -261,37 +261,63 @@ export function OrderDetailsManager({
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 text-sm space-y-4 pt-4">
-            <div className="flex items-start gap-3">
-              <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                <FileText size={14} />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Product & Volume</p>
-                <p className="font-semibold text-foreground text-sm">{order.productType} — {Number(order.litersOrdered).toLocaleString()} Liters</p>
-              </div>
-            </div>
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <FileText size={14} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Product & Volume</p>
+                    <p className="font-semibold text-foreground text-sm">{order.productType} — {Number(order.litersOrdered).toLocaleString()} Liters</p>
+                  </div>
+                </div>
 
-            <div className="flex items-start gap-3">
-              <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                <Building2 size={14} />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Supplier</p>
-                <p className="font-medium text-foreground text-sm">{order.supplier || "Not specified"}</p>
-              </div>
-            </div>
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <Building2 size={14} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Supplier</p>
+                    <p className="font-medium text-foreground text-sm">{order.supplier || "Not specified"}</p>
+                  </div>
+                </div>
 
-            <div className="flex items-start gap-3">
-              <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                <MapPin size={14} />
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <MapPin size={14} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Source Depot</p>
+                    <p className="font-medium text-foreground text-sm">{order.sourceDepot || "Not specified"}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Source Depot</p>
-                <p className="font-medium text-foreground text-sm">{order.sourceDepot || "Not specified"}</p>
+
+              <div className="space-y-4 sm:min-w-[140px]">
+                <div className="flex items-start gap-3 sm:justify-end">
+                  <div className="sm:text-right">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Dispensed</p>
+                    <p className="font-semibold text-emerald-600 dark:text-emerald-500 text-sm">{totalTransportedLiters.toLocaleString()} L</p>
+                  </div>
+                  <div className="size-8 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-500 shrink-0 order-first sm:order-last">
+                    <Truck size={14} />
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 sm:justify-end">
+                  <div className="sm:text-right">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Remaining</p>
+                    <p className="font-semibold text-amber-600 dark:text-amber-500 text-sm">{Math.max(0, Number(order.litersOrdered) - totalTransportedLiters).toLocaleString()} L</p>
+                  </div>
+                  <div className="size-8 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-500 shrink-0 order-first sm:order-last">
+                    <Archive size={14} />
+                  </div>
+                </div>
               </div>
             </div>
             
-            <div className="flex items-start gap-3 pt-2">
+            <div className="flex items-start gap-3 pt-2 border-t border-border/40 mt-4">
               <div className="size-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0">
                 <Calculator size={14} />
               </div>
@@ -379,7 +405,7 @@ export function OrderDetailsManager({
                 </thead>
                 <tbody className="divide-y divide-border/30">
                   {transports.length === 0 ? (
-                    <tr><td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">No transports logged for this order.</td></tr>
+                    <tr><td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">No transports logged for this order.</td></tr>
                   ) : (
                     transports.map((t: any) => (
                       <tr key={t.id} className="hover:bg-muted/10">
@@ -392,6 +418,7 @@ export function OrderDetailsManager({
                         <td className="px-6 py-4 text-right font-mono font-medium">{Number(t.litersCarried).toLocaleString()} L</td>
                         <td className="px-6 py-4 text-right font-mono font-medium">
                           ₦{(Number(t.ratePerLiter || 0) * Number(t.litersCarried || 0)).toLocaleString()}
+                          <div className="text-[10px] text-muted-foreground mt-1">@ ₦{Number(t.ratePerLiter || 0).toLocaleString()}/L</div>
                         </td>
                         <td className="px-6 py-4 text-center">
                           <Badge variant="outline" className={
@@ -405,6 +432,18 @@ export function OrderDetailsManager({
                     ))
                   )}
                 </tbody>
+                {transports.length > 0 && (
+                  <tfoot className="bg-muted/10 border-t border-border/50">
+                    <tr>
+                      <td colSpan={3} className="px-6 py-4 font-bold text-right text-sm">Totals:</td>
+                      <td className="px-6 py-4 text-right font-mono font-bold text-foreground">{totalTransportedLiters.toLocaleString()} L</td>
+                      <td className="px-6 py-4 text-right font-mono font-bold text-foreground">
+                        ₦{totalTransportCost.toLocaleString()}
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </Card>

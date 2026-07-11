@@ -24,7 +24,7 @@ const fontMono = Fira_Code({
 });
 
 export const metadata: Metadata = {
-  title: "RasForge",
+  title: "Forge",
   description: "Manage your filling station with ease.",
 };
 

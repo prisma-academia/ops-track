@@ -163,6 +163,22 @@ export function CreateTransportForm({
 
       <div className="max-w-4xl space-y-6">
         <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
+          {isOverAllocated && selectedOrderId && (
+            <div className="mx-6 mt-6 p-3 text-sm font-medium rounded-md bg-destructive/15 text-destructive border border-destructive/20 flex items-center">
+              Total dispatched volume ({totalRequested.toLocaleString()}L) exceeds the ordered volume ({totalOrdered.toLocaleString()}L).
+            </div>
+          )}
+          {(() => {
+            const assignmentErrors = assignmentsWatch.some(a => {
+              const sum = (a.stationAllocations || []).reduce((acc, alloc) => acc + Number(alloc.allocatedLiters || 0), 0);
+              return sum > Number(a.litersCarried || 0);
+            });
+            return assignmentErrors && (
+              <div className="mx-6 mt-6 p-3 text-sm font-medium rounded-md bg-destructive/15 text-destructive border border-destructive/20 flex items-center">
+                One or more trucks have station allocations exceeding the truck's carried volume.
+              </div>
+            );
+          })()}
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Source Order</CardTitle>
           </CardHeader>
@@ -394,102 +410,8 @@ export function CreateTransportForm({
                   </div>
                 </div>
 
-                {/* Station Requests Fulfillment Section */}
-                <div className="pt-4 pb-2 border-t border-border mt-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="space-y-0.5">
-                      <Label className="text-base flex items-center gap-2">
-                        <SplitSquareHorizontal className="h-4 w-4" />
-                        Station Request Fulfillment
-                      </Label>
-                      <p className="text-xs text-muted-foreground">Select station requests to fulfill and split this truck's volume.</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-muted/30 rounded-lg border overflow-hidden">
-                    {requests.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-muted-foreground">No pending requests available.</div>
-                    ) : (
-                      <div className="divide-y divide-border/50 max-h-64 overflow-y-auto">
-                        {requests.map((req) => {
-                          const stationAllocations = watch(`assignments.${index}.stationAllocations`) || [];
-                          const isSelected = stationAllocations.some(a => a.requestId === req.id);
-                          const allocationIndex = stationAllocations.findIndex(a => a.requestId === req.id);
-                          const allocation = isSelected ? stationAllocations[allocationIndex] : null;
-
-                          return (
-                            <div key={req.id} className={`p-3 flex flex-col gap-3 transition-colors ${isSelected ? "bg-primary/5" : "hover:bg-muted/50"}`}>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <Checkbox
-                                    checked={isSelected}
-                                    onCheckedChange={(checked) => {
-                                      const currentAllocations = watch(`assignments.${index}.stationAllocations`) || [];
-                                      if (checked) {
-                                        setValue(`assignments.${index}.stationAllocations`, [
-                                          ...currentAllocations,
-                                          { requestId: req.id, stationId: req.stationId, allocatedLiters: Number(req.requestedLiters) }
-                                        ], { shouldValidate: true });
-                                        // Auto-update truck volume if possible
-                                        const newTotal = currentAllocations.reduce((s, a) => s + a.allocatedLiters, 0) + Number(req.requestedLiters);
-                                        if (newTotal > Number(watch(`assignments.${index}.litersCarried`) || 0)) {
-                                          setValue(`assignments.${index}.litersCarried`, newTotal, { shouldValidate: true });
-                                        }
-                                      } else {
-                                        setValue(`assignments.${index}.stationAllocations`, currentAllocations.filter(a => a.requestId !== req.id), { shouldValidate: true });
-                                      }
-                                    }}
-                                  />
-                                  <div>
-                                    <div className="font-medium text-sm">{req.station.name}</div>
-                                    <div className="text-xs text-muted-foreground">Req: {Number(req.requestedLiters).toLocaleString()}L {req.productType}</div>
-                                  </div>
-                                </div>
-                                {isSelected && (
-                                  <div className="flex items-center gap-2">
-                                    <Label className="text-xs text-muted-foreground">Allocate (L):</Label>
-                                    <Input
-                                      type="number"
-                                      className="h-8 w-28 text-sm"
-                                      value={allocation?.allocatedLiters || ""}
-                                      onChange={(e) => {
-                                        const val = Number(e.target.value);
-                                        const currentAllocations = [...(watch(`assignments.${index}.stationAllocations`) || [])];
-                                        if (allocationIndex !== -1) {
-                                          currentAllocations[allocationIndex].allocatedLiters = val;
-                                          setValue(`assignments.${index}.stationAllocations`, currentAllocations, { shouldValidate: true });
-                                        }
-                                      }}
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  {fieldErrors?.stationAllocations && <p className="text-xs text-destructive mt-2">{fieldErrors.stationAllocations.message}</p>}
-                </div>
-                
                 <div className="flex justify-between items-center pt-2 text-sm text-muted-foreground border-t border-border mt-4">
-                  <div>
-                    {(() => {
-                      const allocations = watch(`assignments.${index}.stationAllocations`) || [];
-                      const allocatedSum = allocations.reduce((sum, a) => sum + a.allocatedLiters, 0);
-                      const tCapacity = Number(watch(`assignments.${index}.litersCarried`) || 0);
-                      const isOverTruckCapacity = allocatedSum > tCapacity;
-
-                      return (
-                        <div className="flex flex-col">
-                          <span className="text-xs font-medium">Allocated to Stations: {allocatedSum.toLocaleString()}L / {tCapacity.toLocaleString()}L</span>
-                          {isOverTruckCapacity && <span className="text-xs text-destructive font-semibold">Exceeds truck capacity!</span>}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                  <div className="flex flex-col items-end">
+                  <div className="flex flex-col items-end w-full">
                     <span className="font-semibold text-xs">Trip Transport Cost:</span>
                     <span className="font-mono text-primary font-bold">₦{rowCost.toLocaleString()}</span>
                   </div>
@@ -527,25 +449,7 @@ export function CreateTransportForm({
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {formState.errors.assignments?.root && <p className="text-sm text-red-600">{formState.errors.assignments.root.message}</p>}
 
-      {isOverAllocated && selectedOrderId && (
-        <div className="max-w-4xl p-3 text-sm font-medium rounded-md bg-destructive/15 text-destructive border border-destructive/20 flex items-center">
-          Total dispatched volume ({totalRequested.toLocaleString()}L) exceeds the ordered volume ({totalOrdered.toLocaleString()}L).
-        </div>
-      )}
 
-      {(() => {
-        // Validation: Station allocations shouldn't exceed truck volume
-        const assignmentErrors = assignmentsWatch.some(a => {
-          const sum = (a.stationAllocations || []).reduce((acc, alloc) => acc + Number(alloc.allocatedLiters || 0), 0);
-          return sum > Number(a.litersCarried || 0);
-        });
-
-        return assignmentErrors && (
-          <div className="max-w-4xl p-3 text-sm font-medium rounded-md bg-destructive/15 text-destructive border border-destructive/20 flex items-center">
-            One or more trucks have station allocations exceeding the truck's carried volume.
-          </div>
-        );
-      })()}
 
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t z-10 flex justify-end gap-3 lg:pl-64">
         <div className="max-w-4xl w-full flex justify-end gap-3 mx-auto">

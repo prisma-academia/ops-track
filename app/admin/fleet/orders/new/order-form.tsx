@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
@@ -15,6 +15,13 @@ import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const Schema = z.object({
   reference: z.string().max(50).optional().or(z.literal("")),
@@ -40,7 +47,6 @@ export function CreateOrderForm() {
   const [depots, setDepots] = useState<LookupItem[]>([]);
   
   // Popover States
-  const [openProductSelect, setOpenProductSelect] = useState(false);
   const [openSupplierSelect, setOpenSupplierSelect] = useState(false);
   const [openDepotSelect, setOpenDepotSelect] = useState(false);
 
@@ -49,7 +55,7 @@ export function CreateOrderForm() {
   const [newLookupName, setNewLookupName] = useState("");
   const [isAddingLookup, setIsAddingLookup] = useState(false);
 
-  const { register, handleSubmit, formState, setValue, watch } = useForm({
+  const { register, handleSubmit, formState, setValue, watch, control } = useForm({
     resolver: zodResolver(Schema),
     defaultValues: {
       reference: "",
@@ -164,19 +170,7 @@ export function CreateOrderForm() {
           <CommandInput placeholder={`Search ${label.toLowerCase()}...`} />
           <CommandList className="max-h-[200px] overflow-y-auto">
             <CommandEmpty className="py-2 px-2">
-              <p className="text-sm text-muted-foreground text-center mb-2">No {label.toLowerCase()} found.</p>
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="sm" 
-                className="w-full"
-                onClick={() => {
-                  setOpenState(false);
-                  setLookupDialog({ type, title: `Add New ${label}` });
-                }}
-              >
-                <Plus className="mr-2 h-3 w-3" /> Add New
-              </Button>
+              <p className="text-sm text-muted-foreground text-center">No {label.toLowerCase()} found.</p>
             </CommandEmpty>
             <CommandGroup>
               {options.map((opt) => (
@@ -196,6 +190,19 @@ export function CreateOrderForm() {
               ))}
             </CommandGroup>
           </CommandList>
+          <div className="border-t p-1">
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full justify-start text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-8 px-2 text-sm font-medium"
+              onClick={() => {
+                setLookupDialog({ type, title: `Add New ${label}` });
+                setOpenState(false);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" /> Add New {label}
+            </Button>
+          </div>
         </Command>
       </PopoverContent>
     </Popover>
@@ -247,45 +254,26 @@ export function CreateOrderForm() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="productType" className={formState.errors.productType ? "text-destructive" : ""}>Product Type*</Label>
-                    <Popover open={openProductSelect} onOpenChange={setOpenProductSelect}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          id="productType"
-                          className={`w-full justify-between font-normal ${formState.errors.productType ? "border-destructive" : ""}`}
-                        >
-                          <span className="truncate">
-                            {watchProductType || "Select product..."}
-                          </span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                        <Command>
-                          <CommandList>
-                            <CommandEmpty>No product found.</CommandEmpty>
-                            <CommandGroup>
-                              {PRODUCT_TYPES.map((p) => (
-                                <CommandItem
-                                  key={p}
-                                  value={p.toLowerCase()}
-                                  onSelect={() => {
-                                    setValue("productType", p as any, { shouldValidate: true });
-                                    setOpenProductSelect(false);
-                                  }}
-                                  data-checked={watchProductType === p}
-                                >
-                                  {p}
-                                  {watchProductType === p && <Check className="ml-auto h-4 w-4" />}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <input type="hidden" {...register("productType")} />
+                    <Controller
+                      control={control}
+                      name="productType"
+                      render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <SelectTrigger 
+                            id="productType" 
+                            className={`w-full ${formState.errors.productType ? "border-destructive" : ""}`}
+                          >
+                            <SelectValue placeholder="Select product..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="PMS">PMS (Petrol)</SelectItem>
+                            <SelectItem value="AGO">AGO (Diesel)</SelectItem>
+                            <SelectItem value="DPK">DPK (Kerosene)</SelectItem>
+                            <SelectItem value="LPG">LPG (Gas)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
                     {formState.errors.productType && <p className="text-xs text-destructive">{formState.errors.productType.message}</p>}
                   </div>
 

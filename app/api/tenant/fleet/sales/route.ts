@@ -16,6 +16,7 @@ const CreateSaleSchema = z.object({
   litersDespatched: z.number().positive(),
   litersReceived: z.number().min(0).optional().nullable(),
   amountPerLiter: z.number().positive(),
+  transportCostPerLiter: z.number().min(0).optional().default(0),
 }).superRefine((data, ctx) => {
   if (data.recipientType === "CUSTOMER" && !data.customerId) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a customer", path: ["customerId"] });
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
         if (t) {
           const station = await tx.station.findUnique({
             where: { id: s.stationId },
-            select: { code: true }
+            select: { code: true, name: true }
           });
           const rawCode = station ? station.code : "DISP";
           const prefix = rawCode.replace(/-?\d+$/, "");
@@ -140,9 +141,26 @@ export async function POST(request: Request) {
                   stationId: s.stationId,
                   litersToDispense: s.litersDespatched,
                   costPerLiter: s.amountPerLiter,
-                  transportationCost: 0,
+                  transportationCost: (body.transportCostPerLiter ?? 0) * body.litersDespatched,
                 }]
               }
+            }
+          });
+
+          // Append to transport routing
+          const existingLocs = Array.isArray(t.subsequentLocs) ? (t.subsequentLocs as any[]) : [];
+          await tx.transport.update({
+            where: { id: t.id },
+            data: {
+              subsequentLocs: [
+                ...existingLocs,
+                {
+                  location: station?.name || "Station",
+                  rate: body.transportCostPerLiter ?? 0,
+                  litersDelivered: body.litersDespatched,
+                  date: new Date().toISOString()
+                }
+              ]
             }
           });
         }

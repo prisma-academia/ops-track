@@ -92,7 +92,7 @@ export async function POST(request: Request) {
         });
       }
       return results;
-    });
+    }, { maxWait: 5000, timeout: 20000 });
 
     return ok({ transports });
   } catch (e) {

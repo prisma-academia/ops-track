@@ -24,25 +24,16 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
   
   const [openStatusDialog, setOpenStatusDialog] = useState(false);
   const [openAssignDestinationDialog, setOpenAssignDestinationDialog] = useState(false);
-  const [destinationType, setDestinationType] = useState<"STATION" | "CUSTOM">("STATION");
   const [openIncidentDialog, setOpenIncidentDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Subsequent Destination state
-  const [subLocation, setSubLocation] = useState("");
-  const [subRate, setSubRate] = useState("");
-  const [subLiters, setSubLiters] = useState("");
-  const [subProductPrice, setSubProductPrice] = useState("");
+  // Assign Sale state
+  const [assignSaleId, setAssignSaleId] = useState("");
+  const [assignTransportRate, setAssignTransportRate] = useState("");
 
   // Status form state
   const [newStatus, setNewStatus] = useState(transport.status);
-  
-  // Assign Station state
-  const [assignStationId, setAssignStationId] = useState("");
-  const [assignVolume, setAssignVolume] = useState("");
-  const [assignPrice, setAssignPrice] = useState("");
-  const [assignTransportCost, setAssignTransportCost] = useState("");
 
   // Incident form state
   const [lossType, setLossType] = useState("THEFT");
@@ -73,51 +64,36 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
     setError(null);
 
     try {
-      if (destinationType === "STATION") {
-        if (Number(assignVolume) <= 0) throw new Error("Volume to allocate must be greater than 0");
-        if (Number(assignPrice) < 0) throw new Error("Price cannot be negative");
-        if (Number(assignTransportCost) < 0) throw new Error("Transport cost cannot be negative");
+      if (!assignSaleId) throw new Error("Please select a sale");
+      if (Number(assignTransportRate) < 0) throw new Error("Transport rate cannot be negative");
 
-        const res = await apiPost(`/api/tenant/fleet/sales`, {
-          recipientType: "STATION",
-          stationId: assignStationId,
-          transportId: transport.id,
-          litersDespatched: Number(assignVolume),
-          amountPerLiter: Number(assignPrice),
-          transportCostPerLiter: Number(assignTransportCost || 0)
-        });
-        if (res.error) throw new Error(res.error.message || "Failed to assign station");
-        
-        setAssignStationId("");
-        setAssignVolume("");
-        setAssignPrice("");
-        setAssignTransportCost("");
-      } else {
-        if (!subLocation || !subRate || !subLiters) {
-          throw new Error("All fields are required");
-        }
-        if (Number(subLiters) <= 0) throw new Error("Liters delivered must be greater than 0");
-        if (Number(subRate) < 0) throw new Error("Rate cannot be negative");
-        
-        const currentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
-        const newLocs = [...currentLocs, {
-          location: subLocation,
-          rate: Number(subRate),
-          litersDelivered: Number(subLiters),
-          productPrice: Number(subProductPrice || 0),
-          isCustom: true,
-          date: new Date().toISOString()
-        }];
-        const res = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, {
-          subsequentLocs: newLocs
-        });
-        if (res.error) throw new Error(res.error.message || "Failed to add destination");
-        
-        setSubLocation("");
-        setSubRate("");
-        setSubLiters("");
-        setSubProductPrice("");
-      }
+      const sale = transport.sales.find((s: any) => s.id === assignSaleId);
+      if (!sale) throw new Error("Sale not found");
+
+      // 1. Update Sale with transport rate and cost
+      const transportCost = Number(assignTransportRate || 0) * Number(sale.litersDespatched);
+      const resSale = await apiPatch(`/api/tenant/fleet/sales/${sale.id}`, {
+        transportRate: Number(assignTransportRate || 0),
+        transportCost: transportCost
+      });
+      if (resSale.error) throw new Error(resSale.error.message || "Failed to update sale transport rate");
+
+      // 2. Append to Transport's subsequentLocs
+      const currentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
+      const newLocs = [...currentLocs, {
+        location: sale.station ? sale.station.name : (sale.customer ? sale.customer.name : "Unknown"),
+        rate: Number(assignTransportRate || 0),
+        litersDelivered: Number(sale.litersDespatched),
+        date: new Date().toISOString()
+      }];
+      
+      const resTransport = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, {
+        subsequentLocs: newLocs
+      });
+      if (resTransport.error) throw new Error(resTransport.error.message || "Failed to add destination");
+      
+      setAssignSaleId("");
+      setAssignTransportRate("");
       
       router.refresh();
       setOpenAssignDestinationDialog(false);
@@ -566,7 +542,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
         <DialogContent className={cn(
           "w-[calc(100%-2rem)] p-0 gap-0 flex flex-col",
           "max-h-[min(85vh,720px)]",
-          destinationType === "STATION" ? "sm:max-w-2xl" : "sm:max-w-2xl"
+          "sm:max-w-2xl"
         )}>
           {/* Fixed Header */}
           <div className="px-6 pt-6 pb-0 shrink-0">
@@ -588,8 +564,12 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
             const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
             const distributedVolume = salesVol + locsVol;
             const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
-            const enteredVolume = destinationType === "STATION" ? Number(assignVolume || 0) : Number(subLiters || 0);
-            const isOverAllocated = enteredVolume > 0 && enteredVolume > remainingVolume;
+            
+            // Available sales that haven't been added to subsequentLocs yet
+            const availableSales = (transport.sales || []).filter((s: any) => {
+              const recipientName = s.station ? s.station.name : (s.customer ? s.customer.name : "Unknown");
+              return !subsequentLocs.some((loc: any) => loc.location === recipientName);
+            });
 
             return (
           <>
@@ -607,90 +587,42 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                 </div>
                 <div className={cn(
                   "p-3 rounded-xl border text-center",
-                  isOverAllocated ? "bg-destructive/5 border-destructive/20" : "bg-primary/5 border-primary/20"
+                  "bg-primary/5 border-primary/20"
                 )}>
-                  <p className={cn("text-[10px] uppercase tracking-widest font-medium", isOverAllocated ? "text-destructive/70" : "text-primary/70")}>Available</p>
-                  <p className={cn("text-base font-bold mt-0.5", isOverAllocated ? "text-destructive" : "text-primary")}>{remainingVolume.toLocaleString()} L</p>
+                  <p className={cn("text-[10px] uppercase tracking-widest font-medium", "text-primary/70")}>Available</p>
+                  <p className={cn("text-base font-bold mt-0.5", "text-primary")}>{remainingVolume.toLocaleString()} L</p>
                 </div>
               </div>
 
               <Separator />
 
-              {/* Destination Type Tabs */}
-              <Tabs value={destinationType} onValueChange={(v) => setDestinationType(v as "STATION" | "CUSTOM")} className="w-full">
-                <TabsList className="w-full grid grid-cols-2 h-10">
-                  <TabsTrigger value="STATION" className="text-xs font-medium">Rafuel Station</TabsTrigger>
-                  <TabsTrigger value="CUSTOM" className="text-xs font-medium">Custom Location</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="STATION" className="mt-4 space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Left Column */}
-                    <div className="space-y-4">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Select Station</Label>
-                        <Select value={assignStationId} onValueChange={setAssignStationId}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Choose a station..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {stations.map(st => (
-                              <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-
-                    </div>
-
-                    {/* Right Column */}
-                    <div className="space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Volume to Allocate (L)</Label>
-                        <Input type="number" min="0" value={assignVolume} onChange={(e) => setAssignVolume(e.target.value)} placeholder="e.g. 15000" className={cn(isOverAllocated && destinationType === "STATION" && "border-destructive focus-visible:ring-destructive/30")} />
-                        {isOverAllocated && destinationType === "STATION" && (
-                          <p className="text-[11px] text-destructive">Exceeds available volume by {(enteredVolume - remainingVolume).toLocaleString()} L</p>
-                        )}
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Price per Litre (₦)</Label>
-                        <Input type="number" min="0" value={assignPrice} onChange={(e) => setAssignPrice(e.target.value)} placeholder="0.00" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Transport Cost / Litre (₦)</Label>
-                        <Input type="number" min="0" value={assignTransportCost} onChange={(e) => setAssignTransportCost(e.target.value)} placeholder="0.00" />
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="CUSTOM" className="mt-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Location / State</Label>
-                      <Input value={subLocation} onChange={(e) => setSubLocation(e.target.value)} placeholder="e.g. Ogun State" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Product Price per Liter (₦)</Label>
-                      <Input type="number" min="0" value={subProductPrice} onChange={(e) => setSubProductPrice(e.target.value)} placeholder="0" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Transport Rate / L (₦)</Label>
-                      <Input type="number" min="0" value={subRate} onChange={(e) => setSubRate(e.target.value)} placeholder="0" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Liters to Deliver</Label>
-                      <Input type="number" min="0" value={subLiters} onChange={(e) => setSubLiters(e.target.value)} placeholder="0" className={cn(isOverAllocated && destinationType === "CUSTOM" && "border-destructive focus-visible:ring-destructive/30")} />
-                      {isOverAllocated && destinationType === "CUSTOM" && (
-                        <p className="text-[11px] text-destructive">Exceeds available volume by {(enteredVolume - remainingVolume).toLocaleString()} L</p>
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Select Linked Sale</Label>
+                  <Select value={assignSaleId} onValueChange={setAssignSaleId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose a sale..." />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      {availableSales.length === 0 ? (
+                        <SelectItem value="none" disabled>No available sales</SelectItem>
+                      ) : (
+                        availableSales.map((sale: any) => (
+                          <SelectItem key={sale.id} value={sale.id}>
+                            {sale.station ? sale.station.name : (sale.customer ? sale.customer.name : "Unknown")} - {Number(sale.litersDespatched).toLocaleString()} L
+                          </SelectItem>
+                        ))
                       )}
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">Only sales linked to this transport are shown.</p>
+                </div>
+                
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Transport Rate / L (₦)</Label>
+                  <Input type="number" min="0" value={assignTransportRate} onChange={(e) => setAssignTransportRate(e.target.value)} placeholder="0.00" />
+                </div>
+              </div>
 
               {error && (
                 <p className="text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2">
@@ -705,7 +637,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
           <div className="px-6 py-4 shrink-0">
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={() => setOpenAssignDestinationDialog(false)}>Cancel</Button>
-              <Button size="sm" onClick={handleAssignDestination} disabled={isSubmitting || isOverAllocated || (destinationType === "STATION" ? (!assignStationId || !assignVolume || !assignPrice) : (!subLocation || !subRate || !subLiters))}>
+              <Button size="sm" onClick={handleAssignDestination} disabled={isSubmitting || !assignSaleId}>
                 {isSubmitting ? <SpinnerEllipsis /> : "Confirm Assignment"}
               </Button>
             </DialogFooter>

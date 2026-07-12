@@ -3,11 +3,12 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { CreateTransportForm } from "./transport-form"; 
 
-export default async function NewTransportPage({
-  searchParams,
-}: {
-  searchParams?: { requestId?: string | string[] };
-}) {
+export default async function NewTransportPage(
+  props: {
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
 
   const transporters = await prisma.transporter.findMany({

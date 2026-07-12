@@ -39,11 +39,6 @@ const columns: ColumnDef<SaleRow>[] = [
     }
   },
   { 
-    accessorKey: "litersDespatched", 
-    header: "Vol. Despatched (L)",
-    cell: ({ row }) => row.original.litersDespatched.toLocaleString()
-  },
-  { 
     accessorKey: "litersReceived", 
     header: "Vol. Received (L)",
     cell: ({ row }) => {

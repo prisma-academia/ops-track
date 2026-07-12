@@ -20,19 +20,12 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
   const router = useRouter();
 
   const [openStatusDialog, setOpenStatusDialog] = useState(false);
-  const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Status form
   const [newStatus, setNewStatus] = useState(sale.status);
-
-  // Payment form
-  const [payAmount, setPayAmount] = useState("");
-  const [payMethod, setPayMethod] = useState("");
-  const [payDescription, setPayDescription] = useState("");
-  const [payReference, setPayReference] = useState("");
 
   // Edit form
   const [editLitersReceived, setEditLitersReceived] = useState(sale.litersReceived?.toString() || "");
@@ -56,42 +49,6 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
     }
   };
 
-  const handleAddPayment = async () => {
-    setIsSubmitting(true);
-    setError(null);
-
-    if (Number(payAmount) <= 0) {
-      setError("Payment amount must be greater than 0");
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (!payMethod) {
-      setError("Payment method is required");
-      setIsSubmitting(false);
-      return;
-    }
-
-    const res = await apiPost(`/api/tenant/fleet/sales/${sale.id}/payments`, {
-      amount: Number(payAmount),
-      paymentMethod: payMethod,
-      description: payDescription,
-      reference: payReference,
-    });
-    
-    setIsSubmitting(false);
-
-    if (res.error) {
-      setError(res.error.message);
-    } else {
-      setOpenPaymentDialog(false);
-      setPayAmount("");
-      setPayMethod("");
-      setPayDescription("");
-      setPayReference("");
-      router.refresh();
-    }
-  };
 
   const handleEditSale = async () => {
     setIsSubmitting(true);
@@ -187,7 +144,7 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Price per Liter</p>
                 <p className="text-xl font-bold text-foreground">₦{Number(sale.amountPerLiter).toLocaleString()}</p>
               </div>
-              <div className="p-4 rounded-2xl border bg-card border-l-4 border-l-primary">
+              <div className="p-4 rounded-2xl border bg-card">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total Expected</p>
                 <p className="text-xl font-bold text-foreground">₦{totalExpected.toLocaleString()}</p>
               </div>
@@ -237,12 +194,8 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
             <div className="flex justify-between items-end mb-2">
               <div>
                 <h3 className="font-semibold text-lg">Payment History</h3>
-                <p className="text-sm text-muted-foreground">Record and track incoming funds for this sale.</p>
+                <p className="text-sm text-muted-foreground">View recorded incoming funds for this sale. Payments are now centralized.</p>
               </div>
-              <Button onClick={() => setOpenPaymentDialog(true)} disabled={outstanding <= 0}>
-                <Banknote className="h-4 w-4 mr-2" />
-                Record Payment
-              </Button>
             </div>
 
             <div className="border rounded-2xl overflow-hidden bg-card">
@@ -291,61 +244,6 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
         </Tabs>
       </div>
 
-      {/* Record Payment Dialog */}
-      <Dialog open={openPaymentDialog} onOpenChange={setOpenPaymentDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Banknote className="h-5 w-5 text-emerald-500" />
-              Record Payment
-            </DialogTitle>
-            <DialogDescription>
-              Log an incoming payment for this sale. The status will auto-update if fully cleared.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <Label>Amount Received (₦)*</Label>
-                <span className="text-xs text-muted-foreground">Outstanding: ₦{outstanding.toLocaleString()}</span>
-              </div>
-              <div className="flex gap-2">
-                <Input type="number" min="0" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0" />
-                <Button variant="secondary" onClick={() => setPayAmount(outstanding.toString())} type="button">Max</Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Payment Method*</Label>
-              <Input list="payment-methods" value={payMethod} onChange={(e) => setPayMethod(e.target.value)} placeholder="e.g. Bank Transfer" />
-              <datalist id="payment-methods">
-                <option value="Bank Transfer" />
-                <option value="Cash" />
-                <option value="Cheque" />
-                <option value="POS" />
-              </datalist>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Reference (Optional)</Label>
-              <Input value={payReference} onChange={(e) => setPayReference(e.target.value)} placeholder="e.g. TXN-12345" />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Notes (Optional)</Label>
-              <Textarea value={payDescription} onChange={(e) => setPayDescription(e.target.value)} placeholder="Additional details..." />
-            </div>
-
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenPaymentDialog(false)}>Cancel</Button>
-            <Button onClick={handleAddPayment} disabled={isSubmitting}>
-              {isSubmitting ? <SpinnerEllipsis /> : "Record Payment"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>

@@ -11,6 +11,9 @@ const SubsequentLocSchema = z.object({
   location: z.string(),
   rate: z.number(),
   litersDelivered: z.number(),
+  date: z.string().optional(),
+  isCustom: z.boolean().optional(),
+  productPrice: z.number().optional()
 });
 
 const UpdateTransportSchema = z.object({

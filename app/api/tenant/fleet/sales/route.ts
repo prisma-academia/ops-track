@@ -12,7 +12,7 @@ const CreateSaleSchema = z.object({
   customerId: z.string().optional(),
   stationId: z.string().optional(),
   transportCostBorneBy: z.enum(["CLIENT", "COMPANY"]).optional(),
-  transportId: z.string().optional().nullable(),
+  transportId: z.string().min(1, "Transport is required"),
   litersDespatched: z.number().positive(),
   litersReceived: z.number().min(0).optional().nullable(),
   amountPerLiter: z.number().positive(),
@@ -144,23 +144,6 @@ export async function POST(request: Request) {
                   transportationCost: (body.transportCostPerLiter ?? 0) * body.litersDespatched,
                 }]
               }
-            }
-          });
-
-          // Append to transport routing
-          const existingLocs = Array.isArray(t.subsequentLocs) ? (t.subsequentLocs as any[]) : [];
-          await tx.transport.update({
-            where: { id: t.id },
-            data: {
-              subsequentLocs: [
-                ...existingLocs,
-                {
-                  location: station?.name || "Station",
-                  rate: body.transportCostPerLiter ?? 0,
-                  litersDelivered: body.litersDespatched,
-                  date: new Date().toISOString()
-                }
-              ]
             }
           });
         }

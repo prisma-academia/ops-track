@@ -27,7 +27,7 @@ const CONTENT_TYPE_EXT: Record<string, string> = {
   "image/webp": "webp",
 };
 
-export type PresignKind = "logo";
+export type PresignKind = "logo" | "receipt";
 
 export function isAllowedImageType(contentType: string): boolean {
   return contentType in CONTENT_TYPE_EXT;

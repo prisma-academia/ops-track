@@ -43,13 +43,7 @@ export default async function NewTransportPage({
     orderBy: { createdAt: "desc" },
   });
 
-  const requests = await prisma.stationSupplyRequest.findMany({
-    where: { tenantId: actor.tenantId, status: { in: ["PENDING", "APPROVED"] } },
-    include: {
-      station: { select: { id: true, name: true, code: true } }
-    },
-    orderBy: { createdAt: "desc" },
-  });
+
 
   // Extract selected request IDs from URL params
   let preselectedRequestIds: string[] = [];
@@ -68,8 +62,6 @@ export default async function NewTransportPage({
         trucks={JSON.parse(JSON.stringify(trucks))} 
         drivers={drivers} 
         orders={JSON.parse(JSON.stringify(orders))} 
-        requests={JSON.parse(JSON.stringify(requests))}
-        preselectedRequestIds={preselectedRequestIds}
       />
     </div>
   );

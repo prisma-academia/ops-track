@@ -3,7 +3,7 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { notFound } from "next/navigation";
 import { TransportDetailsManager } from "./transport-details-manager";
-import { calculateTripPnL } from "@/lib/fleet/financials";
+
 
 export default async function TransportDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
@@ -31,25 +31,17 @@ export default async function TransportDetailsPage({ params }: { params: Promise
 
   const stations = await prisma.station.findMany({
     where: { tenantId: actor.tenantId },
-    include: {
-      supplyRequests: {
-        where: { 
-          status: "PENDING",
-          productType: transport.productType as any
-        }
-      }
-    },
+
     orderBy: { name: "asc" }
   });
 
-  const pnl = await calculateTripPnL(transport.id);
+
 
   return (
     <div className="space-y-6">
       <TransportDetailsManager 
         transport={JSON.parse(JSON.stringify(transport))} 
         stations={JSON.parse(JSON.stringify(stations))}
-        pnl={pnl}
       />
     </div>
   );

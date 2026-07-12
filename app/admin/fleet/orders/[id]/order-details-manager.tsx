@@ -264,7 +264,7 @@ export function OrderDetailsManager({
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 text-sm space-y-4 pt-4">
+          <CardContent className="flex-1 text-sm space-y-4 ">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
@@ -296,6 +296,16 @@ export function OrderDetailsManager({
                     <p className="font-medium text-foreground text-sm">{order.sourceDepot || "Not specified"}</p>
                   </div>
                 </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <Truck size={14} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Dispatched Transports</p>
+                    <p className="font-medium text-foreground text-sm">{transports.length} {transports.length === 1 ? 'Trip' : 'Trips'}</p>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-4 sm:min-w-[140px]">
@@ -318,17 +328,34 @@ export function OrderDetailsManager({
                     <Archive size={14} />
                   </div>
                 </div>
+
+                <div className="flex items-start gap-3 sm:justify-end">
+                  <div className="sm:text-right">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Price per Litre</p>
+                    <p className="font-semibold text-foreground text-sm">₦{Number(order.pricePerLitre).toLocaleString()}/L</p>
+                  </div>
+                  <div className="size-8 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-500 shrink-0 order-first sm:order-last">
+                    <Calculator size={14} />
+                  </div>
+                </div>
               </div>
             </div>
             
-            <div className="flex items-start gap-3 pt-2 border-t border-border/40 mt-4">
-              <div className="size-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0">
-                <Calculator size={14} />
-              </div>
-              <div className="flex-1">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Financials</p>
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-3 text-xs">
-                  <div className="flex justify-between border-b pb-1">
+
+          </CardContent>
+        </Card>
+
+        {/* Transports Summary */}
+        <Card className="lg:col-span-1 flex flex-col border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+          <CardHeader className="pb-3 border-b border-border/30">
+            <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Calculator size={16} className="text-primary" />
+              Financial Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1">
+            <div className="flex flex-col gap-y-4 w-full">
+                  <div className="flex justify-between border-b pb-1 text-sm">
                     <span className="text-muted-foreground">Rate:</span>
                     <span className="font-mono font-medium">₦{Number(order.pricePerLitre).toLocaleString()}/L</span>
                   </div>
@@ -344,34 +371,14 @@ export function OrderDetailsManager({
                     <span className="text-muted-foreground">Logistics:</span>
                     <span className="font-mono font-medium text-right">
                       ₦{totalTransportCost.toLocaleString()}
-                      <br className="xl:hidden" />
-                      {totalTransportedLiters > 0 && <span className="text-[10px] opacity-70 xl:ml-1">(@ ₦{averageTransportCostPerLiter.toFixed(2)}/L avg)</span>}
+                      {/* {totalTransportedLiters > 0 && <><br /><span className="text-[10px] opacity-70">(@ ₦{averageTransportCostPerLiter.toFixed(2)}/L avg)</span></>} */}
                     </span>
                   </div>
-                  <div className="col-span-1 xl:col-span-2 flex justify-between pt-2 mt-1">
-                    <span className="font-bold text-foreground">Total Value:</span>
-                    <span className="font-mono font-bold text-primary text-sm">₦{currentGrandTotal.toLocaleString()}</span>
+                  <div className="flex justify-between">
+                    <span className="font-bold text-foreground text-sm">Total Value:</span>
+                    <span className="font-mono font-bold text-primary text-base">₦{currentGrandTotal.toLocaleString()}</span>
                   </div>
                 </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Transports Summary */}
-        <Card className="lg:col-span-1 flex flex-col border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
-          <CardHeader className="pb-3 border-b border-border/30">
-            <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Truck size={16} className="text-primary" />
-              Logistics Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col justify-center items-center text-center p-6 py-8">
-            <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-3">
-              <Truck size={28} />
-            </div>
-            <p className="text-3xl font-bold text-foreground">{transports.length}</p>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-1">Dispatched Transports</p>
           </CardContent>
         </Card>
       </div>

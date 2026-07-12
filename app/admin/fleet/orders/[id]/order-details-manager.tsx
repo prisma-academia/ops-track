@@ -15,6 +15,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils"
+
 import {
   ArrowLeft,
   FileText,
@@ -60,9 +62,11 @@ type LookupItem = { id: string; name: string };
 export function OrderDetailsManager({
   order,
   lookups,
+  pnl,
 }: {
   order: any;
   lookups: { suppliers: LookupItem[]; depots: LookupItem[] };
+  pnl?: any;
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");
@@ -378,6 +382,7 @@ export function OrderDetailsManager({
           <TabsList className="h-4 px-1.5 py-2 justify-start md:w-auto gap-1">
             <TabsTrigger value="overview" className="px-6 py-4 text-[15px] font-semibold">Overview</TabsTrigger>
             <TabsTrigger value="transports" className="px-6 py-4 text-[15px] font-semibold">Associated Transports ({transports.length})</TabsTrigger>
+            <TabsTrigger value="pnl" className="px-6 py-4 text-[15px] font-semibold text-emerald-600 dark:text-emerald-400">Profit & Loss</TabsTrigger>
           </TabsList>
         </div>
 
@@ -446,6 +451,104 @@ export function OrderDetailsManager({
                 )}
               </table>
             </div>
+          </Card>
+        </TabsContent>
+
+        {/* ---------------- P&L TAB ---------------- */}
+        <TabsContent value="pnl" className="mt-0 animate-in fade-in duration-500">
+          <Card className="border-border/40 shadow-sm p-6">
+            <h3 className="text-lg font-semibold mb-1">Order Profit & Loss Summary</h3>
+            <p className="text-sm text-muted-foreground mb-6">Aggregated financial breakdown for the entire order and its associated trips.</p>
+            
+            {pnl ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-2xl border bg-card shadow-sm">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total Revenue</p>
+                    <p className="text-xl font-bold text-foreground">₦{pnl.totalRevenue.toLocaleString()}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl border bg-card shadow-sm">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total COGS (Transported)</p>
+                    <p className="text-xl font-bold text-foreground">₦{pnl.totalCogs.toLocaleString()}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl border bg-card shadow-sm">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total Costs (Logistics + Exp)</p>
+                    <p className="text-xl font-bold text-foreground">₦{(pnl.totalTransportFeesPaid + pnl.totalTripExpenses + pnl.totalOrderExpenses + pnl.totalLoadingCost).toLocaleString()}</p>
+                  </div>
+                  <div className={cn("p-4 rounded-2xl border shadow-sm", pnl.netProfit >= 0 ? "bg-emerald-500/10 border-emerald-500/30" : "bg-destructive/10 border-destructive/30")}>
+                    <p className={cn("text-[10px] uppercase tracking-widest font-semibold mb-1", pnl.netProfit >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive")}>Net Profit</p>
+                    <p className={cn("text-xl font-bold", pnl.netProfit >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive")}>
+                      {pnl.netProfit >= 0 ? "+" : "-"}₦{Math.abs(pnl.netProfit).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border rounded-2xl overflow-hidden bg-card shadow-sm mt-6">
+                  <div className="bg-muted/30 px-4 py-3 border-b">
+                    <h5 className="font-semibold text-sm">Detailed Costs Breakdown</h5>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border">
+                    <div className="p-4">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Net Transport Fees Paid</p>
+                      <p className="text-base font-medium">₦{pnl.totalTransportFeesPaid.toLocaleString()}</p>
+                    </div>
+                    <div className="p-4">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Loading Cost</p>
+                      <p className="text-base font-medium text-muted-foreground">₦{pnl.totalLoadingCost.toLocaleString()}</p>
+                    </div>
+                    <div className="p-4">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Total Trip Expenses</p>
+                      <p className="text-base font-medium text-muted-foreground">₦{pnl.totalTripExpenses.toLocaleString()}</p>
+                    </div>
+                    <div className="p-4">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Total Order Expenses</p>
+                      <p className="text-base font-medium text-muted-foreground">₦{pnl.totalOrderExpenses.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border rounded-2xl overflow-hidden bg-card shadow-sm mt-6">
+                  <div className="bg-muted/30 px-4 py-3 border-b">
+                    <h5 className="font-semibold text-sm">Unit Metrics Breakdown (Per Trip)</h5>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {validTransports.map((t: any) => {
+                      const tripPnL = pnl.trips?.find((tp: any) => tp.transportId === t.id);
+                      if (!tripPnL) return null;
+                      
+                      const litersDelivered = Number(t.litersCarried || 0);
+                      const avgTransportCost = litersDelivered > 0 ? tripPnL.totalTransportFee / litersDelivered : 0;
+                      const avgSellingPrice = litersDelivered > 0 ? tripPnL.totalRevenue / litersDelivered : 0;
+                      
+                      return (
+                        <div key={t.id} className="p-4 grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+                          <div>
+                            <p className="font-semibold text-sm">{t.destination}</p>
+                            <p className="text-xs text-muted-foreground">{t.truck?.plateNumber || "Unknown Truck"}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Buying Price</p>
+                            <p className="text-sm font-medium">₦{Number(order.pricePerLitre).toLocaleString()}/L</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Transport Cost</p>
+                            <p className="text-sm font-medium text-muted-foreground">₦{avgTransportCost.toFixed(2)}/L</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Selling Price</p>
+                            <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">₦{avgSellingPrice.toFixed(2)}/L</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 border rounded-2xl bg-card">
+                <p className="text-muted-foreground">P&L data could not be generated.</p>
+              </div>
+            )}
           </Card>
         </TabsContent>
       </Tabs>

@@ -19,6 +19,7 @@ const FLEET_NAV = [
   { href: "/admin/fleet/sales", key: "customers", icon: "BadgeDollarSign", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/fleet/payments", key: "payments", icon: "CreditCard", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/fleet/ledger", key: "transactions", icon: "Wallet", permission: PERMISSIONS.TENANT_FLEET_READ.key },
+  { href: "/admin/fleet/pnl", key: "pnl", icon: "Calculator", permission: PERMISSIONS.TENANT_FLEET_READ.key },
 ];
 
 export default async function FleetDashboardLayout({ children }: { children: React.ReactNode }) {
@@ -62,7 +63,8 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
     if (n.key === 'customers') title = 'Sales';
     if (n.key === 'payments') title = 'Payments';
     if (n.key === 'transactions') title = 'Ledger';
-    if (n.key === 'requests') title = 'Pending Requests';
+    if (n.key === 'requests') title = 'Requests';
+    if (n.key === 'pnl') title = 'Profit & Loss';
 
     return {
       href: n.href,

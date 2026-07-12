@@ -92,7 +92,7 @@ export function FleetRequestsManager({
             {initialRequests.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="h-24 text-center">
-                  No pending requests.
+                  No  requests.
                 </TableCell>
               </TableRow>
             ) : (

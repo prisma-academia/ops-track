@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
 
-export function TransportDetailsManager({ transport, stations = [] }: { transport: any, stations?: any[] }) {
+export function TransportDetailsManager({ transport, stations = [], pnl }: { transport: any, stations?: any[], pnl?: any }) {
   const router = useRouter();
   
   const [openStatusDialog, setOpenStatusDialog] = useState(false);
@@ -225,6 +225,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
               <TabsTrigger value="destinations" className="text-[15px] font-semibold">Destinations ({subsequentLocs.length})</TabsTrigger>
               <TabsTrigger value="distribution" className="text-[15px] font-semibold">Distribution ({(transport.sales?.length || 0) + customDistributions.length})</TabsTrigger>
               <TabsTrigger value="losses" className="text-[15px] font-semibold text-red-600 dark:text-red-400">Loss Logs ({lossLogs.length})</TabsTrigger>
+              <TabsTrigger value="pnl" className="text-[15px] font-semibold text-emerald-600 dark:text-emerald-400">Profit & Loss</TabsTrigger>
             </TabsList>
             
             <TabsContent value="overview" className="mt-6 space-y-6">
@@ -549,6 +550,98 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                     )}
                   </div>
                 ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="pnl" className="mt-6 space-y-4">
+              <div className="flex justify-between items-end mb-2">
+                <div>
+                  <h3 className="font-semibold text-lg">Profit & Loss (P&L) Statement</h3>
+                  <p className="text-sm text-muted-foreground">Financial breakdown of this trip, including deductions and expenses.</p>
+                </div>
+              </div>
+              {pnl ? (
+                <div className="space-y-6 animate-in fade-in duration-500">
+                  {/* Trip Summary P&L */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="p-4 rounded-2xl border bg-card shadow-sm">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total Revenue</p>
+                      <p className="text-xl font-bold text-foreground">₦{pnl.totalRevenue.toLocaleString()}</p>
+                    </div>
+                    <div className="p-4 rounded-2xl border bg-card shadow-sm">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total COGS</p>
+                      <p className="text-xl font-bold text-foreground">₦{pnl.totalCogs.toLocaleString()}</p>
+                    </div>
+                    <div className="p-4 rounded-2xl border bg-card shadow-sm">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Net Transport Fee</p>
+                      <div className="flex flex-col">
+                        <span className="text-xl font-bold text-foreground">₦{pnl.totalTransportFee.toLocaleString()}</span>
+                        {pnl.totalShortageDeduction > 0 && (
+                          <span className="text-[10px] text-destructive uppercase font-medium mt-1">Includes ₦{pnl.totalShortageDeduction.toLocaleString()} shortage ded.</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className={cn("p-4 rounded-2xl border shadow-sm", pnl.netProfit >= 0 ? "bg-emerald-500/10 border-emerald-500/30" : "bg-destructive/10 border-destructive/30")}>
+                      <p className={cn("text-[10px] uppercase tracking-widest font-semibold mb-1", pnl.netProfit >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive")}>Net Profit</p>
+                      <p className={cn("text-xl font-bold", pnl.netProfit >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive")}>
+                        {pnl.netProfit >= 0 ? "+" : "-"}₦{Math.abs(pnl.netProfit).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {pnl.transporterDebtRollover > 0 && (
+                    <div className="p-4 rounded-2xl border bg-amber-500/10 border-amber-500/30">
+                      <h4 className="font-semibold text-amber-800 dark:text-amber-500 mb-1 flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4" />
+                        Transporter Debt Rollover
+                      </h4>
+                      <p className="text-sm text-amber-900 dark:text-amber-400/90">
+                        The deductions for this trip exceeded the transport fee by <span className="font-bold">₦{pnl.transporterDebtRollover.toLocaleString()}</span>. This amount rolls over to the transporter's debt ledger.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Leg by Leg breakdown */}
+                  <div className="space-y-4 pt-2">
+                    <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-widest">Leg-by-Leg Breakdown</h4>
+                    {pnl.legs.map((leg: any, idx: number) => (
+                      <div key={idx} className="border rounded-2xl overflow-hidden bg-card shadow-sm">
+                        <div className="bg-muted/30 px-4 py-3 border-b flex justify-between items-center">
+                          <h5 className="font-semibold text-sm">{leg.legName}</h5>
+                          <span className={cn("font-bold text-sm", leg.profit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
+                            {leg.profit >= 0 ? "+" : "-"}₦{Math.abs(leg.profit).toLocaleString()} Profit
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-5 divide-y md:divide-y-0 md:divide-x divide-border">
+                          <div className="p-4 text-center">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Revenue</p>
+                            <p className="text-sm font-medium">₦{leg.revenue.toLocaleString()}</p>
+                          </div>
+                          <div className="p-4 text-center bg-muted/5">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">COGS</p>
+                            <p className="text-sm font-medium text-muted-foreground">₦{leg.cogs.toLocaleString()}</p>
+                          </div>
+                          <div className="p-4 text-center bg-muted/5">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Transport Fee</p>
+                            <p className="text-sm font-medium text-muted-foreground">₦{leg.transportFee.toLocaleString()}</p>
+                          </div>
+                          <div className="p-4 text-center">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Deductions</p>
+                            <p className="text-sm font-medium text-destructive">₦{leg.shortageDeduction.toLocaleString()}</p>
+                          </div>
+                          <div className="p-4 text-center bg-muted/5">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Expenses</p>
+                            <p className="text-sm font-medium text-muted-foreground">₦{leg.expenses.toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 border rounded-2xl bg-card">
+                  <p className="text-muted-foreground">P&L data could not be generated.</p>
+                </div>
               )}
             </TabsContent>
           </Tabs>

@@ -10,6 +10,7 @@ const UpdateSaleSchema = z.object({
   litersReceived: z.number().min(0).optional(),
   amountPerLiter: z.number().positive().optional(),
   litersDespatched: z.number().positive().optional(),
+  status: z.enum(["UNPAID", "PART_PAID", "CLEARED"]).optional(),
 });
 
 export async function GET(
@@ -67,6 +68,7 @@ export async function PATCH(
         ...(body.litersReceived !== undefined && { litersReceived: body.litersReceived }),
         ...(body.amountPerLiter !== undefined && { amountPerLiter: body.amountPerLiter }),
         ...(body.litersDespatched !== undefined && { litersDespatched: body.litersDespatched }),
+        ...(body.status !== undefined && { status: body.status }),
         totalExpectedAmount,
       },
     });

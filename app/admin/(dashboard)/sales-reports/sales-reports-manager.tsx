@@ -1,17 +1,22 @@
-
 "use client";
-import { useState, useMemo } from "react";
-import { DataTable } from "@/components/data-table";
-import type { ColumnDef } from "@tanstack/react-table";
+import { useState, useMemo, useRef, useCallback } from "react";
+import {
+  type ColumnDef,
+  type SortingState,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
-import { User, Droplets, Banknote, ChartColumnIncreasing, Handbag, CalendarIcon, Eye, CheckCircle2, AlertCircle } from "lucide-react";
+import { User, Droplets, Banknote, ChartColumnIncreasing, Handbag, CalendarIcon, Eye, CheckCircle2, AlertCircle, ChevronUpIcon, ChevronDownIcon, Maximize2, Minimize2, Printer } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { cn, formatHumanReadableDate, formatShortCurrency } from "@/lib/utils";
@@ -64,22 +69,42 @@ export function SalesReportsManager({
   stations: { id: string; name: string; code: string }[];
 }) {
   const router = useRouter();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: addDays(new Date(), -30),
     to: new Date(),
   });
-  // Filter logic
-  const [selectedStationId, setSelectedStationId] = useState<string>("ALL");
+  const [selectedStationIds, setSelectedStationIds] = useState<string[]>([]);
+  const [sorting, setSorting] = useState<SortingState>([]);
 
-  // Filtering logic
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen().catch((err) => {
+        console.error("Error attempting to enable fullscreen:", err.message);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  }, []);
+
+  const handleFullscreenChange = useCallback(() => {
+    setIsFullscreen(!!document.fullscreenElement);
+  }, []);
+
+  useMemo(() => {
+    if (typeof document !== "undefined") {
+      document.addEventListener("fullscreenchange", handleFullscreenChange);
+      return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    }
+  }, [handleFullscreenChange]);
+
   const filteredReports = useMemo(() => {
     return initialReports.filter((report) => {
-      // Filter by station
-      if (selectedStationId !== "ALL" && report.stationId !== selectedStationId) {
+      if (selectedStationIds.length > 0 && !selectedStationIds.includes(report.stationId)) {
         return false;
       }
-
-      // Filter by date
       const logDate = new Date(report.logDate);
       if (dateRange?.from) {
         const sDate = new Date(dateRange.from);
@@ -93,9 +118,8 @@ export function SalesReportsManager({
       }
       return true;
     });
-  }, [initialReports, dateRange, selectedStationId]);
+  }, [initialReports, dateRange, selectedStationIds]);
 
-  // Analytics computation
   const stats = useMemo(() => {
     let totalLiters = 0;
     let cash = 0;
@@ -110,44 +134,52 @@ export function SalesReportsManager({
     return { totalLiters, cash, digital };
   }, [filteredReports]);
 
-  const EcommerceActions = [
+  const statCards = [
     {
       title: "Transactions",
-      subtitle: filteredReports.length.toString(),
-      cardIcon: Handbag,
+      value: filteredReports.length.toString(),
+      icon: Handbag,
       badgeColor: "bg-teal-400/10 text-teal-700 dark:text-teal-400",
-      statusValue: "Period",
+      badge: "Period",
+      valueColor: "",
+      iconColor: "text-teal-600",
     },
     {
       title: "Volume Sold",
-      subtitle: `${stats.totalLiters.toLocaleString()} L`,
-      cardIcon: Droplets,
+      value: `${stats.totalLiters.toLocaleString()} L`,
+      icon: Droplets,
       badgeColor: "bg-blue-400/10 text-blue-700 dark:text-blue-400",
-      statusValue: "Period",
+      badge: "Period",
+      valueColor: "text-blue-600",
+      iconColor: "text-blue-600",
     },
     {
       title: "Cash Revenue",
-      subtitle: formatShortCurrency(stats.cash),
-      cardIcon: Banknote,
+      value: formatShortCurrency(stats.cash),
+      icon: Banknote,
       badgeColor: "bg-emerald-400/10 text-emerald-700 dark:text-emerald-400",
-      statusValue: "Period",
+      badge: "Period",
+      valueColor: "text-emerald-600",
+      iconColor: "text-emerald-600",
     },
     {
       title: "Digital Revenue",
-      subtitle: formatShortCurrency(stats.digital),
-      cardIcon: ChartColumnIncreasing,
+      value: formatShortCurrency(stats.digital),
+      icon: ChartColumnIncreasing,
       badgeColor: "bg-indigo-400/10 text-indigo-700 dark:text-indigo-400",
-      statusValue: "Period",
+      badge: "Period",
+      valueColor: "text-indigo-600",
+      iconColor: "text-indigo-600",
     },
   ];
 
-  const columns: ColumnDef<SalesReportRow>[] = [
+  const columns: ColumnDef<SalesReportRow>[] = useMemo(() => [
     {
       accessorKey: "logDate",
       header: "Date",
-      cell: ({ row }) => {
-        return <span className="font-medium">{formatHumanReadableDate(row.original.logDate)}</span>;
-      },
+      cell: ({ row }) => (
+        <span className="font-medium">{formatHumanReadableDate(row.original.logDate)}</span>
+      ),
     },
     {
       id: "station_name",
@@ -157,8 +189,7 @@ export function SalesReportsManager({
         const station = row.original.station;
         return (
           <div className="flex flex-col">
-            <span className="font-semibold text-foreground">{station?.name}</span>
-            <span className="text-[10px] text-muted-foreground font-mono">{station?.code}</span>
+            <span className="font-semibold text-foreground whitespace-nowrap">{station?.name}</span>
           </div>
         );
       },
@@ -167,45 +198,43 @@ export function SalesReportsManager({
       accessorKey: "productType",
       header: "Product",
       cell: ({ row }) => (
-        <Badge variant="secondary" className="font-mono text-[10px]">
-          {row.original.productType}
-        </Badge>
+        <span className="font-mono text-[10px] uppercase tracking-wider">{row.original.productType}</span>
       ),
     },
     {
       accessorKey: "openingDip",
-      header: () => <div className="text-right">Opening Dip</div>,
+      header: () => <div className="text-right whitespace-nowrap">Opening Dip</div>,
       cell: ({ row }) => (
-        <div className="text-right font-medium text-muted-foreground">
+        <div className="text-right text-xs font-mono tabular-nums text-muted-foreground whitespace-nowrap">
           {Number(row.original.openingDip || 0).toLocaleString()} L
         </div>
       ),
     },
     {
       accessorKey: "closingDip",
-      header: () => <div className="text-right">Closing Dip</div>,
+      header: () => <div className="text-right whitespace-nowrap">Closing Dip</div>,
       cell: ({ row }) => (
-        <div className="text-right font-medium text-muted-foreground">
+        <div className="text-right text-xs font-mono tabular-nums text-muted-foreground whitespace-nowrap">
           {Number(row.original.closingDip || 0).toLocaleString()} L
         </div>
       ),
     },
     {
       accessorKey: "litersSold",
-      header: () => <div className="text-right">Volume Sold</div>,
+      header: () => <div className="text-right whitespace-nowrap">Volume Sold</div>,
       cell: ({ row }) => (
-        <div className="text-right font-medium text-muted-foreground">
+        <div className="text-right text-xs font-mono tabular-nums text-foreground font-semibold whitespace-nowrap">
           {Number(row.original.litersSold).toLocaleString()} L
         </div>
       ),
     },
     {
       id: "revenue",
-      header: () => <div className="text-right">Total Revenue</div>,
+      header: () => <div className="text-right whitespace-nowrap">Total Revenue</div>,
       cell: ({ row }) => {
         const total = Number(row.original.amountCash) + Number(row.original.amountPos) + Number(row.original.amountTransfer);
         return (
-          <div className="text-right font-bold text-foreground">
+          <div className="text-right text-xs font-mono tabular-nums font-bold text-foreground whitespace-nowrap">
             {formatShortCurrency(total)}
           </div>
         );
@@ -223,76 +252,121 @@ export function SalesReportsManager({
         if (report.flaggedReceipt) flags.push("Receipt");
 
         return (
-          <div className="flex flex-col gap-1 py-1">
-            {status === "APPROVED" ? (
-              <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 w-fit">
-                Approved
-              </Badge>
-            ) : status === "REJECTED" ? (
-              <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50 w-fit">
-                Rejected
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 w-fit">
-                Pending
-              </Badge>
-            )}
+          <div className="flex flex-col gap-1">
+            <span className={cn(
+              "text-[10px] font-bold uppercase tracking-wider whitespace-nowrap print:text-black",
+              status === "APPROVED" ? "text-emerald-600" : status === "REJECTED" ? "text-rose-600" : "text-amber-600"
+            )}>
+              {status}
+            </span>
             {flags.length > 0 && (
-              <span className="text-[10px] text-rose-500 font-semibold leading-none mt-0.5">
-                Flagged: {flags.join(", ")}
+              <span className="text-[9px] text-rose-500 font-bold leading-none mt-0.5 print:text-black">
+                Flags: {flags.join(", ")}
               </span>
             )}
           </div>
         );
       },
     },
+  ], []);
 
-    {
-      id: "actions",
-      header: () => <div className="text-center">Action</div>,
-      cell: ({ row }) => {
-        const report = row.original;
-        return (
-          <div className="flex items-center gap-2 justify-center" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push(`/admin/sales-reports/${report.id}`)}
-              className="flex items-center gap-1 h-8 px-3 rounded-4xl"
-            >
-              <Eye className="size-3.5" /> Details
-            </Button>
-          </div>
-        );
-      },
-    },
-  ];
+  const table = useReactTable({
+    data: filteredReports,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
 
   return (
-    <div className="space-y-6">
+    <div
+      ref={containerRef}
+      className={cn(
+        "space-y-6 transition-all print:m-0 print:p-0 print:bg-white print:text-black print:space-y-3",
+        isFullscreen && "bg-background p-6 overflow-auto h-full"
+      )}
+    >
+      <style>{`
+        @media print {
+          @page { size: landscape; margin: 10mm; }
+        }
+      `}</style>
       
-      {/* Filters and Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-card text-card-foreground p-6 rounded-xl border">
+      {/* ── Header + Filters ─────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Sales Reports</h1>
-          <p className="text-muted-foreground text-sm">Monitor daily sales logs across all your stations.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground print:text-black">
+            Sales Reports
+          </h1>
+          <p className="hidden print:block text-[11px] text-black/80 font-medium mt-1">
+            Date: {dateRange?.from ? format(dateRange.from, "d MMMM yyyy") : "All Time"} {dateRange?.to ? ` to ${format(dateRange.to, "d MMMM yyyy")}` : ""}
+            <br />
+            Stations: {selectedStationIds.length === 0 ? "All Stations" : stations.filter(s => selectedStationIds.includes(s.id)).map(s => s.name).join(", ")}
+          </p>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-end gap-4 w-full md:w-auto">
-          {/* Station Dropdown */}
-          <div className="space-y-1 w-full sm:w-48">
-            <Label className="text-xs text-muted-foreground">Station</Label>
-            <Select value={selectedStationId} onValueChange={setSelectedStationId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="All Stations" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Stations</SelectItem>
-                {stations.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="flex flex-col sm:flex-row items-end gap-3 w-full md:w-auto print:hidden">
+          {/* Station filter */}
+          <div className="space-y-1 w-full sm:w-48 print:hidden">
+            <Label className="text-xs text-muted-foreground">Station(s)</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    selectedStationIds.length === 0 && "text-muted-foreground"
+                  )}
+                >
+                  {selectedStationIds.length === 0
+                    ? "All Stations"
+                    : `${selectedStationIds.length} station(s) selected`}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-2" align="start">
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2 p-1">
+                    <Checkbox
+                      id="station-all"
+                      checked={selectedStationIds.length === 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) setSelectedStationIds([]);
+                      }}
+                    />
+                    <label
+                      htmlFor="station-all"
+                      className="text-sm font-medium leading-none cursor-pointer"
+                    >
+                      All Stations
+                    </label>
+                  </div>
+                  {stations.map((s) => (
+                    <div key={s.id} className="flex items-center space-x-2 p-1">
+                      <Checkbox
+                        id={`station-${s.id}`}
+                        checked={selectedStationIds.includes(s.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedStationIds([...selectedStationIds, s.id]);
+                          } else {
+                            setSelectedStationIds(
+                              selectedStationIds.filter((id) => id !== s.id)
+                            );
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor={`station-${s.id}`}
+                        className="text-sm font-medium leading-none cursor-pointer"
+                      >
+                        {s.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Date Picker Range */}
@@ -334,66 +408,175 @@ export function SalesReportsManager({
               </PopoverContent>
             </Popover>
           </div>
+
+          {/* Print button */}
+          <div className="space-y-1 shrink-0">
+            <Label className="text-xs text-muted-foreground opacity-0 select-none">
+              Print
+            </Label>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => window.print()}
+              title="Print report"
+              className="h-10 w-10"
+            >
+              <Printer className="size-4" />
+            </Button>
+          </div>
+
+          {/* Fullscreen toggle */}
+          <div className="space-y-1 shrink-0">
+            <Label className="text-xs text-muted-foreground opacity-0 select-none">
+              View
+            </Label>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleFullscreen}
+              title={isFullscreen ? "Exit fullscreen" : "Fullscreen view"}
+              className="h-10 w-10"
+            >
+              {isFullscreen ? (
+                <Minimize2 className="size-4" />
+              ) : (
+                <Maximize2 className="size-4" />
+              )}
+            </Button>
+          </div>
+
         </div>
       </div>
 
       {/* Analytics Cards */}
-      <div className="w-full">
-        <Card className="p-0 shadow-xs border-border/40">
-          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0">
-            {EcommerceActions.map((item, index) => {
-              return (
-                <div
-                  className="lg:w-3/12 md:w-6/12 w-full border-border border-b last:border-b-0 md:border-e md:even:border-e-0 md:nth-[n+3]:border-b-0 lg:border-b-0 lg:even:border-e lg:last:border-e-0"
-                  key={index}
-                >
-                  <div className="p-6 flex items-start justify-between">
-                    <div className="flex flex-col gap-4">
-                      <p className="text-base font-medium text-card-foreground">
-                        {item.title}
-                      </p>
-                      <div>
-                        <p className="text-2xl font-medium text-card-foreground">
-                          {item.subtitle}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <p className="text-xs text-muted-foreground">
-                            Filtered
-                          </p>
-                          <Badge
-                            className={cn(
-                              "font-medium text-[10px] uppercase tracking-wider",
-                              item.badgeColor,
-                            )}
-                          >
-                            {item.statusValue}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                    {/* icon */}
-                    <div className="p-3 rounded-full bg-muted/30 outline outline-1 outline-border/50">
-                      <item.cardIcon size={16} className="text-muted-foreground" />
+      <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
+        <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
+          {statCards.map((item, index) => (
+            <div
+              key={index}
+              className="lg:w-3/12 md:w-6/12 w-full border-border border-b last:border-b-0 md:border-e md:even:border-e-0 md:nth-[n+3]:border-b-0 lg:border-b-0 lg:even:border-e lg:last:border-e-0 print:border-none print:w-auto"
+            >
+              <div className="p-4 flex items-start justify-between print:p-0">
+                <div className="flex flex-col gap-2 print:gap-0.5">
+                  <p className="text-sm font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                  <div>
+                    <p className={cn("text-xl font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
+                      {item.value}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1 print:hidden">
+                      <Badge
+                        className={cn(
+                          "font-medium text-[9px] uppercase tracking-wider px-1.5 py-0",
+                          item.badgeColor
+                        )}
+                      >
+                        {item.badge}
+                      </Badge>
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      </div>
+                <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
+                  <item.icon
+                    size={14}
+                    className={cn("text-muted-foreground", item.iconColor)}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
-      <DataTable
-        columns={columns}
-        data={filteredReports}
-        title=""
-        description=""
-        filterColumnId="station_name"
-        searchPlaceholder="Search by station name…"
-      />
+      {/* ── Table ───────────────────────────────────────────────────────── */}
+      <Card className="w-full py-0 overflow-hidden print:shadow-none print:border-none print:bg-transparent">
+        <CardContent className="px-0">
+          <div className="overflow-x-auto border-t border-border/40 relative print:overflow-visible print:border-none print:w-full print:max-w-none">
+            <table className="min-w-max w-full text-sm border-collapse border border-border/50 print:border-black/30 print:text-[10px] print:w-full">
+              <thead className="bg-muted/50 border-b border-border/50 print:border-black/30 print:bg-transparent">
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <tr key={headerGroup.id} className="border-none">
+                    {headerGroup.headers.map((header) => (
+                      <th
+                        key={header.id}
+                        className="h-9 px-2 py-1.5 text-[11px] font-bold text-foreground bg-muted/50 border border-border/50 print:border-black/30 uppercase tracking-wider whitespace-nowrap text-left print:text-[9px] print:text-black print:bg-transparent"
+                      >
+                        {header.isPlaceholder ? null : (
+                          <div
+                            className={cn(
+                              header.column.getCanSort() &&
+                                "flex cursor-pointer select-none items-center gap-1.5 hover:text-foreground transition-colors"
+                            )}
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            {flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                            {
+                              {
+                                asc: <ChevronUpIcon size={13} />,
+                                desc: <ChevronDownIcon size={13} />,
+                              }[header.column.getIsSorted() as string] ?? null
+                            }
+                          </div>
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
+              </thead>
 
-
+              <tbody>
+                {table.getRowModel().rows.length ? (
+                  table.getRowModel().rows.map((row, index) => (
+                    <tr
+                      key={row.id}
+                      className={cn(
+                        "hover:bg-muted/20 transition-colors group cursor-pointer",
+                        index % 2 === 0 ? "bg-background" : "bg-muted/5 print:bg-transparent"
+                      )}
+                      onClick={() => router.push(`/admin/sales-reports/${row.original.id}`)}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <td
+                          key={cell.id}
+                          className="px-2 py-1.5 whitespace-nowrap text-[13px] print:text-[10px] print:py-1 border border-border/50 print:border-black/30 print:text-black"
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={columns.length}
+                      className="h-32 text-center text-sm text-muted-foreground border border-border/50 print:border-black/30"
+                    >
+                      No sales reports found for the selected filters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot className="bg-muted/50 font-bold border border-border/50 print:border-black/30 print:bg-transparent">
+                <tr>
+                  <td colSpan={5} className="px-2 py-2 text-right text-sm border border-border/50 print:border-black/30 print:text-black">
+                    Total:
+                  </td>
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
+                    {stats.totalLiters.toLocaleString()} L
+                  </td>
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
+                    {formatShortCurrency(stats.cash + stats.digital)}
+                  </td>
+                  <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black">
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
-

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save, ChevronsUpDown, Plus, Trash2, SplitSquareHorizontal, Truck } from "lucide-react";
+import { ArrowLeft, Save, ChevronsUpDown, Plus, Trash2, SplitSquareHorizontal, Truck, AlertTriangle } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
@@ -55,7 +55,7 @@ export function CreateTransportForm({
   preselectedRequestIds,
 }: {
   transporters: { id: string; name: string }[];
-  trucks: { id: string; name: string; transporterId: string }[];
+  trucks: { id: string; name: string; transporterId: string; capacityLiters?: any }[];
   drivers: { id: string; firstName: string; lastName: string; transporterId: string }[];
   orders: { id: string; reference: string | null; productType: any; litersOrdered: number | string; transports: { litersCarried: number | string }[] }[];
   requests: { id: string; requestedLiters: number | string; productType: string; stationId: string; station: { name: string; code: string; } }[];
@@ -126,10 +126,7 @@ export function CreateTransportForm({
         
         // Only auto-fill if not using preselected requests
         if (initialAllocations.length === 0) {
-          const remaining = Number(selectedOrder.litersOrdered) - selectedOrder.transports.reduce((sum, t) => sum + Number(t.litersCarried), 0);
-          if (remaining > 0 && assignmentsWatch.length === 1 && (assignmentsWatch[0].litersCarried === 45000 || !assignmentsWatch[0].litersCarried)) {
-            setValue(`assignments.0.litersCarried`, Math.min(45000, remaining), { shouldValidate: true });
-          }
+          // Intentionally left blank to allow user to manually enter volume
         }
       }
     }
@@ -401,6 +398,19 @@ export function CreateTransportForm({
                     <Label className={fieldErrors?.litersCarried ? "text-destructive" : ""}>Total Truck Volume (L)*</Label>
                     <Input type="number" placeholder="45000" {...register(`assignments.${index}.litersCarried`)} className={fieldErrors?.litersCarried ? "border-destructive" : ""} />
                     {fieldErrors?.litersCarried && <p className="text-xs text-destructive">{String(fieldErrors.litersCarried.message)}</p>}
+                    {(() => {
+                      const selectedTruck = trucks.find(t => t.id === truckId);
+                      const truckCapacity = selectedTruck?.capacityLiters ? Number(selectedTruck.capacityLiters) : 0;
+                      if (truckCapacity > 0 && Number(lC) > truckCapacity) {
+                        return (
+                          <p className="text-[11px] text-amber-600 dark:text-amber-500 mt-1 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            Volume exceeds truck capacity ({truckCapacity.toLocaleString()}L).
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
 
                   <div className="space-y-2">
@@ -436,7 +446,7 @@ export function CreateTransportForm({
               driverId: "",
               destination: "",
               ratePerLiter: "" as any,
-              litersCarried: (remainingVolume > 0 ? Math.min(45000, remainingVolume) : "") as any,
+              litersCarried: "" as any,
               stationAllocations: []
             });
           }}

@@ -44,8 +44,10 @@ export default async function ReconciliationReportPage() {
   // Build flat rows — each row is one WaybillAllocation (one station delivery)
   const rows = allocations.map((a, index) => {
     const deliveryQty = Number(a.litersToDispense);
-    const deliveryCost = Number(a.costPerLiter);
-    const stockValue = deliveryQty * deliveryCost;
+    const productPrice = Number(a.costPerLiter);
+    const transportationCost = Number(a.transportationCost);
+    const deliveryCost = deliveryQty > 0 ? transportationCost / deliveryQty : 0; // transport cost per liter
+    const stockValue = deliveryQty * productPrice;
 
     // Total delivery for this waybill = sum of all allocations on same waybill
     const totalDelivery = a.waybill.allocations.reduce(
@@ -55,14 +57,13 @@ export default async function ReconciliationReportPage() {
 
     // Reconciliation computed values
     const reconciledQty = a.litersReceived ? Number(a.litersReceived) : null;
-    const transportationCost = Number(a.transportationCost);
     const reconciledDeposit =
       reconciledQty !== null
-        ? reconciledQty * deliveryCost + transportationCost
+        ? reconciledQty * productPrice + transportationCost
         : null;
     const pnl =
       reconciledQty !== null
-        ? (deliveryQty - reconciledQty) * deliveryCost
+        ? (deliveryQty - reconciledQty) * productPrice
         : null;
 
     return {

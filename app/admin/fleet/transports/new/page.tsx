@@ -18,7 +18,7 @@ export default async function NewTransportPage({
   
   const trucks = await prisma.truck.findMany({
     where: { tenantId: actor.tenantId, status: "ACTIVE" },
-    select: { id: true, name: true, transporterId: true },
+    select: { id: true, name: true, transporterId: true, capacityLiters: true },
     orderBy: { name: "asc" },
   });
   
@@ -65,7 +65,7 @@ export default async function NewTransportPage({
     <div className="space-y-6">
       <CreateTransportForm 
         transporters={transporters} 
-        trucks={trucks} 
+        trucks={JSON.parse(JSON.stringify(trucks))} 
         drivers={drivers} 
         orders={JSON.parse(JSON.stringify(orders))} 
         requests={JSON.parse(JSON.stringify(requests))}

@@ -235,7 +235,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
               {(() => {
                 const carriedVolume = Number(transport.litersCarried) || 0;
                 const salesVol = (transport.sales || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
-                const locsVol = (transport.subsequentLocs || []).reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
+                const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
                 const distributedVolume = salesVol + locsVol;
                 const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
 
@@ -373,7 +373,13 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                                 <div className="font-medium">{loc.location}</div>
                                 <div className="text-[10px] text-muted-foreground uppercase mt-0.5">{loc.isCustom ? 'Custom Destination' : 'Station Destination'}</div>
                               </td>
-                              <td className="text-right py-3 px-4 text-foreground/90">{loc.productPrice ? Number(loc.productPrice).toLocaleString() : '—'}</td>
+                              <td className="text-right py-3 px-4 text-foreground/90">
+                                {(() => {
+                                  const saleMatch = transport.sales?.find((s: any) => s.station?.name === loc.location || s.customer?.name === loc.location);
+                                  const priceToUse = loc.productPrice || saleMatch?.amountPerLiter;
+                                  return priceToUse ? Number(priceToUse).toLocaleString() : '—';
+                                })()}
+                              </td>
                               <td className="text-right py-3 px-4 text-foreground/90">{Number(loc.rate).toLocaleString()}</td>
                               <td className="text-right py-3 px-4 text-foreground/90">{Number(loc.litersDelivered).toLocaleString()} L</td>
                               <td className="text-right py-3 px-4 text-foreground/90 font-medium">{(Number(loc.rate) * Number(loc.litersDelivered)).toLocaleString()}</td>
@@ -447,8 +453,19 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                               </div>
                             </td>
                             <td className="text-right py-3 px-4 text-foreground/90 font-medium">{Number(sale.litersDespatched || sale.litersSold).toLocaleString()} L</td>
-                            <td className="text-right py-3 px-4 text-foreground/90 font-medium text-amber-600 dark:text-amber-500">
-                              {sale.litersReceived !== null && sale.litersReceived !== undefined ? `${Number(sale.litersReceived).toLocaleString()} L` : 'Pending'}
+                            <td className="text-right py-3 px-4">
+                              {sale.litersReceived !== null && sale.litersReceived !== undefined ? (
+                                <div className="flex flex-col items-end">
+                                  <span className="font-medium text-emerald-600 dark:text-emerald-500">{Number(sale.litersReceived).toLocaleString()} L</span>
+                                  {Number(sale.litersDespatched || sale.litersSold) !== Number(sale.litersReceived) && (
+                                    <span className="text-[10px] text-destructive font-medium uppercase mt-0.5">
+                                      Diff: {(Number(sale.litersDespatched || sale.litersSold) - Number(sale.litersReceived)).toLocaleString()} L
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="font-medium text-amber-600 dark:text-amber-500">Pending</span>
+                              )}
                             </td>
                             <td className="text-right py-3 px-4 text-foreground/90 font-mono text-xs">₦{Number(sale.amountPerLiter || 0).toLocaleString()}</td>
                             <td className="text-right py-3 px-4 text-foreground/90 font-medium">{Number(sale.totalExpectedAmount || sale.totalAmount || (Number(sale.litersDespatched || sale.litersSold || 0) * Number(sale.amountPerLiter || 0))).toLocaleString()}</td>
@@ -565,7 +582,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
           {(() => {
             const carriedVolume = Number(transport.litersCarried) || 0;
             const salesVol = (transport.sales || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
-            const locsVol = (transport.subsequentLocs || []).reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
+            const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
             const distributedVolume = salesVol + locsVol;
             const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
             const enteredVolume = destinationType === "STATION" ? Number(assignVolume || 0) : Number(subLiters || 0);

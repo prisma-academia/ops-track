@@ -39,6 +39,16 @@ export default async function TenantActivityPage() {
   });
   const stationMap = new Map(stations.map((s) => [s.id, s]));
 
+  const allTenantUsers = await prisma.tenantUser.findMany({
+    where: { tenantId: actor.tenantId },
+    select: { id: true, firstName: true, lastName: true, email: true },
+    orderBy: { firstName: "asc" },
+  });
+  const availableUsers = allTenantUsers.map(u => ({
+    id: u.id,
+    name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email
+  }));
+
   const data = rows.map((r) => {
     // Resolve Actor Display Name
     let actorDisplay = null;
@@ -96,7 +106,7 @@ export default async function TenantActivityPage() {
   return (
     <div>
       <PageHeader title="Activity" />
-      <ActivityTable initialData={data} initialMeta={initialMeta} />
+      <ActivityTable initialData={data} initialMeta={initialMeta} availableUsers={availableUsers} />
     </div>
   );
 }

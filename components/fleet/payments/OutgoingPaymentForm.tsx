@@ -10,9 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Save, Check, ChevronsUpDown } from "lucide-react";
+import { Save, Check, ChevronsUpDown, AlertCircleIcon, ImageIcon, UploadIcon, XIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiPost } from "@/lib/client/api";
+import { useFileUpload } from "@/hooks/use-file-upload";
 
 export default function OutgoingPaymentForm() {
   const [metadata, setMetadata] = useState<any>(null);
@@ -36,6 +37,68 @@ export default function OutgoingPaymentForm() {
     orderId: "",
     transportId: "",
   });
+
+  const maxSizeMB = 2;
+  const maxSize = maxSizeMB * 1024 * 1024;
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const [
+    { files, isDragging, errors: uploadErrors },
+    { handleDragEnter, handleDragLeave, handleDragOver, handleDrop, openFileDialog, removeFile, getInputProps },
+  ] = useFileUpload({
+    accept: "image/svg+xml,image/png,image/jpeg,image/jpg,image/webp",
+    maxSize,
+    onFilesAdded: async (addedFiles) => {
+      const file = addedFiles[0]?.file;
+      if (!file || !(file instanceof File)) return;
+      setUploadError(null);
+      setUploading(true);
+      try {
+        const res = await apiPost<any>("/api/tenant/fleet/payments/upload", { contentType: file.type });
+        if (res.error || !res.data) {
+          setUploadError(res.error?.message ?? "Upload could not be started.");
+          return;
+        }
+
+        let publicUrl = "";
+        if (res.data.uploadType === "cloudinary") {
+          const formDataObj = new FormData();
+          formDataObj.append("file", file);
+          formDataObj.append("api_key", res.data.apiKey);
+          formDataObj.append("timestamp", res.data.timestamp.toString());
+          formDataObj.append("signature", res.data.signature);
+
+          const uploadRes = await fetch(res.data.url, { method: "POST", body: formDataObj });
+          if (!uploadRes.ok) {
+            setUploadError("Cloudinary upload failed.");
+            return;
+          }
+          const cloudinaryData = await uploadRes.json();
+          publicUrl = cloudinaryData.secure_url;
+        } else {
+          const put = await fetch(res.data.url, {
+            method: "PUT",
+            headers: { "Content-Type": file.type },
+            body: file,
+          });
+          if (!put.ok) {
+            setUploadError("S3 Upload failed.");
+            return;
+          }
+          publicUrl = res.data.publicUrl;
+        }
+        setFormData((prev) => ({ ...prev, receiptUrl: publicUrl }));
+      } catch (err: any) {
+        setUploadError(err.message || "Failed to upload.");
+      } finally {
+        setUploading(false);
+      }
+    }
+  });
+
+  const previewUrl = formData.receiptUrl || (files[0]?.preview || null);
+  const displayFileName = files[0]?.file.name || "Payment Receipt";
 
   useEffect(() => {
     const fetchMetadata = async () => {
@@ -148,34 +211,45 @@ export default function OutgoingPaymentForm() {
                   variant="outline"
                   role="combobox"
                   aria-expanded={transportOpen}
-                  className="w-full justify-between font-normal"
+                  className="w-full justify-between font-normal text-left h-auto py-2"
                 >
-                  {formData.transportId
-                    ? (() => {
-                        const t = metadata?.transports?.find((t: any) => t.id === formData.transportId);
-                        return t ? `${t.id.substring(0,8)} - ${t.destination}` : "Select Transport Trip...";
-                      })()
-                    : "Select Transport Trip..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  <span className="truncate pr-4">
+                    {formData.transportId
+                      ? (() => {
+                          const t = metadata?.transports?.find((t: any) => t.id === formData.transportId);
+                          return t 
+                            ? `${t.order?.reference || "No Ref"} • ${t.transporter?.name || "No Transporter"} • ${t.truck?.plateNumber || t.truck?.name || "No Truck"} • ${t.destination}`
+                            : "Select Transport Trip...";
+                        })()
+                      : "Select Transport Trip..."}
+                  </span>
+                  <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                 <Command>
-                  <CommandInput placeholder="Search transport..." />
+                  <CommandInput placeholder="Search transport by ref, transporter, truck, destination..." />
                   <CommandList>
                     <CommandEmpty>No transports found.</CommandEmpty>
                     <CommandGroup>
                       {metadata?.transports?.map((t: any) => (
                         <CommandItem
                           key={t.id}
-                          value={`${t.id} ${t.destination}`}
+                          value={`${t.id} ${t.order?.reference || ""} ${t.transporter?.name || ""} ${t.truck?.plateNumber || t.truck?.name || ""} ${t.destination}`.toLowerCase()}
                           onSelect={() => {
                             setFormData({ ...formData, transportId: t.id });
                             setTransportOpen(false);
                           }}
                         >
-                          <Check className={cn("mr-2 h-4 w-4", formData.transportId === t.id ? "opacity-100" : "opacity-0")} />
-                          {t.id.substring(0,8)} - {t.destination}
+                          <Check className={cn("mr-2 h-4 w-4 shrink-0", formData.transportId === t.id ? "opacity-100" : "opacity-0")} />
+                          <div className="flex flex-col text-left">
+                            <span className="font-semibold text-sm">
+                              {t.order?.reference || "No Ref"} • {t.destination}
+                            </span>
+                            <span className="text-xs text-muted-foreground mt-0.5">
+                              {t.transporter?.name || "Unknown Transporter"} • {t.truck?.plateNumber || t.truck?.name || "Unknown Truck"} • {Number(t.litersCarried || 0).toLocaleString()} L
+                            </span>
+                          </div>
                         </CommandItem>
                       ))}
                     </CommandGroup>
@@ -368,13 +442,65 @@ export default function OutgoingPaymentForm() {
         </div>
 
         <div className="space-y-2">
-          <Label>Attach Proof (Cloudinary URL)</Label>
-          <Input 
-            type="text"
-            placeholder="https://res.cloudinary.com/..."
-            value={formData.receiptUrl}
-            onChange={(e) => setFormData({ ...formData, receiptUrl: e.target.value })}
-          />
+          <Label>Attach Proof</Label>
+          <div className="relative">
+            <div
+              className="relative flex min-h-48 flex-col items-center justify-center overflow-hidden rounded-xl border border-input border-dashed p-4 transition-colors has-[input:focus]:border-ring has-[input:focus]:ring-[3px] has-[input:focus]:ring-ring/50 data-[dragging=true]:bg-accent/50"
+              data-dragging={isDragging || undefined}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
+              <input {...getInputProps()} aria-label="Upload receipt file" className="sr-only" disabled={uploading} />
+              
+              {uploading ? (
+                <div className="flex flex-col items-center justify-center p-4">
+                   <Loader2 className="size-8 animate-spin text-muted-foreground mb-4" />
+                   <p className="text-sm font-medium">Uploading receipt...</p>
+                </div>
+              ) : previewUrl ? (
+                <div className="absolute inset-0 flex items-center justify-center p-4 bg-background">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img alt={displayFileName} className="mx-auto max-h-full rounded object-contain" src={previewUrl} />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
+                  <div aria-hidden="true" className="mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border bg-background">
+                    <ImageIcon className="size-4 opacity-60" />
+                  </div>
+                  <p className="mb-1.5 font-medium text-sm">Drop your receipt here</p>
+                  <p className="text-muted-foreground text-xs">SVG, PNG, JPG or WEBP (max. {maxSizeMB}MB)</p>
+                  <Button className="mt-4" onClick={openFileDialog} variant="outline" type="button">
+                    <UploadIcon aria-hidden="true" className="-ms-1 size-4 opacity-60" /> Select image
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {previewUrl && !uploading && (
+              <div className="absolute top-4 right-4">
+                <button
+                  aria-label="Remove image"
+                  className="z-50 flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white outline-none transition-[color,box-shadow] hover:bg-black/80 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  onClick={() => {
+                     removeFile(files[0]?.id);
+                     setFormData((prev) => ({ ...prev, receiptUrl: "" }));
+                  }}
+                  type="button"
+                >
+                  <XIcon aria-hidden="true" className="size-4" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {(uploadErrors.length > 0 || uploadError) && (
+            <div className="flex items-center gap-1 text-destructive text-xs mt-2" role="alert">
+              <AlertCircleIcon className="size-3 shrink-0" />
+              <span>{uploadErrors[0] || uploadError}</span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2 md:col-span-2">

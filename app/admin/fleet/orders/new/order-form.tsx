@@ -265,7 +265,7 @@ export function CreateOrderForm() {
                           >
                             <SelectValue placeholder="Select product..." />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent position="popper">
                             <SelectItem value="PMS">PMS (Petrol)</SelectItem>
                             <SelectItem value="AGO">AGO (Diesel)</SelectItem>
                             <SelectItem value="DPK">DPK (Kerosene)</SelectItem>

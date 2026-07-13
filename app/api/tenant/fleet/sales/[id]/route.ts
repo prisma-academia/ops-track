@@ -102,6 +102,25 @@ export async function PATCH(
       }
     }
 
+    // Sync with WaybillAllocation if it's a station
+    if (sale.stationId && body.transportCost !== undefined) {
+      const activeAllocation = await prisma.waybillAllocation.findFirst({
+        where: {
+          tenantId: actor.tenantId,
+          stationId: sale.stationId,
+          status: "DISPATCHED"
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (activeAllocation) {
+        await prisma.waybillAllocation.update({
+          where: { id: activeAllocation.id },
+          data: { transportationCost: body.transportCost }
+        });
+      }
+    }
+
     await audit({
       actorType: "TENANT_USER",
       actorId: actor.userId,

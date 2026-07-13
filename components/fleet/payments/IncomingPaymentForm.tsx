@@ -131,16 +131,12 @@ export default function IncomingPaymentForm() {
         receiptUrl: formData.receiptUrl,
       };
       
-      const res = await fetch(`/api/tenant/fleet/payments/inflow`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
+      const res = await apiPost<any>(`/api/tenant/fleet/payments/inflow`, payload);
+      if (!res.error) {
         toast.success("Payment recorded successfully!");
         setFormData({ ...formData, amount: "", reference: "", receiptUrl: "", saleId: "none" });
       } else {
-        toast.error("Failed to record payment.");
+        toast.error(res.error?.message || "Failed to record payment.");
       }
     } catch (e) {
       console.error(e);

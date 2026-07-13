@@ -8,7 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
-import { Save } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Save, Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { apiPost } from "@/lib/client/api";
 
 export default function OutgoingPaymentForm() {
   const [metadata, setMetadata] = useState<any>(null);
@@ -16,6 +20,10 @@ export default function OutgoingPaymentForm() {
   const [submitting, setSubmitting] = useState(false);
   
   const [category, setCategory] = useState<"PERSONAL_EXPENSE" | "FLEET_EXPENSE" | "TRANSPORT_FEE">("PERSONAL_EXPENSE");
+  const [transportOpen, setTransportOpen] = useState(false);
+  const [transporterOpen, setTransporterOpen] = useState(false);
+  const [truckOpen, setTruckOpen] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     amount: "",
@@ -36,7 +44,7 @@ export default function OutgoingPaymentForm() {
         const res = await fetch(`/api/tenant/fleet/payments/metadata`);
         if (res.ok) {
           const data = await res.json();
-          setMetadata(data);
+          setMetadata(data.data || data);
         }
       } catch (e) {
         console.error(e);
@@ -93,17 +101,13 @@ export default function OutgoingPaymentForm() {
         };
       }
 
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res = await apiPost<any>(endpoint, payload);
 
-      if (res.ok) {
+      if (!res.error) {
         toast.success("Payment recorded successfully!");
         setFormData({ ...formData, amount: "", description: "", reference: "", receiptUrl: "" });
       } else {
-        toast.error("Failed to record payment.");
+        toast.error(res.error?.message || "Failed to record payment.");
       }
     } catch (e) {
       console.error(e);
@@ -136,94 +140,185 @@ export default function OutgoingPaymentForm() {
         </div>
 
         {category === "TRANSPORT_FEE" && (
-          <div className="space-y-2">
+          <div className="space-y-2 flex flex-col justify-end">
             <Label>Select Transport Trip *</Label>
-            <Select 
-              value={formData.transportId} 
-              onValueChange={(val) => setFormData({ ...formData, transportId: val })}
-              required
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select Transport Trip..." />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {metadata?.transports?.length > 0 ? (
-                  metadata.transports.map((t: any) => (
-                    <SelectItem key={t.id} value={t.id}>{t.id.substring(0,8)} - {t.destination}</SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="none" disabled>No transports found</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+            <Popover open={transportOpen} onOpenChange={setTransportOpen}>
+              <PopoverTrigger asChild className="w-full">
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={transportOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  {formData.transportId
+                    ? (() => {
+                        const t = metadata?.transports?.find((t: any) => t.id === formData.transportId);
+                        return t ? `${t.id.substring(0,8)} - ${t.destination}` : "Select Transport Trip...";
+                      })()
+                    : "Select Transport Trip..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search transport..." />
+                  <CommandList>
+                    <CommandEmpty>No transports found.</CommandEmpty>
+                    <CommandGroup>
+                      {metadata?.transports?.map((t: any) => (
+                        <CommandItem
+                          key={t.id}
+                          value={`${t.id} ${t.destination}`}
+                          onSelect={() => {
+                            setFormData({ ...formData, transportId: t.id });
+                            setTransportOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", formData.transportId === t.id ? "opacity-100" : "opacity-0")} />
+                          {t.id.substring(0,8)} - {t.destination}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         )}
 
         {(category === "FLEET_EXPENSE" || category === "TRANSPORT_FEE") && (
-          <div className="space-y-2">
+          <div className="space-y-2 flex flex-col justify-end">
             <Label>Transporter {category === "TRANSPORT_FEE" ? "*" : ""}</Label>
-            <Select 
-              value={formData.transporterId} 
-              onValueChange={(val) => setFormData({ ...formData, transporterId: val })}
-              required={category === "TRANSPORT_FEE"}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select Transporter..." />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {metadata?.transporters?.length > 0 ? (
-                  metadata.transporters.map((t: any) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="none" disabled>No transporters found</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+            <Popover open={transporterOpen} onOpenChange={setTransporterOpen}>
+              <PopoverTrigger asChild className="w-full">
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={transporterOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  {formData.transporterId
+                    ? metadata?.transporters?.find((t: any) => t.id === formData.transporterId)?.name
+                    : "Select Transporter..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search transporter..." />
+                  <CommandList>
+                    <CommandEmpty>No transporters found.</CommandEmpty>
+                    <CommandGroup>
+                      {metadata?.transporters?.map((t: any) => (
+                        <CommandItem
+                          key={t.id}
+                          value={t.name}
+                          onSelect={() => {
+                            setFormData({ ...formData, transporterId: t.id });
+                            setTransporterOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", formData.transporterId === t.id ? "opacity-100" : "opacity-0")} />
+                          {t.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         )}
 
         {category === "FLEET_EXPENSE" && (
           <>
-            <div className="space-y-2">
+            <div className="space-y-2 flex flex-col justify-end">
               <Label>Truck (Optional)</Label>
-              <Select 
-                value={formData.truckId} 
-                onValueChange={(val) => setFormData({ ...formData, truckId: val })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Truck..." />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  {metadata?.trucks?.length > 0 ? (
-                    metadata.trucks.map((t: any) => (
-                      <SelectItem key={t.id} value={t.id}>{t.name} - {t.truckNumber}</SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="none" disabled>No trucks found</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+              <Popover open={truckOpen} onOpenChange={setTruckOpen}>
+                <PopoverTrigger asChild className="w-full">
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={truckOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {formData.truckId
+                      ? (() => {
+                          const t = metadata?.trucks?.find((t: any) => t.id === formData.truckId);
+                          return t ? `${t.name} - ${t.truckNumber}` : "Select Truck...";
+                        })()
+                      : "Select Truck..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search truck..." />
+                    <CommandList>
+                      <CommandEmpty>No trucks found.</CommandEmpty>
+                      <CommandGroup>
+                        {metadata?.trucks?.map((t: any) => (
+                          <CommandItem
+                            key={t.id}
+                            value={`${t.name} ${t.truckNumber}`}
+                            onSelect={() => {
+                              setFormData({ ...formData, truckId: t.id });
+                              setTruckOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", formData.truckId === t.id ? "opacity-100" : "opacity-0")} />
+                            {t.name} - {t.truckNumber}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 flex flex-col justify-end">
               <Label>Order (Optional)</Label>
-              <Select 
-                value={formData.orderId} 
-                onValueChange={(val) => setFormData({ ...formData, orderId: val })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Order..." />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  {metadata?.orders?.length > 0 ? (
-                    metadata.orders.map((o: any) => (
-                      <SelectItem key={o.id} value={o.id}>{o.reference || o.id.substring(0,8)}</SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="none" disabled>No orders found</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+              <Popover open={orderOpen} onOpenChange={setOrderOpen}>
+                <PopoverTrigger asChild className="w-full">
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={orderOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {formData.orderId
+                      ? (() => {
+                          const o = metadata?.orders?.find((o: any) => o.id === formData.orderId);
+                          return o ? (o.reference || o.id.substring(0,8)) : "Select Order...";
+                        })()
+                      : "Select Order..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search order..." />
+                    <CommandList>
+                      <CommandEmpty>No orders found.</CommandEmpty>
+                      <CommandGroup>
+                        {metadata?.orders?.map((o: any) => (
+                          <CommandItem
+                            key={o.id}
+                            value={o.reference || o.id}
+                            onSelect={() => {
+                              setFormData({ ...formData, orderId: o.id });
+                              setOrderOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", formData.orderId === o.id ? "opacity-100" : "opacity-0")} />
+                            {o.reference || o.id.substring(0,8)}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           </>
         )}

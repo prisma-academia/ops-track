@@ -646,6 +646,9 @@ model WaybillAllocation {
   waybillVerified     Boolean @default(false)
   cancellationReason  String? @db.Text
 
+  saleId String?
+  sale   Sale?   @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -657,6 +660,7 @@ model WaybillAllocation {
   @@index([tenantId])
   @@index([waybillId])
   @@index([stationId])
+  @@index([saleId])
   @@map("waybill_allocations")
 }
 
@@ -1061,7 +1065,8 @@ model Sale {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  transactions Transaction[]
+  transactions       Transaction[]
+  waybillAllocations WaybillAllocation[]
 
   @@index([tenantId])
   @@index([customerId])

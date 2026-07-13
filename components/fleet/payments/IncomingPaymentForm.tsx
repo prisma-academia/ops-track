@@ -13,6 +13,7 @@ import { Save, AlertCircleIcon, ImageIcon, UploadIcon, XIcon, Loader2, Check, Ch
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { apiPost } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
+import { Separator } from "@/components/ui/separator";
 
 export default function IncomingPaymentForm() {
   const [metadata, setMetadata] = useState<any>(null);
@@ -148,9 +149,15 @@ export default function IncomingPaymentForm() {
 
   if (loading) return <div className="p-8 text-center text-muted-foreground"><SpinnerEllipsis /></div>;
 
+  const selectedSaleDetails = formData.saleId && formData.saleId !== "none" 
+    ? metadata?.sales?.find((s: any) => s.id === formData.saleId)
+    : null;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-500">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className={cn("grid grid-cols-1 gap-6", selectedSaleDetails ? "lg:grid-cols-3" : "md:grid-cols-2")}>
+        <div className={cn("space-y-6", selectedSaleDetails ? "lg:col-span-2" : "md:col-span-2")}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2 flex flex-col justify-end">
           <Label>Client / Station Name *</Label>
           <Popover open={clientOpen} onOpenChange={setClientOpen}>
@@ -358,6 +365,46 @@ export default function IncomingPaymentForm() {
           )}
         </div>
       </div>
+    </div>
+    
+    {/* Right Column: Sale Details Card */}
+    {selectedSaleDetails && (
+      <div className="lg:col-span-1">
+        <div className="sticky top-6 border rounded-2xl bg-card p-5 space-y-4">
+          <div>
+            <h3 className="font-semibold text-lg">Sale Summary</h3>
+            <p className="text-sm text-muted-foreground">Details for the selected pending sale.</p>
+          </div>
+          
+          <div className="space-y-3 pt-3 border-t">
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">Despatched On</span>
+              <span className="font-medium text-sm">{new Date(selectedSaleDetails.createdAt).toLocaleDateString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">Volume</span>
+              <span className="font-medium text-sm">{Number(selectedSaleDetails.litersDespatched).toLocaleString()} L</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">Expected Amount</span>
+              <span className="font-medium text-sm">₦{Number(selectedSaleDetails.totalExpectedAmount).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-green-600 dark:text-green-500">
+              <span className="text-sm">Amount Paid</span>
+              <span className="font-medium text-sm">₦{Number(selectedSaleDetails.paymentReceived).toLocaleString()}</span>
+            </div>
+            <Separator className="my-2" />
+            <div className="flex justify-between">
+              <span className="font-semibold text-foreground">Outstanding</span>
+              <span className="font-bold text-destructive">
+                ₦{(Number(selectedSaleDetails.totalExpectedAmount) - Number(selectedSaleDetails.paymentReceived)).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
 
       <div className="flex justify-end pt-4 border-t border-border/30">
         <Button 

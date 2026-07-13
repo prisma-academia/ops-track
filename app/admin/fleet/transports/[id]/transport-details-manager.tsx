@@ -81,6 +81,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
       // 2. Append to Transport's subsequentLocs
       const currentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
       const newLocs = [...currentLocs, {
+        saleId: sale.id,
         location: sale.station ? sale.station.name : (sale.customer ? sale.customer.name : "Unknown"),
         rate: Number(assignTransportRate || 0),
         litersDelivered: Number(sale.litersDespatched),
@@ -565,10 +566,9 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
             const distributedVolume = salesVol + locsVol;
             const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
             
-            // Available sales that haven't been added to subsequentLocs yet
+            // Available sales that haven't been assigned a transport rate yet
             const availableSales = (transport.sales || []).filter((s: any) => {
-              const recipientName = s.station ? s.station.name : (s.customer ? s.customer.name : "Unknown");
-              return !subsequentLocs.some((loc: any) => loc.location === recipientName);
+              return s.transportRate === null || s.transportRate === undefined;
             });
 
             return (

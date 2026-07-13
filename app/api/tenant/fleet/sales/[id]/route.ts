@@ -83,10 +83,21 @@ export async function PATCH(
       if (transport) {
         const allSales = await prisma.sale.findMany({
           where: { transportId: transport.id },
+          include: { station: true }
         });
-        const totalReceived = allSales.reduce(
+        
+        let totalReceived = allSales.reduce(
           (sum, s) => sum + Number(s.litersReceived ?? 0), 0
         );
+
+        // Add volume from custom distributions in subsequentLocs
+        const subsequentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
+        const salesStationNames = allSales.map((s) => s.station?.name).filter(Boolean);
+        const customDistributions = subsequentLocs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || (!loc.saleId && !salesStationNames.includes(loc.location)));
+        const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
+        
+        totalReceived += locsVol;
+
         const litersLost = Math.max(0, Number(transport.litersCarried) - totalReceived);
         const ratePerLiter = Number(transport.ratePerLiter);
         const cashDeductionForLoss = litersLost * ratePerLiter;
@@ -97,7 +108,7 @@ export async function PATCH(
 
         await prisma.transport.update({
           where: { id: transport.id },
-          data: { litersLost, totalDeduction, netTransportFeePaid },
+          data: { litersDelivered: totalReceived, litersLost, totalDeduction, netTransportFeePaid },
         });
       }
     }
@@ -107,8 +118,7 @@ export async function PATCH(
       const activeAllocation = await prisma.waybillAllocation.findFirst({
         where: {
           tenantId: actor.tenantId,
-          stationId: sale.stationId,
-          status: "DISPATCHED"
+          saleId: sale.id,
         },
         orderBy: { createdAt: "desc" },
       });

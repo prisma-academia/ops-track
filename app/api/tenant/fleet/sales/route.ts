@@ -72,8 +72,9 @@ export async function POST(request: Request) {
       throw new DomainError(400, "invalid_input", "A sale cannot belong to both a customer and a station.");
     }
 
-    const litersReceived = body.litersReceived ?? 0;
-    const totalExpectedAmount = litersReceived * body.amountPerLiter;
+    // null = not yet received (will be set after dipping). 0 is a valid received value.
+    const litersReceivedForCalc = body.litersReceived ?? 0;
+    const totalExpectedAmount = litersReceivedForCalc * body.amountPerLiter;
     
     // Default transport cost rule if not provided (Company for own station, Client for external)
     let transportCostBorneBy = body.transportCostBorneBy;
@@ -139,6 +140,7 @@ export async function POST(request: Request) {
                 create: [{
                   tenantId: actor.tenantId,
                   stationId: s.stationId,
+                  saleId: s.id,
                   litersToDispense: s.litersDespatched,
                   costPerLiter: s.amountPerLiter,
                   transportationCost: (body.transportCostPerLiter ?? 0) * body.litersDespatched,
@@ -150,7 +152,7 @@ export async function POST(request: Request) {
       }
 
       return s;
-    });
+    }, { timeout: 15000 });
 
     await audit({
       actorType: "TENANT_USER",

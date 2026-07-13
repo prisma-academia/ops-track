@@ -23,7 +23,7 @@ const BaseSchema = z.object({
   transportCostBorneBy: z.enum(["CLIENT", "COMPANY"]),
   transportId: z.string().min(1, "Please select a transport"),
   litersDespatched: z.coerce.number().positive("Liters despatched must be > 0"),
-  litersReceived: z.coerce.number().optional(),
+  litersReceived: z.union([z.coerce.number().positive(), z.literal(""), z.undefined()]).transform(v => (v === "" || v === undefined ? null : Number(v))).optional().nullable(),
   amountPerLiter: z.coerce.number().positive("Amount per liter must be > 0"),
 });
 
@@ -117,7 +117,8 @@ export function CreateSaleForm({
     
     const payload = {
       ...values,
-      litersReceived: Number.isNaN(values.litersReceived) ? undefined : values.litersReceived,
+      // null means truly blank (no received volume yet) — do not send 0
+      litersReceived: (values.litersReceived == null || Number.isNaN(values.litersReceived as any)) ? null : values.litersReceived,
       // Clear out the unused relation
       customerId: values.recipientType === "CUSTOMER" ? values.customerId : undefined,
       stationId: values.recipientType === "STATION" ? values.stationId : undefined,

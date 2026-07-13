@@ -208,7 +208,7 @@ export async function POST(request: Request) {
 
 
       return w;
-    });
+    }, { timeout: 15000 });
 
     await audit({
       actorType: "TENANT_USER",

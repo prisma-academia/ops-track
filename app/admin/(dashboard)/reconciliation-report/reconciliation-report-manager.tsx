@@ -9,7 +9,6 @@ import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
-  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
@@ -19,18 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-} from "@/components/ui/pagination";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn, formatShortCurrency } from "@/lib/utils";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
@@ -49,6 +37,7 @@ import {
   ChevronRightIcon,
   Maximize2,
   Minimize2,
+  Printer,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -110,10 +99,10 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: addDays(new Date(), -90),
+    from: addDays(new Date(), -30),
     to: new Date(),
   });
-  const [selectedStationId, setSelectedStationId] = useState<string>("ALL");
+  const [selectedStationIds, setSelectedStationIds] = useState<string[]>([]);
 
   // ── Fullscreen toggle ─────────────────────────────────────────────────────
   const toggleFullscreen = useCallback(() => {
@@ -138,7 +127,7 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
   const filteredRows = useMemo(() => {
     return initialRows
       .filter((row) => {
-        if (selectedStationId !== "ALL" && row.stationId !== selectedStationId) return false;
+        if (selectedStationIds.length > 0 && !selectedStationIds.includes(row.stationId)) return false;
         const d = new Date(row.deliveryDate);
         if (dateRange?.from) {
           const s = new Date(dateRange.from);
@@ -153,7 +142,7 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
         return true;
       })
       .map((row, i) => ({ ...row, sn: i + 1 })); // Re-number after filter
-  }, [initialRows, selectedStationId, dateRange]);
+  }, [initialRows, selectedStationIds, dateRange]);
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -213,9 +202,6 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
           <div className="flex flex-col gap-0.5">
             <span className="text-xs font-semibold text-foreground whitespace-nowrap">
               {row.original.stationName}
-            </span>
-            <span className="text-[10px] font-mono text-muted-foreground">
-              {row.original.stationCode}
             </span>
           </div>
         ),
@@ -329,9 +315,7 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    initialState: { pagination: { pageSize: 25 } },
   });
 
   // ── Stat cards config ─────────────────────────────────────────────────────
@@ -358,7 +342,7 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
       badgeColor: "bg-indigo-400/10 text-indigo-700 dark:text-indigo-400",
     },
     {
-      title: "Net P&L",
+      title: "Profit & Loss",
       value: formatShortCurrency(Math.abs(stats.totalPnl)),
       valueColor: stats.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600",
       icon: stats.totalPnl >= 0 ? TrendingUp : TrendingDown,
@@ -376,38 +360,89 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
     <div
       ref={containerRef}
       className={cn(
-        "space-y-6 transition-all",
+        "space-y-6 transition-all print:m-0 print:p-0 print:bg-white print:text-black print:space-y-3",
         isFullscreen && "bg-background p-6 overflow-auto h-full"
       )}
     >
+      <style>{`
+        @media print {
+          @page { size: landscape; margin: 10mm; }
+        }
+      `}</style>
       {/* ── Header + Filters ─────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-card text-card-foreground p-6 rounded-xl border">
+      <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground print:text-black">
             Reconciliation Report
           </h1>
-          <p className="text-muted-foreground text-sm">
-            PMS general reconciliation across all stations.
+          <p className="hidden print:block text-[11px] text-black/80 font-medium mt-1">
+            Date: {dateRange?.from ? format(dateRange.from, "d MMMM yyyy") : "All Time"} {dateRange?.to ? ` to ${format(dateRange.to, "d MMMM yyyy")}` : ""}
+            <br />
+            Stations: {selectedStationIds.length === 0 ? "All Stations" : stations.filter(s => selectedStationIds.includes(s.id)).map(s => s.name).join(", ")}
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-end gap-3 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-end gap-3 w-full md:w-auto print:hidden">
           {/* Station filter */}
-          <div className="space-y-1 w-full sm:w-48">
-            <Label className="text-xs text-muted-foreground">Station</Label>
-            <Select value={selectedStationId} onValueChange={setSelectedStationId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="All Stations" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Stations</SelectItem>
-                {stations.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-1 w-full sm:w-48 print:hidden">
+            <Label className="text-xs text-muted-foreground">Station(s)</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    selectedStationIds.length === 0 && "text-muted-foreground"
+                  )}
+                >
+                  {selectedStationIds.length === 0
+                    ? "All Stations"
+                    : `${selectedStationIds.length} station(s) selected`}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-2" align="start">
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2 p-1">
+                    <Checkbox
+                      id="station-all"
+                      checked={selectedStationIds.length === 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) setSelectedStationIds([]);
+                      }}
+                    />
+                    <label
+                      htmlFor="station-all"
+                      className="text-sm font-medium leading-none cursor-pointer"
+                    >
+                      All Stations
+                    </label>
+                  </div>
+                  {stations.map((s) => (
+                    <div key={s.id} className="flex items-center space-x-2 p-1">
+                      <Checkbox
+                        id={`station-${s.id}`}
+                        checked={selectedStationIds.includes(s.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedStationIds([...selectedStationIds, s.id]);
+                          } else {
+                            setSelectedStationIds(
+                              selectedStationIds.filter((id) => id !== s.id)
+                            );
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor={`station-${s.id}`}
+                        className="text-sm font-medium leading-none cursor-pointer"
+                      >
+                        {s.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Date range */}
@@ -449,6 +484,22 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
             </Popover>
           </div>
 
+          {/* Print button */}
+          <div className="space-y-1 shrink-0">
+            <Label className="text-xs text-muted-foreground opacity-0 select-none">
+              Print
+            </Label>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => window.print()}
+              title="Print report"
+              className="h-10 w-10"
+            >
+              <Printer className="size-4" />
+            </Button>
+          </div>
+
           {/* Fullscreen toggle */}
           <div className="space-y-1 shrink-0">
             <Label className="text-xs text-muted-foreground opacity-0 select-none">
@@ -472,36 +523,25 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
       </div>
 
       {/* ── Stat Cards ──────────────────────────────────────────────────── */}
-      <Card className="p-0 shadow-xs border-border/40">
-        <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0">
+      <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
+        <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
           {statCards.map((item, index) => (
             <div
               key={index}
-              className="lg:w-3/12 md:w-6/12 w-full border-border border-b last:border-b-0 md:border-e md:even:border-e-0 md:nth-[n+3]:border-b-0 lg:border-b-0 lg:even:border-e lg:last:border-e-0"
+              className="lg:w-3/12 md:w-6/12 w-full border-border border-b last:border-b-0 md:border-e md:even:border-e-0 md:nth-[n+3]:border-b-0 lg:border-b-0 lg:even:border-e lg:last:border-e-0 print:border-none print:w-auto"
             >
-              <div className="p-6 flex items-start justify-between">
-                <div className="flex flex-col gap-4">
-                  <p className="text-base font-medium text-card-foreground">{item.title}</p>
+              <div className="p-4 flex items-start justify-between print:p-0">
+                <div className="flex flex-col gap-2 print:gap-0.5">
+                  <p className="text-sm font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
                   <div>
-                    <p className={cn("text-2xl font-medium text-card-foreground", item.valueColor)}>
+                    <p className={cn("text-xl font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
                       {item.value}
                     </p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <p className="text-xs text-muted-foreground">Period</p>
-                      <Badge
-                        className={cn(
-                          "font-medium text-[10px] uppercase tracking-wider",
-                          item.badgeColor
-                        )}
-                      >
-                        {item.badge}
-                      </Badge>
-                    </div>
                   </div>
                 </div>
-                <div className="p-3 rounded-full bg-muted/30 outline outline-1 outline-border/50">
+                <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
                   <item.icon
-                    size={16}
+                    size={14}
                     className={cn("text-muted-foreground", item.iconColor)}
                   />
                 </div>
@@ -512,12 +552,12 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
       </Card>
 
       {/* ── Table ───────────────────────────────────────────────────────── */}
-      <Card className="w-full py-0 overflow-hidden">
+      <Card className="w-full py-0 overflow-hidden print:shadow-none print:border-none print:bg-transparent">
         <CardContent className="px-0">
           {/* Scrollable table container */}
-          <div className="overflow-x-auto border-t border-border/40 relative">
-            <table className="min-w-max w-full text-sm border-collapse">
-              <thead className="bg-muted/30">
+          <div className="overflow-x-auto border-t border-border/40 relative print:overflow-visible print:border-none print:w-full print:max-w-none">
+            <table className="min-w-max w-full text-sm border-collapse border border-border/50 print:border-black/30 print:text-[10px] print:w-full">
+              <thead className="bg-muted/50 border-b border-border/50 print:border-black/30 print:bg-transparent">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} className="border-none">
                     {headerGroup.headers.map((header) => {
@@ -535,11 +575,8 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
                             left: isPinned === "left" ? pinOffset : undefined,
                           }}
                           className={cn(
-                            "h-11 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap text-left",
-                            isPinned === "left" && [
-                              "sticky z-20 bg-muted/40",
-                              "after:absolute after:right-0 after:top-0 after:bottom-0 after:w-px after:bg-border/60",
-                            ]
+                            "h-9 px-2 py-1.5 text-[11px] font-bold text-foreground bg-muted/50 border border-border/50 print:border-black/30 uppercase tracking-wider whitespace-nowrap text-left print:text-[9px] print:text-black print:bg-transparent",
+                            isPinned === "left" && "sticky z-20"
                           )}
                         >
                           {header.isPlaceholder ? null : (
@@ -569,12 +606,15 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
                 ))}
               </thead>
 
-              <tbody className="divide-y divide-border/30">
+              <tbody>
                 {table.getRowModel().rows.length ? (
-                  table.getRowModel().rows.map((row) => (
+                  table.getRowModel().rows.map((row, index) => (
                     <tr
                       key={row.id}
-                      className="hover:bg-muted/20 transition-colors group"
+                      className={cn(
+                        "hover:bg-muted/20 transition-colors group",
+                        index % 2 === 0 ? "bg-background" : "bg-muted/5 print:bg-transparent"
+                      )}
                     >
                       {row.getVisibleCells().map((cell) => {
                         const isPinned = cell.column.getIsPinned();
@@ -592,11 +632,8 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
                               left: isPinned === "left" ? pinOffset : undefined,
                             }}
                             className={cn(
-                              "px-4 py-2.5 whitespace-nowrap text-sm",
-                              isPinned === "left" && [
-                                "sticky z-10 bg-background group-hover:bg-muted/20 transition-colors",
-                                "after:absolute after:right-0 after:top-0 after:bottom-0 after:w-px after:bg-border/40",
-                              ]
+                              "px-2 py-1.5 whitespace-nowrap text-[13px] print:text-[10px] print:py-1 border border-border/50 print:border-black/30 print:text-black",
+                              isPinned === "left" && "sticky z-10 bg-inherit"
                             )}
                           >
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -616,38 +653,34 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
                   </tr>
                 )}
               </tbody>
-              <tfoot className="bg-muted/40 font-bold border-t border-border">
+              <tfoot className="bg-muted/50 font-bold border border-border/50 print:border-black/30 print:bg-transparent">
                 <tr>
-                  <td colSpan={4} className="px-4 py-3 text-right text-sm">
+                  <td colSpan={4} className="px-2 py-2 text-right text-sm border border-border/50 print:border-black/30 print:text-black">
                     Total:
                   </td>
-                  <td className="px-4 py-3 text-right text-xs font-mono tabular-nums">
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {fmtQty(stats.totalVolume)}
                   </td>
-                  <td className="px-4 py-3 text-right text-xs font-mono tabular-nums">
-                    {/* Total Delivery doesn't make sense to sum since it's already aggregated, but we'll leave it blank or sum it if they want. Let's leave blank for logic. */}
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
+                    {/* Delivery Cost is per liter, summing it makes no sense */}
                   </td>
-                  <td className="px-4 py-3 text-right text-xs font-mono tabular-nums">
-                     {/* Delivery Cost is per liter, summing it makes no sense */}
-                  </td>
-                  <td className="px-4 py-3 text-right text-xs font-mono tabular-nums">
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {fmtMoney(stats.totalStockValue)}
                   </td>
-                  <td colSpan={1} className="px-4 py-3"></td>
-                  <td className="px-4 py-3 text-right text-xs font-mono tabular-nums">
+                  <td className="px-2 py-2 border border-border/50 print:border-black/30"></td>
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {fmtMoney(
                       filteredRows.reduce((acc, row) => acc + (row.reconciledDeposit || 0), 0)
                     )}
                   </td>
                   <td className={cn(
-                    "px-4 py-3 text-right text-xs font-mono tabular-nums",
-                    stats.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600"
+                    "px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black",
+                    stats.totalPnl >= 0 ? "text-emerald-600 print:text-black" : "text-rose-600 print:text-black"
                   )}>
                     {stats.totalPnl >= 0 ? "+" : ""}
                     {fmtMoney(stats.totalPnl)}
                   </td>
-                  <td colSpan={1} className="px-4 py-3"></td>
-                  <td className="px-4 py-3 text-right text-xs font-mono tabular-nums">
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {fmtQty(
                       filteredRows.reduce((acc, row) => acc + (row.reconciledQty || 0), 0)
                     )}
@@ -655,96 +688,6 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
                 </tr>
               </tfoot>
             </table>
-          </div>
-
-          {/* ── Pagination ─────────────────────────────────────────────── */}
-          <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-border/40 gap-4">
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <span>Rows per page</span>
-                <Select
-                  value={table.getState().pagination.pageSize.toString()}
-                  onValueChange={(v) => table.setPageSize(Number(v))}
-                >
-                  <SelectTrigger className="h-8 w-[70px] bg-transparent border-border/40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent align="end">
-                    {[10, 25, 50, 100].map((size) => (
-                      <SelectItem key={size} value={size.toString()}>
-                        {size}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="hidden sm:block">
-                Showing{" "}
-                {table.getState().pagination.pageIndex *
-                  table.getState().pagination.pageSize +
-                  1}{" "}
-                –{" "}
-                {Math.min(
-                  (table.getState().pagination.pageIndex + 1) *
-                    table.getState().pagination.pageSize,
-                  table.getFilteredRowModel().rows.length
-                )}{" "}
-                of {table.getFilteredRowModel().rows.length}
-              </div>
-            </div>
-
-            <Pagination>
-              <PaginationContent className="gap-1">
-                <PaginationItem>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 bg-transparent border-border/40"
-                    onClick={() => table.firstPage()}
-                    disabled={!table.getCanPreviousPage()}
-                  >
-                    <ChevronFirstIcon size={15} />
-                  </Button>
-                </PaginationItem>
-                <PaginationItem>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 bg-transparent border-border/40"
-                    onClick={() => table.previousPage()}
-                    disabled={!table.getCanPreviousPage()}
-                  >
-                    <ChevronLeftIcon size={15} />
-                  </Button>
-                </PaginationItem>
-                <div className="text-xs px-2 text-muted-foreground">
-                  Page {table.getState().pagination.pageIndex + 1} of{" "}
-                  {Math.max(1, table.getPageCount())}
-                </div>
-                <PaginationItem>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 bg-transparent border-border/40"
-                    onClick={() => table.nextPage()}
-                    disabled={!table.getCanNextPage()}
-                  >
-                    <ChevronRightIcon size={15} />
-                  </Button>
-                </PaginationItem>
-                <PaginationItem>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 bg-transparent border-border/40"
-                    onClick={() => table.lastPage()}
-                    disabled={!table.getCanNextPage()}
-                  >
-                    <ChevronLastIcon size={15} />
-                  </Button>
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
           </div>
         </CardContent>
       </Card>

@@ -22,6 +22,7 @@ const CreateWaybillSchema = z.object({
   transportCompany: z.string().optional().nullable(),
   allocations: z.array(z.object({
     stationId: z.string().min(1),
+    stationRequestId: z.string().optional(),
     litersToDispense: z.coerce.number().positive(),
     costPerLiter: z.coerce.number().positive(),
     transportationCost: z.coerce.number().nonnegative(),
@@ -173,34 +174,54 @@ export async function POST(request: Request) {
       throw new DomainError(409, "waybill_exists", "Waybill number already exists in this tenant.");
     }
 
-    const waybill = await prisma.waybill.create({
-      data: {
-        tenantId: actor.tenantId,
-        number: body.number,
-        productType: body.productType,
-        litersLoaded: body.litersLoaded,
-        truckPlate: body.truckPlate,
-        driverName: body.driverName,
-        driverPhone: body.driverPhone ?? null,
-        pictures: body.pictures ?? [],
-        deliveryDatetime: body.deliveryDatetime ? new Date(body.deliveryDatetime) : null,
-        supplier: body.supplier ?? null,
-        depot: body.depot ?? null,
-        transportCompany: body.transportCompany ?? null,
-        recordedById: actor.userId,
-        allocations: {
-          create: body.allocations.map(a => ({
-            tenantId: actor.tenantId,
-            stationId: a.stationId,
-            litersToDispense: a.litersToDispense,
-            costPerLiter: a.costPerLiter,
-            transportationCost: a.transportationCost,
-          }))
+    const waybill = await prisma.$transaction(async (tx) => {
+      const w = await tx.waybill.create({
+        data: {
+          tenantId: actor.tenantId,
+          number: body.number,
+          productType: body.productType,
+          litersLoaded: body.litersLoaded,
+          truckPlate: body.truckPlate,
+          driverName: body.driverName,
+          driverPhone: body.driverPhone ?? null,
+          pictures: body.pictures ?? [],
+          deliveryDatetime: body.deliveryDatetime ? new Date(body.deliveryDatetime) : null,
+          supplier: body.supplier ?? null,
+          depot: body.depot ?? null,
+          transportCompany: body.transportCompany ?? null,
+          recordedById: actor.userId,
+          allocations: {
+            create: body.allocations.map(a => ({
+              tenantId: actor.tenantId,
+              stationId: a.stationId,
+              litersToDispense: a.litersToDispense,
+              costPerLiter: a.costPerLiter,
+              transportationCost: a.transportationCost,
+            }))
+          }
+        },
+        include: {
+          allocations: true
         }
-      },
-      include: {
-        allocations: true
+      });
+
+      // Link any station requests and mark them as IN_TRANSIT
+      for (const a of body.allocations) {
+        if (a.stationRequestId) {
+          const alloc = w.allocations.find(all => all.stationId === a.stationId);
+          if (alloc) {
+            await tx.stationSupplyRequest.update({
+              where: { id: a.stationRequestId },
+              data: {
+                status: "IN_TRANSIT",
+                waybillAllocationId: alloc.id
+              }
+            });
+          }
+        }
       }
+
+      return w;
     });
 
     await audit({

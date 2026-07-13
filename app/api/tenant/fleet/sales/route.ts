@@ -1,0 +1,192 @@
+import { z } from "zod";
+import { prisma } from "@/lib/db/client";
+import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
+import { audit, requestMeta } from "@/lib/auth/audit";
+import { ok } from "@/lib/api/respond";
+import { handleError, DomainError } from "@/lib/api/errors";
+import { requireCsrf } from "@/lib/api/csrf-guard";
+import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
+
+const CreateSaleSchema = z.object({
+  recipientType: z.enum(["CUSTOMER", "STATION"]),
+  customerId: z.string().optional(),
+  stationId: z.string().optional(),
+  transportCostBorneBy: z.enum(["CLIENT", "COMPANY"]).optional(),
+  transportId: z.string().optional().nullable(),
+  litersDespatched: z.number().positive(),
+  litersReceived: z.number().min(0).optional().nullable(),
+  amountPerLiter: z.number().positive(),
+  transportCostPerLiter: z.number().min(0).optional().default(0),
+}).superRefine((data, ctx) => {
+  if (data.recipientType === "CUSTOMER" && !data.customerId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a customer", path: ["customerId"] });
+  }
+  if (data.recipientType === "STATION" && !data.stationId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a station", path: ["stationId"] });
+  }
+});
+
+export async function GET(request: Request) {
+  try {
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key);
+    const url = new URL(request.url);
+    const { cursor, take } = parsePagination(url.searchParams);
+    const status = url.searchParams.get("status");
+
+    const rows = await prisma.sale.findMany({
+      where: {
+        tenantId: actor.tenantId,
+        ...(status ? { status: status as any } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      include: {
+        customer: { select: { id: true, name: true } },
+        station: { select: { id: true, name: true } },
+        transport: {
+          select: {
+            id: true,
+            truck: { select: { id: true, name: true } },
+            transporter: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    return ok(rows, buildPageMeta(rows, take));
+  } catch (e) {
+    return handleError(e);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    await requireCsrf(request);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
+    const body = CreateSaleSchema.parse(await request.json());
+    const meta = requestMeta(request);
+
+    // XOR validation
+    if (body.customerId && body.stationId) {
+      throw new DomainError(400, "invalid_input", "A sale cannot belong to both a customer and a station.");
+    }
+
+    const litersReceived = body.litersReceived ?? 0;
+    const totalExpectedAmount = litersReceived * body.amountPerLiter;
+    
+    // Default transport cost rule if not provided (Company for own station, Client for external)
+    let transportCostBorneBy = body.transportCostBorneBy;
+    if (!transportCostBorneBy) {
+      transportCostBorneBy = body.stationId ? "COMPANY" : "CLIENT";
+    }
+
+    const sale = await prisma.$transaction(async (tx) => {
+      const s = await tx.sale.create({
+        data: {
+          tenantId: actor.tenantId,
+          customerId: body.customerId ?? null,
+          stationId: body.stationId ?? null,
+          transportId: body.transportId ?? null,
+          transportCostBorneBy: transportCostBorneBy,
+          litersDespatched: body.litersDespatched,
+          litersReceived: body.litersReceived ?? null,
+          amountPerLiter: body.amountPerLiter,
+          totalExpectedAmount,
+        },
+        include: {
+          customer: { select: { id: true, name: true } },
+          station: { select: { id: true, name: true } }
+        },
+      });
+
+      // Auto-generate Waybill if this distribution targets a station and comes from a transport
+      if (s.stationId && s.transportId) {
+        const t = await tx.transport.findUnique({
+          where: { id: s.transportId },
+          include: {
+            truck: true,
+            driver: true,
+            transporter: true,
+            order: true,
+          }
+        });
+
+        if (t) {
+          const station = await tx.station.findUnique({
+            where: { id: s.stationId },
+            select: { code: true, name: true }
+          });
+          const rawCode = station ? station.code : "DISP";
+          const prefix = rawCode.replace(/-?\d+$/, "");
+          const today = new Date().toISOString().split("T")[0].replace(/-/g, "");
+          const randomNum = Math.floor(Math.random() * 900) + 100;
+          const wbNumber = `WB-${prefix}-${today}-${t.productType ?? "PMS"}-${randomNum}`;
+
+          await tx.waybill.create({
+            data: {
+              tenantId: actor.tenantId,
+              number: wbNumber,
+              productType: (t.productType as any) ?? "PMS",
+              litersLoaded: s.litersDespatched,
+              truckPlate: t.truck?.plateNumber || t.truck?.name || "N/A",
+              driverName: t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "Unknown Driver",
+              driverPhone: t.driver?.phone ?? null,
+              supplier: t.order?.supplier || "Fleet Management",
+              transportCompany: t.transporter?.name ?? null,
+              recordedById: actor.userId,
+              allocations: {
+                create: [{
+                  tenantId: actor.tenantId,
+                  stationId: s.stationId,
+                  litersToDispense: s.litersDespatched,
+                  costPerLiter: s.amountPerLiter,
+                  transportationCost: (body.transportCostPerLiter ?? 0) * body.litersDespatched,
+                }]
+              }
+            }
+          });
+
+          // Append to transport routing
+          const existingLocs = Array.isArray(t.subsequentLocs) ? (t.subsequentLocs as any[]) : [];
+          await tx.transport.update({
+            where: { id: t.id },
+            data: {
+              subsequentLocs: [
+                ...existingLocs,
+                {
+                  location: station?.name || "Station",
+                  rate: body.transportCostPerLiter ?? 0,
+                  litersDelivered: body.litersDespatched,
+                  date: new Date().toISOString()
+                }
+              ]
+            }
+          });
+        }
+      }
+
+      return s;
+    });
+
+    await audit({
+      actorType: "TENANT_USER",
+      actorId: actor.userId,
+      action: "sale.create",
+      tenantId: actor.tenantId,
+      targetType: "Sale",
+      targetId: sale.id,
+      after: { 
+        recipient: sale.customer ? sale.customer.name : (sale.station ? sale.station.name : 'Unknown'), 
+        totalExpected: totalExpectedAmount,
+        transportCostBorneBy
+      } as object,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+    });
+
+    return ok({ sale });
+  } catch (e) {
+    return handleError(e);
+  }
+}

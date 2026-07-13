@@ -35,6 +35,7 @@ const NAV: NavItemConfig[] = [
   { href: "/admin/users", key: "users", module: "users" as ModuleKey, icon: "CircleUserRound", permission: PERMISSIONS.TENANT_USERS_READ.key },
   { href: "/admin/stations", key: "stations", module: "stations" as ModuleKey, icon: "MapPin", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/expenses", key: "expenses", module: "operations" as ModuleKey, icon: "Coins", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },
+  { href: "/admin/station/requests", key: "stationRequests", module: "operations" as ModuleKey, icon: "ClipboardList", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/waybills", key: "waybills", module: "operations" as ModuleKey, icon: "Truck", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   { href: "/admin/prices", key: "prices", module: "operations" as ModuleKey, icon: "ChartNoAxesCombined", permission: PERMISSIONS.TENANT_PRICES_READ.key },
   { href: "/admin/variance-audit", key: "varianceAudit", module: "operations" as ModuleKey, icon: "Scale", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
@@ -95,13 +96,16 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: actor.tenantId },
-    select: { name: true, status: true, settingsJson: true },
+    select: { name: true, status: true, settingsJson: true, activeModules: true },
   });
   if (!tenant || tenant.status !== "ACTIVE") redirect("/maintenance");
 
   const tNav = await getTranslations("nav");
   const settings = parseTenantSettings(tenant?.settingsJson);
-  const enabled = settings.enabledModules;
+  const enabled = Array.from(new Set([
+    ...settings.enabledModules,
+    ...(tenant?.activeModules?.map(m => m.toLowerCase() as ModuleKey) || [])
+  ]));
   
   const logoUrl =
     settings.logoKey?.startsWith("http")
@@ -143,6 +147,7 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
       logoutContext="tenant-admin"
       stations={allowedStations}
       activeStationId={activeStationId}
+      enabledModules={enabled}
     >
       <UnauthorizedToast />
       {children}

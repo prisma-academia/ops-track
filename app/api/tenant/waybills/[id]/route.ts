@@ -166,6 +166,49 @@ export async function PATCH(
       });
     }
 
+    // Sync with corresponding Sale to ensure Distribution metrics are accurate
+    const matchingSale = await prisma.sale.findFirst({
+      where: {
+        tenantId: actor.tenantId,
+        stationId: allocation.stationId,
+        litersDespatched: allocation.litersToDispense,
+        litersReceived: null
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (matchingSale) {
+      await prisma.sale.update({
+        where: { id: matchingSale.id },
+        data: {
+          litersReceived: body.litersReceived
+        }
+      });
+
+      // Recalculate transport loss if sale belongs to a transport
+      if (matchingSale.transportId) {
+        const transport = await prisma.transport.findUnique({ where: { id: matchingSale.transportId } });
+        if (transport) {
+          const allSales = await prisma.sale.findMany({ where: { transportId: transport.id } });
+          const totalReceived = allSales.reduce((sum, s) => {
+            if (s.id === matchingSale.id) return sum + Number(body.litersReceived || 0);
+            return sum + Number(s.litersReceived ?? 0);
+          }, 0);
+          
+          const litersLost = Math.max(0, Number(transport.litersCarried) - totalReceived);
+          const ratePerLiter = Number(transport.ratePerLiter);
+          const cashDeductionForLoss = litersLost * ratePerLiter;
+          const totalDeduction = Number(transport.maintenanceCost) + cashDeductionForLoss;
+          const netTransportFeePaid = Math.max(0, (ratePerLiter * Number(transport.litersCarried)) - totalDeduction);
+
+          await prisma.transport.update({
+            where: { id: transport.id },
+            data: { litersLost, totalDeduction, netTransportFeePaid }
+          });
+        }
+      }
+    }
+
     await audit({
       actorType: "TENANT_USER",
       actorId: actor.userId,

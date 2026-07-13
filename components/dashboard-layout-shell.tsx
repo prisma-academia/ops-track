@@ -56,6 +56,7 @@ interface DashboardLayoutShellProps {
   logoutContext: "platform" | "tenant-admin" | "client";
   stations?: { id: string; name: string; code: string }[];
   activeStationId?: string;
+  enabledModules?: string[];
 }
 
 export function DashboardLayoutShell({
@@ -70,6 +71,7 @@ export function DashboardLayoutShell({
   logoutContext,
   stations,
   activeStationId,
+  enabledModules,
 }: DashboardLayoutShellProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [logOutModal, setLogOutModal] = useState(false);
@@ -108,6 +110,8 @@ export function DashboardLayoutShell({
           logoUrl={logoUrl}
           roleLabel={roleLabel}
           userLabel={user.name}
+          context={logoutContext}
+          enabledModules={enabledModules}
         />
 
         <SidebarInset className="bg-background overflow-hidden">

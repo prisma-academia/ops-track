@@ -1,0 +1,76 @@
+import { prisma } from "@/lib/db/client";
+import { requireTenantPage } from "@/lib/auth/page-guards";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+import { CreateTransportForm } from "./transport-form"; 
+
+export default async function NewTransportPage({
+  searchParams,
+}: {
+  searchParams?: { requestId?: string | string[] };
+}) {
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
+
+  const transporters = await prisma.transporter.findMany({
+    where: { tenantId: actor.tenantId, status: "ACTIVE" },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  
+  const trucks = await prisma.truck.findMany({
+    where: { tenantId: actor.tenantId, status: "ACTIVE" },
+    select: { id: true, name: true, transporterId: true, capacityLiters: true },
+    orderBy: { name: "asc" },
+  });
+  
+  const drivers = await prisma.driver.findMany({
+    where: { tenantId: actor.tenantId, status: "ACTIVE" },
+    select: { id: true, firstName: true, lastName: true, transporterId: true },
+    orderBy: { firstName: "asc" },
+  });
+  
+  const orders = await prisma.order.findMany({
+    where: { tenantId: actor.tenantId, status: { in: ["PENDING", "CONFIRMED"] } },
+    select: { 
+      id: true, 
+      reference: true, 
+      productType: true,
+      litersOrdered: true,
+      transports: { 
+        where: { status: { not: "CANCELLED" } },
+        select: { litersCarried: true } 
+      }
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const requests = await prisma.stationSupplyRequest.findMany({
+    where: { tenantId: actor.tenantId, status: { in: ["PENDING", "APPROVED"] } },
+    include: {
+      station: { select: { id: true, name: true, code: true } }
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Extract selected request IDs from URL params
+  let preselectedRequestIds: string[] = [];
+  if (searchParams?.requestId) {
+    if (Array.isArray(searchParams.requestId)) {
+      preselectedRequestIds = searchParams.requestId;
+    } else {
+      preselectedRequestIds = [searchParams.requestId];
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <CreateTransportForm 
+        transporters={transporters} 
+        trucks={JSON.parse(JSON.stringify(trucks))} 
+        drivers={drivers} 
+        orders={JSON.parse(JSON.stringify(orders))} 
+        requests={JSON.parse(JSON.stringify(requests))}
+        preselectedRequestIds={preselectedRequestIds}
+      />
+    </div>
+  );
+}

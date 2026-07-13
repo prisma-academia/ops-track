@@ -60,10 +60,12 @@ export function WaybillsManager({
   initialWaybills,
   initialMeta,
   stations,
+  canCreate = false,
 }: {
   initialWaybills: WaybillRow[];
   initialMeta: any;
   stations: { id: string; name: string; code: string }[];
+  canCreate?: boolean;
 }) {
   const router = useRouter();
   
@@ -107,14 +109,8 @@ export function WaybillsManager({
   return (
     <div className="space-y-6">
       <DataTableToolbar
-        
-        title="Dispatches"
-        description="Track fuel distribution movements from depots to retail stations."
-        action={
-          <Button onClick={() => router.push("/admin/waybills/create")}>
-            <Plus size={16} className="mr-1" /> New Dispatch
-          </Button>
-        }
+        title="Waybills"
+        description="Monitor incoming and completed waybills across your stations."
       />
 
       <div className="flex items-center gap-6 text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg border mb-4">

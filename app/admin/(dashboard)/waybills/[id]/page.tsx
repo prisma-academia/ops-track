@@ -54,8 +54,8 @@ export default async function WaybillDetailsPage({
   // Calculate overall received volume vs loaded volume
   const totalAllocated = waybill.allocations.reduce((acc, a) => acc + Number(a.litersToDispense), 0);
   const totalReceived = waybill.allocations.reduce((acc, a) => acc + (a.litersReceived ? Number(a.litersReceived) : 0), 0);
-  const anyDelivered = waybill.allocations.some(a => a.status === "DELIVERED");
-  const allDelivered = waybill.allocations.every(a => a.status === "DELIVERED");
+  const anyDelivered = waybill.allocations.some(a => ["DELIVERED", "COMPLETED"].includes(a.status));
+  const allDelivered = waybill.allocations.length > 0 && waybill.allocations.every(a => ["DELIVERED", "COMPLETED"].includes(a.status));
 
   const variance = anyDelivered ? totalReceived - totalAllocated : null;
 
@@ -124,22 +124,10 @@ export default async function WaybillDetailsPage({
                 <dd className="font-semibold text-foreground">{formatHumanReadableDate(waybill.dispatchedAt)}</dd>
               </div>
 
-              <div className="border-t pt-4 col-span-2 md:col-span-4 grid grid-cols-2 md:grid-cols-3 gap-6">
-                <div>
-                  <dt className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wider font-semibold">Supplier</dt>
-                  <dd className="font-medium text-foreground">{waybill.supplier || "—"}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wider font-semibold">Depot</dt>
-                  <dd className="font-medium text-foreground">{waybill.depot || "—"}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wider font-semibold">Transport Company</dt>
-                  <dd className="font-medium text-foreground">{waybill.transportCompany || "—"}</dd>
-                </div>
-              </div>
 
-              <div className="border-t pt-4 col-span-2 md:col-span-4 grid grid-cols-2 md:grid-cols-3 gap-6">
+
+
+              <div className="border-t pt-4 col-span-2 md:col-span-4 grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div>
                   <dt className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wider font-semibold">Truck Plate Number</dt>
                   <dd className="font-semibold text-foreground">{waybill.truckPlate}</dd>
@@ -152,16 +140,17 @@ export default async function WaybillDetailsPage({
                   <dt className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wider font-semibold">Driver Phone</dt>
                   <dd className="font-medium text-foreground">{waybill.driverPhone || "—"}</dd>
                 </div>
+                <div>
+                  <dt className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wider font-semibold">Transport Company</dt>
+                  <dd className="font-medium text-foreground">{waybill.transportCompany || "—"}</dd>
+                </div>
               </div>
             </dl>
           </CardContent>
         </Card>
 
         {/* Station Allocations Full Width Table with Action modal triggers */}
-        <Card className="shadow-none border-muted p-0 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
-            <span className="text-foreground text-sm font-medium">Station Allocations</span>
-          </div>
+
           {(() => {
             const serializedAllocations = waybill.allocations.map((a) => ({
               ...a,
@@ -191,7 +180,7 @@ export default async function WaybillDetailsPage({
               />
             );
           })()}
-        </Card>
+
 
         {/* Discharge Dippings Table */}
         {waybill.dippings.length > 0 && (

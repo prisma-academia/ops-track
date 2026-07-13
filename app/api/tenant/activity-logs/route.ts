@@ -9,8 +9,42 @@ export async function GET(request: Request) {
     const actor = await requireTenantActor(PERMISSIONS.TENANT_ACTIVITY_READ.key);
     const url = new URL(request.url);
     const action = url.searchParams.get("action");
+    const date = url.searchParams.get("date");
+    const name = url.searchParams.get("name");
     const useOffset = url.searchParams.has("page");
     
+    let actorIdsToFilter: string[] | undefined;
+    if (name) {
+      const matchingUsers = await prisma.tenantUser.findMany({
+        where: {
+          tenantId: actor.tenantId,
+          OR: [
+            { firstName: { contains: name, mode: "insensitive" } },
+            { lastName: { contains: name, mode: "insensitive" } },
+            { email: { contains: name, mode: "insensitive" } },
+          ],
+        },
+        select: { id: true },
+      });
+      actorIdsToFilter = matchingUsers.map((u) => u.id);
+    }
+
+    const whereClause: any = {
+      tenantId: actor.tenantId,
+    };
+    if (action) {
+      whereClause.action = { contains: action, mode: "insensitive" };
+    }
+    if (date) {
+      whereClause.createdAt = {
+        gte: new Date(`${date}T00:00:00.000Z`),
+        lte: new Date(`${date}T23:59:59.999Z`),
+      };
+    }
+    if (actorIdsToFilter) {
+      whereClause.actorId = { in: actorIdsToFilter };
+    }
+
     let rows: any[] = [];
     let meta: any = {};
 
@@ -18,10 +52,10 @@ export async function GET(request: Request) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
       const [totalCount, rawRows] = await Promise.all([
         prisma.activityLog.count({
-          where: { tenantId: actor.tenantId, ...(action ? { action } : {}) },
+          where: whereClause,
         }),
         prisma.activityLog.findMany({
-          where: { tenantId: actor.tenantId, ...(action ? { action } : {}) },
+          where: whereClause,
           orderBy: { createdAt: "desc" },
           take,
           skip,
@@ -33,7 +67,7 @@ export async function GET(request: Request) {
     } else {
       const { cursor, take } = parsePagination(url.searchParams);
       rows = await prisma.activityLog.findMany({
-        where: { tenantId: actor.tenantId, ...(action ? { action } : {}) },
+        where: whereClause,
         orderBy: { createdAt: "desc" },
         take,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),

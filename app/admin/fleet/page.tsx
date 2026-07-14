@@ -85,7 +85,7 @@ export default async function FleetOverviewPage() {
           <CardHeader>
             <CardTitle>Transport Volume by Product</CardTitle>
           </CardHeader>
-          <CardContent className="pl-2 flex h-[350px] items-center justify-center text-muted-foreground">
+          <CardContent className="pl-2">
             <TransportVolumeChart data={volumeData} />
           </CardContent>
         </Card>
@@ -94,7 +94,7 @@ export default async function FleetOverviewPage() {
           <CardHeader>
             <CardTitle>Transport Status</CardTitle>
           </CardHeader>
-          <CardContent className="flex h-[350px] items-center justify-center text-muted-foreground">
+          <CardContent>
             <TransportStatusChart data={statusData} />
           </CardContent>
         </Card>

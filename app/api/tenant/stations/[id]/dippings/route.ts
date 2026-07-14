@@ -244,8 +244,14 @@ export async function GET(
         },
         orderBy: { createdAt: "desc" },
       });
+
+      // Map waybillDippings to expose waybillAllocationId alongside waybillId
+      const mappedWaybillDippings = waybillDippings.map((d) => ({
+        ...d,
+        waybillAllocationId: d.waybillAllocationId,
+      }));
   
-      return ok({ dippings, waybillDippings });
+      return ok({ dippings, waybillDippings: mappedWaybillDippings });
     }
   } catch (e) {
     return handleError(e);

@@ -173,7 +173,7 @@ export async function PATCH(
       }
     }) : null;
 
-    if (matchingSale) {
+    if (matchingSale && body.litersReceived !== undefined) {
       await prisma.sale.update({
         where: { id: matchingSale.id },
         data: {

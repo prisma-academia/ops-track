@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       include: {
         sale: {
-          include: { customer: true },
+          include: { customer: true, station: true },
         },
       },
     });

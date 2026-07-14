@@ -93,8 +93,7 @@ model Tenant {
   nozzles                    Nozzle[]
   shiftLogs                  ShiftLog[]
   expenses                   Expense[]
-  supplyRequests             StationSupplyRequest[]
-  supplyRequestBatches       SupplyRequestBatch[]
+
 
   activeModules     String[]           @default(["STATION"])
   transporters      Transporter[]
@@ -158,8 +157,7 @@ model TenantUser {
   recordedExpenses        Expense[]        @relation("ExpenseRecordedBy")
   approvedExpenses        Expense[]        @relation("ExpenseApprovedBy")
   recordedWaybillDippings WaybillDipping[]
-  supplyRequests          StationSupplyRequest[]
-  supplyRequestBatches    SupplyRequestBatch[]
+
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -429,7 +427,7 @@ model Station {
   waybillAllocations WaybillAllocation[]
   pumps              Pump[]
   expenses           Expense[]
-  supplyRequests     StationSupplyRequest[]
+
   stationSales       Sale[]              @relation("StationSales")
 
   @@unique([tenantId, code])
@@ -648,79 +646,24 @@ model WaybillAllocation {
   waybillVerified     Boolean @default(false)
   cancellationReason  String? @db.Text
 
+  saleId String?
+  sale   Sale?   @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   dippings WaybillDipping[]
-  supplyRequest StationSupplyRequest?
+
 
 
   @@unique([waybillId, stationId])
   @@index([tenantId])
   @@index([waybillId])
   @@index([stationId])
+  @@index([saleId])
   @@map("waybill_allocations")
 }
 
-enum SupplyRequestStatus {
-  PENDING
-  APPROVED
-  IN_TRANSIT
-  FULFILLED
-  REJECTED
-  CANCELLED
-}
-
-model SupplyRequestBatch {
-  id            String     @id @default(uuid())
-  tenantId      String
-  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  reference     String?    // Auto-generated batch reference e.g. "RB-20260709-001"
-  notes         String?    @db.Text
-  requestedById String
-  requestedBy   TenantUser @relation(fields: [requestedById], references: [id], onDelete: Restrict)
-  createdAt     DateTime   @default(now())
-
-  requests StationSupplyRequest[]
-
-  @@index([tenantId])
-  @@map("supply_request_batches")
-}
-
-model StationSupplyRequest {
-  id                  String              @id @default(uuid())
-  tenantId            String
-  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  stationId           String
-  station             Station             @relation(fields: [stationId], references: [id], onDelete: Cascade)
-  productType         ProductType
-  requestedLiters     Decimal             @db.Decimal(12, 2)
-  status              SupplyRequestStatus @default(PENDING)
-  notes               String?             @db.Text
-
-  requestedById       String
-  requestedBy         TenantUser          @relation(fields: [requestedById], references: [id], onDelete: Restrict)
-  
-  waybillAllocationId String?             @unique
-  waybillAllocation   WaybillAllocation?  @relation(fields: [waybillAllocationId], references: [id], onDelete: SetNull)
-
-  batchId             String?
-  batch               SupplyRequestBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
-
-  transportId         String?
-  transport           Transport?          @relation(fields: [transportId], references: [id], onDelete: SetNull)
-  allocatedLiters     Decimal?            @db.Decimal(12, 2)
-
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-
-  @@index([tenantId])
-  @@index([stationId])
-  @@index([requestedById])
-  @@index([batchId])
-  @@index([transportId])
-  @@map("station_supply_requests")
-}
 
 model Pump {
   id        String      @id @default(uuid())
@@ -1061,7 +1004,7 @@ model Transport {
   sales          Sale[]
   lossLogs       TransportLossLog[]
   transactions   Transaction[]
-  supplyRequests StationSupplyRequest[]
+
 
   @@index([tenantId])
   @@index([orderId])
@@ -1122,7 +1065,8 @@ model Sale {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  transactions Transaction[]
+  transactions       Transaction[]
+  waybillAllocations WaybillAllocation[]
 
   @@index([tenantId])
   @@index([customerId])

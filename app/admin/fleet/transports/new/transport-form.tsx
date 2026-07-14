@@ -17,11 +17,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
 
-const StationAllocationSchema = z.object({
-  requestId: z.string().min(1, "Request is required"),
-  stationId: z.string().min(1, "Station is required"),
-  allocatedLiters: z.coerce.number().positive("Volume must be positive"),
-});
 
 const Schema = z.object({
   orderId: z.string().min(1, "Order is required"),
@@ -33,7 +28,6 @@ const Schema = z.object({
     destination: z.string().min(1, "Destination is required"),
     ratePerLiter: z.coerce.number().min(1, "Rate is required"),
     litersCarried: z.coerce.number().min(1, "Volume is required"),
-    stationAllocations: z.array(StationAllocationSchema).optional().default([]),
   })).min(1, "At least one truck assignment is required"),
 });
 
@@ -51,15 +45,11 @@ export function CreateTransportForm({
   trucks,
   drivers,
   orders,
-  requests,
-  preselectedRequestIds,
 }: {
   transporters: { id: string; name: string }[];
   trucks: { id: string; name: string; transporterId: string; capacityLiters?: any }[];
   drivers: { id: string; firstName: string; lastName: string; transporterId: string }[];
   orders: { id: string; reference: string | null; productType: any; litersOrdered: number | string; transports: { litersCarried: number | string }[] }[];
-  requests: { id: string; requestedLiters: number | string; productType: string; stationId: string; station: { name: string; code: string; } }[];
-  preselectedRequestIds: string[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -70,19 +60,7 @@ export function CreateTransportForm({
     setOpenStates(prev => ({ ...prev, [key]: isOpen }));
   };
 
-  // Setup initial allocations based on preselected requests
-  const initialAllocations = preselectedRequestIds
-    .map(id => {
-      const req = requests.find(r => r.id === id);
-      return req ? {
-        requestId: req.id,
-        stationId: req.stationId,
-        allocatedLiters: Number(req.requestedLiters),
-      } : null;
-    })
-    .filter(Boolean) as z.infer<typeof StationAllocationSchema>[];
 
-  const initialLitersCarried = initialAllocations.reduce((sum, a) => sum + a.allocatedLiters, 0);
 
   const { register, handleSubmit, formState, setValue, watch, control } = useForm<Values>({
     resolver: zodResolver(Schema) as any,
@@ -95,8 +73,7 @@ export function CreateTransportForm({
         driverId: "",
         destination: "",
         ratePerLiter: "" as any,
-        litersCarried: initialLitersCarried > 0 ? initialLitersCarried : ("" as any),
-        stationAllocations: initialAllocations,
+        litersCarried: "" as any,
       }],
     },
   });
@@ -123,11 +100,6 @@ export function CreateTransportForm({
     if (selectedOrderId) {
       if (selectedOrder) {
         if (selectedOrder.productType) setValue("productType", selectedOrder.productType, { shouldValidate: true });
-        
-        // Only auto-fill if not using preselected requests
-        if (initialAllocations.length === 0) {
-          // Intentionally left blank to allow user to manually enter volume
-        }
       }
     }
   }, [selectedOrderId, orders, setValue]);
@@ -165,17 +137,7 @@ export function CreateTransportForm({
               Total dispatched volume ({totalRequested.toLocaleString()}L) exceeds the ordered volume ({totalOrdered.toLocaleString()}L).
             </div>
           )}
-          {(() => {
-            const assignmentErrors = assignmentsWatch.some(a => {
-              const sum = (a.stationAllocations || []).reduce((acc, alloc) => acc + Number(alloc.allocatedLiters || 0), 0);
-              return sum > Number(a.litersCarried || 0);
-            });
-            return assignmentErrors && (
-              <div className="mx-6 mt-6 p-3 text-sm font-medium rounded-md bg-destructive/15 text-destructive border border-destructive/20 flex items-center">
-                One or more trucks have station allocations exceeding the truck's carried volume.
-              </div>
-            );
-          })()}
+
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Source Order</CardTitle>
           </CardHeader>
@@ -446,8 +408,7 @@ export function CreateTransportForm({
               driverId: "",
               destination: "",
               ratePerLiter: "" as any,
-              litersCarried: "" as any,
-              stationAllocations: []
+              litersCarried: "" as any
             });
           }}
         >

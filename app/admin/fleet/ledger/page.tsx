@@ -45,9 +45,9 @@ export default function LedgerPage() {
     let rows: string[][] = [];
 
     if (activeTab === "SALES") {
-      headers = ["Client Name", "Date", "Payment Type", "Amount Received", "Payment Method", "Sales ID"];
+      headers = ["Client / Station Name", "Date", "Payment Type", "Amount Received", "Payment Method", "Sales ID"];
       rows = data.map((d: any) => [
-        d.sale?.customer?.name || "N/A",
+        d.sale?.customer?.name || d.sale?.station?.name || "N/A",
         new Date(d.createdAt).toLocaleDateString(),
         d.paymentType || "N/A",
         d.amount,
@@ -141,7 +141,7 @@ export default function LedgerPage() {
                 <TableHeader>
                   {activeTab === "SALES" && (
                     <TableRow>
-                      <TableHead>Client Name</TableHead>
+                      <TableHead>Client / Station Name</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Amount</TableHead>
@@ -176,7 +176,7 @@ export default function LedgerPage() {
                     <TableRow key={row.id || i}>
                       {activeTab === "SALES" && (
                         <>
-                          <TableCell className="font-medium">{row.sale?.customer?.name || "-"}</TableCell>
+                          <TableCell className="font-medium">{row.sale?.customer?.name || row.sale?.station?.name || "-"}</TableCell>
                           <TableCell>{new Date(row.createdAt).toLocaleDateString()}</TableCell>
                           <TableCell>
                             <Badge variant="outline">{row.paymentType?.replace(/_/g, ' ') || "-"}</Badge>

@@ -205,24 +205,10 @@ export async function POST(request: Request) {
         }
       });
 
-      // Link any station requests and mark them as IN_TRANSIT
-      for (const a of body.allocations) {
-        if (a.stationRequestId) {
-          const alloc = w.allocations.find(all => all.stationId === a.stationId);
-          if (alloc) {
-            await tx.stationSupplyRequest.update({
-              where: { id: a.stationRequestId },
-              data: {
-                status: "IN_TRANSIT",
-                waybillAllocationId: alloc.id
-              }
-            });
-          }
-        }
-      }
+
 
       return w;
-    });
+    }, { timeout: 15000 });
 
     await audit({
       actorType: "TENANT_USER",

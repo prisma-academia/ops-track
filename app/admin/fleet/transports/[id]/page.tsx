@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { notFound } from "next/navigation";
 import { TransportDetailsManager } from "./transport-details-manager";
 
+
 export default async function TransportDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
   const { id } = await params;
@@ -30,16 +31,11 @@ export default async function TransportDetailsPage({ params }: { params: Promise
 
   const stations = await prisma.station.findMany({
     where: { tenantId: actor.tenantId },
-    include: {
-      supplyRequests: {
-        where: { 
-          status: "PENDING",
-          productType: transport.productType as any
-        }
-      }
-    },
+
     orderBy: { name: "asc" }
   });
+
+
 
   return (
     <div className="space-y-6">

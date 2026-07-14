@@ -3,6 +3,7 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { redirect } from "next/navigation";
 import { OrderDetailsManager } from "./order-details-manager";
+import { calculateOrderPnL } from "@/lib/fleet/financials";
 
 export default async function OrderDetailPage({
   params,
@@ -36,6 +37,7 @@ export default async function OrderDetailPage({
   const depots = await prisma.depot.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
 
   const serializedOrder = JSON.parse(JSON.stringify(order));
+  const pnl = await calculateOrderPnL(order.id);
 
-  return <OrderDetailsManager order={serializedOrder} lookups={{ suppliers, depots }} />;
+  return <OrderDetailsManager order={serializedOrder} lookups={{ suppliers, depots }} pnl={pnl} />;
 }

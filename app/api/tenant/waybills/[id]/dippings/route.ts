@@ -121,8 +121,59 @@ export async function POST(
         });
       }
 
+      // Sync with corresponding Sale unconditionally
+      const matchingSale = allocation.saleId ? await tx.sale.findUnique({
+        where: { id: allocation.saleId }
+      }) : null;
+
+      if (matchingSale) {
+        const totalExpectedAmount = currentReceived * Number(matchingSale.amountPerLiter);
+
+        await tx.sale.update({
+          where: { id: matchingSale.id },
+          data: {
+            litersReceived: currentReceived,
+            totalExpectedAmount,
+          }
+        });
+
+        // Recalculate transport loss if sale belongs to a transport
+        if (matchingSale.transportId) {
+          const transport = await tx.transport.findUnique({ where: { id: matchingSale.transportId } });
+          if (transport) {
+            const allSales = await tx.sale.findMany({ 
+              where: { transportId: transport.id },
+              include: { station: true }
+            });
+            let totalReceived = allSales.reduce((sum, s) => {
+              if (s.id === matchingSale.id) return sum + Number(currentReceived || 0);
+              return sum + Number(s.litersReceived ?? 0);
+            }, 0);
+            
+            const subsequentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
+            const salesStationNames = allSales.map((s) => s.station?.name).filter(Boolean);
+            const customDistributions = subsequentLocs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || (!loc.saleId && !salesStationNames.includes(loc.location)));
+            const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
+            
+            totalReceived += locsVol;
+
+            const litersLost = Math.max(0, Number(transport.litersCarried) - totalReceived);
+            const ratePerLiter = Number(transport.ratePerLiter);
+            const cashDeductionForLoss = litersLost * ratePerLiter;
+            const totalDeduction = Number(transport.maintenanceCost) + cashDeductionForLoss;
+            const netTransportFeePaid = Math.max(0, (ratePerLiter * Number(transport.litersCarried)) - totalDeduction);
+
+            await tx.transport.update({
+              where: { id: transport.id },
+              data: { litersDelivered: totalReceived, litersLost, totalDeduction, netTransportFeePaid }
+            });
+          }
+        }
+      }
+
+
       return { createdDippings, completed: shouldComplete, variance: Number(allocation.litersToDispense) - currentReceived };
-    });
+    }, { timeout: 15000 });
 
     await audit({
       actorType: "TENANT_USER",

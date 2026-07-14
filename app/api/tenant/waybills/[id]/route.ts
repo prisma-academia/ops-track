@@ -167,17 +167,13 @@ export async function PATCH(
     }
 
     // Sync with corresponding Sale to ensure Distribution metrics are accurate
-    const matchingSale = await prisma.sale.findFirst({
+    const matchingSale = allocation.saleId ? await prisma.sale.findUnique({
       where: {
-        tenantId: actor.tenantId,
-        stationId: allocation.stationId,
-        litersDespatched: allocation.litersToDispense,
-        litersReceived: null
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+        id: allocation.saleId,
+      }
+    }) : null;
 
-    if (matchingSale) {
+    if (matchingSale && body.litersReceived !== undefined) {
       await prisma.sale.update({
         where: { id: matchingSale.id },
         data: {
@@ -189,12 +185,23 @@ export async function PATCH(
       if (matchingSale.transportId) {
         const transport = await prisma.transport.findUnique({ where: { id: matchingSale.transportId } });
         if (transport) {
-          const allSales = await prisma.sale.findMany({ where: { transportId: transport.id } });
-          const totalReceived = allSales.reduce((sum, s) => {
+          const allSales = await prisma.sale.findMany({ 
+            where: { transportId: transport.id },
+            include: { station: true }
+          });
+          let totalReceived = allSales.reduce((sum, s) => {
             if (s.id === matchingSale.id) return sum + Number(body.litersReceived || 0);
             return sum + Number(s.litersReceived ?? 0);
           }, 0);
           
+          // Add volume from custom distributions in subsequentLocs
+          const subsequentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
+          const salesStationNames = allSales.map((s) => s.station?.name).filter(Boolean);
+          const customDistributions = subsequentLocs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || (!loc.saleId && !salesStationNames.includes(loc.location)));
+          const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
+          
+          totalReceived += locsVol;
+
           const litersLost = Math.max(0, Number(transport.litersCarried) - totalReceived);
           const ratePerLiter = Number(transport.ratePerLiter);
           const cashDeductionForLoss = litersLost * ratePerLiter;

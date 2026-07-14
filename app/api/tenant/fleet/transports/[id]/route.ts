@@ -11,6 +11,11 @@ const SubsequentLocSchema = z.object({
   location: z.string(),
   rate: z.number(),
   litersDelivered: z.number(),
+  date: z.string().optional(),
+  isCustom: z.boolean().optional(),
+  productPrice: z.number().optional(),
+  // saleId links this destination to a B2B Sale for received-litres sync
+  saleId: z.string().optional().nullable(),
 });
 
 const UpdateTransportSchema = z.object({

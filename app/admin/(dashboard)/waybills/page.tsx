@@ -79,7 +79,10 @@ export default async function WaybillsPage() {
       initialWaybills={rows}
       initialMeta={initialMeta}
       stations={serializedStations}
-      canCreate={actor.permissions.has(PERMISSIONS.TENANT_FLEET_WRITE.key)}
+      canCreate={
+        actor.permissions.has(PERMISSIONS.TENANT_FLEET_WRITE.key) ||
+        actor.permissions.has(PERMISSIONS.TENANT_WAYBILLS_WRITE.key)
+      }
     />
   );
 }

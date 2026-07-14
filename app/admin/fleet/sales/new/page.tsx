@@ -3,11 +3,12 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { CreateSaleForm } from "./sale-form"; 
 
-export default async function NewSalePage({
-  searchParams,
-}: {
-  searchParams?: { transportId?: string };
-}) {
+export default async function NewSalePage(
+  props: {
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
 
   const customers = await prisma.customer.findMany({
@@ -27,7 +28,12 @@ export default async function NewSalePage({
     select: { 
       id: true, 
       destination: true, 
-      truck: { select: { name: true } },
+      litersCarried: true,
+      ratePerLiter: true,
+      status: true,
+      order: { select: { reference: true, productType: true, litersOrdered: true, supplier: true, sourceDepot: true, status: true } },
+      sales: { select: { litersDespatched: true } },
+      truck: { select: { name: true, plateNumber: true, capacityLiters: true } },
       transporter: { select: { name: true } }
     },
     orderBy: { createdAt: "desc" },
@@ -38,8 +44,8 @@ export default async function NewSalePage({
       <CreateSaleForm 
         customers={customers} 
         stations={stations}
-        transports={transports} 
-        preselectedTransportId={searchParams?.transportId}
+        transports={JSON.parse(JSON.stringify(transports))} 
+        preselectedTransportId={typeof searchParams.transportId === 'string' ? searchParams.transportId : undefined}
       />
     </div>
   );

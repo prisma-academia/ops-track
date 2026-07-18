@@ -78,6 +78,33 @@ export async function POST(
       );
     }
 
+    // Validate daily limits for Opening and Closing dips
+    if (body.reason === "OPENING_DIP" || body.reason === "CLOSING_DIP") {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const existingDip = await prisma.tankDipping.findFirst({
+        where: {
+          tankId: body.tankId,
+          reason: body.reason,
+          recordedAt: {
+            gte: today,
+            lt: tomorrow,
+          },
+        },
+      });
+
+      if (existingDip) {
+        throw new DomainError(
+          400,
+          "daily_limit_exceeded",
+          `An ${body.reason === "OPENING_DIP" ? "Opening" : "Closing"} dip has already been recorded for this tank today.`
+        );
+      }
+    }
+
     // Execute actions
     const result = await prisma.$transaction(async (tx) => {
       // Validate capacity inside transaction to prevent race conditions

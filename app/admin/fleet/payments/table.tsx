@@ -87,7 +87,7 @@ const columns: ColumnDef<PaymentRow>[] = [
   },
 ];
 
-export function PaymentsTable({ data }: { data: PaymentRow[] }) {
+export function PaymentsTable({ data, filterNode }: { data: PaymentRow[], filterNode?: React.ReactNode }) {
   return (
     <DataTable
       columns={columns}
@@ -95,6 +95,7 @@ export function PaymentsTable({ data }: { data: PaymentRow[] }) {
       rowHref={(s) => `/admin/fleet/payments/${s.id}`}
       filterColumnId="reference"
       searchPlaceholder="Search by reference…"
+      filterNode={filterNode}
     />
   );
 }

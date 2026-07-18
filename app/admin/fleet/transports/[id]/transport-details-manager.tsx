@@ -163,8 +163,8 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
   const subsequentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
   const lossLogs = transport.lossLogs || [];
 
-  const salesStationNames = (transport.sales || []).map((s: any) => s.station?.name).filter(Boolean);
-  const customDistributions = subsequentLocs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || !salesStationNames.includes(loc.location));
+  const salesRecipientNames = (transport.sales || []).map((s: any) => s.station?.name || s.customer?.name).filter(Boolean);
+  const customDistributions = subsequentLocs.filter((loc: any) => !salesRecipientNames.includes(loc.location));
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -202,6 +202,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
               <TabsTrigger value="destinations" className="text-[15px] font-semibold">Destinations ({subsequentLocs.length})</TabsTrigger>
               <TabsTrigger value="distribution" className="text-[15px] font-semibold">Distribution ({(transport.sales?.length || 0) + customDistributions.length})</TabsTrigger>
               <TabsTrigger value="losses" className="text-[15px] font-semibold text-red-600 dark:text-red-400">Loss Logs ({lossLogs.length})</TabsTrigger>
+              <TabsTrigger value="payments" className="text-[15px] font-semibold">Payments & Expenses ({(transport.transactions || []).length})</TabsTrigger>
 
             </TabsList>
             
@@ -237,7 +238,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-4 rounded-2xl border bg-card">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Rate per Liter</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Transport Rate per Liter</p>
                   <p className="text-xl font-bold text-foreground">₦{Number(transport.ratePerLiter).toLocaleString()}</p>
                 </div>
                 <div className="p-4 rounded-2xl border bg-card">
@@ -483,6 +484,59 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                       </>
                     )}
                   </tbody>
+                  <tfoot>
+                    {((transport.sales && transport.sales.length > 0) || customDistributions.length > 0) ? (
+                      <>
+                        <tr className="bg-muted/30 border-t border-border/50 font-bold">
+                          <td colSpan={2} className="text-right py-3 px-4 text-foreground">Total:</td>
+                        <td className="text-right py-3 px-4 text-foreground">
+                          {(() => {
+                             const salesDespatched = (transport.sales || []).reduce((sum: number, sale: any) => sum + Number(sale.litersDespatched || sale.litersSold || 0), 0);
+                             const customDespatched = customDistributions.reduce((sum: number, loc: any) => sum + Number(loc.litersDelivered || 0), 0);
+                             return `${(salesDespatched + customDespatched).toLocaleString()} L`;
+                          })()}
+                        </td>
+                        <td className="text-right py-3 px-4 text-emerald-600 dark:text-emerald-500">
+                          {(() => {
+                             const salesReceived = (transport.sales || []).reduce((sum: number, sale: any) => sum + (sale.litersReceived !== null && sale.litersReceived !== undefined ? Number(sale.litersReceived) : 0), 0);
+                             const customReceived = customDistributions.reduce((sum: number, loc: any) => sum + (loc.litersReceived !== undefined ? Number(loc.litersReceived) : 0), 0);
+                             return `${(salesReceived + customReceived).toLocaleString()} L`;
+                          })()}
+                        </td>
+                        <td></td>
+                        <td className="text-right py-3 px-4 text-foreground font-mono text-xs">
+                          {(() => {
+                             const salesAmount = (transport.sales || []).reduce((sum: number, sale: any) => sum + Number(sale.totalExpectedAmount || sale.totalAmount || (Number(sale.litersDespatched || sale.litersSold || 0) * Number(sale.amountPerLiter || 0))), 0);
+                             const customAmount = customDistributions.reduce((sum: number, loc: any) => sum + (Number(loc.litersDelivered) * Number(loc.productPrice || 0)), 0);
+                             return `₦${(salesAmount + customAmount).toLocaleString()}`;
+                          })()}
+                        </td>
+                        <td></td>
+                      </tr>
+                      {(() => {
+                         const variance = [...(transport.sales || []), ...customDistributions].reduce((sum: number, item: any) => {
+                           const isSale = 'litersDespatched' in item || 'litersSold' in item;
+                           const despatched = Number(isSale ? (item.litersDespatched || item.litersSold || 0) : (item.litersDelivered || 0));
+                           const received = item.litersReceived;
+                           if (received !== null && received !== undefined) {
+                             return sum + (despatched - Number(received));
+                           }
+                           return sum;
+                         }, 0);
+
+                         if (variance <= 0) return null;
+
+                         return (
+                           <tr className="bg-destructive/5 border-t border-destructive/20 font-bold text-destructive">
+                             <td colSpan={3} className="text-right py-3 px-4 uppercase text-[11px] tracking-wider">Total Variance / Shortage:</td>
+                             <td className="text-right py-3 px-4">{variance.toLocaleString()} L</td>
+                             <td colSpan={3}></td>
+                           </tr>
+                         );
+                      })()}
+                    </>
+                    ) : null}
+                  </tfoot>
                 </table>
               </div>
             </TabsContent>
@@ -530,6 +584,78 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
               )}
             </TabsContent>
 
+            <TabsContent value="payments" className="mt-6 space-y-4">
+              <div className="flex justify-between items-end mb-2">
+                <div>
+                  <h3 className="font-semibold text-lg">Payments & Expenses</h3>
+                  <p className="text-sm text-muted-foreground">Outgoing payments for fleet-related expenses and transport fees.</p>
+                </div>
+              </div>
+              
+              {(!transport.transactions || transport.transactions.length === 0) ? (
+                <div className="text-center py-12 border rounded-2xl bg-card">
+                  <AlertTriangle className="h-8 w-8 text-muted-foreground mx-auto mb-3 opacity-50" />
+                  <p className="text-muted-foreground">No payments or expenses recorded for this trip.</p>
+                </div>
+              ) : (
+                <div className="border rounded-2xl overflow-hidden bg-card">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/50 bg-muted/50">
+                        <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Date</th>
+                        <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Category</th>
+                        <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Description</th>
+                        <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Method & Ref</th>
+                        <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Receipt</th>
+                        <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Amount (₦)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transport.transactions.map((txn: any, idx: number) => (
+                        <tr key={txn.id || idx} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
+                          <td className="py-3 px-4 text-foreground/90 whitespace-nowrap">
+                            {new Date(txn.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-medium text-foreground">
+                              {txn.category === "FLEET_EXPENSE" ? "Fleet Expense" : txn.category === "TRANSPORT_FEE" ? "Transport Fee" : txn.category}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-foreground/90 max-w-[200px] truncate" title={txn.description || ""}>
+                            {txn.description || "—"}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="text-foreground/90">{txn.paymentMethod || "N/A"}</div>
+                            {txn.reference && <div className="text-[10px] text-muted-foreground uppercase mt-0.5">{txn.reference}</div>}
+                          </td>
+                          <td className="text-right py-3 px-4">
+                            {txn.receiptUrl ? (
+                              <a href={txn.receiptUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                                View
+                              </a>
+                            ) : "—"}
+                          </td>
+                          <td className="text-right py-3 px-4 text-foreground/90 font-medium font-mono text-destructive">
+                            {Number(txn.amount).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-muted/30 border-t border-border/50 font-bold">
+                        <td colSpan={5} className="text-right py-3 px-4 text-foreground">Total Payments & Expenses:</td>
+                        <td className="text-right py-3 px-4 text-destructive font-mono text-base">
+                          {(() => {
+                             const totalAmount = transport.transactions.reduce((sum: number, txn: any) => sum + Number(txn.amount || 0), 0);
+                             return `₦${totalAmount.toLocaleString()}`;
+                          })()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </TabsContent>
 
           </Tabs>
         </div>

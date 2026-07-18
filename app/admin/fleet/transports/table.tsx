@@ -100,7 +100,7 @@ const columns: ColumnDef<TransportRow>[] = [
   },
 ];
 
-export function TransportsTable({ data }: { data: TransportRow[] }) {
+export function TransportsTable({ data, filterNode }: { data: TransportRow[], filterNode?: React.ReactNode }) {
   return (
     <DataTable
       columns={columns}
@@ -108,6 +108,7 @@ export function TransportsTable({ data }: { data: TransportRow[] }) {
       rowHref={(s) => `/admin/fleet/transports/${s.id}`}
       filterColumnId="destination"
       searchPlaceholder="Search by destination…"
+      filterNode={filterNode}
     />
   );
 }

@@ -3,12 +3,31 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { TransportsTable } from "./table";
+import { DateRangeFilter } from "@/components/date-range-filter";
 
-export default async function TransportsPage() {
+export default async function TransportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>;
+}) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+  const { from, to } = await searchParams;
+
+  let dateFilter: any = {};
+  if (from || to) {
+    dateFilter = {
+      createdAt: {
+        ...(from ? { gte: new Date(from) } : {}),
+        ...(to ? { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) } : {}),
+      }
+    };
+  }
 
   const transports = await prisma.transport.findMany({
-    where: { tenantId: actor.tenantId },
+    where: { 
+      tenantId: actor.tenantId,
+      ...dateFilter
+    },
     orderBy: { createdAt: "desc" },
     include: {
       transporter: { select: { id: true, name: true } },
@@ -45,7 +64,7 @@ export default async function TransportsPage() {
         createLabel="Add Transport"
         description="Manage active and completed truck dispatch trips."
       />
-      <TransportsTable data={rows} />
+      <TransportsTable data={rows} filterNode={<DateRangeFilter />} />
     </div>
   );
 }

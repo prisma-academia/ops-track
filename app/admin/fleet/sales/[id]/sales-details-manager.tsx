@@ -161,6 +161,47 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
               </div>
             </div>
 
+            {/* Net Profit & Loss Card */}
+            {(() => {
+              const x = Number(sale.litersReceived ?? sale.litersDespatched);
+              const w = Number(sale.transportCost || sale.transport?.netTransportFeePaid || 0);
+              const orderPricePerLitre = Number(sale.transport?.order?.pricePerLitre || 0);
+              const e = orderPricePerLitre * x;
+              const A = totalExpected;
+              
+              const netProfitLoss = A - e - w;
+
+              return (
+                <div className="p-5 rounded-2xl border bg-muted/20">
+                  <h3 className="font-semibold text-sm uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2 border-b pb-2">
+                    <Banknote className="h-4 w-4" />
+                    Net Profit & Loss
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Sales Revenue (A)</p>
+                      <p className="text-xl font-bold text-foreground">₦{A.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Purchase Cost (e)</p>
+                      <p className="text-xl font-bold text-destructive">₦{e.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground mt-1">@ ₦{orderPricePerLitre.toLocaleString()}/L</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Transport Fee (w)</p>
+                      <p className="text-xl font-bold text-amber-500">₦{w.toLocaleString()}</p>
+                    </div>
+                    <div className="p-3 rounded-xl border bg-background">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Net Profit/Loss</p>
+                      <p className={cn("text-2xl font-bold", netProfitLoss >= 0 ? "text-emerald-500" : "text-red-500")}>
+                        {netProfitLoss >= 0 ? "+" : ""}₦{netProfitLoss.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {sale.transport && (
               <div className="p-4 rounded-2xl border bg-card space-y-3">
                 <h3 className="font-semibold uppercase tracking-widest text-[10px] text-muted-foreground border-b pb-2 flex items-center gap-2">

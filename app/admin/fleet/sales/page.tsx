@@ -7,12 +7,31 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Banknote, Droplets, ReceiptText, Landmark } from "lucide-react";
 import { cn, formatShortCurrency } from "@/lib/utils";
+import { DateRangeFilter } from "@/components/date-range-filter";
 
-export default async function SalesPage() {
+export default async function SalesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>;
+}) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+  const { from, to } = await searchParams;
+
+  let dateFilter: any = {};
+  if (from || to) {
+    dateFilter = {
+      createdAt: {
+        ...(from ? { gte: new Date(from) } : {}),
+        ...(to ? { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) } : {}),
+      }
+    };
+  }
 
   const sales = await prisma.sale.findMany({
-    where: { tenantId: actor.tenantId },
+    where: { 
+      tenantId: actor.tenantId,
+      ...dateFilter
+    },
     orderBy: { createdAt: "desc" },
     include: {
       customer: { select: { id: true, name: true } },
@@ -32,18 +51,26 @@ export default async function SalesPage() {
     },
   });
 
-  const rows = sales.map((s) => ({
-    id: s.id,
-    customerName: s.customer ? s.customer.name : (s.station ? s.station.name : "Unknown"),
-    transportDetails: s.transport ? `${s.transport.truck.name} to ${s.transport.destination}` : "None",
-    litersDespatched: Number(s.litersDespatched),
-    litersReceived: s.litersReceived ? Number(s.litersReceived) : null,
-    totalExpectedAmount: Number(s.totalExpectedAmount),
-    paymentReceived: Number(s.paymentReceived),
-    status: s.status,
-    transactionCount: s._count.transactions,
-    createdAt: s.createdAt.toISOString(),
-  }));
+  const rows = sales.map((s) => {
+    const litersDespatched = Number(s.litersDespatched);
+    const litersReceived = s.litersReceived ? Number(s.litersReceived) : null;
+    const variance = litersReceived !== null ? litersDespatched - litersReceived : null;
+
+    return {
+      id: s.id,
+      customerName: s.customer ? s.customer.name : (s.station ? s.station.name : "Unknown"),
+      transportDetails: s.transport ? `${s.transport.truck.name} to ${s.transport.destination}` : "None",
+      litersDespatched,
+      litersReceived,
+      variance,
+      amountPerLiter: Number(s.amountPerLiter),
+      totalExpectedAmount: Number(s.totalExpectedAmount),
+      paymentReceived: Number(s.paymentReceived),
+      status: s.status,
+      transactionCount: s._count.transactions,
+      createdAt: s.createdAt.toISOString(),
+    };
+  });
 
   const totalVolume = rows.reduce((sum, r) => sum + r.litersDespatched, 0);
   const totalExpected = rows.reduce((sum, r) => sum + r.totalExpectedAmount, 0);
@@ -118,7 +145,7 @@ export default async function SalesPage() {
         </CardContent>
       </Card>
 
-      <SalesTable data={rows} />
+      <SalesTable data={rows} filterNode={<DateRangeFilter />} />
     </div>
   );
 }

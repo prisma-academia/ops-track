@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Building2, Users, CreditCard, Receipt } from "lucide-react"
+import { Building2, Users, CreditCard, Receipt, Truck } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, XAxis, Area, AreaChart, YAxis } from "recharts"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,6 +13,7 @@ export type TopStats = {
   totalUsers: number;
   totalExpenses: number;
   totalRevenue: number;
+  activeDeliveries: number;
 };
 
 export type MonthlyData = {
@@ -78,6 +79,7 @@ export function DashboardClient({ topStats, monthlyData, dailyVolume }: Dashboar
     { title: "Total Users", value: topStats.totalUsers.toString(), description: "Active users", icon: Users },
     { title: "Total Expenses", value: formatCurrency(topStats.totalExpenses), description: "Approved expenses", icon: Receipt },
     { title: "Transactions", value: formatCurrency(topStats.totalRevenue), description: "Approved revenue", icon: CreditCard },
+    { title: "Active Deliveries", value: topStats.activeDeliveries.toString(), description: "Waybills in transit", icon: Truck },
   ]
 
   const [activeVolume, setActiveVolume] = useState<DailyVolumeData>(
@@ -87,7 +89,7 @@ export function DashboardClient({ topStats, monthlyData, dailyVolume }: Dashboar
   return (
     <div className="space-y-6">
       {/* Top Stats Row */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
         {statsCardsData.map((item, index) => {
           const Icon = item.icon
           return (

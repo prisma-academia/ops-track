@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Save, ChevronsUpDown, Check, Plus, Trash2, Calculator, FileText, Sparkles } from "lucide-react";
@@ -363,12 +364,18 @@ export function CreateWaybillForm({
                     <Label htmlFor="litersLoaded" className={formState.errors.litersLoaded ? "text-destructive" : ""}>
                       Liters Loaded*
                     </Label>
-                    <Input
-                      id="litersLoaded"
-                      type="number"
-                      placeholder="e.g. 45000"
-                      {...register("litersLoaded")}
-                      className={formState.errors.litersLoaded ? "border-destructive" : ""}
+                    <Controller
+                      control={control}
+                      name="litersLoaded"
+                      render={({ field }) => (
+                        <NumberInput
+                          id="litersLoaded"
+                          placeholder="e.g. 45000"
+                          value={field.value}
+                          onChange={field.onChange}
+                          className={formState.errors.litersLoaded ? "border-destructive" : ""}
+                        />
+                      )}
                     />
                     {formState.errors.litersLoaded && <p className="text-xs text-destructive">{formState.errors.litersLoaded.message}</p>}
                   </div>
@@ -521,11 +528,17 @@ export function CreateWaybillForm({
 
                       <div className="md:col-span-2 space-y-1.5">
                         <Label className="text-xs font-medium text-foreground">Expected Liters*</Label>
-                        <Input
-                          type="number"
-                          placeholder="Liters"
-                          className="h-10"
-                          {...register(`allocations.${index}.litersToDispense`)}
+                        <Controller
+                          control={control}
+                          name={`allocations.${index}.litersToDispense`}
+                          render={({ field }) => (
+                            <NumberInput
+                              placeholder="Liters"
+                              className="h-10"
+                              value={field.value}
+                              onChange={field.onChange}
+                            />
+                          )}
                         />
                         {formState.errors.allocations?.[index]?.litersToDispense && (
                           <p className="text-xs text-destructive mt-1 font-medium">
@@ -536,11 +549,17 @@ export function CreateWaybillForm({
 
                       <div className="md:col-span-2 space-y-1.5">
                         <Label className="text-xs font-medium text-foreground">Cost/Liter (₦)*</Label>
-                        <Input
-                          type="number"
-                          placeholder="Cost"
-                          className="h-10"
-                          {...register(`allocations.${index}.costPerLiter`)}
+                        <Controller
+                          control={control}
+                          name={`allocations.${index}.costPerLiter`}
+                          render={({ field }) => (
+                            <NumberInput
+                              placeholder="Cost"
+                              className="h-10"
+                              value={field.value}
+                              onChange={field.onChange}
+                            />
+                          )}
                         />
                         {formState.errors.allocations?.[index]?.costPerLiter && (
                           <p className="text-xs text-destructive mt-1 font-medium">
@@ -551,11 +570,17 @@ export function CreateWaybillForm({
 
                       <div className="md:col-span-2 space-y-1.5">
                         <Label className="text-xs font-medium text-foreground">Transportation Cost (₦)*</Label>
-                        <Input
-                          type="number"
-                          placeholder="Trans. cost"
-                          className="h-10"
-                          {...register(`allocations.${index}.transportationCost`)}
+                        <Controller
+                          control={control}
+                          name={`allocations.${index}.transportationCost`}
+                          render={({ field }) => (
+                            <NumberInput
+                              placeholder="Trans. cost"
+                              className="h-10"
+                              value={field.value}
+                              onChange={field.onChange}
+                            />
+                          )}
                         />
                         {formState.errors.allocations?.[index]?.transportationCost && (
                           <p className="text-xs text-destructive mt-1 font-medium">

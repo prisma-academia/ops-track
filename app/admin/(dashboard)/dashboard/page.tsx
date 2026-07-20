@@ -13,6 +13,7 @@ import { DatePickerWithRange } from "@/components/date-range-picker"
 import { AssetTank } from "@/components/asset-tank"
 import { DashboardClient, TopStats, MonthlyData, DailyVolumeData } from "./dashboard-client"
 import { DashboardContentSkeleton } from "./dashboard-content-skeleton"
+import { DashboardDatePicker } from "./dashboard-date-picker"
 
 export default async function DashboardPage({
   searchParams,

@@ -371,7 +371,7 @@ export function CreateWaybillForm({
                         <NumberInput
                           id="litersLoaded"
                           placeholder="e.g. 45000"
-                          value={field.value}
+                          value={field.value as string | number}
                           onChange={field.onChange}
                           className={formState.errors.litersLoaded ? "border-destructive" : ""}
                         />
@@ -535,7 +535,7 @@ export function CreateWaybillForm({
                             <NumberInput
                               placeholder="Liters"
                               className="h-10"
-                              value={field.value}
+                              value={field.value as string | number}
                               onChange={field.onChange}
                             />
                           )}
@@ -556,7 +556,7 @@ export function CreateWaybillForm({
                             <NumberInput
                               placeholder="Cost"
                               className="h-10"
-                              value={field.value}
+                              value={field.value as string | number}
                               onChange={field.onChange}
                             />
                           )}
@@ -577,7 +577,7 @@ export function CreateWaybillForm({
                             <NumberInput
                               placeholder="Trans. cost"
                               className="h-10"
-                              value={field.value}
+                              value={field.value as string | number}
                               onChange={field.onChange}
                             />
                           )}

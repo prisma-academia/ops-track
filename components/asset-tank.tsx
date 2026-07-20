@@ -15,7 +15,7 @@ export const AssetTank: React.FC<AssetTankProps> = ({
   label = "Asset Storage Tank",
   type = "fuel",
 }) => {
-  const percentage = Math.min(Math.max((currentLitres / maxCapacity) * 100, 0), 100);
+  const percentage = maxCapacity > 0 ? Math.min(Math.max((currentLitres / maxCapacity) * 100, 0), 100) : 0;
 
   // Dynamic Theme Colors based on safety threshold
   let liquidColor = "url(#liquid-green)";

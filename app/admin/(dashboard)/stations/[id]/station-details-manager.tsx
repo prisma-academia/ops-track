@@ -54,7 +54,7 @@ import {
   Check,
   ArrowLeft
 } from "lucide-react";
-import { AssetTank } from "@/app/admin/(dashboard)/dashboard/Tank";
+import { AssetTank } from "@/components/asset-tank";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import nigerianLocations from "@/constant/nigerian-locations.json";
 

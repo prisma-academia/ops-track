@@ -18,6 +18,7 @@ export default async function SaleDetailsPage({ params }: { params: Promise<{ id
           transporter: true,
           truck: true,
           driver: true,
+          order: true,
         }
       },
       transactions: {

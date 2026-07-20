@@ -21,12 +21,32 @@ export default async function TransportDetailsPage({ params }: { params: Promise
       },
       sales: {
         include: { customer: true, station: true }
+      },
+      transactions: {
+        orderBy: { createdAt: "desc" }
       }
     },
   });
 
   if (!transport) {
     notFound();
+  }
+
+  const additionalTransactions = await prisma.transaction.findMany({
+    where: {
+      tenantId: actor.tenantId,
+      category: "EXPENSE",
+      transportId: null,
+      orderId: transport.orderId,
+      truckId: transport.truckId,
+    },
+    orderBy: { createdAt: "desc" }
+  });
+
+  if (additionalTransactions.length > 0) {
+    transport.transactions = [...transport.transactions, ...additionalTransactions].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   }
 
   const stations = await prisma.station.findMany({

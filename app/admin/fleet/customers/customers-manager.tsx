@@ -133,8 +133,7 @@ export function CustomersManager({
         }
       />
 
-      <Card className="overflow-hidden shadow-sm">
-        <DataTable
+      <DataTable
           columns={columns}
           data={data.length > 0 ? data : initialCustomers}
           isLoading={isLoading}
@@ -146,7 +145,6 @@ export function CustomersManager({
           filterColumnId="name"
           searchPlaceholder="Search by name…"
         />
-      </Card>
 
       {/* ==========================================
           CREATE CUSTOMER DIALOG

@@ -151,6 +151,7 @@ export default function OutgoingPaymentForm() {
         payload.transporterId = formData.transporterId;
         payload.truckId = formData.truckId;
         payload.orderId = formData.orderId;
+        payload.transportId = formData.transportId;
       } else if (category === "TRANSPORT_FEE") {
         endpoint = `/api/tenant/fleet/payments/outflow/transport`;
         payload = {
@@ -202,9 +203,9 @@ export default function OutgoingPaymentForm() {
           </Select>
         </div>
 
-        {category === "TRANSPORT_FEE" && (
+        {(category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && (
           <div className="space-y-2 flex flex-col justify-end">
-            <Label>Select Transport Trip *</Label>
+            <Label>Select Transport Trip {category === "TRANSPORT_FEE" ? "*" : "(Optional)"}</Label>
             <Popover open={transportOpen} onOpenChange={setTransportOpen}>
               <PopoverTrigger asChild className="w-full">
                 <Button
@@ -426,6 +427,7 @@ export default function OutgoingPaymentForm() {
             <SelectContent position="popper">
               <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
               <SelectItem value="Cash">Cash</SelectItem>
+              <SelectItem value="POS">POS</SelectItem>
               <SelectItem value="Cheque">Cheque</SelectItem>
             </SelectContent>
           </Select>

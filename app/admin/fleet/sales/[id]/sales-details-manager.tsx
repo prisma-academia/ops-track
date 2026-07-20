@@ -19,13 +19,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export function SalesDetailsManager({ sale }: { sale: any }) {
   const router = useRouter();
 
-  const [openStatusDialog, setOpenStatusDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Status form
-  const [newStatus, setNewStatus] = useState(sale.status);
 
   // Edit form
   const [editLitersReceived, setEditLitersReceived] = useState(sale.litersReceived?.toString() || "");
@@ -34,20 +30,6 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
   const totalExpected = Number(sale.totalExpectedAmount);
   const paymentReceived = Number(sale.paymentReceived);
   const outstanding = Math.max(0, totalExpected - paymentReceived);
-
-  const handleUpdateStatus = async () => {
-    setIsSubmitting(true);
-    setError(null);
-    const res = await apiPatch(`/api/tenant/fleet/sales/${sale.id}`, { status: newStatus });
-    setIsSubmitting(false);
-
-    if (res.error) {
-      setError(res.error.message);
-    } else {
-      setOpenStatusDialog(false);
-      router.refresh();
-    }
-  };
 
 
   const handleEditSale = async () => {
@@ -102,13 +84,6 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
             </p>
           </div>
         </div>
-        
-        <div className="flex gap-2">
-          <Button onClick={() => setOpenStatusDialog(true)} variant="outline">
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Override Status
-          </Button>
-        </div>
       </div>
 
       <div className="space-y-6">
@@ -160,6 +135,84 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
                 <p className={cn("text-3xl font-bold", outstanding > 0 ? "text-red-800 dark:text-red-300" : "text-foreground")}>₦{outstanding.toLocaleString()}</p>
               </div>
             </div>
+
+            {/* Net Profit & Loss Card */}
+            {(() => {
+              const x = Number(sale.litersReceived ?? sale.litersDespatched);
+              
+              // Waybill/subsequent delivery transport fee
+              const w = Number(sale.transportCost || 0);
+              const wRate = x > 0 ? w / x : 0;
+              
+              // Primary transport fee for this sale
+              const tRate = Number(sale.transport?.ratePerLiter || 0);
+              const t = tRate * x;
+              
+              // Loading fee
+              const orderLoadingCost = Number(sale.transport?.order?.loadingCost || 0);
+              const loadingFeePerLitre = orderLoadingCost / (Number(sale.litersDespatched) || 1);
+              const l = loadingFeePerLitre * x;
+              
+              // Purchase cost
+              const orderPricePerLitre = Number(sale.transport?.order?.pricePerLitre || 0);
+              const e = orderPricePerLitre * x;
+              
+              const A = totalExpected;
+              
+              const netProfitLoss = A - e - t - l - w;
+
+              return (
+                <div className="rounded-3xl border bg-card overflow-hidden mt-8">
+                  <div className="bg-muted/30 p-5 border-b border-border/50">
+                    <h3 className="font-semibold text-sm uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                      <Banknote className="h-4 w-4" />
+                      Net Profit & Loss Summary
+                    </h3>
+                  </div>
+                  
+                  {/* Top-Level Summary */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x border-b border-border/50">
+                    <div className="p-6 flex flex-col justify-center">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold mb-2">Total Sales Revenue (A)</p>
+                      <p className="text-3xl font-bold text-foreground">₦{A.toLocaleString()}</p>
+                    </div>
+                    <div className="p-6 bg-gradient-to-br from-background to-muted/10 flex flex-col justify-center">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold mb-2">Net Profit / Loss</p>
+                      <p className={cn("text-4xl font-black tracking-tight", netProfitLoss >= 0 ? "text-emerald-600 dark:text-emerald-500" : "text-red-600 dark:text-red-500")}>
+                        {netProfitLoss >= 0 ? "+" : ""}₦{netProfitLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Deductions Breakdown */}
+                  <div className="p-6 bg-muted/5">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-4">Deductions Breakdown</p>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="p-4 rounded-2xl border bg-background hover:border-destructive/30 transition-colors">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Purchase Cost (e)</p>
+                        <p className="text-xl font-bold text-destructive">₦{e.toLocaleString()}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1.5 opacity-80 font-medium">@ ₦{orderPricePerLitre.toLocaleString()}/L</p>
+                      </div>
+                      <div className="p-4 rounded-2xl border bg-background hover:border-amber-500/30 transition-colors">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Primary Transport (t)</p>
+                        <p className="text-xl font-bold text-amber-600 dark:text-amber-500">₦{t.toLocaleString()}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1.5 opacity-80 font-medium">@ ₦{tRate.toLocaleString()}/L</p>
+                      </div>
+                      <div className="p-4 rounded-2xl border bg-background hover:border-amber-500/30 transition-colors">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Loading Fee (l)</p>
+                        <p className="text-xl font-bold text-amber-600 dark:text-amber-500">₦{l.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1.5 opacity-80 font-medium">@ ₦{loadingFeePerLitre.toLocaleString(undefined, { maximumFractionDigits: 2 })}/L</p>
+                      </div>
+                      <div className="p-4 rounded-2xl border bg-background hover:border-amber-500/30 transition-colors">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Subsequent Trans. (w)</p>
+                        <p className="text-xl font-bold text-amber-600 dark:text-amber-500">₦{w.toLocaleString()}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1.5 opacity-80 font-medium">@ ₦{wRate.toLocaleString(undefined, { maximumFractionDigits: 2 })}/L</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {sale.transport && (
               <div className="p-4 rounded-2xl border bg-card space-y-3">
@@ -268,37 +321,6 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
             <Button variant="outline" onClick={() => setOpenEditDialog(false)}>Cancel</Button>
             <Button onClick={handleEditSale} disabled={isSubmitting}>
               {isSubmitting ? <SpinnerEllipsis /> : "Save Changes"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Status Dialog */}
-      <Dialog open={openStatusDialog} onOpenChange={setOpenStatusDialog}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Override Sale Status</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <Select value={newStatus} onValueChange={setNewStatus}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="UNPAID">UNPAID</SelectItem>
-                  <SelectItem value="PART_PAID">PARTIAL PAYMENT</SelectItem>
-                  <SelectItem value="CLEARED">CLEARED</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenStatusDialog(false)}>Cancel</Button>
-            <Button onClick={handleUpdateStatus} disabled={isSubmitting}>
-              {isSubmitting ? <SpinnerEllipsis /> : "Update Status"}
             </Button>
           </DialogFooter>
         </DialogContent>

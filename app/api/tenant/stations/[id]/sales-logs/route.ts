@@ -15,6 +15,7 @@ const CreateSalesLogSchema = z.object({
   amountTransfer: z.coerce.number().min(0).default(0),
   cashReceiptUrl: z.string().nullable().optional(),
   posReceiptUrl: z.string().nullable().optional(),
+  transferReceiptUrl: z.string().nullable().optional(),
   logDate: z.string().optional(),
 });
 
@@ -101,6 +102,7 @@ export async function POST(
         amountTransfer: body.amountTransfer,
         cashReceiptUrl: body.cashReceiptUrl,
         posReceiptUrl: body.posReceiptUrl,
+        transferReceiptUrl: body.transferReceiptUrl,
         logDate,
         recordedById: actor.userId,
       },

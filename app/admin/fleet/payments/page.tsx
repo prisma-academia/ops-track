@@ -3,7 +3,7 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { PaymentsTable } from "./table";
-import { PaymentsDateFilter } from "./date-filter";
+import { DateRangeFilter } from "@/components/date-range-filter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Activity } from "lucide-react";
 import Link from "next/link";
@@ -99,14 +99,13 @@ export default async function PaymentsPage({
           description="View and manage all incoming and outgoing fleet payments."
           action={
             <div className="flex items-center gap-2">
-              <PaymentsDateFilter />
               <Link href="/admin/fleet/payments/new">
                 <Button>Log Payment</Button>
               </Link>
             </div>
           }
         />
-        <PaymentsTable data={rows} />
+        <PaymentsTable data={rows} filterNode={<DateRangeFilter />} />
       </div>
     </div>
   );

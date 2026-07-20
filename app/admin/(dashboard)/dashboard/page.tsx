@@ -9,8 +9,8 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card"
-import { DashboardDatePicker } from "./dashboard-date-picker"
-import { AssetTank } from "./Tank"
+import { DatePickerWithRange } from "@/components/date-range-picker"
+import { AssetTank } from "@/components/asset-tank"
 import { DashboardClient, TopStats, MonthlyData, DailyVolumeData } from "./dashboard-client"
 import { DashboardContentSkeleton } from "./dashboard-content-skeleton"
 

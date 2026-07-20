@@ -16,6 +16,7 @@ const ExpenseSchema = z.object({
   transporterId: z.string().optional().nullable(),
   truckId: z.string().optional().nullable(),
   orderId: z.string().optional().nullable(),
+  transportId: z.string().optional().nullable(),
 });
 
 export async function POST(request: Request) {
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
         transporterId: body.expenseType === "FLEET" ? body.transporterId : null,
         truckId: body.expenseType === "FLEET" ? body.truckId : null,
         orderId: body.expenseType === "FLEET" ? body.orderId : null,
+        transportId: body.expenseType === "FLEET" ? body.transportId : null,
       },
     });
 

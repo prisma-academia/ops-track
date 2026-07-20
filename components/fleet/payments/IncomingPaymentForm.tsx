@@ -289,6 +289,7 @@ export default function IncomingPaymentForm() {
             <SelectContent position="popper">
               <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
               <SelectItem value="Cash">Cash</SelectItem>
+              <SelectItem value="POS">POS</SelectItem>
               <SelectItem value="Cheque">Cheque</SelectItem>
             </SelectContent>
           </Select>

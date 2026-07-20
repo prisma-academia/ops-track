@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
 
-export function PaymentsDateFilter() {
+export function DateRangeFilter() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromParam = searchParams.get("from");
@@ -53,12 +53,12 @@ export function PaymentsDateFilter() {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className={`inline-flex flex-shrink-0 items-center border rounded-full h-9 overflow-hidden ${hasFilter ? 'bg-primary/5 border-primary/20' : 'bg-background'}`}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" className={`gap-2 ${hasFilter ? 'bg-primary/10 border-primary/20 text-primary' : ''}`}>
-            <CalendarIcon className="h-4 w-4" />
-            {buttonLabel}
+          <Button variant="ghost" size="sm" className={`rounded-none border-0 h-full px-3 whitespace-nowrap gap-2 ${hasFilter ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'} ${hasFilter ? 'pr-2' : ''} hover:bg-transparent`}>
+            <CalendarIcon className="h-4 w-4 shrink-0" />
+            <span className="font-normal">{buttonLabel}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-80">
@@ -92,7 +92,7 @@ export function PaymentsDateFilter() {
         </PopoverContent>
       </Popover>
       {hasFilter && (
-        <Button variant="ghost" size="icon" onClick={clearFilter} className="h-9 w-9 text-muted-foreground hover:text-foreground">
+        <Button variant="ghost" size="sm" onClick={clearFilter} className="rounded-none border-0 h-full px-2 text-muted-foreground hover:text-foreground hover:bg-transparent">
           <X className="h-4 w-4" />
         </Button>
       )}

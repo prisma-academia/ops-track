@@ -33,7 +33,7 @@ export default async function TransportsPage({
       transporter: { select: { id: true, name: true } },
       truck: { select: { id: true, name: true } },
       driver: { select: { id: true, firstName: true, lastName: true } },
-      order: { select: { id: true, reference: true } },
+      order: { select: { id: true, reference: true, sourceDepot: true } },
       _count: {
         select: {
           sales: true,
@@ -45,6 +45,7 @@ export default async function TransportsPage({
   const rows = transports.map((t) => ({
     id: t.id,
     destination: t.destination,
+    sourceDepot: t.order?.sourceDepot || "Depot",
     transporterName: t.transporter.name,
     truckName: t.truck.name,
     driverName: t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "Unassigned",

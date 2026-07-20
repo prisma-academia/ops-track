@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 export type TransportRow = {
   id: string;
   destination: string;
+  sourceDepot?: string;
   transporterName: string;
   truckName: string;
   driverName: string;
@@ -26,23 +27,19 @@ const columns: ColumnDef<TransportRow>[] = [
     header: "Destination",
     cell: ({ row }) => {
       const dest = row.original.destination;
+      const source = row.original.sourceDepot || "Depot";
       return (
         <div className="flex items-center gap-3 py-1">
           <div className="size-10 flex items-center justify-center shrink-0 text-primary bg-primary/10 rounded-md">
             <Route className="w-5 h-5" />
           </div>
           <div className="flex flex-col">
-            <span className="font-semibold text-foreground">{dest}</span>
-            <span className="text-xs text-muted-foreground">{row.original.truckName} - {row.original.transporterName}</span>
+            <span className="font-semibold text-foreground">{source} to {dest}</span>
+            <span className="text-xs text-muted-foreground">{row.original.truckName} - {row.original.driverName}</span>
           </div>
         </div>
       );
     }
-  },
-  { 
-    accessorKey: "driverName", 
-    header: "Driver",
-    cell: ({ row }) => row.original.driverName
   },
   { 
     accessorKey: "litersCarried", 

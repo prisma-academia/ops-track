@@ -14,10 +14,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, MapPin, Truck, AlertTriangle, CheckCircle, PackageOpen, MoreVertical } from "lucide-react";
+import { ArrowLeft, MapPin, Truck, AlertTriangle, CheckCircle, PackageOpen, MoreVertical, Droplets, Wallet, Coins, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
+import { AssetTank } from "@/components/asset-tank";
 
 export function TransportDetailsManager({ transport, stations = [] }: { transport: any, stations?: any[] }) {
   const router = useRouter();
@@ -235,157 +236,189 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
 
             </TabsList>
             
-            <TabsContent value="overview" className="mt-6 space-y-6">
-              <div className="mb-2">
-                <h3 className="font-semibold text-lg">Trip Overview</h3>
-                <p className="text-sm text-muted-foreground">General information, volume summary, and transport personnel.</p>
+            <TabsContent value="overview" className="mt-6 space-y-8">
+              {/* Section 1: Volume Reconciliation */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                      <Droplets className="w-5 h-5 text-primary" />
+                      Volume Reconciliation
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Track how the loaded volume was distributed and identify any shortages.
+                    </p>
+                  </div>
+                </div>
+
+                {(() => {
+                  const carriedVolume = Number(transport.litersCarried) || 0;
+                  const salesVol = (transport.sales || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
+                  const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
+                  const distributedVolume = salesVol + locsVol;
+                  const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
+
+                  const variance = [...(transport.sales || []), ...customDistributions].reduce((sum: number, item: any) => {
+                    const isSale = 'litersDespatched' in item || 'litersSold' in item;
+                    const despatched = Number(isSale ? (item.litersDespatched || item.litersSold || 0) : (item.litersDelivered || 0));
+                    const received = item.litersReceived;
+                    if (received !== null && received !== undefined) {
+                      return sum + (despatched - Number(received));
+                    }
+                    return sum;
+                  }, 0);
+
+                  const variancePercentage = carriedVolume > 0 ? (variance / carriedVolume) * 100 : 0;
+                  const distributedPercentage = carriedVolume > 0 ? (distributedVolume / carriedVolume) * 100 : 0;
+
+                  return (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="p-4 rounded-2xl border bg-card shadow-sm flex flex-col justify-center">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Loaded Volume</p>
+                          <p className="text-2xl font-bold text-foreground">{carriedVolume.toLocaleString()} L</p>
+                        </div>
+                        <div className="p-4 rounded-2xl border bg-card shadow-sm flex flex-col justify-center">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Distributed</p>
+                          <p className="text-2xl font-bold text-foreground">{distributedVolume.toLocaleString()} L</p>
+                        </div>
+                        <div className="p-4 rounded-2xl border bg-card shadow-sm flex flex-col justify-center">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Remaining to Deliver</p>
+                          <p className="text-2xl font-bold text-foreground">{remainingVolume.toLocaleString()} L</p>
+                        </div>
+                        <div className="p-4 rounded-2xl border bg-card shadow-sm flex flex-col justify-center">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Shortage (Variance)</p>
+                          <div className="flex items-end gap-2">
+                            <p className={cn("text-2xl font-bold", variance > 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-500")}>
+                              {variance.toLocaleString()} L
+                            </p>
+                            {variance > 0 && (
+                              <span className="text-xs font-medium text-destructive mb-1">({variancePercentage.toFixed(2)}%)</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="p-5 rounded-2xl border bg-card shadow-sm">
+                          <div className="flex justify-between items-center mb-3">
+                            <span className="text-sm font-medium text-foreground">Delivery Progress</span>
+                            <span className="text-sm font-bold text-primary">{Math.round(distributedPercentage)}%</span>
+                          </div>
+                          <div className="h-4 w-full bg-muted rounded-full overflow-hidden flex">
+                            <div 
+                              className="h-full bg-primary transition-all duration-500"
+                              style={{ width: `${Math.min(distributedPercentage, 100)}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between mt-3 text-xs text-muted-foreground">
+                            <span>0 L</span>
+                            <span>{carriedVolume.toLocaleString()} L Total</span>
+                          </div>
+                        </div>
+                        
+                        <div className="">
+                          <AssetTank 
+                            currentLitres={remainingVolume} 
+                            maxCapacity={carriedVolume} 
+                            label="Remaining in Transport" 
+                            type={transport.productType === "LPG" ? "gas" : "fuel"} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
-              {(() => {
-                const carriedVolume = Number(transport.litersCarried) || 0;
-                const salesVol = (transport.sales || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
-                const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
-                const distributedVolume = salesVol + locsVol;
-                const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
 
-                const variance = [...(transport.sales || []), ...customDistributions].reduce((sum: number, item: any) => {
-                  const isSale = 'litersDespatched' in item || 'litersSold' in item;
-                  const despatched = Number(isSale ? (item.litersDespatched || item.litersSold || 0) : (item.litersDelivered || 0));
-                  const received = item.litersReceived;
-                  if (received !== null && received !== undefined) {
-                    return sum + (despatched - Number(received));
-                  }
-                  return sum;
-                }, 0);
+              <Separator />
 
-                return (
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="p-5 rounded-2xl border bg-card shadow-sm flex flex-col justify-between space-y-2 hover:shadow-md transition-all">
-                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Total Truck Volume</p>
-                      <p className="text-2xl font-bold text-foreground">{carriedVolume.toLocaleString()} L</p>
-                    </div>
-                    <div className="p-5 rounded-2xl border bg-card shadow-sm flex flex-col justify-between space-y-2 hover:shadow-md transition-all">
-                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Distributed</p>
-                      <p className="text-2xl font-bold text-foreground">{distributedVolume.toLocaleString()} L</p>
-                    </div>
-                    <div className="p-5 rounded-2xl border bg-card shadow-sm flex flex-col justify-between space-y-2 hover:shadow-md transition-all">
-                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Remaining Volume</p>
-                      <p className="text-2xl font-bold text-foreground">{remainingVolume.toLocaleString()} L</p>
-                    </div>
-                    <div className="p-5 rounded-2xl border bg-card shadow-sm flex flex-col justify-between space-y-2 hover:shadow-md transition-all">
-                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Total Variance</p>
-                      <p className={`text-2xl font-bold ${variance > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
-                        {variance.toLocaleString()} L
-                      </p>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {(() => {
-                const primaryFee = Number(transport.ratePerLiter || 0) * Number(transport.litersCarried || 0);
-                const subsequentFee = subsequentLocs.reduce((acc: number, loc: any) => acc + (Number(loc.rate || 0) * Number(loc.litersDelivered || 0)), 0);
-                const totalLossDeductions = lossLogs.reduce((sum: number, log: any) => sum + Number(log.expensesIncurred || 0), 0);
-                const totalExpenses = (transport.transactions || []).reduce((sum: number, txn: any) => sum + Number(txn.amount || 0), 0);
-                const netFee = primaryFee + subsequentFee - totalLossDeductions - totalExpenses;
-
-                return (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="p-5 rounded-2xl border bg-card shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition-all">
+              {/* Section 2: Financial Overview */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5">Primary Transport Fee</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      ₦{primaryFee.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="pt-3 border-t border-border/50 grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <p className="text-[9px] text-muted-foreground uppercase font-medium">Expense <span className="text-[8px] opacity-70">(Dummy)</span></p>
-                      <p className="font-semibold text-amber-600 dark:text-amber-500 mt-0.5">₦20,000</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-muted-foreground uppercase font-medium">Payment <span className="text-[8px] opacity-70">(Dummy)</span></p>
-                      <p className="font-semibold text-emerald-600 dark:text-emerald-500 mt-0.5">₦15,000</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-5 rounded-2xl border bg-card shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition-all">
-                  <div>
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5">Subsequent Transport Fee</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      ₦{subsequentFee.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="pt-3 border-t border-border/50 grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <p className="text-[9px] text-muted-foreground uppercase font-medium">Expense <span className="text-[8px] opacity-70">(Dummy)</span></p>
-                      <p className="font-semibold text-amber-600 dark:text-amber-500 mt-0.5">₦5,000</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-muted-foreground uppercase font-medium">Payment <span className="text-[8px] opacity-70">(Dummy)</span></p>
-                      <p className="font-semibold text-emerald-600 dark:text-emerald-500 mt-0.5">₦2,500</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-5 rounded-2xl border bg-card shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition-all">
-                  <div>
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5">Total Loss Deductions</p>
-                    <p className="text-2xl font-bold text-destructive">
-                      ₦{totalLossDeductions.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="pt-3 border-t border-border/50 grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <p className="text-[9px] text-muted-foreground uppercase font-medium">Source</p>
-                      <p className="font-semibold text-muted-foreground mt-0.5">Incident Logs</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-muted-foreground uppercase font-medium">Records</p>
-                      <p className="font-semibold text-muted-foreground mt-0.5">{lossLogs.length}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-5 rounded-2xl border bg-card shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition-all">
-                  <div>
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5">Total Fleet Expenses</p>
-                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                      ₦{totalExpenses.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="pt-3 border-t border-border/50 grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <p className="text-[9px] text-muted-foreground uppercase font-medium">Source</p>
-                      <p className="font-semibold text-muted-foreground mt-0.5">Transactions</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-muted-foreground uppercase font-medium">Records</p>
-                      <p className="font-semibold text-muted-foreground mt-0.5">{(transport.transactions || []).length}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-6 rounded-2xl border bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 shadow-sm lg:col-span-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-widest mb-1">Net Transport Fee</p>
-                    <p className="text-[11px] font-medium text-emerald-600/80 dark:text-emerald-500/80">Primary + Subsequent - Deductions - Expenses</p>
-                  </div>
-                  <div className="md:text-right">
-                    <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
-                      ₦{netFee.toLocaleString()}
+                    <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                      <Wallet className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
+                      Financial Overview
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Breakdown of transport fees, deductions, and net earnings for this trip.
                     </p>
                   </div>
                 </div>
+
+                {(() => {
+                  const primaryFee = Number(transport.ratePerLiter || 0) * Number(transport.litersCarried || 0);
+                  const subsequentFee = subsequentLocs.reduce((acc: number, loc: any) => acc + (Number(loc.rate || 0) * Number(loc.litersDelivered || 0)), 0);
+                  const expectedFee = primaryFee + subsequentFee;
+                  const totalLossDeductions = lossLogs.reduce((sum: number, log: any) => sum + Number(log.expensesIncurred || 0), 0);
+                  const totalExpenses = (transport.transactions || []).reduce((sum: number, txn: any) => sum + Number(txn.amount || 0), 0);
+                  const netFee = expectedFee - totalLossDeductions - totalExpenses;
+
+                  return (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="p-4 rounded-xl border bg-card/50 flex flex-col justify-center">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Primary Transport Fee</p>
+                          <p className="text-xl font-bold text-foreground">₦{primaryFee.toLocaleString()}</p>
+                          <p className="text-[10px] text-muted-foreground mt-2">Base fee for main destination</p>
+                        </div>
+                        
+                        <div className="p-4 rounded-xl border bg-card/50 flex flex-col justify-center">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Subsequent Fee</p>
+                          <p className="text-xl font-bold text-foreground">₦{subsequentFee.toLocaleString()}</p>
+                          <p className="text-[10px] text-muted-foreground mt-2">Earnings from additional drops</p>
+                        </div>
+
+                        <div className="sm:col-span-2 p-4 rounded-xl border bg-blue-50/30 dark:bg-blue-950/10 flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Expected Transport Fee</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">Total earnings before deductions and expenses</p>
+                          </div>
+                          <p className="text-2xl font-bold text-blue-600 dark:text-blue-500">₦{expectedFee.toLocaleString()}</p>
+                        </div>
+                        
+                        <div className="p-4 rounded-xl border bg-red-50/30 dark:bg-red-950/10 flex flex-col justify-center">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Loss Deductions</p>
+                          <p className="text-xl font-bold text-destructive">₦{totalLossDeductions.toLocaleString()}</p>
+                          <p className="text-[10px] text-muted-foreground mt-2">Shortages or damages penalty</p>
+                        </div>
+
+                        <div className="p-4 rounded-xl border bg-amber-50/30 dark:bg-amber-950/10 flex flex-col justify-center">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Fleet Expenses</p>
+                          <p className="text-xl font-bold text-amber-600 dark:text-amber-500">₦{totalExpenses.toLocaleString()}</p>
+                          <p className="text-[10px] text-muted-foreground mt-2">Trip-related operational costs</p>
+                        </div>
+                      </div>
+
+                      <div className="p-6 rounded-2xl border bg-gradient-to-br from-emerald-50 to-green-100 dark:from-emerald-950/30 dark:to-green-900/20 shadow-sm flex flex-col justify-center items-center text-center">
+                        <div className="p-3 bg-emerald-100 dark:bg-emerald-900/50 rounded-full mb-4">
+                          <Coins className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                        <p className="text-sm font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-widest mb-2">Net Transport Fee</p>
+                        <p className="text-4xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
+                          ₦{netFee.toLocaleString()}
+                        </p>
+                        <p className="text-xs font-medium text-emerald-600/80 dark:text-emerald-500/80 mt-4 px-4">
+                          Final earnings after deducting losses and expenses from all fees.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
-                );
-              })()}
 
               {transport.comment && (
-                <div className="p-5 rounded-2xl border bg-card">
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-2">Trip Notes</p>
-                  <p className="text-sm text-foreground">{transport.comment}</p>
-                </div>
+                <>
+                  <Separator />
+                  <div className="p-5 rounded-2xl border bg-muted/30">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="w-4 h-4 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Trip Notes</p>
+                    </div>
+                    <p className="text-sm text-foreground/90 leading-relaxed">{transport.comment}</p>
+                  </div>
+                </>
               )}
             </TabsContent>
 

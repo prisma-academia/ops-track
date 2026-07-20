@@ -9,7 +9,7 @@ import {
   CardTitle
 } from "@/components/ui/card"
 import { DatePickerWithRange } from "@/components/date-range-picker"
-import { AssetTank } from "./Tank"
+import { AssetTank } from "@/components/asset-tank"
 import { DashboardClient, TopStats, MonthlyData, DailyVolumeData } from "./dashboard-client"
 
 export default async function DashboardPage() {

@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { apiPost } from "@/lib/client/api";
+import { apiPost, apiPatch } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,7 @@ import { ArrowLeft, Save, ChevronsUpDown } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const Schema = z.object({
   name: z.string().min(2).max(100),
@@ -31,8 +32,10 @@ type Values = z.infer<typeof Schema>;
 
 export function CreateTruckForm({
   transporters,
+  truck,
 }: {
   transporters: { id: string; name: string }[];
+  truck?: any;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -41,15 +44,15 @@ export function CreateTruckForm({
   const { register, handleSubmit, formState, setValue, watch } = useForm({
     resolver: zodResolver(Schema),
     defaultValues: {
-      name: "",
-      transporterId: "",
-      truckNumber: "",
-      plateNumber: "",
-      truckBrand: "",
-      model: "",
-      truckType: "",
-      fuelType: "",
-      capacityLiters: 45000,
+      name: truck?.name || "",
+      transporterId: truck?.transporterId || "",
+      truckNumber: truck?.truckNumber || "",
+      plateNumber: truck?.plateNumber || "",
+      truckBrand: truck?.truckBrand || "",
+      model: truck?.model || "",
+      truckType: truck?.truckType || "",
+      fuelType: truck?.fuelType || "",
+      capacityLiters: truck?.capacityLiters ? Number(truck.capacityLiters) : 45000,
     },
   });
 
@@ -60,28 +63,40 @@ export function CreateTruckForm({
   const watchName = watch("name");
 
   useEffect(() => {
-    if (watchPlateNumber) {
-      setValue("name", `TRK-${watchPlateNumber.toUpperCase()}`, { shouldValidate: true });
-      if (!watchTruckNumber) {
-        setValue("truckNumber", `TN-${Math.floor(100000 + Math.random() * 900000)}`, { shouldValidate: true });
+    if (!truck) {
+      if (watchPlateNumber) {
+        setValue("name", `TRK-${watchPlateNumber.toUpperCase()}`, { shouldValidate: true });
+        if (!watchTruckNumber) {
+          setValue("truckNumber", `TN-${Math.floor(100000 + Math.random() * 900000)}`, { shouldValidate: true });
+        }
+      } else {
+        setValue("name", "", { shouldValidate: true });
+        setValue("truckNumber", "", { shouldValidate: true });
       }
-    } else {
-      setValue("name", "", { shouldValidate: true });
-      setValue("truckNumber", "", { shouldValidate: true });
     }
-  }, [watchPlateNumber, watchTruckNumber, setValue]);
+  }, [watchPlateNumber, watchTruckNumber, setValue, truck]);
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     
-    const res = await apiPost<{ truck: { id: string } }>("/api/tenant/fleet/trucks", values);
-    if (res.error) {
-      setError(res.error.message);
-      return;
-    }
-    if (res.data?.truck.id) {
-      router.push(`/admin/fleet/trucks`);
+    if (truck?.id) {
+      const res = await apiPatch<{ truck: { id: string } }>(`/api/tenant/fleet/trucks/${truck.id}`, values);
+      if (res.error) {
+        setError(res.error.message);
+        return;
+      }
+      router.push(`/admin/fleet/trucks/${truck.id}`);
       router.refresh();
+    } else {
+      const res = await apiPost<{ truck: { id: string } }>("/api/tenant/fleet/trucks", values);
+      if (res.error) {
+        setError(res.error.message);
+        return;
+      }
+      if (res.data?.truck.id) {
+        router.push(`/admin/fleet/trucks`);
+        router.refresh();
+      }
     }
   });
 
@@ -100,7 +115,7 @@ export function CreateTruckForm({
           </Button>
           <div>
             <h2 className="text-xl font-bold tracking-tight text-foreground uppercase tracking-widest">
-              Add Truck
+              {truck ? "Edit Truck" : "Add Truck"}
             </h2>
             <p className="text-xs text-muted-foreground">Register a new truck in the fleet</p>
           </div>
@@ -186,12 +201,23 @@ export function CreateTruckForm({
 
               <div className="space-y-2">
                 <Label htmlFor="truckType" className={formState.errors.truckType ? "text-destructive" : ""}>Truck Type*</Label>
-                <Input 
-                  id="truckType" 
-                  placeholder="e.g. Tanker" 
-                  {...register("truckType")}
-                  className={formState.errors.truckType ? "border-destructive" : ""}
-                />
+                <Select
+                  value={watch("truckType")}
+                  onValueChange={(val) => setValue("truckType", val, { shouldValidate: true })}
+                >
+                  <SelectTrigger id="truckType" className={formState.errors.truckType ? "border-destructive" : ""}>
+                    <SelectValue placeholder="Select Truck Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Bridger">Bridger (Super Tanker)</SelectItem>
+                    <SelectItem value="Articulated Tanker">Articulated Tanker</SelectItem>
+                    <SelectItem value="Rigid Tanker">Rigid Tanker</SelectItem>
+                    <SelectItem value="Peddler">Peddler (Bobtail)</SelectItem>
+                    <SelectItem value="LPG Tanker">LPG Tanker</SelectItem>
+                    <SelectItem value="Lube Oil Truck">Lube Oil Truck</SelectItem>
+                  </SelectContent>
+                </Select>
+                <input type="hidden" {...register("truckType")} />
                 {formState.errors.truckType && <p className="text-xs text-destructive">{formState.errors.truckType.message}</p>}
               </div>
             </div>
@@ -211,12 +237,22 @@ export function CreateTruckForm({
 
               <div className="space-y-2">
                 <Label htmlFor="fuelType" className={formState.errors.fuelType ? "text-destructive" : ""}>Fuel Usage Type</Label>
-                <Input 
-                  id="fuelType" 
-                  placeholder="e.g. AGO, PMS" 
-                  {...register("fuelType")}
-                  className={formState.errors.fuelType ? "border-destructive" : ""}
-                />
+                <Select
+                  value={watch("fuelType")}
+                  onValueChange={(val) => setValue("fuelType", val, { shouldValidate: true })}
+                >
+                  <SelectTrigger id="fuelType" className={formState.errors.fuelType ? "border-destructive" : ""}>
+                    <SelectValue placeholder="Select Fuel Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AGO">AGO (Diesel)</SelectItem>
+                    <SelectItem value="PMS">PMS (Petrol)</SelectItem>
+                    <SelectItem value="DPK">DPK (Kerosene)</SelectItem>
+                    <SelectItem value="LPG">LPG (Gas)</SelectItem>
+                    {/* <SelectItem value="ATK">ATK (Aviation Fuel)</SelectItem> */}
+                  </SelectContent>
+                </Select>
+                <input type="hidden" {...register("fuelType")} />
                 {formState.errors.fuelType && <p className="text-xs text-destructive">{formState.errors.fuelType.message}</p>}
               </div>
             </div>
@@ -267,12 +303,12 @@ export function CreateTruckForm({
           {formState.isSubmitting ? (
             <>
               <SpinnerEllipsis />
-              <span>Saving...</span>
+              <span>{truck ? "Updating..." : "Saving..."}</span>
             </>
           ) : (
             <>
               <Save className="h-4 w-4" />
-              <span>Add Truck</span>
+              <span>{truck ? "Update Truck" : "Add Truck"}</span>
             </>
           )}
         </Button>

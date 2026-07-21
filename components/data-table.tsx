@@ -47,8 +47,9 @@ import {
   ChevronUpIcon,
   Search,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
+import { DataTableContext } from "./data-table-context";
 
 export interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -97,8 +98,20 @@ export function DataTable<TData, TValue>({
   searchValue,
 }: DataTableProps<TData, TValue>) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [isTransitioning, setIsTransitioning] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsTransitioning(false);
+  }, [searchParams]);
+
+  const handleStartTransition = React.useCallback(() => {
+    setIsTransitioning(true);
+  }, []);
+
+  const showSkeleton = isLoading || isTransitioning;
 
   const effectiveSearchKey = searchKey || filterColumnId;
 
@@ -125,8 +138,9 @@ export function DataTable<TData, TValue>({
   });
 
   return (
-    <div className="space-y-6">
-      {(title || effectiveSearchKey || headerAction || filterColumnId || filterNode) && (
+    <DataTableContext.Provider value={{ startTransition: handleStartTransition }}>
+      <div className="space-y-6">
+        {(title || effectiveSearchKey || headerAction || filterColumnId || filterNode) && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0">
           <div className="space-y-1">
             {title && (
@@ -200,7 +214,7 @@ export function DataTable<TData, TValue>({
               </TableHeader>
 
               <TableBody className="divide-y divide-border/30">
-                {isLoading ? (
+                {showSkeleton ? (
                   Array.from({ length: serverPagination?.pageSize || pageSize }).map((_, index) => (
                     <TableRow key={`skeleton-${index}`}>
                       {columns.map((column, colIndex) => (
@@ -251,6 +265,7 @@ export function DataTable<TData, TValue>({
                 <Select
                   onValueChange={(value) => {
                     if (serverPagination) {
+                      handleStartTransition();
                       serverPagination.onPageSizeChange(Number(value));
                     } else {
                       table.setPageSize(Number(value))
@@ -285,7 +300,14 @@ export function DataTable<TData, TValue>({
                       variant="outline"
                       size="icon"
                       className="h-8 w-8 bg-transparent border-border/40 hover:bg-muted"
-                      onClick={() => serverPagination ? serverPagination.onPageChange(1) : table.firstPage()}
+                      onClick={() => {
+                        if (serverPagination) {
+                          handleStartTransition();
+                          serverPagination.onPageChange(1);
+                        } else {
+                          table.firstPage();
+                        }
+                      }}
                       disabled={serverPagination ? !serverPagination.hasPreviousPage : !table.getCanPreviousPage()}
                     >
                       <ChevronFirstIcon size={16} />
@@ -296,7 +318,14 @@ export function DataTable<TData, TValue>({
                       variant="outline"
                       size="icon"
                       className="h-8 w-8 bg-transparent border-border/40 hover:bg-muted"
-                      onClick={() => serverPagination ? serverPagination.onPageChange(serverPagination.page - 1) : table.previousPage()}
+                      onClick={() => {
+                        if (serverPagination) {
+                          handleStartTransition();
+                          serverPagination.onPageChange(serverPagination.page - 1);
+                        } else {
+                          table.previousPage();
+                        }
+                      }}
                       disabled={serverPagination ? !serverPagination.hasPreviousPage : !table.getCanPreviousPage()}
                     >
                       <ChevronLeftIcon size={16} />
@@ -310,7 +339,14 @@ export function DataTable<TData, TValue>({
                       variant="outline"
                       size="icon"
                       className="h-8 w-8 bg-transparent border-border/40 hover:bg-muted"
-                      onClick={() => serverPagination ? serverPagination.onPageChange(serverPagination.page + 1) : table.nextPage()}
+                      onClick={() => {
+                        if (serverPagination) {
+                          handleStartTransition();
+                          serverPagination.onPageChange(serverPagination.page + 1);
+                        } else {
+                          table.nextPage();
+                        }
+                      }}
                       disabled={serverPagination ? !serverPagination.hasNextPage : !table.getCanNextPage()}
                     >
                       <ChevronRightIcon size={16} />
@@ -321,7 +357,14 @@ export function DataTable<TData, TValue>({
                       variant="outline"
                       size="icon"
                       className="h-8 w-8 bg-transparent border-border/40 hover:bg-muted"
-                      onClick={() => serverPagination ? serverPagination.onPageChange(serverPagination.totalPages) : table.lastPage()}
+                      onClick={() => {
+                        if (serverPagination) {
+                          handleStartTransition();
+                          serverPagination.onPageChange(serverPagination.totalPages);
+                        } else {
+                          table.lastPage();
+                        }
+                      }}
                       disabled={serverPagination ? !serverPagination.hasNextPage : !table.getCanNextPage()}
                     >
                       <ChevronLastIcon size={16} />
@@ -334,5 +377,6 @@ export function DataTable<TData, TValue>({
         </CardContent>
       </Card>
     </div>
+    </DataTableContext.Provider>
   );
 }

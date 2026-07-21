@@ -2,9 +2,12 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
-import { Truck } from "lucide-react";
+import { Truck, Edit } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export type TruckRow = {
   id: string;
@@ -73,9 +76,40 @@ const columns: ColumnDef<TruckRow>[] = [
       );
     }
   },
+  {
+    id: "actions",
+    cell: ({ row }) => {
+      const truck = row.original;
+      return (
+        <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" asChild>
+            <Link href={`/admin/fleet/trucks/${truck.id}/edit`}>
+              <Edit className="w-4 h-4 text-muted-foreground" />
+            </Link>
+          </Button>
+        </div>
+      );
+    }
+  }
 ];
 
-export function TrucksTable({ data }: { data: TruckRow[] }) {
+export function TrucksTable({ data, serverPagination, filterNode }: { data: TruckRow[]; serverPagination?: any; filterNode?: React.ReactNode }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", newPage.toString());
+    router.push(`?${params.toString()}`);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("take", newSize.toString());
+    params.delete("page");
+    router.push(`?${params.toString()}`);
+  };
+
   return (
     <DataTable
       columns={columns}
@@ -83,6 +117,14 @@ export function TrucksTable({ data }: { data: TruckRow[] }) {
       rowHref={(s) => `/admin/fleet/trucks/${s.id}`}
       filterColumnId="name"
       searchPlaceholder="Search by plate number or ID…"
+      filterNode={filterNode}
+      {...(serverPagination ? {
+        serverPagination: {
+          ...serverPagination,
+          onPageChange: handlePageChange,
+          onPageSizeChange: handlePageSizeChange,
+        }
+      } : {})}
     />
   );
 }

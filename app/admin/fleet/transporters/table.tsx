@@ -2,9 +2,12 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
-import { Building2 } from "lucide-react";
+import { Building2, Edit } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export type TransporterRow = {
   id: string;
@@ -79,9 +82,40 @@ const columns: ColumnDef<TransporterRow>[] = [
       );
     }
   },
+  {
+    id: "actions",
+    cell: ({ row }) => {
+      const transporter = row.original;
+      return (
+        <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" asChild>
+            <Link href={`/admin/fleet/transporters/${transporter.id}/edit`}>
+              <Edit className="w-4 h-4 text-muted-foreground" />
+            </Link>
+          </Button>
+        </div>
+      );
+    }
+  }
 ];
 
-export function TransportersTable({ data }: { data: TransporterRow[] }) {
+export function TransportersTable({ data, serverPagination, filterNode }: { data: TransporterRow[]; serverPagination?: any; filterNode?: React.ReactNode }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", newPage.toString());
+    router.push(`?${params.toString()}`);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("take", newSize.toString());
+    params.delete("page");
+    router.push(`?${params.toString()}`);
+  };
+
   return (
     <DataTable
       columns={columns}
@@ -89,6 +123,14 @@ export function TransportersTable({ data }: { data: TransporterRow[] }) {
       rowHref={(s) => `/admin/fleet/transporters/${s.id}`}
       filterColumnId="name"
       searchPlaceholder="Search by name…"
+      filterNode={filterNode}
+      {...(serverPagination ? {
+        serverPagination: {
+          ...serverPagination,
+          onPageChange: handlePageChange,
+          onPageSizeChange: handlePageSizeChange,
+        }
+      } : {})}
     />
   );
 }

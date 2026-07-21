@@ -5,6 +5,7 @@ import { DataTable } from "@/components/data-table";
 import { ShoppingCart } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export type OrderRow = {
   id: string;
@@ -103,7 +104,23 @@ const columns: ColumnDef<OrderRow>[] = [
   },
 ];
 
-export function OrdersTable({ data }: { data: OrderRow[] }) {
+export function OrdersTable({ data, serverPagination, filterNode }: { data: OrderRow[]; serverPagination?: any; filterNode?: React.ReactNode }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", newPage.toString());
+    router.push(`?${params.toString()}`);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("take", newSize.toString());
+    params.delete("page");
+    router.push(`?${params.toString()}`);
+  };
+
   return (
     <DataTable
       columns={columns}
@@ -111,6 +128,14 @@ export function OrdersTable({ data }: { data: OrderRow[] }) {
       rowHref={(s) => `/admin/fleet/orders/${s.id}`}
       filterColumnId="reference"
       searchPlaceholder="Search by reference…"
+      filterNode={filterNode}
+      {...(serverPagination ? {
+        serverPagination: {
+          ...serverPagination,
+          onPageChange: handlePageChange,
+          onPageSizeChange: handlePageSizeChange,
+        }
+      } : {})}
     />
   );
 }

@@ -40,6 +40,11 @@ export function DriverDetailsManager({
               <CardTitle className="text-xl">Driver Details</CardTitle>
             </div>
           </div>
+          <div className="flex gap-2">
+            <Button variant="outline" asChild>
+              <Link href={`/admin/fleet/drivers/${driver.id}/edit`}>Edit Driver</Link>
+            </Button>
+          </div>
         </CardHeader>
       </Card>
 

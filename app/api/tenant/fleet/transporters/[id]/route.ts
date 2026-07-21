@@ -101,3 +101,44 @@ export async function PATCH(
     return handleError(e);
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await requireCsrf(request);
+    const { id } = await params;
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
+    const meta = requestMeta(request);
+
+    const existing = await prisma.transporter.findFirst({
+      where: { id, tenantId: actor.tenantId },
+    });
+    if (!existing) throw new DomainError(404, "not_found", "Transporter not found.");
+
+    await prisma.transporter.delete({
+      where: { id },
+    });
+
+    await audit({
+      actorType: "TENANT_USER",
+      actorId: actor.userId,
+      action: "transporter.delete",
+      tenantId: actor.tenantId,
+      targetType: "Transporter",
+      targetId: existing.id,
+      before: { name: existing.name } as object,
+      after: null,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+    });
+
+    return ok({ success: true });
+  } catch (e: any) {
+    if (e.code === "P2003") {
+      return handleError(new DomainError(400, "conflict", "Cannot delete transporter because it is associated with existing transports or transactions."));
+    }
+    return handleError(e);
+  }
+}

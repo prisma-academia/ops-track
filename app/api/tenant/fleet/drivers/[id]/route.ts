@@ -90,3 +90,44 @@ export async function PATCH(
     return handleError(e);
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await requireCsrf(request);
+    const { id } = await params;
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
+    const meta = requestMeta(request);
+
+    const existing = await prisma.driver.findFirst({
+      where: { id, tenantId: actor.tenantId },
+    });
+    if (!existing) throw new DomainError(404, "not_found", "Driver not found.");
+
+    await prisma.driver.delete({
+      where: { id },
+    });
+
+    await audit({
+      actorType: "TENANT_USER",
+      actorId: actor.userId,
+      action: "driver.delete",
+      tenantId: actor.tenantId,
+      targetType: "Driver",
+      targetId: existing.id,
+      before: { name: `${existing.firstName} ${existing.lastName}` } as object,
+      after: null,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+    });
+
+    return ok({ success: true });
+  } catch (e: any) {
+    if (e.code === "P2003") {
+      return handleError(new DomainError(400, "conflict", "Cannot delete driver because they are associated with existing transports."));
+    }
+    return handleError(e);
+  }
+}

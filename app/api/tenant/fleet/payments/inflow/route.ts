@@ -24,6 +24,21 @@ export async function POST(request: Request) {
     const meta = requestMeta(request);
 
     const transaction = await prisma.$transaction(async (tx) => {
+      // If paying with a deposit, deduct from deposit balance first
+      if (body.paymentMethod === "Deposit") {
+        const customer = await tx.customer.findFirst({
+          where: { id: body.customerId, tenantId: actor.tenantId }
+        });
+        if (!customer) throw new Error("Customer not found.");
+        if (Number(customer.depositBalance) < body.amount) {
+          throw new Error(`Insufficient deposit balance. Available: ₦${customer.depositBalance.toString()}`);
+        }
+        await tx.customer.update({
+          where: { id: body.customerId },
+          data: { depositBalance: { decrement: body.amount } }
+        });
+      }
+
       const trx = await tx.transaction.create({
         data: {
           tenantId: actor.tenantId,
@@ -35,11 +50,20 @@ export async function POST(request: Request) {
           reference: body.reference,
           receiptUrl: body.receiptUrl,
           saleId: body.saleId,
+          customerId: body.customerId,
         },
       });
 
+      // If advance deposit without a sale, increment the customer's deposit balance
+      if (body.paymentType === "ADVANCE_DEPOSIT" && !body.saleId && body.paymentMethod !== "Deposit") {
+        await tx.customer.update({
+          where: { id: body.customerId },
+          data: { depositBalance: { increment: body.amount } }
+        });
+      }
+
       if (body.saleId) {
-        const sale = await tx.sale.findUnique({ where: { id: body.saleId, tenantId: actor.tenantId } });
+        const sale = await tx.sale.findFirst({ where: { id: body.saleId, tenantId: actor.tenantId } });
         if (sale) {
           const newPaymentReceived = Number(sale.paymentReceived) + body.amount;
           let status = sale.status;

@@ -13,6 +13,7 @@ export type CustomerRow = {
   id: string;
   name: string;
   outstandingBalance: number | string;
+  depositBalance: number | string;
   createdAt: string;
 };
 
@@ -36,6 +37,18 @@ const columns: ColumnDef<CustomerRow>[] = [
       const bal = Number(row.original.outstandingBalance);
       return (
         <div className={`text-right font-mono font-bold text-sm ${bal > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+          {bal.toLocaleString()}
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "depositBalance",
+    header: () => <div className="text-right">Deposit Balance</div>,
+    cell: ({ row }) => {
+      const bal = Number(row.original.depositBalance || 0);
+      return (
+        <div className={`text-right font-mono font-bold text-sm ${bal > 0 ? "text-indigo-600 dark:text-indigo-400" : "text-stone-500"}`}>
           {bal.toLocaleString()}
         </div>
       );

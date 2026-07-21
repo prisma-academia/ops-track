@@ -580,10 +580,20 @@ model Customer {
   tenantId           String
   tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name               String
+  email              String?
+  phone              String?
+  address            String?
+  state              String?
+  lga                String?
+  contactPerson      String?
+  contactPhone       String?
+  contactPosition    String?
   outstandingBalance Decimal  @default(0.00) @db.Decimal(12, 2)
+  depositBalance     Decimal  @default(0.00) @db.Decimal(12, 2)
   createdAt          DateTime @default(now())
 
   sales Sale[]
+  transactions Transaction[]
 
   @@index([tenantId])
   @@map("customers")
@@ -1089,6 +1099,9 @@ model Transaction {
   reference      String?
   paymentMethod  String? // Bank Transfer, Cash, Cheque
   receiptUrl     String?
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   saleId String?
   sale   Sale?   @relation(fields: [saleId], references: [id], onDelete: SetNull)

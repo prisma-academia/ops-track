@@ -134,9 +134,9 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
       } else {
         toast.error(res.error?.message || "Failed to record payment.");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast.error("Error recording payment.");
+      toast.error(e.message || "Error recording payment.");
     } finally {
       setSubmitting(false);
     }
@@ -147,6 +147,9 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
   const selectedSaleDetails = formData.saleId && formData.saleId !== "none" 
     ? metadata?.sales?.find((s: any) => s.id === formData.saleId)
     : null;
+
+  const selectedCustomer = metadata?.customers?.find((c: any) => c.id === formData.clientId);
+  const depositBalance = selectedCustomer ? Number(selectedCustomer.depositBalance || 0) : 0;
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -308,11 +311,19 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
         </div>
 
         <div className="space-y-2">
-          <Label>Amount Paid (₦) *</Label>
+          <div className="flex justify-between items-center">
+            <Label>Amount Paid (₦) *</Label>
+            {formData.paymentMethod === "Deposit" && selectedCustomer && (
+              <span className="text-xs text-muted-foreground">
+                Available Deposit: ₦{depositBalance.toLocaleString()}
+              </span>
+            )}
+          </div>
           <Input 
             required
             type="number"
             min="0"
+            max={formData.paymentMethod === "Deposit" ? depositBalance : undefined}
             step="0.01"
             value={formData.amount}
             onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
@@ -354,6 +365,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
               <SelectItem value="Cash">Cash</SelectItem>
               <SelectItem value="POS">POS</SelectItem>
               <SelectItem value="Cheque">Cheque</SelectItem>
+              <SelectItem value="Deposit">Apply Deposit</SelectItem>
             </SelectContent>
           </Select>
         </div>

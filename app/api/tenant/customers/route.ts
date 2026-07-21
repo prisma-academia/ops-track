@@ -9,6 +9,14 @@ import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageM
 
 const CreateCustomerSchema = z.object({
   name: z.string().min(2).max(100),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().optional().or(z.literal("")),
+  address: z.string().optional().or(z.literal("")),
+  state: z.string().optional().or(z.literal("")),
+  lga: z.string().optional().or(z.literal("")),
+  contactPerson: z.string().optional().or(z.literal("")),
+  contactPhone: z.string().optional().or(z.literal("")),
+  contactPosition: z.string().optional().or(z.literal("")),
   outstandingBalance: z.coerce.number().default(0),
 });
 
@@ -58,6 +66,14 @@ export async function POST(request: Request) {
       data: {
         tenantId: actor.tenantId,
         name: body.name,
+        email: body.email || null,
+        phone: body.phone || null,
+        address: body.address || null,
+        state: body.state || null,
+        lga: body.lga || null,
+        contactPerson: body.contactPerson || null,
+        contactPhone: body.contactPhone || null,
+        contactPosition: body.contactPosition || null,
         outstandingBalance: body.outstandingBalance,
       },
     });

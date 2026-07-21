@@ -1,11 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import IncomingPaymentForm from "@/components/fleet/payments/IncomingPaymentForm";
 import OutgoingPaymentForm from "@/components/fleet/payments/OutgoingPaymentForm";
 
 export default function PaymentsPage({ params }: { params: { tenant: string } }) {
   const [activeTab, setActiveTab] = useState<"INCOMING" | "OUTGOING">("INCOMING");
+  const [metadata, setMetadata] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      try {
+        const res = await fetch(`/api/tenant/fleet/payments/metadata`);
+        if (res.ok) {
+          const body = await res.json();
+          setMetadata(body.data || body);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMetadata();
+  }, []);
 
   return (
     <div className="p-6 space-y-6">
@@ -29,8 +48,8 @@ export default function PaymentsPage({ params }: { params: { tenant: string } })
       </div>
 
       <div className="mt-6">
-        {activeTab === "INCOMING" && <IncomingPaymentForm />}
-        {activeTab === "OUTGOING" && <OutgoingPaymentForm />}
+        {activeTab === "INCOMING" && <IncomingPaymentForm metadata={metadata} loading={loading} />}
+        {activeTab === "OUTGOING" && <OutgoingPaymentForm metadata={metadata} loading={loading} />}
       </div>
     </div>
   );

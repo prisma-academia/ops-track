@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Activity } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { formatShortCurrency } from "@/lib/utils";
 
 export default async function PaymentsPage({
   searchParams,
@@ -60,7 +61,7 @@ export default async function PaymentsPage({
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${netBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
-              {netBalance >= 0 ? "+" : "-"}₦{Math.abs(netBalance).toLocaleString()}
+              {netBalance >= 0 ? "+" : "-"}{formatShortCurrency(Math.abs(netBalance))}
             </div>
           </CardContent>
         </Card>
@@ -70,7 +71,7 @@ export default async function PaymentsPage({
             <ArrowDownLeft className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">₦{totalInflow.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-green-600">{formatShortCurrency(totalInflow)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -79,7 +80,7 @@ export default async function PaymentsPage({
             <ArrowUpRight className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">₦{totalOutflow.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-red-600">{formatShortCurrency(totalOutflow)}</div>
           </CardContent>
         </Card>
         <Card>

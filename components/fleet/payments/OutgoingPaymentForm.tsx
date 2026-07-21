@@ -10,15 +10,16 @@ import { Textarea } from "@/components/ui/textarea";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Save, Check, ChevronsUpDown, AlertCircleIcon, ImageIcon, UploadIcon, XIcon, Loader2 } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Save, Check, ChevronsUpDown, AlertCircleIcon, ImageIcon, UploadIcon, XIcon, Loader2, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiPost } from "@/lib/client/api";
 import { useFileUpload } from "@/hooks/use-file-upload";
+import { useRouter } from "next/navigation";
 
-export default function OutgoingPaymentForm() {
-  const [metadata, setMetadata] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+export default function OutgoingPaymentForm({ metadata, loading }: { metadata: any, loading: boolean }) {
   const [submitting, setSubmitting] = useState(false);
+  const router = useRouter();
   
   const [category, setCategory] = useState<"PERSONAL_EXPENSE" | "FLEET_EXPENSE" | "TRANSPORT_FEE">("PERSONAL_EXPENSE");
   const [transportOpen, setTransportOpen] = useState(false);
@@ -85,6 +86,7 @@ export default function OutgoingPaymentForm() {
           if (!put.ok) {
             setUploadError("S3 Upload failed.");
             return;
+
           }
           publicUrl = res.data.publicUrl;
         }
@@ -101,32 +103,16 @@ export default function OutgoingPaymentForm() {
   const displayFileName = files[0]?.file.name || "Payment Receipt";
 
   useEffect(() => {
-    const fetchMetadata = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/tenant/fleet/payments/metadata`);
-        if (res.ok) {
-          const data = await res.json();
-          setMetadata(data.data || data);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchMetadata();
-  }, []);
-
-  // Handle derived transport fee calc
-  useEffect(() => {
-    if (category === "TRANSPORT_FEE" && formData.transportId && metadata?.transports) {
-      const transport = metadata.transports.find((t: any) => t.id === formData.transportId);
-      if (transport) {
-        const base = Number(transport.ratePerLiter || 0) * Number(transport.litersDelivered || 0);
-        const deductions = Number(transport.totalDeduction || 0) + Number(transport.maintenanceCost || 0);
-        const suggestedAmount = Math.max(0, base - deductions);
-        setFormData(prev => ({ ...prev, amount: suggestedAmount.toString(), transporterId: transport.transporterId }));
+    if ((category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && formData.transportId && metadata?.transports) {
+      const t = metadata.transports.find((x: any) => x.id === formData.transportId);
+      if (t) {
+        setFormData((prev) => ({ 
+          ...prev, 
+          amount: category === "TRANSPORT_FEE" ? (t.netTransportFeePaid?.toString() || "0") : prev.amount,
+          transporterId: t.transporterId || prev.transporterId,
+          truckId: t.truckId || prev.truckId,
+          orderId: t.orderId || prev.orderId,
+        }));
       }
     }
   }, [category, formData.transportId, metadata]);
@@ -170,6 +156,7 @@ export default function OutgoingPaymentForm() {
       if (!res.error) {
         toast.success("Payment recorded successfully!");
         setFormData({ ...formData, amount: "", description: "", reference: "", receiptUrl: "" });
+        router.push("/admin/fleet/payments");
       } else {
         toast.error(res.error?.message || "Failed to record payment.");
       }
@@ -184,9 +171,20 @@ export default function OutgoingPaymentForm() {
   if (loading) return <div className="p-8 text-center text-muted-foreground"><SpinnerEllipsis /></div>;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-500">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-2 md:col-span-2">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="lg:col-span-2">
+        <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
+          <CardHeader className="pb-4 border-b border-border/30">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-red-600" />
+              Log Outgoing Payment
+            </CardTitle>
+            <CardDescription>Record transport fee payouts and operational expenses.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-500">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4 md:col-span-2">
           <Label>Expense Category</Label>
           <Select 
             value={category} 
@@ -227,7 +225,11 @@ export default function OutgoingPaymentForm() {
                   <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+              <PopoverContent 
+                className="p-0" 
+                style={{ width: 'var(--radix-popover-trigger-width)' }} 
+                align="start"
+              >
                 <Command>
                   <CommandInput placeholder="Search transport by ref, transporter, truck, destination..." />
                   <CommandList>
@@ -238,7 +240,11 @@ export default function OutgoingPaymentForm() {
                           key={t.id}
                           value={`${t.id} ${t.order?.reference || ""} ${t.transporter?.name || ""} ${t.truck?.plateNumber || t.truck?.name || ""} ${t.destination}`.toLowerCase()}
                           onSelect={() => {
-                            setFormData({ ...formData, transportId: t.id });
+                            if (formData.transportId === t.id) {
+                              setFormData({ ...formData, transportId: "", transporterId: "", truckId: "", orderId: "", amount: "" });
+                            } else {
+                              setFormData({ ...formData, transportId: t.id });
+                            }
                             setTransportOpen(false);
                           }}
                         >
@@ -270,6 +276,7 @@ export default function OutgoingPaymentForm() {
                   variant="outline"
                   role="combobox"
                   aria-expanded={transporterOpen}
+                  disabled={(category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && !!formData.transportId}
                   className="w-full justify-between font-normal"
                 >
                   {formData.transporterId
@@ -278,7 +285,11 @@ export default function OutgoingPaymentForm() {
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+              <PopoverContent 
+                className="p-0" 
+                style={{ width: 'var(--radix-popover-trigger-width)' }} 
+                align="start"
+              >
                 <Command>
                   <CommandInput placeholder="Search transporter..." />
                   <CommandList>
@@ -289,7 +300,7 @@ export default function OutgoingPaymentForm() {
                           key={t.id}
                           value={t.name}
                           onSelect={() => {
-                            setFormData({ ...formData, transporterId: t.id });
+                            setFormData({ ...formData, transporterId: formData.transporterId === t.id ? "" : t.id });
                             setTransporterOpen(false);
                           }}
                         >
@@ -305,7 +316,7 @@ export default function OutgoingPaymentForm() {
           </div>
         )}
 
-        {category === "FLEET_EXPENSE" && (
+        {(category === "FLEET_EXPENSE" || category === "TRANSPORT_FEE") && (
           <>
             <div className="space-y-2 flex flex-col justify-end">
               <Label>Truck (Optional)</Label>
@@ -315,6 +326,7 @@ export default function OutgoingPaymentForm() {
                     variant="outline"
                     role="combobox"
                     aria-expanded={truckOpen}
+                    disabled={(category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && !!formData.transportId}
                     className="w-full justify-between font-normal"
                   >
                     {formData.truckId
@@ -337,7 +349,7 @@ export default function OutgoingPaymentForm() {
                             key={t.id}
                             value={`${t.name} ${t.truckNumber}`}
                             onSelect={() => {
-                              setFormData({ ...formData, truckId: t.id });
+                              setFormData({ ...formData, truckId: formData.truckId === t.id ? "" : t.id });
                               setTruckOpen(false);
                             }}
                           >
@@ -359,6 +371,7 @@ export default function OutgoingPaymentForm() {
                     variant="outline"
                     role="combobox"
                     aria-expanded={orderOpen}
+                    disabled={(category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && !!formData.transportId}
                     className="w-full justify-between font-normal"
                   >
                     {formData.orderId
@@ -381,7 +394,7 @@ export default function OutgoingPaymentForm() {
                             key={o.id}
                             value={o.reference || o.id}
                             onSelect={() => {
-                              setFormData({ ...formData, orderId: o.id });
+                              setFormData({ ...formData, orderId: formData.orderId === o.id ? "" : o.id });
                               setOrderOpen(false);
                             }}
                           >
@@ -409,9 +422,6 @@ export default function OutgoingPaymentForm() {
             onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
             placeholder="e.g. 50000"
           />
-          {category === "TRANSPORT_FEE" && (
-            <p className="text-xs text-muted-foreground mt-1">Amount is auto-calculated based on deductions, but can be edited.</p>
-          )}
         </div>
 
         <div className="space-y-2">
@@ -443,7 +453,30 @@ export default function OutgoingPaymentForm() {
           />
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 md:col-span-2">
+          <Label>Description / Purpose {category !== "TRANSPORT_FEE" ? "*" : ""}</Label>
+          <Input 
+            list="expense-descriptions"
+            required={category !== "TRANSPORT_FEE"}
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            placeholder="Select or type a purpose..."
+          />
+          <datalist id="expense-descriptions">
+            <option value="Fuel Purchase" />
+            <option value="Vehicle Maintenance & Repair" />
+            <option value="Driver Allowance" />
+            <option value="Toll Gate Fee" />
+            <option value="Local Government Ticket" />
+            <option value="Tyre Repair / Replacement" />
+            <option value="Police / Security Checkpoint" />
+            <option value="Union Dues / NUPENG" />
+            <option value="Office Supplies" />
+            <option value="Transport Fee Payout" />
+          </datalist>
+        </div>
+
+        <div className="space-y-2 md:col-span-2">
           <Label>Attach Proof</Label>
           <div className="relative">
             <div
@@ -505,37 +538,45 @@ export default function OutgoingPaymentForm() {
           )}
         </div>
 
-        <div className="space-y-2 md:col-span-2">
-          <Label>Description / Purpose {category !== "TRANSPORT_FEE" ? "*" : ""}</Label>
-          <Textarea 
-            required={category !== "TRANSPORT_FEE"}
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="What is this payment for?"
-            rows={3}
-          />
-        </div>
-      </div>
+          </div>
 
-      <div className="flex justify-end pt-4 border-t border-border/30">
-        <Button 
-          type="submit" 
-          disabled={submitting}
-          className="h-10 rounded-full px-6 gap-2 bg-red-600 hover:bg-red-700 text-white"
-        >
-          {submitting ? (
-            <>
-              <SpinnerEllipsis />
-              <span>Saving...</span>
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4" />
-              <span>Log Payment</span>
-            </>
-          )}
-        </Button>
+          <div className="flex justify-end pt-4 border-t border-border/30">
+            <Button 
+              type="submit" 
+              disabled={submitting}
+              className="h-10 rounded-full px-6 gap-2"
+            >
+              {submitting ? (
+                <>
+                  <SpinnerEllipsis />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  <span>Log Expense</span>
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  </div>
+
+  <div className="lg:col-span-1">
+    <div className="sticky top-6 border rounded-2xl bg-card p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-lg">Expense Summary</h3>
+        <p className="text-sm text-muted-foreground">Details for the selected expense.</p>
       </div>
-    </form>
-  );
+      <div className="pt-8 pb-4 text-center border-t border-dashed">
+        <AlertCircleIcon className="h-8 w-8 mx-auto text-muted-foreground opacity-30 mb-3" />
+        <p className="text-sm text-muted-foreground font-medium">Expense Information</p>
+        <p className="text-xs text-muted-foreground/70 mt-1">Additional details will be displayed here based on the selected outgoing payment options.</p>
+      </div>
+    </div>
+  </div>
+</div>
+);
 }

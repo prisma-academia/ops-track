@@ -149,12 +149,16 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
     let totalVolume = 0;
     let totalStockValue = 0;
     let totalPnl = 0;
+    let totalVariance = 0;
     filteredRows.forEach((r) => {
       totalVolume += r.deliveryQty;
       totalStockValue += r.stockValue;
       if (r.pnl !== null) totalPnl += r.pnl;
+      if (r.reconciledQty !== null) {
+        totalVariance += (r.reconciledQty - r.totalDelivery);
+      }
     });
-    return { count: filteredRows.length, totalVolume, totalStockValue, totalPnl };
+    return { count: filteredRows.length, totalVolume, totalStockValue, totalPnl, totalVariance };
   }, [filteredRows]);
 
   // ── Column defs ───────────────────────────────────────────────────────────
@@ -295,6 +299,31 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
             {fmtQty(row.original.reconciledQty)}
           </div>
         ),
+      },
+      {
+        id: "variance",
+        accessorKey: "variance",
+        header: () => <div className="text-right whitespace-nowrap">Variance</div>,
+        size: 130,
+        cell: ({ row }) => {
+          const rq = row.original.reconciledQty;
+          const td = row.original.totalDelivery;
+          if (rq === null || td === null) return <div className="text-right text-xs text-muted-foreground">—</div>;
+          const variance = rq - td;
+          const isPos = variance > 0;
+          const isNeg = variance < 0;
+          return (
+            <div
+              className={cn(
+                "text-right text-xs font-mono font-semibold tabular-nums",
+                isPos ? "text-amber-500" : isNeg ? "text-rose-600" : "text-emerald-600"
+              )}
+            >
+              {isPos ? "+" : ""}
+              {fmtQty(variance)}
+            </div>
+          );
+        },
       },
     ],
     []
@@ -684,6 +713,13 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
                     {fmtQty(
                       filteredRows.reduce((acc, row) => acc + (row.reconciledQty || 0), 0)
                     )}
+                  </td>
+                  <td className={cn(
+                    "px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black",
+                    stats.totalVariance > 0 ? "text-amber-500 print:text-black" : stats.totalVariance < 0 ? "text-rose-600 print:text-black" : "text-emerald-600 print:text-black"
+                  )}>
+                    {stats.totalVariance > 0 ? "+" : ""}
+                    {fmtQty(stats.totalVariance)}
                   </td>
                 </tr>
               </tfoot>

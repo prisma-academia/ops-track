@@ -1,37 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useRouter } from "next/navigation";
-import { apiPost } from "@/lib/client/api";
+import Link from "next/link";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { FormField, TextInput } from "@/components/form-field";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
-import { Card } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Plus, User, DollarSign } from "lucide-react";
-import SpinnerEllipsis from "@/components/spinner-ellipsis";
+import { Plus, User } from "lucide-react";
 import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 import { DataTable } from "@/components/data-table";
 import type { ColumnDef } from "@tanstack/react-table";
-
-const CreateCustomerSchema = z.object({
-  name: z.string().min(2).max(100),
-  outstandingBalance: z.coerce.number().default(0),
-});
 
 export type CustomerRow = {
   id: string;
   name: string;
   outstandingBalance: number | string;
+  depositBalance: number | string;
   createdAt: string;
 };
 
@@ -55,6 +37,18 @@ const columns: ColumnDef<CustomerRow>[] = [
       const bal = Number(row.original.outstandingBalance);
       return (
         <div className={`text-right font-mono font-bold text-sm ${bal > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+          {bal.toLocaleString()}
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "depositBalance",
+    header: () => <div className="text-right">Deposit Balance</div>,
+    cell: ({ row }) => {
+      const bal = Number(row.original.depositBalance || 0);
+      return (
+        <div className={`text-right font-mono font-bold text-sm ${bal > 0 ? "text-indigo-600 dark:text-indigo-400" : "text-stone-500"}`}>
           {bal.toLocaleString()}
         </div>
       );
@@ -87,9 +81,7 @@ export function CustomersManager({
   initialCustomers: any[];
   initialMeta: any;
 }) {
-  const router = useRouter();
-  const [activeDialog, setActiveDialog] = useState<string | null>(null);
-  const [apiError, setApiError] = useState<string | null>(null);
+
 
   const { data, meta, isLoading, setPage, setPageSize, setInitialData } = usePaginatedQuery<CustomerRow>({
     baseUrl: "/api/tenant/customers",
@@ -99,102 +91,33 @@ export function CustomersManager({
     setInitialData(initialCustomers, initialMeta);
   }, [initialCustomers, initialMeta, setInitialData]);
 
-  const form = useForm({
-    resolver: zodResolver(CreateCustomerSchema),
-    defaultValues: { outstandingBalance: 0 },
-  });
-
-  const handleCreateCustomer = form.handleSubmit(async (values) => {
-    setApiError(null);
-    const res = await apiPost("/api/tenant/customers", values);
-    if (res.error) {
-      setApiError(res.error.message);
-    } else {
-      closeDialog();
-    }
-  });
-
-  const closeDialog = () => {
-    setActiveDialog(null);
-    setApiError(null);
-    form.reset({ outstandingBalance: 0 });
-    router.refresh();
-  };
-
   return (
     <div className="space-y-6">
       <DataTableToolbar
         title="B2B Customers"
         description="Manage corporate customer accounts and track outstanding balances."
         action={
-          <Button onClick={() => setActiveDialog("create")}>
-            <Plus size={16} className="mr-1" /> Add Customer
+          <Button asChild>
+            <Link href="/admin/fleet/customers/create">
+              <Plus size={16} className="mr-1" /> Add Customer
+            </Link>
           </Button>
         }
       />
 
       <DataTable
-          columns={columns}
-          data={data.length > 0 ? data : initialCustomers}
-          isLoading={isLoading}
-          serverPagination={{
-            ...meta,
-            onPageChange: setPage,
-            onPageSizeChange: setPageSize,
-          }}
-          filterColumnId="name"
-          searchPlaceholder="Search by name…"
-        />
-
-      {/* ==========================================
-          CREATE CUSTOMER DIALOG
-      ========================================== */}
-      {activeDialog === "create" && (
-        <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add B2B Customer Account</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCreateCustomer} className="space-y-4">
-              <FormField
-                label="Company / Customer Name"
-                htmlFor="c_name"
-                error={form.formState.errors.name?.message}
-              >
-                <TextInput id="c_name" placeholder="e.g. Dangote Logistics Ltd" {...form.register("name")} />
-              </FormField>
-
-              <FormField
-                label="Opening Outstanding Balance"
-                htmlFor="c_bal"
-                error={form.formState.errors.outstandingBalance?.message}
-              >
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-stone-400">
-                    <DollarSign size={14} />
-                  </span>
-                  <TextInput id="c_bal" type="number" className="pl-8" placeholder="0" {...form.register("outstandingBalance")} />
-                </div>
-              </FormField>
-
-              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
-
-              <DialogFooter showCloseButton={true}>
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? (
-                    <div className="flex items-center gap-2">
-                      <SpinnerEllipsis />
-                      <span>Creating...</span>
-                    </div>
-                  ) : (
-                    "Create Customer"
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
+        columns={columns}
+        data={data.length > 0 ? data : initialCustomers}
+        isLoading={isLoading}
+        serverPagination={{
+          ...meta,
+          onPageChange: setPage,
+          onPageSizeChange: setPageSize,
+        }}
+        filterColumnId="name"
+        searchPlaceholder="Search by name…"
+        rowHref={(row) => `/admin/fleet/customers/${row.id}`}
+      />
     </div>
   );
 }

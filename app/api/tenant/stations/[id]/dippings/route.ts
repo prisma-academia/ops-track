@@ -10,6 +10,7 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 const CreateDippingSchema = z.object({
   tankId: z.string().min(1),
   dippingLiters: z.coerce.number().nonnegative(),
+  dippingType: z.enum(["OPENING", "CLOSING"]).optional(),
   reason: z.string().min(1),
   pricePerLiter: z.coerce.number().positive().optional(),
 });
@@ -24,6 +25,20 @@ export async function POST(
     const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_WRITE.key);
     const body = CreateDippingSchema.parse(await request.json());
     const meta = requestMeta(request);
+
+    // Resolve dippingType and reason for backward compatibility
+    let resolvedDippingType = body.dippingType;
+    let resolvedReason = body.reason;
+
+    if (!resolvedDippingType) {
+      if (body.reason === "OPENING_DIP") {
+        resolvedDippingType = "OPENING";
+        resolvedReason = "ROUTINE";
+      } else if (body.reason === "CLOSING_DIP") {
+        resolvedDippingType = "CLOSING";
+        resolvedReason = "ROUTINE";
+      }
+    }
 
     // Verify station ownership
     const station = await prisma.station.findUnique({ where: { id: stationId } });
@@ -78,30 +93,50 @@ export async function POST(
       );
     }
 
-    // Validate daily limits for Opening and Closing dips
-    if (body.reason === "OPENING_DIP" || body.reason === "CLOSING_DIP") {
+    // Validate opening and closing window rules for today
+    if (resolvedDippingType) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      const existingDip = await prisma.tankDipping.findFirst({
+      const latestDipToday = await prisma.tankDipping.findFirst({
         where: {
           tankId: body.tankId,
-          reason: body.reason,
           recordedAt: {
             gte: today,
             lt: tomorrow,
           },
         },
+        orderBy: { recordedAt: "desc" },
       });
 
-      if (existingDip) {
-        throw new DomainError(
-          400,
-          "daily_limit_exceeded",
-          `An ${body.reason === "OPENING_DIP" ? "Opening" : "Closing"} dip has already been recorded for this tank today.`
+      if (resolvedDippingType === "OPENING") {
+        // If latest dip is OPENING (or old OPENING_DIP), another opening is not allowed until closed
+        const isCurrentlyOpen = latestDipToday && (
+          latestDipToday.dippingType === "OPENING" || 
+          latestDipToday.reason === "OPENING_DIP"
         );
+        if (isCurrentlyOpen) {
+          throw new DomainError(
+            400,
+            "unclosed_opening_exists",
+            "An unclosed Opening dip already exists for this tank today. Please record a Closing dip first."
+          );
+        }
+      } else if (resolvedDippingType === "CLOSING") {
+        // Closing dip requires an open dip to exist today
+        const isCurrentlyOpen = latestDipToday && (
+          latestDipToday.dippingType === "OPENING" || 
+          latestDipToday.reason === "OPENING_DIP"
+        );
+        if (!isCurrentlyOpen) {
+          throw new DomainError(
+            400,
+            "missing_opening_dip",
+            "No active Opening dip found for this tank today. Record an Opening dip first before recording a Closing dip."
+          );
+        }
       }
     }
 
@@ -138,8 +173,9 @@ export async function POST(
         data: {
           tenantId: actor.tenantId,
           tankId: body.tankId,
+          dippingType: resolvedDippingType ?? null,
           dippingLiters: body.dippingLiters,
-          reason: body.reason,
+          reason: resolvedReason,
           recordedAt: new Date(),
         },
       });
@@ -221,6 +257,7 @@ export async function GET(
           id: d.id,
           tankId: d.tankId,
           dippingLiters: Number(d.dippingLiters),
+          dippingType: d.dippingType || (d.reason === 'OPENING_DIP' ? 'OPENING' : d.reason === 'CLOSING_DIP' ? 'CLOSING' : null),
           reason: d.reason,
           recordedAt: d.recordedAt,
           type: 'routine' as const

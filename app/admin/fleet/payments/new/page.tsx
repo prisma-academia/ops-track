@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import IncomingPaymentForm from "@/components/fleet/payments/IncomingPaymentForm";
 import OutgoingPaymentForm from "@/components/fleet/payments/OutgoingPaymentForm";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,6 +11,26 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default function NewPaymentPage() {
+  const [metadata, setMetadata] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      try {
+        const res = await fetch(`/api/tenant/fleet/payments/metadata`);
+        if (res.ok) {
+          const body = await res.json();
+          setMetadata(body.data || body);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMetadata();
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -36,33 +58,11 @@ export default function NewPaymentPage() {
         </TabsList>
 
         <TabsContent value="incoming" className="animate-in fade-in duration-500">
-          <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
-            <CardHeader className="pb-4 border-b border-border/30">
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-green-600" />
-                Log Incoming Payment
-              </CardTitle>
-              <CardDescription>Record payments received from customers for fuel sales.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <IncomingPaymentForm />
-            </CardContent>
-          </Card>
+          <IncomingPaymentForm metadata={metadata} loading={loading} />
         </TabsContent>
 
         <TabsContent value="outgoing" className="animate-in fade-in duration-500">
-          <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
-            <CardHeader className="pb-4 border-b border-border/30">
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-red-600" />
-                Log Outgoing Payment
-              </CardTitle>
-              <CardDescription>Record transport fee payouts and operational expenses.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <OutgoingPaymentForm />
-            </CardContent>
-          </Card>
+          <OutgoingPaymentForm metadata={metadata} loading={loading} />
         </TabsContent>
       </Tabs>
     </div>

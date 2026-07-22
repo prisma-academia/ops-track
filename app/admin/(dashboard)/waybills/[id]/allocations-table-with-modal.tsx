@@ -5,8 +5,104 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { Truck, Clock, MapPin, ExternalLink, AlertCircle, Check, Eye, Package, ClipboardCheck } from "lucide-react";
+import { Truck, Clock, MapPin, ExternalLink, AlertCircle, Check, Eye, Package, ClipboardCheck, Loader2 } from "lucide-react";
 import { formatHumanReadableDate } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { apiPatch } from "@/lib/client/api";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+
+function ReceiveWaybillModal({ allocation, onSuccess }: { allocation: Allocation; onSuccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [litersReceived, setLitersReceived] = useState(allocation.litersToDispense?.toString() || "");
+  const [truckNumberVerified, setTruckNumberVerified] = useState(false);
+  const [driverVerified, setDriverVerified] = useState(false);
+  const [waybillVerified, setWaybillVerified] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await apiPatch<any>(`/api/tenant/waybills/${allocation.id}`, {
+        litersReceived: Number(litersReceived),
+        truckNumberVerified,
+        driverVerified,
+        waybillVerified,
+        arrivalTime: new Date().toISOString(),
+      });
+      if (!res.error) {
+        toast.success("Waybill received successfully!");
+        setOpen(false);
+        onSuccess();
+      } else {
+        toast.error(res.error.message || "Failed to receive waybill.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to receive waybill.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="w-full md:w-auto" variant="default">
+          <ClipboardCheck className="mr-2 h-4 w-4" /> Receive Delivery
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Receive Delivery - {allocation.station.name}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+          <div className="space-y-2">
+            <Label>Liters Received *</Label>
+            <Input 
+              type="number" 
+              required 
+              min="0"
+              step="0.01"
+              value={litersReceived} 
+              onChange={e => setLitersReceived(e.target.value)} 
+            />
+            <p className="text-xs text-muted-foreground">Expected: {Number(allocation.litersToDispense).toLocaleString()} L</p>
+          </div>
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center space-x-2">
+              <Checkbox id="truck" checked={truckNumberVerified} onCheckedChange={(c) => setTruckNumberVerified(c as boolean)} />
+              <label htmlFor="truck" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                Truck plate number verified
+              </label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox id="driver" checked={driverVerified} onCheckedChange={(c) => setDriverVerified(c as boolean)} />
+              <label htmlFor="driver" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                Driver credentials verified
+              </label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox id="waybill" checked={waybillVerified} onCheckedChange={(c) => setWaybillVerified(c as boolean)} />
+              <label htmlFor="waybill" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                Waybill manifest verified
+              </label>
+            </div>
+          </div>
+          <div className="flex justify-end pt-4">
+            <Button type="submit" disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm Receipt
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 type Allocation = {
   id: string;
@@ -39,6 +135,7 @@ export function AllocationsTableWithModal({
   dispatchedAt: string;
 }) {
   const [selectedAlloc, setSelectedAlloc] = useState<Allocation | null>(null);
+  const router = useRouter();
 
   // Summaries
   const totalExpected = allocations.reduce((acc, a) => acc + Number(a.litersToDispense), 0);
@@ -129,11 +226,12 @@ export function AllocationsTableWithModal({
 
                         {/* Horizontal Stepper Timeline */}
                         <div className="flex items-center justify-between pt-6 pb-14 px-4 relative">
-                          <div className="absolute top-11 left-10 right-10 h-[2px] bg-muted -translate-y-1/2 z-0" />
-                          <div 
-                            className="absolute top-11 left-10 h-[2px] bg-slate-900 -translate-y-1/2 z-0 transition-all duration-500" 
-                            style={{ width: (a.status === "DELIVERED" || a.status === "COMPLETED") ? '100%' : '33%' }}
-                          />
+                          <div className="absolute top-11 left-10 right-10 h-[2px] bg-muted -translate-y-1/2 z-0">
+                            <div 
+                              className="absolute top-0 left-0 h-full bg-slate-900 transition-all duration-500" 
+                              style={{ width: (a.status === "DELIVERED" || a.status === "COMPLETED") ? '100%' : '33%' }}
+                            />
+                          </div>
 
                           <div className="relative z-10 flex flex-col items-center gap-2">
                             <div className="size-11 rounded-full bg-slate-900 text-white flex items-center justify-center border-[3px] border-background shadow-sm">
@@ -232,6 +330,18 @@ export function AllocationsTableWithModal({
                               </div>
                             )}
                           </div>
+                          
+                          {a.status === "DISPATCHED" && (
+                            <div className="bg-background rounded-lg p-4 border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-4">
+                              <div>
+                                <h4 className="font-semibold text-emerald-800 dark:text-emerald-400">Ready to Receive</h4>
+                                <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1">
+                                  This allocation has been dispatched and is pending receipt at the station.
+                                </p>
+                              </div>
+                              <ReceiveWaybillModal allocation={a} onSuccess={() => router.refresh()} />
+                            </div>
+                          )}
                         </div>
 
                         {/* Verification Pictures */}

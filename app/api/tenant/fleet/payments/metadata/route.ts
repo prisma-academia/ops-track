@@ -10,8 +10,8 @@ export async function GET(request: Request) {
     // Fetch Customers, Transporters, Trucks, Orders, Transports, and Pending Sales
     const [customers, transporters, trucks, orders, transports, sales, stations] = await Promise.all([
       prisma.customer.findMany({ where: { tenantId: actor.tenantId } }),
-      prisma.transporter.findMany({ where: { tenantId: actor.tenantId, status: "ACTIVE" } }),
-      prisma.truck.findMany({ where: { tenantId: actor.tenantId, status: "ACTIVE" } }),
+      prisma.transporter.findMany({ where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true } }),
+      prisma.truck.findMany({ where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true } }),
       prisma.order.findMany({ where: { tenantId: actor.tenantId } }),
       prisma.transport.findMany({ 
         where: { tenantId: actor.tenantId },

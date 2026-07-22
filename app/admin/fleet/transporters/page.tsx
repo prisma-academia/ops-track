@@ -53,6 +53,7 @@ export default async function TransportersPage({
     email: t.email || "-",
     phone: t.phone || "-",
     status: t.status,
+    isActive: t.isActive,
     truckCount: t._count.trucks,
     driverCount: t._count.drivers,
     createdAt: t.createdAt.toISOString(),

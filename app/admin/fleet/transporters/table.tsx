@@ -2,14 +2,14 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
-import { Building2, Edit, Trash2 } from "lucide-react";
+import { Building2, Edit, Ban, CheckCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { apiDelete } from "@/lib/client/api";
+import { apiPatch } from "@/lib/client/api";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -28,24 +28,26 @@ export type TransporterRow = {
   email: string;
   phone: string;
   status: string;
+  isActive: boolean;
   truckCount: number;
   driverCount: number;
   createdAt: string;
 };
 
-function DeleteTransporterAction({ transporterId }: { transporterId: string }) {
+function ToggleTransporterStatusAction({ transporter }: { transporter: TransporterRow }) {
   const router = useRouter();
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
   const [open, setOpen] = useState(false);
+  const isCurrentlyActive = transporter.isActive;
 
-  const handleDelete = async () => {
-    setIsDeleting(true);
-    const res = await apiDelete(`/api/tenant/fleet/transporters/${transporterId}`);
-    setIsDeleting(false);
+  const handleToggle = async () => {
+    setIsToggling(true);
+    const res = await apiPatch(`/api/tenant/fleet/transporters/${transporter.id}`, { isActive: !isCurrentlyActive });
+    setIsToggling(false);
     if (res.error) {
       toast.error(res.error.message);
     } else {
-      toast.success("Transporter deleted successfully");
+      toast.success(`Transporter ${isCurrentlyActive ? 'deactivated' : 'activated'} successfully`);
       setOpen(false);
       router.refresh();
     }
@@ -55,20 +57,26 @@ function DeleteTransporterAction({ transporterId }: { transporterId: string }) {
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
         <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
-          <Trash2 className="w-4 h-4 text-destructive" />
+          {isCurrentlyActive ? (
+            <Ban className="w-4 h-4 text-destructive" />
+          ) : (
+            <CheckCircle className="w-4 h-4 text-emerald-500" />
+          )}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent onClick={(e) => e.stopPropagation()}>
         <AlertDialogHeader>
           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete this transporter along with all associated trucks and drivers. This action cannot be undone.
+            {isCurrentlyActive
+              ? "This will deactivate this transporter. It will be hidden from selection dropdowns."
+              : "This will reactivate this transporter, making it available again."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-          <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
-            {isDeleting ? "Deleting..." : "Delete"}
+          <AlertDialogCancel disabled={isToggling}>Cancel</AlertDialogCancel>
+          <Button variant={isCurrentlyActive ? "destructive" : "default"} onClick={handleToggle} disabled={isToggling}>
+            {isToggling ? (isCurrentlyActive ? "Deactivating..." : "Activating...") : (isCurrentlyActive ? "Deactivate" : "Activate")}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -105,6 +113,10 @@ const columns: ColumnDef<TransporterRow>[] = [
     header: "Status",
     cell: ({ row }) => {
       const status = row.original.status;
+      const isActive = row.original.isActive;
+      if (!isActive) {
+        return <Badge variant="destructive">Deactivated</Badge>;
+      }
       return (
         <Badge variant={status === "ACTIVE" ? "default" : "secondary"}>
           {status}
@@ -149,7 +161,7 @@ const columns: ColumnDef<TransporterRow>[] = [
               <Edit className="w-4 h-4 text-muted-foreground" />
             </Link>
           </Button>
-          <DeleteTransporterAction transporterId={transporter.id} />
+          <ToggleTransporterStatusAction transporter={transporter} />
         </div>
       );
     }

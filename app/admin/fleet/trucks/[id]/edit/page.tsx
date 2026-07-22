@@ -17,7 +17,7 @@ export default async function EditTruckPage({ params }: { params: Promise<{ id: 
   }
 
   const transporters = await prisma.transporter.findMany({
-    where: { tenantId: actor.tenantId, status: "ACTIVE" },
+    where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

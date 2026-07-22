@@ -3,21 +3,39 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { OrdersTable } from "./table";
+import { StatusFilter } from "@/components/status-filter";
 
-export default async function OrdersPage() {
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; page?: string; take?: string }>;
+}) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+  const { status, page: pageParam, take: takeParam } = await searchParams;
 
-  const orders = await prisma.order.findMany({
-    where: { tenantId: actor.tenantId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      _count: {
-        select: {
-          transports: true,
+  const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
+  const take = Math.min(100, Math.max(1, parseInt(takeParam || "25", 10) || 25));
+  const skip = (page - 1) * take;
+
+  const where: any = { tenantId: actor.tenantId };
+  if (status) where.status = status;
+
+  const [totalCount, orders] = await Promise.all([
+    prisma.order.count({ where }),
+    prisma.order.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+      include: {
+        _count: {
+          select: {
+            transports: true,
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
 
   const rows = orders.map((o) => ({
     id: o.id,
@@ -32,6 +50,8 @@ export default async function OrdersPage() {
     createdAt: o.createdAt.toISOString(),
   }));
 
+  const totalPages = Math.ceil(totalCount / take);
+
   return (
     <div>
       <DataTableToolbar
@@ -40,7 +60,28 @@ export default async function OrdersPage() {
         createLabel="Add Order"
         description="Manage fuel procurement orders from depots."
       />
-      <OrdersTable data={rows} />
+      <OrdersTable
+        data={rows}
+        serverPagination={{
+          page,
+          pageSize: take,
+          totalCount,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        }}
+        filterNode={
+          <StatusFilter
+            paramName="status"
+            label="Status"
+            options={[
+              { value: "PENDING", label: "Pending" },
+              { value: "CONFIRMED", label: "Confirmed" },
+              { value: "CANCELLED", label: "Cancelled" },
+            ]}
+          />
+        }
+      />
     </div>
   );
 }

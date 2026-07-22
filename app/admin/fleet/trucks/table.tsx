@@ -2,9 +2,25 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
-import { Truck } from "lucide-react";
+import { Truck, Edit, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { apiDelete } from "@/lib/client/api";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export type TruckRow = {
   id: string;
@@ -15,6 +31,49 @@ export type TruckRow = {
   transportCount: number;
   createdAt: string;
 };
+
+function DeleteTruckAction({ truckId }: { truckId: string }) {
+  const router = useRouter();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    const res = await apiDelete(`/api/tenant/fleet/trucks/${truckId}`);
+    setIsDeleting(false);
+    if (res.error) {
+      toast.error(res.error.message);
+    } else {
+      toast.success("Truck deleted successfully");
+      setOpen(false);
+      router.refresh();
+    }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
+          <Trash2 className="w-4 h-4 text-destructive" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete this truck. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+            {isDeleting ? "Deleting..." : "Delete"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
 
 const columns: ColumnDef<TruckRow>[] = [
   { 
@@ -73,9 +132,41 @@ const columns: ColumnDef<TruckRow>[] = [
       );
     }
   },
+  {
+    id: "actions",
+    cell: ({ row }) => {
+      const truck = row.original;
+      return (
+        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" asChild>
+            <Link href={`/admin/fleet/trucks/${truck.id}/edit`}>
+              <Edit className="w-4 h-4 text-muted-foreground" />
+            </Link>
+          </Button>
+          <DeleteTruckAction truckId={truck.id} />
+        </div>
+      );
+    }
+  }
 ];
 
-export function TrucksTable({ data }: { data: TruckRow[] }) {
+export function TrucksTable({ data, serverPagination, filterNode }: { data: TruckRow[]; serverPagination?: any; filterNode?: React.ReactNode }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", newPage.toString());
+    router.push(`?${params.toString()}`);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("take", newSize.toString());
+    params.delete("page");
+    router.push(`?${params.toString()}`);
+  };
+
   return (
     <DataTable
       columns={columns}
@@ -83,6 +174,14 @@ export function TrucksTable({ data }: { data: TruckRow[] }) {
       rowHref={(s) => `/admin/fleet/trucks/${s.id}`}
       filterColumnId="name"
       searchPlaceholder="Search by plate number or ID…"
+      filterNode={filterNode}
+      {...(serverPagination ? {
+        serverPagination: {
+          ...serverPagination,
+          onPageChange: handlePageChange,
+          onPageSizeChange: handlePageSizeChange,
+        }
+      } : {})}
     />
   );
 }

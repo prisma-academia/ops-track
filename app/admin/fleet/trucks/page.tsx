@@ -3,24 +3,42 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { TrucksTable } from "./table";
+import { StatusFilter } from "@/components/status-filter";
 
-export default async function TrucksPage() {
+export default async function TrucksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; page?: string; take?: string }>;
+}) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+  const { status, page: pageParam, take: takeParam } = await searchParams;
 
-  const trucks = await prisma.truck.findMany({
-    where: { tenantId: actor.tenantId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      transporter: {
-        select: { id: true, name: true },
-      },
-      _count: {
-        select: {
-          transports: true,
+  const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
+  const take = Math.min(100, Math.max(1, parseInt(takeParam || "25", 10) || 25));
+  const skip = (page - 1) * take;
+
+  const where: any = { tenantId: actor.tenantId };
+  if (status) where.status = status;
+
+  const [totalCount, trucks] = await Promise.all([
+    prisma.truck.count({ where }),
+    prisma.truck.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+      include: {
+        transporter: {
+          select: { id: true, name: true },
+        },
+        _count: {
+          select: {
+            transports: true,
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
 
   const rows = trucks.map((t) => ({
     id: t.id,
@@ -32,6 +50,8 @@ export default async function TrucksPage() {
     createdAt: t.createdAt.toISOString(),
   }));
 
+  const totalPages = Math.ceil(totalCount / take);
+
   return (
     <div>
       <DataTableToolbar
@@ -40,7 +60,29 @@ export default async function TrucksPage() {
         createLabel="Add Truck"
         description="Manage the fleet of trucks registered in the system."
       />
-      <TrucksTable data={rows} />
+      <TrucksTable
+        data={rows}
+        serverPagination={{
+          page,
+          pageSize: take,
+          totalCount,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        }}
+        filterNode={
+          <StatusFilter
+            paramName="status"
+            label="Status"
+            options={[
+              { value: "ACTIVE", label: "Active" },
+              { value: "MAINTENANCE", label: "Maintenance" },
+              { value: "OFFLINE", label: "Offline" },
+              { value: "ISSUE", label: "Issue" },
+            ]}
+          />
+        }
+      />
     </div>
   );
 }

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { apiPost } from "@/lib/client/api";
+import { apiPost, apiPatch } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,7 +40,7 @@ const Schema = z.object({
 
 type Values = z.infer<typeof Schema>;
 
-export function CreateTransporterForm() {
+export function CreateTransporterForm({ transporter }: { transporter?: any } = {}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [openStateSelect, setOpenStateSelect] = useState(false);
@@ -49,38 +49,47 @@ export function CreateTransporterForm() {
   const { register, handleSubmit, formState, setValue, watch } = useForm({
     resolver: zodResolver(Schema),
     defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
-      registrationNumber: "",
-      businessType: "",
-      contactPerson: "",
-      contactPhone: "",
-      contactPosition: "",
-      state: "",
-      lga: "",
-      ward: "",
-      address: "",
+      name: transporter?.name || "",
+      email: transporter?.email || "",
+      phone: transporter?.phone || "",
+      registrationNumber: transporter?.registrationNumber || "",
+      businessType: transporter?.businessType || "",
+      contactPerson: transporter?.contactPerson || "",
+      contactPhone: transporter?.contactPhone || "",
+      contactPosition: transporter?.contactPosition || "",
+      state: transporter?.state || "",
+      lga: transporter?.lga || "",
+      ward: transporter?.ward || "",
+      address: transporter?.address || "",
     },
   });
 
+
+  
   const selectedState = watch("state");
   const selectedLga = watch("lga");
   const watchName = watch("name");
   const watchRegNumber = watch("registrationNumber");
 
   useEffect(() => {
-    if (watchName && !watchRegNumber) {
-      const generated = `RC-${Math.floor(100000 + Math.random() * 900000)}`;
-      setValue("registrationNumber", generated, { shouldValidate: true });
-    } else if (!watchName && watchRegNumber) {
-      setValue("registrationNumber", "", { shouldValidate: true });
+    if (!transporter) {
+      if (watchName && !watchRegNumber) {
+        const generated = `RC-${Math.floor(100000 + Math.random() * 900000)}`;
+        setValue("registrationNumber", generated, { shouldValidate: true });
+      } else if (!watchName && watchRegNumber) {
+        setValue("registrationNumber", "", { shouldValidate: true });
+      }
     }
-  }, [watchName, watchRegNumber, setValue]);
+  }, [watchName, watchRegNumber, setValue, transporter]);
+
+  const previousState = useRef(selectedState);
 
   useEffect(() => {
-    setValue("lga", "", { shouldValidate: false });
-    setValue("ward", "", { shouldValidate: false });
+    if (previousState.current !== selectedState) {
+      setValue("lga", "", { shouldValidate: false });
+      setValue("ward", "", { shouldValidate: false });
+      previousState.current = selectedState;
+    }
   }, [selectedState, setValue]);
 
   const availableLgas = selectedState
@@ -90,14 +99,24 @@ export function CreateTransporterForm() {
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     
-    const res = await apiPost<{ transporter: { id: string } }>("/api/tenant/fleet/transporters", values);
-    if (res.error) {
-      setError(res.error.message);
-      return;
-    }
-    if (res.data?.transporter.id) {
-      router.push(`/admin/fleet/transporters`);
+    if (transporter?.id) {
+      const res = await apiPatch<{ transporter: { id: string } }>(`/api/tenant/fleet/transporters/${transporter.id}`, values);
+      if (res.error) {
+        setError(res.error.message);
+        return;
+      }
+      router.push(`/admin/fleet/transporters/${transporter.id}`);
       router.refresh();
+    } else {
+      const res = await apiPost<{ transporter: { id: string } }>("/api/tenant/fleet/transporters", values);
+      if (res.error) {
+        setError(res.error.message);
+        return;
+      }
+      if (res.data?.transporter.id) {
+        router.push(`/admin/fleet/transporters`);
+        router.refresh();
+      }
     }
   });
 
@@ -116,7 +135,7 @@ export function CreateTransporterForm() {
           </Button>
           <div>
             <h2 className="text-xl font-bold tracking-tight text-foreground uppercase tracking-widest">
-              Create Transporter
+              {transporter ? "Edit Transporter" : "Create Transporter"}
             </h2>
             <p className="text-xs text-muted-foreground">Add a new transport company to the fleet</p>
           </div>
@@ -352,12 +371,12 @@ export function CreateTransporterForm() {
           {formState.isSubmitting ? (
             <>
               <SpinnerEllipsis />
-              <span>Creating...</span>
+              <span>{transporter ? "Updating..." : "Creating..."}</span>
             </>
           ) : (
             <>
               <Save className="h-4 w-4" />
-              <span>Create Transporter</span>
+              <span>{transporter ? "Update Transporter" : "Create Transporter"}</span>
             </>
           )}
         </Button>

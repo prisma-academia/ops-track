@@ -8,10 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
+import { useDataTable } from "./data-table-context";
 
 export function DateRangeFilter() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const dataTable = useDataTable();
   const fromParam = searchParams.get("from");
   const toParam = searchParams.get("to");
 
@@ -27,6 +29,9 @@ export function DateRangeFilter() {
     if (to) params.set("to", to);
     else params.delete("to");
 
+    if (params.toString() !== searchParams.toString()) {
+      dataTable.startTransition();
+    }
     router.push(`?${params.toString()}`);
     setOpen(false);
   };
@@ -37,6 +42,10 @@ export function DateRangeFilter() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("from");
     params.delete("to");
+    
+    if (params.toString() !== searchParams.toString()) {
+      dataTable.startTransition();
+    }
     router.push(`?${params.toString()}`);
     setOpen(false);
   };

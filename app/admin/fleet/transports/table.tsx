@@ -5,6 +5,7 @@ import { DataTable } from "@/components/data-table";
 import { Route } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export type TransportRow = {
   id: string;
@@ -97,7 +98,23 @@ const columns: ColumnDef<TransportRow>[] = [
   },
 ];
 
-export function TransportsTable({ data, filterNode }: { data: TransportRow[], filterNode?: React.ReactNode }) {
+export function TransportsTable({ data, filterNode, serverPagination }: { data: TransportRow[], filterNode?: React.ReactNode, serverPagination?: any }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", newPage.toString());
+    router.push(`?${params.toString()}`);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("take", newSize.toString());
+    params.delete("page");
+    router.push(`?${params.toString()}`);
+  };
+
   return (
     <DataTable
       columns={columns}
@@ -106,6 +123,13 @@ export function TransportsTable({ data, filterNode }: { data: TransportRow[], fi
       filterColumnId="destination"
       searchPlaceholder="Search by destination…"
       filterNode={filterNode}
+      {...(serverPagination ? {
+        serverPagination: {
+          ...serverPagination,
+          onPageChange: handlePageChange,
+          onPageSizeChange: handlePageSizeChange,
+        }
+      } : {})}
     />
   );
 }

@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { PaymentsTable } from "./table";
 import { DateRangeFilter } from "@/components/date-range-filter";
+import { StatusFilter } from "@/components/status-filter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Activity } from "lucide-react";
 import Link from "next/link";
@@ -13,28 +14,58 @@ import { formatShortCurrency } from "@/lib/utils";
 export default async function PaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; type?: string; category?: string; page?: string; take?: string }>;
 }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
-  const { from, to } = await searchParams;
+  const { from, to, type, category, page: pageParam, take: takeParam } = await searchParams;
 
-  let dateFilter: any = {};
+  const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
+  const take = Math.min(100, Math.max(1, parseInt(takeParam || "25", 10) || 25));
+  const skip = (page - 1) * take;
+
+  const where: any = { tenantId: actor.tenantId };
+  if (type) where.type = type;
+  if (category) where.category = category;
   if (from || to) {
-    dateFilter = {
-      createdAt: {
-        ...(from ? { gte: new Date(from) } : {}),
-        ...(to ? { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) } : {}),
-      }
+    where.createdAt = {
+      ...(from ? { gte: new Date(from) } : {}),
+      ...(to ? { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) } : {}),
     };
   }
 
-  const transactions = await prisma.transaction.findMany({
-    where: { 
-      tenantId: actor.tenantId,
-      ...dateFilter
-    },
-    orderBy: { createdAt: "desc" },
+  // Aggregates: always computed on ALL data regardless of filters/pagination
+  const allTransactions = await prisma.transaction.findMany({
+    where: { tenantId: actor.tenantId },
+    select: { type: true, amount: true },
   });
+
+  const totalInflow = allTransactions.filter(t => t.type === "INFLOW").reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalOutflow = allTransactions.filter(t => t.type === "OUTFLOW").reduce((sum, t) => sum + Number(t.amount), 0);
+  const netBalance = totalInflow - totalOutflow;
+  const totalTransactionsCount = allTransactions.length;
+
+  // Get distinct categories for filter options
+  const categories = await prisma.transaction.findMany({
+    where: { tenantId: actor.tenantId },
+    select: { category: true },
+    distinct: ["category"],
+    orderBy: { category: "asc" },
+  });
+  const categoryOptions = categories.map(c => ({
+    value: c.category,
+    label: c.category.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+  }));
+
+  // Filtered + paginated data
+  const [totalCount, transactions] = await Promise.all([
+    prisma.transaction.count({ where }),
+    prisma.transaction.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+    }),
+  ]);
 
   const rows = transactions.map((t) => ({
     id: t.id,
@@ -46,10 +77,7 @@ export default async function PaymentsPage({
     createdAt: t.createdAt.toISOString(),
   }));
 
-  const totalInflow = transactions.filter(t => t.type === "INFLOW").reduce((sum, t) => sum + Number(t.amount), 0);
-  const totalOutflow = transactions.filter(t => t.type === "OUTFLOW").reduce((sum, t) => sum + Number(t.amount), 0);
-  const netBalance = totalInflow - totalOutflow;
-  const totalTransactions = transactions.length;
+  const totalPages = Math.ceil(totalCount / take);
 
   return (
     <div className="space-y-6">
@@ -89,7 +117,7 @@ export default async function PaymentsPage({
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalTransactions}</div>
+            <div className="text-2xl font-bold">{totalTransactionsCount}</div>
           </CardContent>
         </Card>
       </div>
@@ -106,7 +134,35 @@ export default async function PaymentsPage({
             </div>
           }
         />
-        <PaymentsTable data={rows} filterNode={<DateRangeFilter />} />
+        <PaymentsTable
+          data={rows}
+          serverPagination={{
+            page,
+            pageSize: take,
+            totalCount,
+            totalPages,
+            hasNextPage: page < totalPages,
+            hasPreviousPage: page > 1,
+          }}
+          filterNode={
+            <>
+              <StatusFilter
+                paramName="type"
+                label="Type"
+                options={[
+                  { value: "INFLOW", label: "Inflow" },
+                  { value: "OUTFLOW", label: "Outflow" },
+                ]}
+              />
+              <StatusFilter
+                paramName="category"
+                label="Category"
+                options={categoryOptions}
+              />
+              <DateRangeFilter />
+            </>
+          }
+        />
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { apiPost } from "@/lib/client/api";
+import { apiPost, apiPatch } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,8 +29,10 @@ type Values = z.infer<typeof Schema>;
 
 export function CreateDriverForm({
   transporters,
+  driver,
 }: {
   transporters: { id: string; name: string }[];
+  driver?: any;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -39,13 +41,13 @@ export function CreateDriverForm({
   const { register, handleSubmit, formState, setValue, watch } = useForm({
     resolver: zodResolver(Schema),
     defaultValues: {
-      firstName: "",
-      lastName: "",
-      transporterId: "",
-      phone: "",
-      licenseNumber: "",
-      licenseExpiryDate: "",
-      address: "",
+      firstName: driver?.firstName || "",
+      lastName: driver?.lastName || "",
+      transporterId: driver?.transporterId || "",
+      phone: driver?.phone || "",
+      licenseNumber: driver?.licenseNumber || "",
+      licenseExpiryDate: driver?.licenseExpiryDate ? new Date(driver.licenseExpiryDate).toISOString().split('T')[0] : "",
+      address: driver?.address || "",
     },
   });
 
@@ -55,14 +57,24 @@ export function CreateDriverForm({
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     
-    const res = await apiPost<{ driver: { id: string } }>("/api/tenant/fleet/drivers", values);
-    if (res.error) {
-      setError(res.error.message);
-      return;
-    }
-    if (res.data?.driver.id) {
-      router.push(`/admin/fleet/drivers`);
+    if (driver?.id) {
+      const res = await apiPatch<{ driver: { id: string } }>(`/api/tenant/fleet/drivers/${driver.id}`, values);
+      if (res.error) {
+        setError(res.error.message);
+        return;
+      }
+      router.push(`/admin/fleet/drivers/${driver.id}`);
       router.refresh();
+    } else {
+      const res = await apiPost<{ driver: { id: string } }>("/api/tenant/fleet/drivers", values);
+      if (res.error) {
+        setError(res.error.message);
+        return;
+      }
+      if (res.data?.driver.id) {
+        router.push(`/admin/fleet/drivers`);
+        router.refresh();
+      }
     }
   });
 
@@ -81,7 +93,7 @@ export function CreateDriverForm({
           </Button>
           <div>
             <h2 className="text-xl font-bold tracking-tight text-foreground uppercase tracking-widest">
-              Add Driver
+              {driver ? "Edit Driver" : "Add Driver"}
             </h2>
             <p className="text-xs text-muted-foreground">Register a new truck driver</p>
           </div>
@@ -234,12 +246,12 @@ export function CreateDriverForm({
           {formState.isSubmitting ? (
             <>
               <SpinnerEllipsis />
-              <span>Saving...</span>
+              <span>{driver ? "Updating..." : "Saving..."}</span>
             </>
           ) : (
             <>
               <Save className="h-4 w-4" />
-              <span>Add Driver</span>
+              <span>{driver ? "Update Driver" : "Add Driver"}</span>
             </>
           )}
         </Button>

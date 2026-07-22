@@ -5,6 +5,7 @@ import { DataTable } from "@/components/data-table";
 import { CreditCard, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export type PaymentRow = {
   id: string;
@@ -87,7 +88,23 @@ const columns: ColumnDef<PaymentRow>[] = [
   },
 ];
 
-export function PaymentsTable({ data, filterNode }: { data: PaymentRow[], filterNode?: React.ReactNode }) {
+export function PaymentsTable({ data, filterNode, serverPagination }: { data: PaymentRow[], filterNode?: React.ReactNode, serverPagination?: any }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", newPage.toString());
+    router.push(`?${params.toString()}`);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("take", newSize.toString());
+    params.delete("page");
+    router.push(`?${params.toString()}`);
+  };
+
   return (
     <DataTable
       columns={columns}
@@ -96,6 +113,13 @@ export function PaymentsTable({ data, filterNode }: { data: PaymentRow[], filter
       filterColumnId="reference"
       searchPlaceholder="Search by reference…"
       filterNode={filterNode}
+      {...(serverPagination ? {
+        serverPagination: {
+          ...serverPagination,
+          onPageChange: handlePageChange,
+          onPageSizeChange: handlePageSizeChange,
+        }
+      } : {})}
     />
   );
 }

@@ -4,43 +4,49 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { TransportsTable } from "./table";
 import { DateRangeFilter } from "@/components/date-range-filter";
+import { StatusFilter } from "@/components/status-filter";
 
 export default async function TransportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; status?: string; page?: string; take?: string }>;
 }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
-  const { from, to } = await searchParams;
+  const { from, to, status, page: pageParam, take: takeParam } = await searchParams;
 
-  let dateFilter: any = {};
+  const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
+  const take = Math.min(100, Math.max(1, parseInt(takeParam || "25", 10) || 25));
+  const skip = (page - 1) * take;
+
+  const where: any = { tenantId: actor.tenantId };
+  if (status) where.status = status;
   if (from || to) {
-    dateFilter = {
-      createdAt: {
-        ...(from ? { gte: new Date(from) } : {}),
-        ...(to ? { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) } : {}),
-      }
+    where.createdAt = {
+      ...(from ? { gte: new Date(from) } : {}),
+      ...(to ? { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) } : {}),
     };
   }
 
-  const transports = await prisma.transport.findMany({
-    where: { 
-      tenantId: actor.tenantId,
-      ...dateFilter
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      transporter: { select: { id: true, name: true } },
-      truck: { select: { id: true, name: true } },
-      driver: { select: { id: true, firstName: true, lastName: true } },
-      order: { select: { id: true, reference: true, sourceDepot: true } },
-      _count: {
-        select: {
-          sales: true,
+  const [totalCount, transports] = await Promise.all([
+    prisma.transport.count({ where }),
+    prisma.transport.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+      include: {
+        transporter: { select: { id: true, name: true } },
+        truck: { select: { id: true, name: true } },
+        driver: { select: { id: true, firstName: true, lastName: true } },
+        order: { select: { id: true, reference: true, sourceDepot: true } },
+        _count: {
+          select: {
+            sales: true,
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
 
   const rows = transports.map((t) => ({
     id: t.id,
@@ -57,6 +63,8 @@ export default async function TransportsPage({
     createdAt: t.createdAt.toISOString(),
   }));
 
+  const totalPages = Math.ceil(totalCount / take);
+
   return (
     <div>
       <DataTableToolbar
@@ -65,7 +73,31 @@ export default async function TransportsPage({
         createLabel="Add Transport"
         description="Manage active and completed truck dispatch trips."
       />
-      <TransportsTable data={rows} filterNode={<DateRangeFilter />} />
+      <TransportsTable
+        data={rows}
+        serverPagination={{
+          page,
+          pageSize: take,
+          totalCount,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        }}
+        filterNode={
+          <>
+            <StatusFilter
+              paramName="status"
+              label="Status"
+              options={[
+                { value: "IN_TRANSIT", label: "In Transit" },
+                { value: "COMPLETED", label: "Completed" },
+                { value: "CANCELLED", label: "Cancelled" },
+              ]}
+            />
+            <DateRangeFilter />
+          </>
+        }
+      />
     </div>
   );
 }

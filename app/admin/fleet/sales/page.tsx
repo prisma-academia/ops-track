@@ -4,52 +4,73 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { SalesTable } from "./table";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Banknote, Droplets, ReceiptText, Landmark } from "lucide-react";
 import { cn, formatShortCurrency } from "@/lib/utils";
 import { DateRangeFilter } from "@/components/date-range-filter";
+import { StatusFilter } from "@/components/status-filter";
 
 export default async function SalesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; status?: string; page?: string; take?: string }>;
 }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
-  const { from, to } = await searchParams;
+  const { from, to, status, page: pageParam, take: takeParam } = await searchParams;
 
-  let dateFilter: any = {};
+  const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
+  const take = Math.min(100, Math.max(1, parseInt(takeParam || "25", 10) || 25));
+  const skip = (page - 1) * take;
+
+  const where: any = { tenantId: actor.tenantId };
+  if (status) where.status = status;
   if (from || to) {
-    dateFilter = {
-      createdAt: {
-        ...(from ? { gte: new Date(from) } : {}),
-        ...(to ? { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) } : {}),
-      }
+    where.createdAt = {
+      ...(from ? { gte: new Date(from) } : {}),
+      ...(to ? { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) } : {}),
     };
   }
 
-  const sales = await prisma.sale.findMany({
-    where: { 
-      tenantId: actor.tenantId,
-      ...dateFilter
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      customer: { select: { id: true, name: true } },
-      station: { select: { id: true, name: true } },
-      transport: {
-        select: {
-          id: true,
-          destination: true,
-          truck: { select: { id: true, name: true } }
-        }
-      },
-      _count: {
-        select: {
-          transactions: true,
-        },
-      },
+  // Aggregates: always computed on ALL data regardless of filters/pagination
+  const allSales = await prisma.sale.findMany({
+    where: { tenantId: actor.tenantId },
+    select: {
+      litersDespatched: true,
+      totalExpectedAmount: true,
+      paymentReceived: true,
     },
   });
+
+  const totalVolume = allSales.reduce((sum, s) => sum + Number(s.litersDespatched), 0);
+  const totalExpected = allSales.reduce((sum, s) => sum + Number(s.totalExpectedAmount), 0);
+  const totalCollected = allSales.reduce((sum, s) => sum + Number(s.paymentReceived), 0);
+  const outstanding = Math.max(0, totalExpected - totalCollected);
+
+  // Filtered + paginated data
+  const [totalCount, sales] = await Promise.all([
+    prisma.sale.count({ where }),
+    prisma.sale.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+      include: {
+        customer: { select: { id: true, name: true } },
+        station: { select: { id: true, name: true } },
+        transport: {
+          select: {
+            id: true,
+            destination: true,
+            truck: { select: { id: true, name: true } }
+          }
+        },
+        _count: {
+          select: {
+            transactions: true,
+          },
+        },
+      },
+    }),
+  ]);
 
   const rows = sales.map((s) => {
     const litersDespatched = Number(s.litersDespatched);
@@ -72,10 +93,7 @@ export default async function SalesPage({
     };
   });
 
-  const totalVolume = rows.reduce((sum, r) => sum + r.litersDespatched, 0);
-  const totalExpected = rows.reduce((sum, r) => sum + r.totalExpectedAmount, 0);
-  const totalCollected = rows.reduce((sum, r) => sum + r.paymentReceived, 0);
-  const outstanding = Math.max(0, totalExpected - totalCollected);
+  const totalPages = Math.ceil(totalCount / take);
 
   const stats = [
     {
@@ -145,7 +163,32 @@ export default async function SalesPage({
         </CardContent>
       </Card>
 
-      <SalesTable data={rows} filterNode={<DateRangeFilter />} />
+      <SalesTable
+        data={rows}
+        serverPagination={{
+          page,
+          pageSize: take,
+          totalCount,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        }}
+        filterNode={
+          <>
+            <StatusFilter
+              paramName="status"
+              label="Status"
+              options={[
+                { value: "UNPAID", label: "Unpaid" },
+                { value: "PART_PAID", label: "Part Paid" },
+                { value: "CLEARED", label: "Cleared" },
+                { value: "OVERDUE", label: "Overdue" },
+              ]}
+            />
+            <DateRangeFilter />
+          </>
+        }
+      />
     </div>
   );
 }

@@ -40,6 +40,11 @@ export function TruckDetailsManager({
               <CardTitle className="text-xl">Truck Details</CardTitle>
             </div>
           </div>
+          <div className="flex gap-2">
+            <Button variant="outline" asChild>
+              <Link href={`/admin/fleet/trucks/${truck.id}/edit`}>Edit Truck</Link>
+            </Button>
+          </div>
         </CardHeader>
       </Card>
 

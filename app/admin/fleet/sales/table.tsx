@@ -10,7 +10,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { apiPost } from "@/lib/client/api";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 
 export type SaleRow = {
@@ -197,7 +197,23 @@ const columns: ColumnDef<SaleRow>[] = [
   }
 ];
 
-export function SalesTable({ data, filterNode }: { data: SaleRow[], filterNode?: React.ReactNode }) {
+export function SalesTable({ data, filterNode, serverPagination }: { data: SaleRow[], filterNode?: React.ReactNode, serverPagination?: any }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", newPage.toString());
+    router.push(`?${params.toString()}`);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("take", newSize.toString());
+    params.delete("page");
+    router.push(`?${params.toString()}`);
+  };
+
   return (
     <DataTable
       columns={columns}
@@ -206,6 +222,13 @@ export function SalesTable({ data, filterNode }: { data: SaleRow[], filterNode?:
       filterColumnId="customerName"
       searchPlaceholder="Search by customer/station…"
       filterNode={filterNode}
+      {...(serverPagination ? {
+        serverPagination: {
+          ...serverPagination,
+          onPageChange: handlePageChange,
+          onPageSizeChange: handlePageSizeChange,
+        }
+      } : {})}
     />
   );
 }

@@ -346,6 +346,11 @@ enum DipShift {
   EVENING
 }
 
+enum DippingType {
+  OPENING
+  CLOSING
+}
+
 enum TicketStatus {
   OPEN
   PENDING_APPROVAL
@@ -538,6 +543,7 @@ model TankDipping {
   tankId             String
   tank               Tank              @relation(fields: [tankId], references: [id], onDelete: Cascade)
   shift              DipShift? // MORNING or EVENING
+  dippingType        DippingType? // OPENING or CLOSING
   dippingLiters      Decimal           @db.Decimal(12, 2)
   reason             String?
   recordedAt         DateTime          @default(now())

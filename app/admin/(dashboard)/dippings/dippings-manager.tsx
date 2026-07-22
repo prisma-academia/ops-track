@@ -24,7 +24,8 @@ import { formatHumanReadableDate } from "@/lib/utils";
 const RecordDippingSchema = z.object({
   tankId: z.string().min(1, "Please select a tank"),
   dippingLiters: z.coerce.number().nonnegative("Volume must be non-negative"),
-  reason: z.enum(["ROUTINE", "WAYBILL_DELIVERY", "PRICE_CHANGE"]),
+  dippingType: z.enum(["OPENING", "CLOSING"]),
+  reason: z.enum(["ROUTINE", "PRICE_CHANGE"]),
   pricePerLiter: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
   recordedAt: z.string().min(1),
 });
@@ -49,6 +50,7 @@ export function DippingsManager({
     defaultValues: {
       tankId: "",
       dippingLiters: 0,
+      dippingType: "OPENING" as any,
       reason: "ROUTINE" as any,
       pricePerLiter: "",
       recordedAt: new Date().toISOString(),
@@ -76,6 +78,7 @@ export function DippingsManager({
     dippingForm.reset({
       tankId: "",
       dippingLiters: 0,
+      dippingType: "OPENING" as any,
       reason: "ROUTINE" as any,
       pricePerLiter: "",
       recordedAt: new Date().toISOString(),
@@ -114,7 +117,7 @@ export function DippingsManager({
                 <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Station</th>
                 <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Tank</th>
                 <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase">Product</th>
-                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase text-center">Reason / Shift</th>
+                <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase text-center">Type & Reason</th>
                 <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase text-right">Dipped Volume</th>
                 <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase text-right">Capacity</th>
                 <th className="px-6 py-3 font-bold text-stone-600 text-xs uppercase text-right">Percentage</th>
@@ -132,27 +135,31 @@ export function DippingsManager({
                   const capacity = Number(dip.tank.capacity);
                   const volume = Number(dip.dippingLiters);
                   const pct = capacity > 0 ? Math.min(100, Math.round((volume / capacity) * 100)) : 0;
+                  const typeLabel = dip.dippingType || (dip.reason === "OPENING_DIP" ? "OPENING" : dip.reason === "CLOSING_DIP" ? "CLOSING" : null);
                   return (
                     <tr key={dip.id} className="hover:bg-stone-50/50">
                       <td className="px-6 py-3 whitespace-nowrap">{formatHumanReadableDate(dip.recordedAt)}</td>
                       <td className="px-6 py-3 font-semibold text-stone-800">{dip.tank.station.name}</td>
                       <td className="px-6 py-3 font-medium">{dip.tank.name}</td>
                       <td className="px-6 py-3 font-mono text-xs text-stone-600">{dip.tank.productType}</td>
-                      <td className="px-6 py-3 text-center">
-                        <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+                      <td className="px-6 py-3 text-center flex items-center justify-center gap-1">
+                        {typeLabel && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                            typeLabel === "OPENING"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-rose-100 text-rose-800"
+                          }`}>
+                            {typeLabel}
+                          </span>
+                        )}
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                           dip.reason === "WAYBILL_DELIVERY"
                             ? "bg-blue-100 text-blue-800"
                             : dip.reason === "PRICE_CHANGE"
                             ? "bg-purple-100 text-purple-800"
-                            : dip.reason === "ROUTINE"
-                            ? "bg-stone-100 text-stone-800"
-                            : dip.shift === "MORNING"
-                            ? "bg-amber-100 text-amber-800"
-                            : dip.shift === "EVENING"
-                            ? "bg-indigo-100 text-indigo-800"
                             : "bg-stone-100 text-stone-800"
                         }`}>
-                          {dip.reason || dip.shift || "ROUTINE"}
+                          {dip.reason === "OPENING_DIP" || dip.reason === "CLOSING_DIP" ? "ROUTINE" : (dip.reason || "ROUTINE")}
                         </span>
                       </td>
                       <td className="px-6 py-3 text-right font-mono font-bold text-stone-800">{volume.toLocaleString()} L</td>
@@ -194,6 +201,17 @@ export function DippingsManager({
                 </select>
               </FormField>
 
+              <FormField label="Dipping Type" htmlFor="d_type" error={dippingForm.formState.errors.dippingType?.message}>
+                <select
+                  id="d_type"
+                  className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm"
+                  {...dippingForm.register("dippingType")}
+                >
+                  <option value="OPENING">Opening Dip (Start of Sales Window)</option>
+                  <option value="CLOSING">Closing Dip (End of Sales Window)</option>
+                </select>
+              </FormField>
+
               <FormField label="Dipped Liters Volume" htmlFor="d_vol" error={dippingForm.formState.errors.dippingLiters?.message}>
                 <TextInput id="d_vol" type="number" step="any" placeholder="e.g. 15420.50" {...dippingForm.register("dippingLiters")} />
               </FormField>
@@ -204,14 +222,13 @@ export function DippingsManager({
                   className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm"
                   {...dippingForm.register("reason")}
                 >
-                  <option value="ROUTINE">Routine Operational Check</option>
-                  <option value="WAYBILL_DELIVERY">Waybill / Fuel Delivery Arrival</option>
+                  <option value="ROUTINE">Routine Check</option>
                   <option value="PRICE_CHANGE">Price Change Adjustment</option>
                 </select>
               </FormField>
 
-              {/* Show new price input if reason is WAYBILL_DELIVERY or PRICE_CHANGE */}
-              {(dippingForm.watch("reason") === "WAYBILL_DELIVERY" || dippingForm.watch("reason") === "PRICE_CHANGE") && (
+              {/* Show new price input if reason is PRICE_CHANGE */}
+              {dippingForm.watch("reason") === "PRICE_CHANGE" && (
                 <FormField
                   label="New Fuel Price Per Liter (Optional, ₦)"
                   htmlFor="d_price"

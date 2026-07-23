@@ -81,7 +81,7 @@ model Tenant {
   stations                   Station[]
   tanks                      Tank[]
   priceControls              PriceControl[]
-  dailySalesLogs             DailySalesLog[]
+  SalesLogs                  SalesLog[]
   dailyStockReports          DailyStockReport[]
   tankDippings               TankDipping[]
   tickets                    Ticket[]
@@ -94,7 +94,6 @@ model Tenant {
   shiftLogs                  ShiftLog[]
   expenses                   Expense[]
 
-
   activeModules     String[]           @default(["STATION"])
   transporters      Transporter[]
   trucks            Truck[]
@@ -104,6 +103,7 @@ model Tenant {
   sales             Sale[]
   transactions      Transaction[]
   transportLossLogs TransportLossLog[]
+  dippingSessions   DippingSession[]
 
   @@index([status])
 }
@@ -147,8 +147,8 @@ model TenantUser {
   expoPushTokens      String[]   @default([])
 
   stations                Station[]        @relation("StationStaff")
-  recordedSalesLogs       DailySalesLog[]  @relation("SalesRecordedBy")
-  approvedSalesLogs       DailySalesLog[]  @relation("SalesApprovedBy")
+  recordedSalesLogs       SalesLog[]       @relation("SalesRecordedBy")
+  approvedSalesLogs       SalesLog[]       @relation("SalesApprovedBy")
   raisedTickets           Ticket[]         @relation("TicketRaiser")
   approvedTickets         Ticket[]         @relation("TicketApprover")
   recordedWaybills        Waybill[]
@@ -157,7 +157,6 @@ model TenantUser {
   recordedExpenses        Expense[]        @relation("ExpenseRecordedBy")
   approvedExpenses        Expense[]        @relation("ExpenseApprovedBy")
   recordedWaybillDippings WaybillDipping[]
-
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -428,12 +427,13 @@ model Station {
   priceControls      PriceControl[]
   dailyReports       DailyStockReport[]
   tickets            Ticket[]
-  dailySalesLogs     DailySalesLog[]
+  SalesLogs          SalesLog[]
   waybillAllocations WaybillAllocation[]
   pumps              Pump[]
   expenses           Expense[]
 
-  stationSales       Sale[]              @relation("StationSales")
+  stationSales    Sale[]           @relation("StationSales")
+  dippingSessions DippingSession[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -455,6 +455,7 @@ model Tank {
   dippings        TankDipping[]
   waybillDippings WaybillDipping[]
   pumps           Pump[]
+  dippingSessions DippingSession[]
 
   @@index([tenantId])
   @@index([stationId])
@@ -477,37 +478,40 @@ model PriceControl {
   @@map("price_controls")
 }
 
-model DailySalesLog {
-  id             String         @id @default(uuid())
-  tenantId       String
-  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  stationId      String
-  station        Station        @relation(fields: [stationId], references: [id], onDelete: Cascade)
-  recordedById   String
-  recordedBy     TenantUser     @relation("SalesRecordedBy", fields: [recordedById], references: [id])
-  productType    ProductType
-  litersSold     Decimal        @db.Decimal(12, 2)
+model SalesLog {
+  id                 String         @id @default(uuid())
+  tenantId           String
+  tenant             Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stationId          String
+  station            Station        @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  recordedById       String
+  recordedBy         TenantUser     @relation("SalesRecordedBy", fields: [recordedById], references: [id])
+  productType        ProductType
+  litersSold         Decimal        @db.Decimal(12, 2)
   amountCash         Decimal        @db.Decimal(12, 2) // Cash collected
   amountPos          Decimal        @db.Decimal(12, 2) // POS payments
   amountTransfer     Decimal        @db.Decimal(12, 2) // Bank transfers
   cashReceiptUrl     String?
   posReceiptUrl      String?
   transferReceiptUrl String?
-  logDate        DateTime       @db.Date
-  status         SalesLogStatus @default(PENDING)
-  flaggedAmount  Boolean        @default(false)
-  flaggedLiters  Boolean        @default(false)
-  flaggedReceipt Boolean        @default(false)
-  reason         String?        @db.Text
-  approvedById   String?
-  approvedBy     TenantUser?    @relation("SalesApprovedBy", fields: [approvedById], references: [id])
-  approvedAt     DateTime?
+  logDate            DateTime       @db.Date
+  status             SalesLogStatus @default(PENDING)
+  flaggedAmount      Boolean        @default(false)
+  flaggedLiters      Boolean        @default(false)
+  flaggedReceipt     Boolean        @default(false)
+  reason             String?        @db.Text
+  approvedById       String?
+  approvedBy         TenantUser?    @relation("SalesApprovedBy", fields: [approvedById], references: [id])
+  approvedAt         DateTime?
+
+  dippingClosing   DippingClosing?
+  dippingClosingId String?         @unique
 
   @@index([tenantId])
   @@index([stationId])
   @@index([recordedById])
   @@index([approvedById])
-  @@map("daily_sales_logs")
+  @@map("sales_logs")
 }
 
 model DailyStockReport {
@@ -598,7 +602,7 @@ model Customer {
   depositBalance     Decimal  @default(0.00) @db.Decimal(12, 2)
   createdAt          DateTime @default(now())
 
-  sales Sale[]
+  sales        Sale[]
   transactions Transaction[]
 
   @@index([tenantId])
@@ -671,8 +675,6 @@ model WaybillAllocation {
 
   dippings WaybillDipping[]
 
-
-
   @@unique([waybillId, stationId])
   @@index([tenantId])
   @@index([waybillId])
@@ -680,7 +682,6 @@ model WaybillAllocation {
   @@index([saleId])
   @@map("waybill_allocations")
 }
-
 
 model Pump {
   id        String      @id @default(uuid())
@@ -892,9 +893,9 @@ model Transporter {
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
-  trucks     Truck[]
-  drivers    Driver[]
-  transports Transport[]
+  trucks       Truck[]
+  drivers      Driver[]
+  transports   Transport[]
   transactions Transaction[]
 
   @@index([tenantId])
@@ -980,7 +981,7 @@ model Order {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  transports Transport[]
+  transports   Transport[]
   transactions Transaction[]
 
   @@index([tenantId])
@@ -1018,10 +1019,9 @@ model Transport {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
-  sales          Sale[]
-  lossLogs       TransportLossLog[]
-  transactions   Transaction[]
-
+  sales        Sale[]
+  lossLogs     TransportLossLog[]
+  transactions Transaction[]
 
   @@index([tenantId])
   @@index([orderId])
@@ -1119,10 +1119,10 @@ model Transaction {
   transport   Transport? @relation(fields: [transportId], references: [id], onDelete: SetNull)
 
   truckId String?
-  truck   Truck? @relation(fields: [truckId], references: [id], onDelete: SetNull)
+  truck   Truck?  @relation(fields: [truckId], references: [id], onDelete: SetNull)
 
   orderId String?
-  order   Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1134,4 +1134,63 @@ model Transaction {
   @@index([truckId])
   @@index([orderId])
   @@map("fleet_transactions")
+}
+
+enum DippingSessionStatus {
+  OPEN
+  COMPLETED
+}
+
+enum ClosingReason {
+  END_OF_DAY
+  PRICE_CHANGE
+  ROUTINE
+}
+
+model DippingSession {
+  id        String  @id @default(uuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tankId    String
+  tank      Tank    @relation(fields: [tankId], references: [id], onDelete: Cascade)
+  stationId String
+  station   Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  openingLiters Decimal  @db.Decimal(12, 2)
+  pricePerLiter Decimal  @db.Decimal(10, 2) // Price at session open
+  openedAt      DateTime @default(now())
+
+  status      DippingSessionStatus @default(OPEN)
+  completedAt DateTime?
+
+  closings DippingClosing[]
+
+  @@index([tenantId])
+  @@index([stationId])
+  @@index([tankId])
+  @@map("dipping_sessions")
+}
+
+model DippingClosing {
+  id        String         @id @default(uuid())
+  sessionId String
+  session   DippingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  closingLiters Decimal       @db.Decimal(12, 2)
+  reason        ClosingReason
+
+  // If reason is PRICE_CHANGE, store the new price for the NEXT reading
+  newPricePerLiter Decimal? @db.Decimal(10, 2)
+
+  // The price that applies to THIS closing's sale calculation
+  appliedPrice Decimal @db.Decimal(10, 2)
+
+  recordedAt DateTime @default(now())
+
+  // Auto-generated sale from this closing
+  generatedSale   SalesLog? @relation(fields: [generatedSaleId], references: [id])
+  generatedSaleId String?   @unique
+
+  @@index([sessionId])
+  @@map("dipping_closings")
 }

@@ -89,7 +89,7 @@ async function DashboardDataContent({ tenantId, fromDate, toDate }: { tenantId: 
   });
   const totalExpenses = Number(expensesAgg._sum.amount || 0);
 
-  const revenueAgg = await prisma.dailySalesLog.aggregate({
+  const revenueAgg = await prisma.salesLog.aggregate({
     where: { 
       tenantId, 
       status: "APPROVED",
@@ -130,7 +130,7 @@ async function DashboardDataContent({ tenantId, fromDate, toDate }: { tenantId: 
   }));
 
   // 3. Fetch Monthly Data (Based on Date Picker Range)
-  const salesData = await prisma.dailySalesLog.findMany({
+  const salesData = await prisma.salesLog.findMany({
     where: { tenantId, status: "APPROVED", logDate: { gte: fromDate, lte: toDate } },
     select: { logDate: true, amountCash: true, amountPos: true, amountTransfer: true }
   });
@@ -182,7 +182,7 @@ async function DashboardDataContent({ tenantId, fromDate, toDate }: { tenantId: 
  
 
   // 4. Fetch Daily Volume Data (Based on Date Picker Range)
-  const volumeDataList = await prisma.dailySalesLog.findMany({
+  const volumeDataList = await prisma.salesLog.findMany({
     where: { tenantId, status: "APPROVED", logDate: { gte: fromDate, lte: toDate } },
     select: { logDate: true, productType: true, litersSold: true }
   });

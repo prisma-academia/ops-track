@@ -33,7 +33,7 @@ export async function PATCH(
     }
 
     // Verify sales log existence and ownership
-    const salesLog = await prisma.dailySalesLog.findUnique({
+    const salesLog = await prisma.salesLog.findUnique({
       where: { id: salesLogId },
     });
 
@@ -45,7 +45,7 @@ export async function PATCH(
       throw new DomainError(400, "reason_required", "A reason is required when rejecting a sales report.");
     }
 
-    const updated = await prisma.dailySalesLog.update({
+    const updated = await prisma.salesLog.update({
       where: { id: salesLogId },
       data: {
         status: body.status,
@@ -82,7 +82,7 @@ export async function PATCH(
       actorId: actor.userId,
       action: "sales.review",
       tenantId: actor.tenantId,
-      targetType: "DailySalesLog",
+      targetType: "SalesLog",
       targetId: salesLogId,
       after: {
         status: body.status,

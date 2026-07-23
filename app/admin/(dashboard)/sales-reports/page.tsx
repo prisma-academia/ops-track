@@ -6,7 +6,7 @@ import { SalesReportsManager } from "./sales-reports-manager";
 export default async function SalesReportsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_SHIFTS_READ.key);
 
-  const salesReports = await prisma.dailySalesLog.findMany({
+  const salesReports = await prisma.salesLog.findMany({
     where: { tenantId: actor.tenantId },
     orderBy: { logDate: "desc" },
     include: {

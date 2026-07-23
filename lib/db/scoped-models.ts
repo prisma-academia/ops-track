@@ -20,7 +20,7 @@ export const STRICT_SCOPED: ReadonlySet<string> = new Set([
   "Station",
   "Tank",
   "PriceControl",
-  "DailySalesLog",
+  "SalesLog",
   "DailyStockReport",
   "TankDipping",
   "Ticket",

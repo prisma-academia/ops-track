@@ -41,7 +41,7 @@ export async function GET(request: Request) {
         tanks: {
           select: { productType: true, capacity: true },
         },
-        dailySalesLogs: {
+        SalesLogs: {
           where: { status: "APPROVED" as const },
           orderBy: { logDate: "desc" as const },
           take: 1,
@@ -78,7 +78,7 @@ export async function GET(request: Request) {
           if (t.productType === "LPG") lpgLiters += Number(t.capacity);
         });
     
-        const lastSales = s.dailySalesLogs[0];
+        const lastSales = s.SalesLogs[0];
         const lastSalesAmount = lastSales
           ? Number(lastSales.amountCash) + Number(lastSales.amountPos) + Number(lastSales.amountTransfer)
           : 0;
@@ -113,7 +113,7 @@ export async function GET(request: Request) {
         tanks: {
           select: { productType: true, capacity: true },
         },
-        dailySalesLogs: {
+        SalesLogs: {
           where: { status: "APPROVED" as const },
           orderBy: { logDate: "desc" as const },
           take: 1,
@@ -145,7 +145,7 @@ export async function GET(request: Request) {
           if (t.productType === "LPG") lpgLiters += Number(t.capacity);
         });
     
-        const lastSales = s.dailySalesLogs[0];
+        const lastSales = s.SalesLogs[0];
         const lastSalesAmount = lastSales
           ? Number(lastSales.amountCash) + Number(lastSales.amountPos) + Number(lastSales.amountTransfer)
           : 0;

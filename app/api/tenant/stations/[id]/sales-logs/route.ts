@@ -17,6 +17,7 @@ const CreateSalesLogSchema = z.object({
   posReceiptUrl: z.string().nullable().optional(),
   transferReceiptUrl: z.string().nullable().optional(),
   logDate: z.string().optional(),
+  dippingClosingId: z.string().optional(),
 });
 
 export async function GET(
@@ -45,8 +46,8 @@ export async function GET(
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
       const [totalCount, rows] = await Promise.all([
-        prisma.dailySalesLog.count({ where }),
-        prisma.dailySalesLog.findMany({
+        prisma.salesLog.count({ where }),
+        prisma.salesLog.findMany({
           where,
           orderBy: { logDate: "desc" },
           take,
@@ -57,7 +58,7 @@ export async function GET(
       return ok(rows, buildOffsetPageMeta(totalCount, page, take));
     }
 
-    const salesLogs = await prisma.dailySalesLog.findMany({
+    const salesLogs = await prisma.salesLog.findMany({
       where,
       orderBy: { logDate: "desc" },
       include,
@@ -91,7 +92,7 @@ export async function POST(
 
     const logDate = body.logDate ? new Date(body.logDate) : new Date();
 
-    const salesLog = await prisma.dailySalesLog.create({
+    const salesLog = await prisma.salesLog.create({
       data: {
         tenantId: actor.tenantId,
         stationId,
@@ -105,6 +106,7 @@ export async function POST(
         transferReceiptUrl: body.transferReceiptUrl,
         logDate,
         recordedById: actor.userId,
+        dippingClosingId: body.dippingClosingId,
       },
     });
 
@@ -113,7 +115,7 @@ export async function POST(
       actorId: actor.userId,
       action: "sales.record",
       tenantId: actor.tenantId,
-      targetType: "DailySalesLog",
+      targetType: "SalesLog",
       targetId: salesLog.id,
       after: { productType: salesLog.productType, litersSold: salesLog.litersSold, amountCash: salesLog.amountCash, amountPos: salesLog.amountPos } as object,
       ip: meta.ip,

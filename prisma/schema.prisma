@@ -604,7 +604,6 @@ model Customer {
   createdAt          DateTime @default(now())
 
   sales        Sale[]
-  sales        Sale[]
   transactions Transaction[]
 
   @@index([tenantId])
@@ -899,9 +898,6 @@ model Transporter {
   trucks       Truck[]
   drivers      Driver[]
   transports   Transport[]
-  trucks       Truck[]
-  drivers      Driver[]
-  transports   Transport[]
   transactions Transaction[]
 
   @@index([tenantId])
@@ -990,7 +986,6 @@ model Order {
   updatedAt     DateTime    @updatedAt
 
   transports   Transport[]
-  transports   Transport[]
   transactions Transaction[]
 
   @@index([tenantId])
@@ -1028,9 +1023,6 @@ model Transport {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
-  sales        Sale[]
-  lossLogs     TransportLossLog[]
-  transactions Transaction[]
   sales        Sale[]
   lossLogs     TransportLossLog[]
   transactions Transaction[]
@@ -1132,10 +1124,8 @@ model Transaction {
 
   truckId String?
   truck   Truck?  @relation(fields: [truckId], references: [id], onDelete: SetNull)
-  truck   Truck?  @relation(fields: [truckId], references: [id], onDelete: SetNull)
 
   orderId String?
-  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
   order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())

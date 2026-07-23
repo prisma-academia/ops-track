@@ -12,19 +12,19 @@ export default async function NewTransportPage(
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
 
   const transporters = await prisma.transporter.findMany({
-    where: { tenantId: actor.tenantId, status: "ACTIVE" },
+    where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
   
   const trucks = await prisma.truck.findMany({
-    where: { tenantId: actor.tenantId, status: "ACTIVE" },
+    where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true },
     select: { id: true, name: true, transporterId: true, capacityLiters: true },
     orderBy: { name: "asc" },
   });
   
   const drivers = await prisma.driver.findMany({
-    where: { tenantId: actor.tenantId, status: "ACTIVE" },
+    where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true },
     select: { id: true, firstName: true, lastName: true, transporterId: true },
     orderBy: { firstName: "asc" },
   });

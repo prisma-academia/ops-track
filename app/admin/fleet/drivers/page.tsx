@@ -47,6 +47,7 @@ export default async function DriversPage({
     phone: d.phone || "-",
     licenseNumber: d.licenseNumber || "-",
     status: d.status,
+    isActive: d.isActive,
     transportCount: d._count.transports,
     createdAt: d.createdAt.toISOString(),
   }));

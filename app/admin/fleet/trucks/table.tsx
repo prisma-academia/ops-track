@@ -2,14 +2,14 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
-import { Truck, Edit, Trash2 } from "lucide-react";
+import { Truck as TruckIcon, Edit, Ban, CheckCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { apiDelete } from "@/lib/client/api";
+import { apiPatch } from "@/lib/client/api";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -28,23 +28,25 @@ export type TruckRow = {
   transporterName: string;
   capacityLiters: number;
   status: string;
+  isActive: boolean;
   transportCount: number;
   createdAt: string;
 };
 
-function DeleteTruckAction({ truckId }: { truckId: string }) {
+function ToggleTruckStatusAction({ truck }: { truck: TruckRow }) {
   const router = useRouter();
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
   const [open, setOpen] = useState(false);
+  const isCurrentlyActive = truck.isActive;
 
-  const handleDelete = async () => {
-    setIsDeleting(true);
-    const res = await apiDelete(`/api/tenant/fleet/trucks/${truckId}`);
-    setIsDeleting(false);
+  const handleToggle = async () => {
+    setIsToggling(true);
+    const res = await apiPatch(`/api/tenant/fleet/trucks/${truck.id}`, { isActive: !isCurrentlyActive });
+    setIsToggling(false);
     if (res.error) {
       toast.error(res.error.message);
     } else {
-      toast.success("Truck deleted successfully");
+      toast.success(`Truck ${isCurrentlyActive ? 'deactivated' : 'activated'} successfully`);
       setOpen(false);
       router.refresh();
     }
@@ -54,20 +56,26 @@ function DeleteTruckAction({ truckId }: { truckId: string }) {
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
         <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
-          <Trash2 className="w-4 h-4 text-destructive" />
+          {isCurrentlyActive ? (
+            <Ban className="w-4 h-4 text-destructive" />
+          ) : (
+            <CheckCircle className="w-4 h-4 text-emerald-500" />
+          )}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent onClick={(e) => e.stopPropagation()}>
         <AlertDialogHeader>
           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete this truck. This action cannot be undone.
+            {isCurrentlyActive
+              ? "This will deactivate this truck. It will be hidden from selection dropdowns."
+              : "This will reactivate this truck, making it available again."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-          <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
-            {isDeleting ? "Deleting..." : "Delete"}
+          <AlertDialogCancel disabled={isToggling}>Cancel</AlertDialogCancel>
+          <Button variant={isCurrentlyActive ? "destructive" : "default"} onClick={handleToggle} disabled={isToggling}>
+            {isToggling ? (isCurrentlyActive ? "Deactivating..." : "Activating...") : (isCurrentlyActive ? "Deactivate" : "Activate")}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -84,7 +92,7 @@ const columns: ColumnDef<TruckRow>[] = [
       return (
         <div className="flex items-center gap-3 py-1">
           <div className="size-10 flex items-center justify-center shrink-0 text-primary bg-primary/10 rounded-md">
-            <Truck className="w-5 h-5" />
+            <TruckIcon className="w-5 h-5" />
           </div>
           <div className="flex flex-col">
             <span className="font-semibold text-foreground">{name}</span>
@@ -104,6 +112,10 @@ const columns: ColumnDef<TruckRow>[] = [
     header: "Status",
     cell: ({ row }) => {
       const status = row.original.status;
+      const isActive = row.original.isActive;
+      if (!isActive) {
+        return <Badge variant="destructive">Deactivated</Badge>;
+      }
       return (
         <Badge variant={status === "ACTIVE" ? "default" : "secondary"}>
           {status}
@@ -143,7 +155,7 @@ const columns: ColumnDef<TruckRow>[] = [
               <Edit className="w-4 h-4 text-muted-foreground" />
             </Link>
           </Button>
-          <DeleteTruckAction truckId={truck.id} />
+          <ToggleTruckStatusAction truck={truck} />
         </div>
       );
     }

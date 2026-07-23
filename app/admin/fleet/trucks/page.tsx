@@ -46,6 +46,7 @@ export default async function TrucksPage({
     transporterName: t.transporter.name,
     capacityLiters: Number(t.capacityLiters),
     status: t.status,
+    isActive: t.isActive,
     transportCount: t._count.transports,
     createdAt: t.createdAt.toISOString(),
   }));

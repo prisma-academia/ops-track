@@ -14,6 +14,7 @@ const UpdateTransporterSchema = z.object({
   businessType: z.string().optional().nullable(),
   contactPerson: z.string().optional().nullable(),
   contactPhone: z.string().optional().nullable(),
+
   contactPosition: z.string().optional().nullable(),
   state: z.string().optional().nullable(),
   lga: z.string().optional().nullable(),
@@ -21,6 +22,7 @@ const UpdateTransporterSchema = z.object({
   address: z.string().optional().nullable(),
   kycDocuments: z.any().optional(),
   status: z.enum(["ACTIVE", "MAINTENANCE", "OFFLINE", "ISSUE"]).optional(),
+  isActive: z.boolean().optional(),
 });
 
 export async function GET(
@@ -80,6 +82,7 @@ export async function PATCH(
         ...(body.address !== undefined && { address: body.address }),
         ...(body.kycDocuments !== undefined && { kycDocuments: body.kycDocuments }),
         ...(body.status !== undefined && { status: body.status }),
+        ...(body.isActive !== undefined && { isActive: body.isActive }),
       },
     });
 
@@ -98,47 +101,6 @@ export async function PATCH(
 
     return ok({ transporter });
   } catch (e) {
-    return handleError(e);
-  }
-}
-
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireCsrf(request);
-    const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
-    const meta = requestMeta(request);
-
-    const existing = await prisma.transporter.findFirst({
-      where: { id, tenantId: actor.tenantId },
-    });
-    if (!existing) throw new DomainError(404, "not_found", "Transporter not found.");
-
-    await prisma.transporter.delete({
-      where: { id },
-    });
-
-    await audit({
-      actorType: "TENANT_USER",
-      actorId: actor.userId,
-      action: "transporter.delete",
-      tenantId: actor.tenantId,
-      targetType: "Transporter",
-      targetId: existing.id,
-      before: { name: existing.name } as object,
-      after: null,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-    });
-
-    return ok({ success: true });
-  } catch (e: any) {
-    if (e.code === "P2003") {
-      return handleError(new DomainError(400, "conflict", "Cannot delete transporter because it is associated with existing transports or transactions."));
-    }
     return handleError(e);
   }
 }

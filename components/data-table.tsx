@@ -61,6 +61,7 @@ export interface DataTableProps<TData, TValue> {
   pageSize?: number;
   headerAction?: React.ReactNode;
   rowHref?: (row: TData) => string | null;
+  getRowClassName?: (row: TData) => string;
   empty?: string;
   filterColumnId?: string;
   filterNode?: React.ReactNode;
@@ -89,6 +90,7 @@ export function DataTable<TData, TValue>({
   pageSize = 25,
   headerAction,
   rowHref,
+  getRowClassName,
   empty = "No results found.",
   filterColumnId,
   filterNode,
@@ -232,7 +234,8 @@ export function DataTable<TData, TValue>({
                         key={row.id}
                         className={cn(
                           "group hover:bg-muted/20 transition-colors",
-                          href && "cursor-pointer"
+                          href && "cursor-pointer",
+                          getRowClassName && getRowClassName(row.original)
                         )}
                         onClick={() => {
                           if (href) router.push(href);

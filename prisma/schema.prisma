@@ -488,6 +488,7 @@ model SalesLog {
   recordedBy         TenantUser     @relation("SalesRecordedBy", fields: [recordedById], references: [id])
   productType        ProductType
   litersSold         Decimal        @db.Decimal(12, 2)
+  pricePerLiter      Decimal        @default(0.00) @db.Decimal(10, 2)
   amountCash         Decimal        @db.Decimal(12, 2) // Cash collected
   amountPos          Decimal        @db.Decimal(12, 2) // POS payments
   amountTransfer     Decimal        @db.Decimal(12, 2) // Bank transfers

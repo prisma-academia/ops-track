@@ -10,6 +10,7 @@ import { parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination
 const CreateSalesLogSchema = z.object({
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   litersSold: z.coerce.number().positive(),
+  pricePerLiter: z.coerce.number().min(0).default(0),
   amountCash: z.coerce.number().min(0),
   amountPos: z.coerce.number().min(0),
   amountTransfer: z.coerce.number().min(0).default(0),
@@ -98,6 +99,7 @@ export async function POST(
         stationId,
         productType: body.productType,
         litersSold: body.litersSold,
+        pricePerLiter: body.pricePerLiter,
         amountCash: body.amountCash,
         amountPos: body.amountPos,
         amountTransfer: body.amountTransfer,

@@ -19,6 +19,7 @@ const CreateSalesLogSchema = z.object({
   transferReceiptUrl: z.string().nullable().optional(),
   logDate: z.string().optional(),
   dippingClosingId: z.string().optional(),
+  clientId: z.string().optional(),
 });
 
 export async function GET(
@@ -93,8 +94,18 @@ export async function POST(
 
     const logDate = body.logDate ? new Date(body.logDate) : new Date();
 
+    if (body.clientId) {
+      const existingLog = await prisma.salesLog.findUnique({
+        where: { id: body.clientId },
+      });
+      if (existingLog) {
+        return ok(existingLog);
+      }
+    }
+
     const salesLog = await prisma.salesLog.create({
       data: {
+        id: body.clientId || undefined,
         tenantId: actor.tenantId,
         stationId,
         productType: body.productType,

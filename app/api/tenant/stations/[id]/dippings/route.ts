@@ -243,16 +243,84 @@ export async function GET(
     }
 
     if (useOffset) {
-      const [tankDips, waybillDips] = await Promise.all([
+      const [tankDips, waybillDips, sessions] = await Promise.all([
         prisma.tankDipping.findMany({
           where: { tankId: { in: tankIds }, tenantId: actor.tenantId },
         }),
         prisma.waybillDipping.findMany({
           where: { tankId: { in: tankIds }, tenantId: actor.tenantId },
+        }),
+        prisma.dippingSession.findMany({
+          where: { tankId: { in: tankIds }, tenantId: actor.tenantId },
+          include: { 
+            closings: {
+              orderBy: { recordedAt: "asc" },
+            }, 
+            tank: true 
+          },
         })
       ]);
 
+      const sessionDips: any[] = [];
+      sessions.forEach((s) => {
+        let prevLiters = Number(s.openingLiters);
+        let prevPrice = Number(s.pricePerLiter);
+
+        s.closings.forEach((c, idx) => {
+          const closingLit = Number(c.closingLiters);
+          const litersSold = Math.max(0, prevLiters - closingLit);
+          const appliedPrice = Number(c.appliedPrice ?? prevPrice);
+          const revenue = litersSold * appliedPrice;
+
+          sessionDips.push({
+            id: c.id,
+            sessionId: s.id,
+            tankId: s.tankId,
+            dippingType: "SESSION_CLOSING",
+            reason: c.reason,
+            recordedAt: c.recordedAt,
+            openedAt: s.openedAt,
+            openingLiters: prevLiters,
+            closingLiters: closingLit,
+            pricePerLiter: appliedPrice,
+            newPricePerLiter: c.newPricePerLiter ? Number(c.newPricePerLiter) : null,
+            litersSold,
+            revenue,
+            closingIndex: idx + 1,
+            tank: s.tank,
+          });
+
+          // Next interval's opening dip is this closing dip level, and price updates if newPricePerLiter is set
+          prevLiters = closingLit;
+          if (c.newPricePerLiter) {
+            prevPrice = Number(c.newPricePerLiter);
+          }
+        });
+
+        // If session is still OPEN (no closing or active interval ongoing)
+        if (s.status === "OPEN" && s.closings.length === 0) {
+          sessionDips.push({
+            id: s.id,
+            sessionId: s.id,
+            tankId: s.tankId,
+            dippingType: "SESSION_OPEN",
+            reason: "OPENING_DIP",
+            recordedAt: s.openedAt,
+            openedAt: s.openedAt,
+            openingLiters: prevLiters,
+            closingLiters: null,
+            pricePerLiter: prevPrice,
+            newPricePerLiter: null,
+            litersSold: null,
+            revenue: null,
+            closingIndex: 0,
+            tank: s.tank,
+          });
+        }
+      });
+
       const allDippings = [
+        ...sessionDips,
         ...tankDips.map(d => ({
           id: d.id,
           tankId: d.tankId,
@@ -270,7 +338,7 @@ export async function GET(
           recordedAt: d.createdAt,
           type: 'waybill' as const
         }))
-      ].sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime());
+      ].sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
 
       const totalCount = allDippings.length;
       const mappedRows = allDippings.slice(skip, skip + take).map(row => {
@@ -295,6 +363,45 @@ export async function GET(
         },
         orderBy: { recordedAt: "desc" },
       });
+
+      // Fetch new sessions
+      const sessions = await prisma.dippingSession.findMany({
+        where: { tankId: { in: tankIds }, tenantId: actor.tenantId },
+        include: { closings: true, tank: true },
+        orderBy: { openedAt: "desc" }
+      });
+
+      const mappedSessionDips = sessions.flatMap(s => {
+        const records = [];
+        records.push({
+          id: s.id,
+          tankId: s.tankId,
+          dippingLiters: Number(s.openingLiters),
+          dippingType: 'OPENING',
+          reason: 'OPENING_DIP',
+          recordedAt: s.openedAt,
+          type: 'routine',
+          tank: s.tank
+        });
+        s.closings.forEach(c => {
+          records.push({
+            id: c.id,
+            tankId: s.tankId,
+            dippingLiters: Number(c.closingLiters),
+            dippingType: 'CLOSING',
+            reason: c.reason,
+            recordedAt: c.recordedAt,
+            type: 'routine',
+            tank: s.tank
+          });
+        });
+        return records;
+      });
+
+      const allRoutineDippings = [
+        ...dippings,
+        ...mappedSessionDips
+      ].sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime());
   
       // Fetch waybill dippings
       const waybillDippings = await prisma.waybillDipping.findMany({
@@ -315,7 +422,7 @@ export async function GET(
         waybillAllocationId: d.waybillAllocationId,
       }));
   
-      return ok({ dippings, waybillDippings: mappedWaybillDippings });
+      return ok({ dippings: allRoutineDippings, waybillDippings: mappedWaybillDippings });
     }
   } catch (e) {
     return handleError(e);

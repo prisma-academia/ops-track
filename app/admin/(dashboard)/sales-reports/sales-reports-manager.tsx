@@ -40,6 +40,7 @@ interface SalesReportRow {
   tenantId: string;
   stationId: string;
   productType: string;
+  pricePerLiter: number;
   openingDip: number;
   closingDip: number;
   litersSold: number;
@@ -122,16 +123,21 @@ export function SalesReportsManager({
 
   const stats = useMemo(() => {
     let totalLiters = 0;
+    let expectedRevenue = 0;
     let cash = 0;
     let digital = 0;
 
     filteredReports.forEach((r) => {
       totalLiters += Number(r.litersSold);
+      expectedRevenue += Number(r.litersSold) * Number(r.pricePerLiter);
       cash += Number(r.amountCash);
       digital += Number(r.amountPos) + Number(r.amountTransfer);
     });
 
-    return { totalLiters, cash, digital };
+    const totalReceived = cash + digital;
+    const totalBalance = totalReceived - expectedRevenue;
+
+    return { totalLiters, expectedRevenue, cash, digital, totalReceived, totalBalance };
   }, [filteredReports]);
 
   const statCards = [
@@ -202,22 +208,28 @@ export function SalesReportsManager({
       ),
     },
     {
-      accessorKey: "openingDip",
-      header: () => <div className="text-right whitespace-nowrap">Opening Dip</div>,
+      accessorKey: "pricePerLiter",
+      header: () => <div className="text-right whitespace-nowrap">Unit Price</div>,
       cell: ({ row }) => (
-        <div className="text-right text-xs font-mono tabular-nums text-muted-foreground whitespace-nowrap">
-          {Number(row.original.openingDip || 0).toLocaleString()} L
+        <div className="text-right text-xs font-mono tabular-nums text-foreground whitespace-nowrap">
+          ₦{Number(row.original.pricePerLiter || 0).toLocaleString()}/L
         </div>
       ),
     },
     {
-      accessorKey: "closingDip",
-      header: () => <div className="text-right whitespace-nowrap">Closing Dip</div>,
-      cell: ({ row }) => (
-        <div className="text-right text-xs font-mono tabular-nums text-muted-foreground whitespace-nowrap">
-          {Number(row.original.closingDip || 0).toLocaleString()} L
-        </div>
-      ),
+      id: "dippingInterval",
+      header: () => <div className="whitespace-nowrap">Dipping Interval</div>,
+      cell: ({ row }) => {
+        const opening = Number(row.original.openingDip || 0);
+        const closing = Number(row.original.closingDip || 0);
+        return (
+          <div className="flex items-center gap-2 text-xs font-mono whitespace-nowrap">
+            <span className="text-muted-foreground">{opening.toLocaleString()} L</span>
+            <span className="text-slate-300">→</span>
+            <span className="font-medium text-foreground">{closing.toLocaleString()} L</span>
+          </div>
+        );
+      },
     },
     {
       accessorKey: "litersSold",
@@ -230,12 +242,51 @@ export function SalesReportsManager({
     },
     {
       id: "revenue",
-      header: () => <div className="text-right whitespace-nowrap">Total Revenue</div>,
+      header: () => <div className="text-right whitespace-nowrap">Expected Revenue</div>,
       cell: ({ row }) => {
-        const total = Number(row.original.amountCash) + Number(row.original.amountPos) + Number(row.original.amountTransfer);
+        const expectedTotal = Number(row.original.litersSold) * Number(row.original.pricePerLiter);
+        return (
+          <div className="text-right text-xs font-mono tabular-nums font-medium text-slate-600 whitespace-nowrap">
+            {formatShortCurrency(expectedTotal)}
+          </div>
+        );
+      },
+    },
+    {
+      id: "received",
+      header: () => <div className="text-right whitespace-nowrap">Total Received</div>,
+      cell: ({ row }) => {
+        const receivedTotal = Number(row.original.amountCash) + Number(row.original.amountPos) + Number(row.original.amountTransfer);
         return (
           <div className="text-right text-xs font-mono tabular-nums font-bold text-foreground whitespace-nowrap">
-            {formatShortCurrency(total)}
+            {formatShortCurrency(receivedTotal)}
+          </div>
+        );
+      },
+    },
+    {
+      id: "balance",
+      header: () => <div className="text-right whitespace-nowrap">Balance</div>,
+      cell: ({ row }) => {
+        const receivedTotal = Number(row.original.amountCash) + Number(row.original.amountPos) + Number(row.original.amountTransfer);
+        const expectedTotal = Number(row.original.litersSold) * Number(row.original.pricePerLiter);
+        const balance = receivedTotal - expectedTotal;
+        
+        let colorClass = "text-muted-foreground";
+        let prefix = "";
+        
+        if (balance > 0) {
+          colorClass = "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded";
+          prefix = "+";
+        } else if (balance < 0) {
+          colorClass = "text-rose-600 bg-rose-50 dark:bg-rose-950/30 px-2 py-0.5 rounded";
+        }
+
+        return (
+          <div className="text-right flex justify-end items-center whitespace-nowrap">
+            <div className={`text-[11px] font-mono tabular-nums font-bold ${colorClass}`}>
+              {balance === 0 ? "—" : `${prefix}${formatShortCurrency(balance)}`}
+            </div>
           </div>
         );
       },
@@ -566,8 +617,23 @@ export function SalesReportsManager({
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {stats.totalLiters.toLocaleString()} L
                   </td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {formatShortCurrency(stats.cash + stats.digital)}
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-slate-600">
+                    {formatShortCurrency(stats.expectedRevenue)}
+                  </td>
+                  <td className={cn(
+                    "px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black",
+                    stats.totalReceived > stats.expectedRevenue ? "text-emerald-600" : stats.totalReceived < stats.expectedRevenue ? "text-rose-600" : "text-foreground"
+                  )}>
+                    {formatShortCurrency(stats.totalReceived)}
+                  </td>
+                  <td className="px-2 py-2 text-right text-[11px] font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
+                    <span className={cn(
+                      "px-2 py-0.5 rounded inline-block",
+                      stats.totalBalance > 0 ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30" : 
+                      stats.totalBalance < 0 ? "text-rose-600 bg-rose-50 dark:bg-rose-950/30" : "text-muted-foreground"
+                    )}>
+                      {stats.totalBalance === 0 ? "—" : `${stats.totalBalance > 0 ? "+" : ""}${formatShortCurrency(stats.totalBalance)}`}
+                    </span>
                   </td>
                   <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black">
                   </td>

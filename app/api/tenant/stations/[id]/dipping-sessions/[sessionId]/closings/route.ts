@@ -24,10 +24,12 @@ export async function POST(
     const body = CloseSessionSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    const session = await prisma.dippingSession.findUnique({
+    let session = await prisma.dippingSession.findUnique({
       where: { id: sessionId },
       include: { closings: { orderBy: { recordedAt: "desc" } }, tank: true },
     });
+
+    // Removed dangerous fallback: closings must be attached to the exact session ID requested.
 
     if (!session || session.tenantId !== actor.tenantId || session.stationId !== stationId) {
       throw new DomainError(404, "not_found", "Session not found.");
@@ -66,6 +68,14 @@ export async function POST(
         where: { id: session.tankId },
         data: { currentLiters: body.closingLiters },
       });
+
+      // Close the session if reason is END_OF_DAY
+      if (body.reason === "END_OF_DAY") {
+        await tx.dippingSession.update({
+          where: { id: session.id },
+          data: { status: "COMPLETED", completedAt: new Date() },
+        });
+      }
 
       // If price change, add to price controls
       if (body.reason === "PRICE_CHANGE" && body.newPricePerLiter) {

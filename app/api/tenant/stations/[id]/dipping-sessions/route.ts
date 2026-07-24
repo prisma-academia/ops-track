@@ -7,6 +7,7 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 
 const OpenSessionSchema = z.object({
+  clientId: z.string().optional(),
   tankId: z.string().min(1),
   openingLiters: z.coerce.number().nonnegative(),
   pricePerLiter: z.coerce.number().positive(),
@@ -70,9 +71,22 @@ export async function POST(
         },
       });
 
+      // Check if session with client ID already exists
+      let existingSession = null;
+      if (body.clientId) {
+        existingSession = await tx.dippingSession.findUnique({
+          where: { id: body.clientId },
+        });
+      }
+
+      if (existingSession) {
+        return existingSession;
+      }
+
       // Create session
       const newSession = await tx.dippingSession.create({
         data: {
+          id: body.clientId || undefined,
           tenantId: actor.tenantId,
           stationId,
           tankId: body.tankId,

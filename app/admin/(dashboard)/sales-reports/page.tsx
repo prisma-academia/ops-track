@@ -17,6 +17,17 @@ export default async function SalesReportsPage() {
           code: true,
         },
       },
+      dippingClosing: {
+        include: {
+          session: {
+            include: {
+              closings: {
+                orderBy: { recordedAt: "asc" }
+              }
+            }
+          }
+        },
+      },
       recordedBy: {
         select: {
           id: true,
@@ -59,50 +70,159 @@ export default async function SalesReportsPage() {
     minDate.setHours(0, 0, 0, 0);
   }
 
-  // Only fetch dippings if we have reports
-  const dippings = minDate && maxDate ? await prisma.tankDipping.findMany({
-    where: { 
-      tenantId: actor.tenantId,
-      recordedAt: {
-        gte: minDate,
-        lte: maxDate,
-      }
-    },
-    include: {
-      tank: {
-        select: {
-          productType: true,
-          stationId: true,
+  // Fetch legacy TankDipping records and DippingSession records for the date range
+  const [dippings, dippingSessions] = minDate && maxDate ? await Promise.all([
+    prisma.tankDipping.findMany({
+      where: { 
+        tenantId: actor.tenantId,
+        recordedAt: {
+          gte: minDate,
+          lte: maxDate,
+        }
+      },
+      include: {
+        tank: {
+          select: {
+            productType: true,
+            stationId: true,
+          },
         },
       },
-    },
-  }) : [];
+    }),
+    prisma.dippingSession.findMany({
+      where: {
+        tenantId: actor.tenantId,
+        OR: [
+          {
+            openedAt: {
+              gte: minDate,
+              lte: maxDate,
+            },
+          },
+          {
+            closings: {
+              some: {
+                recordedAt: {
+                  gte: minDate,
+                  lte: maxDate,
+                },
+              },
+            },
+          },
+        ],
+      },
+      include: {
+        tank: true,
+        closings: true,
+      },
+    }),
+  ]) : [[], []];
 
-  // Map the dippings directly into the sales reports server-side
+  // Map dippings and dipping sessions into the sales reports server-side
   const mappedReports = salesReports.map((report) => {
-    const logDateStr = report.logDate.toDateString();
     let openingDip = 0;
     let closingDip = 0;
+    let pricePerLiter = Number(report.pricePerLiter || 0);
 
-    dippings.forEach((dip) => {
-      if (
-        dip.tank?.stationId === report.stationId &&
-        dip.tank?.productType === report.productType
-      ) {
-        if (dip.recordedAt.toDateString() === logDateStr) {
-          if (dip.reason === "OPENING_DIP" || dip.shift === "MORNING") {
-            openingDip += Number(dip.dippingLiters);
-          } else if (dip.reason === "CLOSING_DIP" || dip.shift === "EVENING") {
-            closingDip += Number(dip.dippingLiters);
+    // 1. Direct relation check if generated via DippingClosing or lookup via dippingClosingId
+    if (report.dippingClosing || report.dippingClosingId) {
+      let foundClosing = report.dippingClosing;
+      let foundSession = report.dippingClosing?.session;
+
+      if (!foundClosing && report.dippingClosingId) {
+        for (const ds of dippingSessions) {
+          const c = ds.closings.find((c) => c.id === report.dippingClosingId);
+          if (c) {
+            foundSession = ds as any;
+            foundClosing = c as any;
+            break;
           }
         }
       }
-    });
+
+      if (foundClosing && foundSession) {
+        closingDip = Number(foundClosing.closingLiters);
+        if (foundClosing.appliedPrice) {
+          pricePerLiter = Number(foundClosing.appliedPrice);
+        }
+        
+        // Use closings directly from the included session instead of looking up in dippingSessions
+        const sortedClosings = [...(foundSession.closings || [])].sort(
+          (a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()
+        );
+        
+        const closingIndex = sortedClosings.findIndex((c) => c.id === foundClosing.id);
+        if (closingIndex > 0) {
+          // Opening dip for this specific closing interval is the previous closing's liters
+          openingDip = Number(sortedClosings[closingIndex - 1].closingLiters);
+        } else {
+          // First closing interval opens with session openingLiters
+          openingDip = Number(foundSession.openingLiters);
+        }
+      }
+    }
+
+    const logDateStr = report.logDate.toDateString();
+
+    // 2. Check DippingSession records matching date, station, and product type if opening/closing not set
+    if (openingDip === 0 || closingDip === 0) {
+      dippingSessions.forEach((ds) => {
+        const isActiveOnDate = ds.openedAt.toDateString() === logDateStr || ds.closings.some(c => c.recordedAt.toDateString() === logDateStr);
+        if (
+          ds.stationId === report.stationId &&
+          ds.tank?.productType === report.productType &&
+          isActiveOnDate
+        ) {
+          // Attempt to guess the interval by matching the volume sold
+          let matched = false;
+          let prevLiters = Number(ds.openingLiters);
+          const sortedClosings = [...ds.closings].sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+          
+          for (const c of sortedClosings) {
+            const closingLiters = Number(c.closingLiters);
+            const sold = prevLiters - closingLiters;
+            if (Math.abs(sold - Number(report.litersSold)) < 0.1) {
+              openingDip = prevLiters;
+              closingDip = closingLiters;
+              matched = true;
+              break;
+            }
+            prevLiters = closingLiters;
+          }
+
+          if (!matched) {
+            if (openingDip === 0) openingDip = Number(ds.openingLiters);
+            if (closingDip === 0 && ds.closings.length > 0) {
+              closingDip = Number(ds.closings[ds.closings.length - 1].closingLiters);
+            }
+          }
+          if (pricePerLiter === 0) pricePerLiter = Number(ds.pricePerLiter);
+        }
+      });
+    }
+
+    // 3. Fallback to legacy TankDipping records
+    if (openingDip === 0 || closingDip === 0) {
+      dippings.forEach((dip) => {
+        if (
+          dip.tank?.stationId === report.stationId &&
+          dip.tank?.productType === report.productType &&
+          dip.recordedAt.toDateString() === logDateStr
+        ) {
+          if ((dip.reason === "OPENING_DIP" || dip.shift === "MORNING") && openingDip === 0) {
+            openingDip = Number(dip.dippingLiters);
+          } else if ((dip.reason === "CLOSING_DIP" || dip.shift === "EVENING") && closingDip === 0) {
+            closingDip = Number(dip.dippingLiters);
+          }
+        }
+      });
+    }
 
     return {
       ...report,
       openingDip,
       closingDip,
+      pricePerLiter,
     };
   });
 

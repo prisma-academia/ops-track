@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { cn, formatHumanReadableDate, formatShortCurrency } from "@/lib/utils";
 import { z } from "zod";
 import { apiPost, apiPatch } from "@/lib/client/api";
 import { DataTable } from "@/components/data-table";
@@ -339,34 +339,122 @@ export function StationDetailsManager({
     {
       accessorKey: "recorded_at",
       header: "Date & Time",
-      cell: ({ row }) => <span className="text-foreground/90">{formatHumanReadableDate(row.original.recorded_at || row.original.recordedAt)}</span>,
+      cell: ({ row }) => (
+        <span className="text-foreground/90">{formatHumanReadableDate(row.original.recorded_at || row.original.recordedAt)}</span>
+      ),
     },
     {
       id: "tank_name",
       header: "Tank",
-      cell: ({ row }) => <span className="font-medium text-foreground">{row.original.tank_name || row.original.tank?.name || "—"}</span>,
+      cell: ({ row }) => (
+        <span className="font-medium text-foreground">{row.original.tank_name || row.original.tank?.name || "—"}</span>
+      ),
     },
     {
       id: "product_type",
       header: "Product",
-      cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.product_type || row.original.tank?.productType || "—"}</span>,
-    },
-    {
-      id: "reason",
-      header: () => <div className="text-center">Reason</div>,
       cell: ({ row }) => (
-        <div className="text-center">
-          <Badge variant="outline" className="text-[10px] font-semibold">{row.original.reason || "ROUTINE"}</Badge>
-        </div>
+        <span className="font-mono text-xs text-muted-foreground">{row.original.product_type || row.original.tank?.productType || "—"}</span>
       ),
     },
     {
-      id: "volume",
-      header: () => <div className="text-right">Volume Recorded</div>,
+      id: "reason",
+      header: () => <div className="text-center">Reason / Type</div>,
       cell: ({ row }) => {
-        const liters = Number(row.original.dipping_liters ?? row.original.dippingLiters ?? 0);
-        const productType = row.original.product_type || row.original.tank?.productType;
-        return <div className="text-right font-mono font-medium text-foreground">{liters.toLocaleString()} {productType === "LPG" ? "KG" : "L"}</div>;
+        const o = row.original;
+        const reason = o.reason || "ROUTINE";
+        const isPriceChange = reason === "PRICE_CHANGE";
+        const isEod = reason === "END_OF_DAY";
+
+        return (
+          <div className="flex flex-col items-center gap-1">
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[10px] font-semibold uppercase tracking-wider",
+                isPriceChange
+                  ? "text-indigo-600 border-indigo-200 bg-indigo-50 dark:bg-indigo-950/30"
+                  : isEod
+                  ? "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30"
+                  : "text-slate-600 border-slate-200 bg-slate-50 dark:bg-slate-900/30"
+              )}
+            >
+              {reason.replace(/_/g, " ")}
+            </Badge>
+            {o.closingIndex > 0 && (
+              <span className="text-[9px] text-muted-foreground font-mono">Closing #{o.closingIndex}</span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: "price",
+      header: () => <div className="text-right whitespace-nowrap">Unit Price</div>,
+      cell: ({ row }) => {
+        const o = row.original;
+        if (o.pricePerLiter != null) {
+          return (
+            <div className="text-right font-mono text-xs text-foreground whitespace-nowrap">
+              <div>₦{Number(o.pricePerLiter).toLocaleString()}/L</div>
+              {o.newPricePerLiter != null && (
+                <div className="text-[10px] text-indigo-600 font-semibold">New: ₦{Number(o.newPricePerLiter).toLocaleString()}/L</div>
+              )}
+            </div>
+          );
+        }
+        return <div className="text-right text-muted-foreground text-xs">—</div>;
+      },
+    },
+    {
+      id: "dip_levels",
+      header: () => <div className="text-right whitespace-nowrap">Dip Levels (Op / Cl)</div>,
+      cell: ({ row }) => {
+        const o = row.original;
+        const productType = o.product_type || o.tank?.productType;
+        const unit = productType === "LPG" ? "KG" : "L";
+
+        if (o.openingLiters != null) {
+          return (
+            <div className="text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
+              <div>Op: {Number(o.openingLiters).toLocaleString()} {unit}</div>
+              {o.closingLiters != null ? (
+                <div>Cl: {Number(o.closingLiters).toLocaleString()} {unit}</div>
+              ) : (
+                <div className="text-amber-600 font-semibold">Active Open</div>
+              )}
+            </div>
+          );
+        }
+
+        const liters = Number(o.dipping_liters ?? o.dippingLiters ?? 0);
+        return <div className="text-right font-mono text-xs text-foreground">{liters.toLocaleString()} {unit}</div>;
+      },
+    },
+    {
+      id: "volume_and_revenue",
+      header: () => <div className="text-right whitespace-nowrap">Sold & Revenue</div>,
+      cell: ({ row }) => {
+        const o = row.original;
+        const productType = o.product_type || o.tank?.productType;
+        const unit = productType === "LPG" ? "KG" : "L";
+
+        if (o.litersSold != null) {
+          return (
+            <div className="text-right whitespace-nowrap">
+              <div className="text-xs font-semibold text-emerald-600 font-mono">
+                {Number(o.litersSold).toLocaleString()} {unit}
+              </div>
+              {o.revenue != null && (
+                <div className="text-xs font-bold text-foreground font-mono">
+                  {formatShortCurrency(Number(o.revenue))}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        return <div className="text-right text-muted-foreground text-xs">—</div>;
       },
     },
   ];

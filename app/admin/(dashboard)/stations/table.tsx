@@ -16,6 +16,7 @@ export type StationRow = {
   lpgLiters: number;
   lastSalesAmount: number;
   lastWaybillDate: string | null;
+  derivedBalance: number;
 };
 
 const columns: ColumnDef<StationRow>[] = [
@@ -64,6 +65,20 @@ const columns: ColumnDef<StationRow>[] = [
     cell: ({ row }) => {
       const amount = row.original.lastSalesAmount;
       return amount > 0 ? `₦${amount.toLocaleString()}` : "—";
+    }
+  },
+  { 
+    accessorKey: "derivedBalance", 
+    header: "Wallet Balance",
+    cell: ({ row }) => {
+      const balance = row.original.derivedBalance;
+      const isDebt = balance < 0;
+      const formatted = `₦${Math.abs(balance).toLocaleString()}`;
+      return (
+        <span className={isDebt ? "text-destructive font-semibold" : "text-emerald-600 font-semibold"}>
+          {isDebt ? `-${formatted}` : formatted}
+        </span>
+      );
     }
   },
   { 

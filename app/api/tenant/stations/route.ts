@@ -67,6 +67,20 @@ export async function GET(request: Request) {
         }),
       ]);
       
+      const stationIds = rawRows.map((s) => s.id);
+      const allStationLogs = await prisma.salesLog.findMany({
+        where: { stationId: { in: stationIds }, status: { not: "REJECTED" } },
+        select: { stationId: true, litersSold: true, pricePerLiter: true, amountCash: true, amountPos: true, amountTransfer: true }
+      });
+
+      const balanceByStation = allStationLogs.reduce((acc, log) => {
+        const expected = Number(log.litersSold) * Number(log.pricePerLiter);
+        const collected = Number(log.amountCash) + Number(log.amountPos) + Number(log.amountTransfer);
+        const balance = collected - expected;
+        acc[log.stationId] = (acc[log.stationId] || 0) + balance;
+        return acc;
+      }, {} as Record<string, number>);
+
       const rows = rawRows.map((s) => {
         let pmsLiters = 0;
         let agoLiters = 0;
@@ -94,6 +108,7 @@ export async function GET(request: Request) {
           lpgLiters,
           lastSalesAmount,
           lastWaybillDate,
+          derivedBalance: balanceByStation[s.id] || 0,
         };
       });
       
@@ -134,6 +149,20 @@ export async function GET(request: Request) {
         include,
       });
   
+      const stationIds = rawRows.map((s) => s.id);
+      const allStationLogs = await prisma.salesLog.findMany({
+        where: { stationId: { in: stationIds }, status: { not: "REJECTED" } },
+        select: { stationId: true, litersSold: true, pricePerLiter: true, amountCash: true, amountPos: true, amountTransfer: true }
+      });
+
+      const balanceByStation = allStationLogs.reduce((acc, log) => {
+        const expected = Number(log.litersSold) * Number(log.pricePerLiter);
+        const collected = Number(log.amountCash) + Number(log.amountPos) + Number(log.amountTransfer);
+        const balance = collected - expected;
+        acc[log.stationId] = (acc[log.stationId] || 0) + balance;
+        return acc;
+      }, {} as Record<string, number>);
+  
       const rows = rawRows.map((s) => {
         let pmsLiters = 0;
         let agoLiters = 0;
@@ -161,6 +190,7 @@ export async function GET(request: Request) {
           lpgLiters,
           lastSalesAmount,
           lastWaybillDate,
+          derivedBalance: balanceByStation[s.id] || 0,
         };
       });
 

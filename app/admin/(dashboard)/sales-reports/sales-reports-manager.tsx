@@ -60,6 +60,8 @@ interface SalesReportRow {
   station: SalesReportStation;
   recordedBy: SalesReportUser | null;
   approvedBy: SalesReportUser | null;
+  isDebtRepayment?: boolean;
+  parentSaleId?: string | null;
 }
 
 export function SalesReportsManager({
@@ -204,7 +206,14 @@ export function SalesReportsManager({
       accessorKey: "productType",
       header: "Product",
       cell: ({ row }) => (
-        <span className="font-mono text-[10px] uppercase tracking-wider">{row.original.productType}</span>
+        <div className="flex flex-col gap-1">
+          <span className="font-mono text-[10px] uppercase tracking-wider">{row.original.productType}</span>
+          {row.original.isDebtRepayment && (
+            <span className="text-[9px] text-blue-600 bg-blue-50 px-1 py-0.5 rounded font-bold uppercase tracking-wider self-start">
+              Debt Repayment
+            </span>
+          )}
+        </div>
       ),
     },
     {
@@ -220,6 +229,9 @@ export function SalesReportsManager({
       id: "dippingInterval",
       header: () => <div className="whitespace-nowrap">Dipping Interval</div>,
       cell: ({ row }) => {
+        if (row.original.isDebtRepayment) {
+          return <span className="text-muted-foreground text-xs italic">N/A</span>;
+        }
         const opening = Number(row.original.openingDip || 0);
         const closing = Number(row.original.closingDip || 0);
         return (
@@ -584,7 +596,8 @@ export function SalesReportsManager({
                       key={row.id}
                       className={cn(
                         "hover:bg-muted/20 transition-colors group cursor-pointer",
-                        index % 2 === 0 ? "bg-background" : "bg-muted/5 print:bg-transparent"
+                        index % 2 === 0 ? "bg-background" : "bg-muted/5 print:bg-transparent",
+                        row.original.isDebtRepayment && "bg-blue-50/50"
                       )}
                       onClick={() => router.push(`/admin/sales-reports/${row.original.id}`)}
                     >

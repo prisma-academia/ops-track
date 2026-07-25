@@ -51,7 +51,10 @@ interface SalesReportRow {
   station: SalesReportStation;
   recordedBy: SalesReportUser | null;
   approvedBy: SalesReportUser | null;
+  isDebtRepayment?: boolean;
+  parentSaleId?: string | null;
 }
+
 
 export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   const router = useRouter();
@@ -157,9 +160,16 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                 </div>
                 <div className="p-4 sm:p-5">
                   <span className="text-xs text-muted-foreground block font-medium uppercase tracking-wider mb-1">Product</span>
-                  <Badge variant="secondary" className="font-mono text-xs">
-                    {report.productType}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="font-mono text-xs">
+                      {report.productType}
+                    </Badge>
+                    {report.isDebtRepayment && (
+                      <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50 font-bold text-[10px]">
+                        Debt Repayment
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="p-4 sm:p-5">
                   <span className="text-xs text-muted-foreground block font-medium uppercase tracking-wider mb-1">Volume Sold</span>

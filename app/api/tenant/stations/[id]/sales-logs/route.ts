@@ -7,6 +7,9 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
 const CreateSalesLogSchema = z.object({
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   litersSold: z.coerce.number().positive(),

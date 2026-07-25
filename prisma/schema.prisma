@@ -505,6 +505,11 @@ model SalesLog {
   approvedBy         TenantUser?    @relation("SalesApprovedBy", fields: [approvedById], references: [id])
   approvedAt         DateTime?
 
+  isDebtRepayment    Boolean        @default(false)
+  parentSaleId       String?        // Links to the original sale that was short
+  parentSale         SalesLog?      @relation("DebtRepayments", fields: [parentSaleId], references: [id])
+  debtRepayments     SalesLog[]     @relation("DebtRepayments")
+
   dippingClosing   DippingClosing?
   dippingClosingId String?         @unique
 

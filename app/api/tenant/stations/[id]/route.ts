@@ -55,7 +55,20 @@ export async function GET(
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
-    return ok(station);
+    // Calculate derived balance using an immutable ledger approach
+    // Total Payments Received - Expected Value of Liters Sold
+    const salesLogs = await prisma.salesLog.findMany({
+      where: { stationId: id, status: { not: "REJECTED" } },
+      select: { amountCash: true, amountPos: true, amountTransfer: true, litersSold: true, pricePerLiter: true },
+    });
+
+    const derivedBalance = salesLogs.reduce((acc, log) => {
+      const paid = Number(log.amountCash || 0) + Number(log.amountPos || 0) + Number(log.amountTransfer || 0);
+      const expected = Number(log.litersSold || 0) * Number(log.pricePerLiter || 0);
+      return acc + (paid - expected);
+    }, 0);
+
+    return ok({ ...station, derivedBalance });
   } catch (e) {
     return handleError(e);
   }

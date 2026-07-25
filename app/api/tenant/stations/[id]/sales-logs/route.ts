@@ -12,7 +12,7 @@ export const fetchCache = "force-no-store";
 
 const CreateSalesLogSchema = z.object({
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
-  litersSold: z.coerce.number().positive(),
+  litersSold: z.coerce.number().min(0), // Changed from .positive() to allow 0 for debt repayments
   pricePerLiter: z.coerce.number().min(0).default(0),
   amountCash: z.coerce.number().min(0),
   amountPos: z.coerce.number().min(0),
@@ -23,6 +23,8 @@ const CreateSalesLogSchema = z.object({
   logDate: z.string().optional(),
   dippingClosingId: z.string().optional(),
   clientId: z.string().optional(),
+  isDebtRepayment: z.boolean().optional().default(false),
+  parentSaleId: z.string().nullable().optional(),
 });
 
 export async function GET(
@@ -123,6 +125,8 @@ export async function POST(
         logDate,
         recordedById: actor.userId,
         dippingClosingId: body.dippingClosingId,
+        isDebtRepayment: body.isDebtRepayment,
+        parentSaleId: body.parentSaleId || null,
       },
     });
 

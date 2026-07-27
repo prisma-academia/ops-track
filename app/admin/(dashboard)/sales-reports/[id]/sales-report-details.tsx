@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, User, FileText, CheckCircle2, AlertCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ArrowLeft, User, CheckCircle2, AlertCircle, Image as ImageIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { formatHumanReadableDate, formatShortCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { apiPatch } from "@/lib/client/api";
@@ -27,6 +28,23 @@ interface SalesReportUser {
   email: string;
   firstName: string | null;
   lastName: string | null;
+}
+
+interface DebtRepayment {
+  id: string;
+  amountCash: number;
+  amountPos: number;
+  amountTransfer: number;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  logDate: string | Date;
+  cashReceiptUrl?: string | null;
+  posReceiptUrl?: string | null;
+  recordedBy?: SalesReportUser | null;
+  approvedBy?: SalesReportUser | null;
+  reason?: string | null;
+  flaggedAmount?: boolean;
+  flaggedLiters?: boolean;
+  flaggedReceipt?: boolean;
 }
 
 interface SalesReportRow {
@@ -58,28 +76,38 @@ interface SalesReportRow {
     id: string;
     logDate: string | Date;
     productType: string;
-  } | null;
-  debtRepayments?: {
-    id: string;
+    litersSold: number;
+    pricePerLiter: number;
     amountCash: number;
     amountPos: number;
     amountTransfer: number;
+    cashReceiptUrl: string | null;
+    posReceiptUrl: string | null;
     status: "PENDING" | "APPROVED" | "REJECTED";
-    logDate: string | Date;
-  }[];
+    recordedBy: SalesReportUser | null;
+    approvedBy: SalesReportUser | null;
+    reason: string | null;
+    flaggedAmount: boolean;
+    flaggedLiters: boolean;
+    flaggedReceipt: boolean;
+    debtRepayments: DebtRepayment[];
+  } | null;
+  debtRepayments?: DebtRepayment[];
 }
 
 export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   const router = useRouter();
 
-  // Review State
-  const [reviewStatus, setReviewStatus] = useState<"APPROVED" | "REJECTED">(
-    report.status === "REJECTED" ? "REJECTED" : "APPROVED"
-  );
-  const [flaggedAmount, setFlaggedAmount] = useState(report.flaggedAmount);
-  const [flaggedLiters, setFlaggedLiters] = useState(report.flaggedLiters);
-  const [flaggedReceipt, setFlaggedReceipt] = useState(report.flaggedReceipt);
-  const [reason, setReason] = useState(report.reason || "");
+  // Review Modal State
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewTargetId, setReviewTargetId] = useState<string | null>(null);
+  
+  // Review Form State
+  const [reviewStatus, setReviewStatus] = useState<"APPROVED" | "REJECTED">("APPROVED");
+  const [flaggedAmount, setFlaggedAmount] = useState(false);
+  const [flaggedLiters, setFlaggedLiters] = useState(false);
+  const [flaggedReceipt, setFlaggedReceipt] = useState(false);
+  const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -88,14 +116,33 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   const [activeFileName, setActiveFileName] = useState<string | undefined>();
   const [isFileViewerOpen, setIsFileViewerOpen] = useState(false);
 
+  // Collapsible State
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+
+  const toggleRow = (id: string) => {
+    setExpandedRows((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   const handleOpenReceipt = (url: string, name: string) => {
     setActiveFileUrl(url);
     setActiveFileName(name);
     setIsFileViewerOpen(true);
   };
 
+  const handleOpenReviewModal = (targetId: string, initialStatus: string) => {
+    setReviewTargetId(targetId);
+    setReviewStatus(initialStatus === "REJECTED" ? "REJECTED" : "APPROVED");
+    setFlaggedAmount(false);
+    setFlaggedLiters(false);
+    setFlaggedReceipt(false);
+    setReason("");
+    setApiError(null);
+    setReviewModalOpen(true);
+  };
+
   const handleReviewReport = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!reviewTargetId) return;
 
     if (reviewStatus === "REJECTED" && !reason.trim()) {
       setApiError("Rejection reason is required.");
@@ -105,7 +152,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     setApiError(null);
     setIsSubmitting(true);
 
-    const res = await apiPatch(`/api/tenant/stations/${report.stationId}/sales-logs/${report.id}`, {
+    const res = await apiPatch(`/api/tenant/stations/${report.stationId}/sales-logs/${reviewTargetId}`, {
       status: reviewStatus,
       flaggedAmount,
       flaggedLiters,
@@ -118,19 +165,84 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     if (res.error) {
       setApiError(res.error.message);
     } else {
+      setReviewModalOpen(false);
       router.refresh();
-      router.push("/admin/sales-reports");
     }
   };
 
-  const totalRevenue = Number(report.amountCash) + Number(report.amountPos) + Number(report.amountTransfer);
+  // Determine Flow Table Data
+  let flowParent: any = null;
+  let flowChildren: any[] = [];
+
+  if (report.isDebtRepayment && report.parentSale) {
+    flowParent = report.parentSale;
+    flowChildren = report.parentSale.debtRepayments || [];
+  } else {
+    flowParent = report;
+    flowChildren = report.debtRepayments || [];
+  }
+
+  // Pre-sort children by date
+  flowChildren.sort((a, b) => new Date(a.logDate).getTime() - new Date(b.logDate).getTime());
+
+  let currentBalance = 0;
   
-  const expectedRevenue = Number(report.litersSold) * Number(report.pricePerLiter);
-  const initialShortage = expectedRevenue > totalRevenue ? expectedRevenue - totalRevenue : 0;
-  
-  const approvedRepayments = (report.debtRepayments || []).filter(r => r.status !== "REJECTED");
-  const totalRepaid = approvedRepayments.reduce((sum, r) => sum + Number(r.amountCash) + Number(r.amountPos) + Number(r.amountTransfer), 0);
-  const remainingDebt = initialShortage - totalRepaid;
+  if (flowParent) {
+    const pExpected = Number(flowParent.litersSold) * Number(flowParent.pricePerLiter);
+    const pPaid = Number(flowParent.amountCash) + Number(flowParent.amountPos) + Number(flowParent.amountTransfer);
+    currentBalance = pExpected - pPaid;
+  }
+
+  const renderTimeline = (rowReport: any) => (
+    <div className="p-4 bg-muted/10 border-b border-border">
+      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pl-1 mb-4">Timeline & Logging details</h3>
+      <div className="relative pl-6 space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-border/60">
+        <div className="relative">
+          <div className="absolute -left-[20px] top-1 size-3 rounded-full bg-primary border-2 border-background" />
+          <div className="bg-card border rounded-xl p-4 shadow-sm w-full md:w-1/2">
+            <span className="text-sm font-semibold block mb-1">Sales Log Submitted</span>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <User className="size-3.5" />
+              <span>
+                By <strong className="text-foreground">{rowReport.recordedBy ? `${rowReport.recordedBy.firstName ?? ""} ${rowReport.recordedBy.lastName ?? ""}`.trim() : "Unknown"}</strong> ({rowReport.recordedBy?.email || "No email"})
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {rowReport.status !== "PENDING" && (
+          <div className="relative">
+            <div className={`absolute -left-[20px] top-1 size-3 rounded-full border-2 border-background ${rowReport.status === "APPROVED" ? "bg-emerald-600" : "bg-rose-600"}`} />
+            <div className={`bg-card border rounded-xl p-4 shadow-sm w-full md:w-1/2 ${rowReport.status === "APPROVED" ? "border-emerald-500/20 bg-emerald-500/5" : "border-rose-500/20 bg-rose-500/5"}`}>
+              <span className={`text-sm font-semibold block mb-1 ${rowReport.status === "APPROVED" ? "text-emerald-600 dark:text-emerald-500" : "text-rose-600 dark:text-rose-500"}`}>
+                {rowReport.status === "APPROVED" ? "Report Approved" : "Report Rejected"}
+              </span>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                <User className="size-3.5" />
+                <span>
+                  By <strong className="text-foreground">{rowReport.approvedBy ? `${rowReport.approvedBy.firstName ?? ""} ${rowReport.approvedBy.lastName ?? ""}`.trim() : "Supervisor"}</strong> ({rowReport.approvedBy?.email || "No email"})
+                </span>
+              </div>
+              
+              {rowReport.reason && (
+                <div className="text-sm bg-background/60 p-3 rounded-lg border mb-3 whitespace-pre-wrap italic text-muted-foreground">
+                  {rowReport.reason}
+                </div>
+              )}
+              
+              {(rowReport.flaggedAmount || rowReport.flaggedLiters || rowReport.flaggedReceipt) && (
+                <div className="flex flex-wrap gap-2">
+                  {rowReport.flaggedAmount && <Badge variant="destructive" className="bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400 hover:bg-rose-100">Flagged: Amount</Badge>}
+                  {rowReport.flaggedLiters && <Badge variant="destructive" className="bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400 hover:bg-rose-100">Flagged: Liters</Badge>}
+                  {rowReport.flaggedReceipt && <Badge variant="destructive" className="bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400 hover:bg-rose-100">Flagged: Receipt</Badge>}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -147,7 +259,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
             Logged for {formatHumanReadableDate(report.logDate)} at {report.station?.name}
           </p>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
           {report.status === "APPROVED" ? (
             <Badge variant="outline" className="text-emerald-600 border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-sm px-3 py-1">
               <CheckCircle2 className="size-4 mr-1.5" /> Approved
@@ -164,11 +276,11 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 space-y-4">
+      <div className="grid grid-cols-1 gap-6">
+        <div className="space-y-4">
           {/* Summary Stats Grid */}
           <Card className="shadow-sm">
-            <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
+            <CardHeader className="pb-3 border-b border-border/40 bg-muted/20 flex flex-row items-center justify-between">
               <CardTitle className="text-base font-semibold">Overview</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -200,282 +312,161 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                   <span className="font-semibold text-foreground font-mono text-base">{formatShortCurrency(Number(report.pricePerLiter))}</span>
                 </div>
               </div>
-              {report.isDebtRepayment && report.parentSale && (
-                <div className="border-t border-border/40 p-4 bg-blue-50/50 dark:bg-blue-900/10">
-                  <span className="text-sm">Paying off shortage for <Link href={`/admin/sales-reports/${report.parentSale.id}`} className="font-semibold text-blue-600 hover:underline">{report.parentSale.productType} Sale on {formatHumanReadableDate(report.parentSale.logDate)}</Link></span>
-                </div>
-              )}
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Financial Breakdown */}
-            <Card className="shadow-sm">
+          {/* Flow Table / Explanatory Table */}
+          <Card className="shadow-sm border border-border">
             <CardHeader className="pb-3 border-b border-border/40">
-              <CardTitle className="text-base font-semibold">Financial Summary</CardTitle>
+              <CardTitle className="text-base font-semibold">Debt & Repayment Flow</CardTitle>
+              <p className="text-xs text-muted-foreground">This table shows the initial sale revenue vs expected, and any subsequent debt repayments.</p>
             </CardHeader>
-            <CardContent className="p-5">
-              <div className="space-y-3 divide-y divide-border/20 text-sm">
-                <div className="flex justify-between items-center pb-2">
-                  <span className="text-muted-foreground">Cash Revenue</span>
-                  <span className="font-semibold font-mono text-base">{formatShortCurrency(Number(report.amountCash))}</span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-muted-foreground">POS Revenue</span>
-                  <span className="font-semibold font-mono text-base">{formatShortCurrency(Number(report.amountPos))}</span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-muted-foreground">Bank Transfer</span>
-                  <span className="font-semibold font-mono text-base">{formatShortCurrency(Number(report.amountTransfer))}</span>
-                </div>
-                <div className="flex justify-between items-center pt-3 font-bold text-lg border-t border-border/40">
-                  <span>Total Deposit/Revenue</span>
-                  <span className="text-primary">{formatShortCurrency(totalRevenue)}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Expected vs Actual Revenue (Only for root sales) */}
-          {!report.isDebtRepayment && (
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3 border-b border-border/40">
-                <CardTitle className="text-base font-semibold">Revenue Validation</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="space-y-3 divide-y divide-border/20 text-sm">
-                  <div className="flex justify-between items-center pb-2">
-                    <span className="text-muted-foreground">Expected Revenue</span>
-                    <span className="font-semibold font-mono text-base">{formatShortCurrency(expectedRevenue)}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-muted-foreground">Total Paid (Incl. Repayments)</span>
-                    <span className="font-semibold font-mono text-base text-emerald-600">{formatShortCurrency(totalRevenue + totalRepaid)}</span>
-                  </div>
-                  <div className="flex justify-between items-center pt-3 font-bold text-base border-t border-border/40">
-                    <span>Remaining Balance</span>
-                    <span className={remainingDebt > 0 ? "text-rose-600" : "text-emerald-600"}>{remainingDebt > 0 ? formatShortCurrency(remainingDebt) : formatShortCurrency(0)}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          </div>
-
-          {/* Receipt Files */}
-          {(report.cashReceiptUrl || report.posReceiptUrl) && (
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3 border-b border-border/40">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <FileText className="size-4 text-muted-foreground" /> Receipt Files
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-5 space-y-3">
-                {report.cashReceiptUrl && (
-                  <div className="flex justify-between items-center bg-muted/20 hover:bg-muted/40 transition-colors p-3.5 rounded-xl border border-border/60">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-background rounded-lg border shadow-xs">
-                        <FileText className="size-4 text-primary" />
-                      </div>
-                      <span className="font-medium text-sm">Cash Teller Receipt</span>
-                    </div>
-                    <Button 
-                      variant="secondary" 
-                      size="sm" 
-                      onClick={() => handleOpenReceipt(report.cashReceiptUrl!, "Cash Teller Receipt")}
-                    >
-                      View Receipt
-                    </Button>
-                  </div>
-                )}
-                {report.posReceiptUrl && (
-                  <div className="flex justify-between items-center bg-muted/20 hover:bg-muted/40 transition-colors p-3.5 rounded-xl border border-border/60">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-background rounded-lg border shadow-xs">
-                        <FileText className="size-4 text-primary" />
-                      </div>
-                      <span className="font-medium text-sm">POS Settlement Receipt</span>
-                    </div>
-                    <Button 
-                      variant="secondary" 
-                      size="sm" 
-                      onClick={() => handleOpenReceipt(report.posReceiptUrl!, "POS Settlement Receipt")}
-                    >
-                      View Receipt
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Debt Repayments Listing */}
-          {report.debtRepayments && report.debtRepayments.length > 0 && (
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3 border-b border-border/40">
-                <CardTitle className="text-base font-semibold">Debt Repayments</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y divide-border/40">
-                  {report.debtRepayments.map(r => {
-                    const rTotal = Number(r.amountCash) + Number(r.amountPos) + Number(r.amountTransfer);
-                    return (
-                      <div key={r.id} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                        <div>
-                          <div className="font-semibold text-sm mb-1">{formatShortCurrency(rTotal)}</div>
-                          <div className="text-xs text-muted-foreground">{formatHumanReadableDate(r.logDate)}</div>
-                        </div>
-                        <div className="flex items-center gap-4">
+            <CardContent className="p-0 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/50 border-b border-border text-muted-foreground">
+                    <th className="py-3 px-4 font-medium text-left">Date</th>
+                    <th className="py-3 px-4 font-medium text-left">Type</th>
+                    <th className="py-3 px-4 font-medium text-right">Expected Rev</th>
+                    <th className="py-3 px-4 font-medium text-right">Total Received</th>
+                    <th className="py-3 px-4 font-medium text-right">Balance</th>
+                    <th className="py-3 px-4 font-medium text-center">Receipts</th>
+                    <th className="py-3 px-4 font-medium text-center">Status</th>
+                    <th className="py-3 px-4 font-medium text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {/* Parent Sale Row */}
+                  {flowParent && (
+                    <Fragment>
+                      <tr className={flowParent.id === report.id ? "bg-primary/5" : ""}>
+                        <td className="py-4 px-4 whitespace-nowrap">{formatHumanReadableDate(flowParent.logDate)}</td>
+                        <td className="py-4 px-4 whitespace-nowrap font-medium">Initial Sale</td>
+                        <td className="py-4 px-4 text-right font-mono tabular-nums whitespace-nowrap text-slate-600">{formatShortCurrency(Number(flowParent.litersSold) * Number(flowParent.pricePerLiter))}</td>
+                        <td className="py-4 px-4 text-right font-mono font-bold tabular-nums whitespace-nowrap text-emerald-600">{formatShortCurrency(Number(flowParent.amountCash) + Number(flowParent.amountPos) + Number(flowParent.amountTransfer))}</td>
+                        <td className="py-4 px-4 text-right font-mono font-bold tabular-nums whitespace-nowrap text-rose-600">{formatShortCurrency(currentBalance)}</td>
+                        <td className="py-4 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {flowParent.cashReceiptUrl && (
+                              <Button variant="outline" size="icon" className="size-7" onClick={() => handleOpenReceipt(flowParent.cashReceiptUrl, "Cash Receipt")}>
+                                <ImageIcon className="size-3 text-muted-foreground" />
+                              </Button>
+                            )}
+                            {flowParent.posReceiptUrl && (
+                              <Button variant="outline" size="icon" className="size-7" onClick={() => handleOpenReceipt(flowParent.posReceiptUrl, "POS Receipt")}>
+                                <ImageIcon className="size-3 text-muted-foreground" />
+                              </Button>
+                            )}
+                            {!flowParent.cashReceiptUrl && !flowParent.posReceiptUrl && (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-center">
                           <Badge variant="outline" className={
-                            r.status === "APPROVED" ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
-                            r.status === "REJECTED" ? "bg-rose-50 text-rose-600 border-rose-200" :
-                            "bg-amber-50 text-amber-600 border-amber-200"
-                          }>
-                            {r.status}
-                          </Badge>
-                          <Button variant="ghost" size="sm" asChild>
-                            <Link href={`/admin/sales-reports/${r.id}`}>View</Link>
-                          </Button>
-                        </div>
-                      </div>
+                              flowParent.status === "APPROVED" ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                              flowParent.status === "REJECTED" ? "bg-rose-50 text-rose-600 border-rose-200" :
+                              "bg-amber-50 text-amber-600 border-amber-200"
+                            }>
+                              {flowParent.status}
+                            </Badge>
+                        </td>
+                        <td className="py-4 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button size="sm" variant="secondary" onClick={() => handleOpenReviewModal(flowParent.id, flowParent.status)}>Review</Button>
+                            <Button size="sm" variant="outline" onClick={() => toggleRow(flowParent.id)}>
+                              Details
+                              {expandedRows[flowParent.id] ? <ChevronUp className="size-4 ml-1" /> : <ChevronDown className="size-4 ml-1" />}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedRows[flowParent.id] && (
+                        <tr>
+                          <td colSpan={8} className="p-0">
+                            {renderTimeline(flowParent)}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )}
+                  
+                  {/* Children Rows */}
+                  {flowChildren.map((child) => {
+                    const childPaid = Number(child.amountCash) + Number(child.amountPos) + Number(child.amountTransfer);
+                    if (child.status === "APPROVED") {
+                      currentBalance -= childPaid;
+                    }
+                    return (
+                      <Fragment key={child.id}>
+                        <tr className={child.id === report.id ? "bg-primary/5" : ""}>
+                          <td className="py-4 px-4 whitespace-nowrap relative text-muted-foreground pl-8">
+                            <div className="absolute left-4 top-0 bottom-1/2 border-l border-b border-border/80 w-3 rounded-bl"></div>
+                            {formatHumanReadableDate(child.logDate)}
+                          </td>
+                          <td className="py-4 px-4 whitespace-nowrap text-blue-600 font-medium">Debt Repayment</td>
+                          <td className="py-4 px-4 text-right text-muted-foreground">—</td>
+                          <td className="py-4 px-4 text-right font-mono font-bold tabular-nums whitespace-nowrap text-emerald-600">+{formatShortCurrency(childPaid)}</td>
+                          <td className="py-4 px-4 text-right font-mono font-bold tabular-nums whitespace-nowrap text-rose-600">
+                            {child.status === "APPROVED" ? formatShortCurrency(currentBalance) : <span className="text-xs font-normal text-amber-600">(Pending Approval)</span>}
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {child.cashReceiptUrl && (
+                                <Button variant="outline" size="icon" className="size-7" onClick={() => handleOpenReceipt(child.cashReceiptUrl, "Cash Receipt")}>
+                                  <ImageIcon className="size-3 text-muted-foreground" />
+                                </Button>
+                              )}
+                              {child.posReceiptUrl && (
+                                <Button variant="outline" size="icon" className="size-7" onClick={() => handleOpenReceipt(child.posReceiptUrl, "POS Receipt")}>
+                                  <ImageIcon className="size-3 text-muted-foreground" />
+                                </Button>
+                              )}
+                              {!child.cashReceiptUrl && !child.posReceiptUrl && (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <Badge variant="outline" className={
+                                child.status === "APPROVED" ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                                child.status === "REJECTED" ? "bg-rose-50 text-rose-600 border-rose-200" :
+                                "bg-amber-50 text-amber-600 border-amber-200"
+                              }>
+                                {child.status}
+                              </Badge>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button size="sm" variant="secondary" onClick={() => handleOpenReviewModal(child.id, child.status)}>Review</Button>
+                              <Button size="sm" variant="outline" onClick={() => toggleRow(child.id)}>
+                                Details
+                                {expandedRows[child.id] ? <ChevronUp className="size-4 ml-1" /> : <ChevronDown className="size-4 ml-1" />}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                        {expandedRows[child.id] && (
+                          <tr>
+                            <td colSpan={8} className="p-0">
+                              {renderTimeline(child)}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Review Timeline / Status Details */}
-          <div className="space-y-4 pt-2">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pl-1">Timeline & Approval</h3>
-            <div className="relative pl-6 space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-border/60">
-              <div className="relative">
-                <div className="absolute -left-[20px] top-1 size-3 rounded-full bg-primary border-2 border-background" />
-                <div className="bg-card border rounded-xl p-4 shadow-sm">
-                  <span className="text-sm font-semibold block mb-1">Sales Log Submitted</span>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <User className="size-3.5" />
-                    <span>
-                      By <strong className="text-foreground">{report.recordedBy ? `${report.recordedBy.firstName ?? ""} ${report.recordedBy.lastName ?? ""}`.trim() : "Unknown"}</strong> ({report.recordedBy?.email || "No email"})
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {report.status !== "PENDING" && (
-                <div className="relative">
-                  <div className={`absolute -left-[20px] top-1 size-3 rounded-full border-2 border-background ${report.status === "APPROVED" ? "bg-emerald-600" : "bg-rose-600"}`} />
-                  <div className={`bg-card border rounded-xl p-4 shadow-sm ${report.status === "APPROVED" ? "border-emerald-500/20 bg-emerald-500/5" : "border-rose-500/20 bg-rose-500/5"}`}>
-                    <span className={`text-sm font-semibold block mb-1 ${report.status === "APPROVED" ? "text-emerald-600 dark:text-emerald-500" : "text-rose-600 dark:text-rose-500"}`}>
-                      {report.status === "APPROVED" ? "Report Approved" : "Report Rejected"}
-                    </span>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-                      <User className="size-3.5" />
-                      <span>
-                        By <strong className="text-foreground">{report.approvedBy ? `${report.approvedBy.firstName ?? ""} ${report.approvedBy.lastName ?? ""}`.trim() : "Supervisor"}</strong> ({report.approvedBy?.email || "No email"})
-                      </span>
-                    </div>
-                    
-                    {report.reason && (
-                      <div className="text-sm bg-background/60 p-3 rounded-lg border mb-3 whitespace-pre-wrap italic text-muted-foreground">
-                        {report.reason}
-                      </div>
-                    )}
-                    
-                    {(report.flaggedAmount || report.flaggedLiters || report.flaggedReceipt) && (
-                      <div className="flex flex-wrap gap-2">
-                        {report.flaggedAmount && <Badge variant="destructive" className="bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400 hover:bg-rose-100">Flagged: Amount</Badge>}
-                        {report.flaggedLiters && <Badge variant="destructive" className="bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400 hover:bg-rose-100">Flagged: Liters</Badge>}
-                        {report.flaggedReceipt && <Badge variant="destructive" className="bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400 hover:bg-rose-100">Flagged: Receipt</Badge>}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Sidebar: Review Action Panel */}
-        <div className="xl:col-span-1">
-          <div className="sticky top-6 space-y-6">
-            <Card className={report.status === "PENDING" ? "border-primary/30 shadow-md ring-1 ring-primary/10" : "shadow-sm"}>
-              <CardHeader className={report.status === "PENDING" ? "bg-primary/5 pb-4" : "pb-4"}>
-                <CardTitle className="text-lg">Review Decision</CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {report.status === "PENDING" 
-                    ? "Please review the report details and provide an approval decision." 
-                    : "You can update the review decision below if needed."}
-                </p>
-              </CardHeader>
-              <CardContent className="p-5 pt-4">
-                <form onSubmit={handleReviewReport} className="space-y-5">
-                  <div className="space-y-2.5">
-                    <Label className="text-sm font-semibold">Action</Label>
-                    <Select value={reviewStatus} onValueChange={(val) => setReviewStatus(val as "APPROVED" | "REJECTED")}>
-                      <SelectTrigger className="w-full h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="APPROVED">Approve Report</SelectItem>
-                        <SelectItem value="REJECTED">Reject Report</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Flag Checkboxes */}
-                  <div className="space-y-3 bg-muted/30 border rounded-xl p-4">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">Issue Flags (Optional)</span>
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-3">
-                        <Checkbox id="flag-liters" checked={flaggedLiters} onCheckedChange={(val) => setFlaggedLiters(!!val)} />
-                        <label htmlFor="flag-liters" className="text-sm font-medium cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Volume Discrepancy</label>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <Checkbox id="flag-amount" checked={flaggedAmount} onCheckedChange={(val) => setFlaggedAmount(!!val)} />
-                        <label htmlFor="flag-amount" className="text-sm font-medium cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Revenue Amount Mismatch</label>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <Checkbox id="flag-receipt" checked={flaggedReceipt} onCheckedChange={(val) => setFlaggedReceipt(!!val)} />
-                        <label htmlFor="flag-receipt" className="text-sm font-medium cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Missing/Invalid Receipt</label>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Comments / Reason Textarea */}
-                  <div className="space-y-2.5">
-                    <Label htmlFor="review-reason" className={`text-sm font-semibold ${reviewStatus === "REJECTED" ? "text-rose-600 dark:text-rose-500" : ""}`}>
-                      Remarks {reviewStatus === "REJECTED" && "*"}
-                    </Label>
-                    <Textarea
-                      id="review-reason"
-                      placeholder={reviewStatus === "REJECTED" ? "Specify why the report is rejected..." : "Add any notes or remarks..."}
-                      value={reason}
-                      onChange={(e) => setReason(e.target.value)}
-                      className="min-h-[100px] resize-none"
-                    />
-                  </div>
-
-                  {apiError && <p className="text-sm text-rose-600 dark:text-rose-500 font-medium">{apiError}</p>}
-
-                  <Button 
-                    type="submit" 
-                    disabled={isSubmitting} 
-                    className={`w-full h-11 gap-2 ${reviewStatus === "REJECTED" ? "bg-rose-600 hover:bg-rose-700 text-white" : ""}`}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <SpinnerEllipsis />
-                        <span>Saving...</span>
-                      </>
-                    ) : (
-                      reviewStatus === "APPROVED" ? "Save & Approve" : "Save & Reject"
-                    )}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
+                </tbody>
+                <tfoot className="bg-muted/10 border-t-2 border-border/60">
+                  <tr>
+                    <td colSpan={4} className="py-4 px-4 text-right font-semibold text-muted-foreground">Final Outstanding Debt:</td>
+                    <td className="py-4 px-4 text-right font-mono font-black text-lg text-foreground tabular-nums">{formatShortCurrency(currentBalance)}</td>
+                    <td colSpan={3}></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -486,6 +477,82 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
         fileUrl={activeFileUrl}
         fileName={activeFileName}
       />
+
+      {/* Review Modal */}
+      <Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Review Decision</DialogTitle>
+            <DialogDescription>
+              Please review the report details and provide an approval decision.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleReviewReport} className="space-y-5 py-4">
+            <div className="space-y-2.5">
+              <Label className="text-sm font-semibold">Action</Label>
+              <Select value={reviewStatus} onValueChange={(val) => setReviewStatus(val as "APPROVED" | "REJECTED")}>
+                <SelectTrigger className="w-full h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="APPROVED">Approve Report</SelectItem>
+                  <SelectItem value="REJECTED">Reject Report</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Flag Checkboxes */}
+            <div className="space-y-3 bg-muted/30 border rounded-xl p-4">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">Issue Flags (Optional)</span>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <Checkbox id="flag-liters" checked={flaggedLiters} onCheckedChange={(val) => setFlaggedLiters(!!val)} />
+                  <label htmlFor="flag-liters" className="text-sm font-medium cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Volume Discrepancy</label>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Checkbox id="flag-amount" checked={flaggedAmount} onCheckedChange={(val) => setFlaggedAmount(!!val)} />
+                  <label htmlFor="flag-amount" className="text-sm font-medium cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Revenue Amount Mismatch</label>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Checkbox id="flag-receipt" checked={flaggedReceipt} onCheckedChange={(val) => setFlaggedReceipt(!!val)} />
+                  <label htmlFor="flag-receipt" className="text-sm font-medium cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Missing/Invalid Receipt</label>
+                </div>
+              </div>
+            </div>
+
+            {/* Comments / Reason Textarea */}
+            <div className="space-y-2.5">
+              <Label htmlFor="review-reason" className={`text-sm font-semibold ${reviewStatus === "REJECTED" ? "text-rose-600 dark:text-rose-500" : ""}`}>
+                Remarks {reviewStatus === "REJECTED" && "*"}
+              </Label>
+              <Textarea
+                id="review-reason"
+                placeholder={reviewStatus === "REJECTED" ? "Specify why the report is rejected..." : "Add any notes or remarks..."}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="min-h-[100px] resize-none"
+              />
+            </div>
+
+            {apiError && <p className="text-sm text-rose-600 dark:text-rose-500 font-medium">{apiError}</p>}
+
+            <Button 
+              type="submit" 
+              disabled={isSubmitting} 
+              className={`w-full h-11 gap-2 ${reviewStatus === "REJECTED" ? "bg-rose-600 hover:bg-rose-700 text-white" : ""}`}
+            >
+              {isSubmitting ? (
+                <>
+                  <SpinnerEllipsis />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                reviewStatus === "APPROVED" ? "Save & Approve" : "Save & Reject"
+              )}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

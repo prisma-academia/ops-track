@@ -104,6 +104,7 @@ model Tenant {
   transactions      Transaction[]
   transportLossLogs TransportLossLog[]
   dippingSessions   DippingSession[]
+  bankAccounts      BankAccount[]
 
   @@index([status])
 }
@@ -1202,4 +1203,25 @@ model DippingClosing {
 
   @@index([sessionId])
   @@map("dipping_closings")
+}
+
+enum AccountScope {
+  STATION
+  FLEET
+}
+
+model BankAccount {
+  id            String       @id @default(uuid())
+  tenantId      String
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scope         AccountScope
+  accountName   String
+  accountNumber String
+  bankName      String
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([tenantId])
+  @@map("bank_accounts")
 }

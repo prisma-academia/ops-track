@@ -4,6 +4,15 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { notFound } from "next/navigation";
 import { SalesReportDetails } from "./sales-report-details";
 
+const userSelect = {
+  select: {
+    id: true,
+    email: true,
+    firstName: true,
+    lastName: true,
+  },
+};
+
 export default async function SalesReportDetailsPage({
   params,
 }: {
@@ -19,28 +28,10 @@ export default async function SalesReportDetailsPage({
     },
     include: {
       station: {
-        select: {
-          id: true,
-          name: true,
-          code: true,
-        },
+        select: { id: true, name: true, code: true },
       },
-      recordedBy: {
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-        },
-      },
-      approvedBy: {
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-        },
-      },
+      recordedBy: userSelect,
+      approvedBy: userSelect,
       debtRepayments: {
         select: {
           id: true,
@@ -49,6 +40,14 @@ export default async function SalesReportDetailsPage({
           amountTransfer: true,
           status: true,
           logDate: true,
+          cashReceiptUrl: true,
+          posReceiptUrl: true,
+          recordedBy: userSelect,
+          approvedBy: userSelect,
+          reason: true,
+          flaggedAmount: true,
+          flaggedLiters: true,
+          flaggedReceipt: true,
         },
       },
       parentSale: {
@@ -56,6 +55,38 @@ export default async function SalesReportDetailsPage({
           id: true,
           logDate: true,
           productType: true,
+          litersSold: true,
+          pricePerLiter: true,
+          amountCash: true,
+          amountPos: true,
+          amountTransfer: true,
+          cashReceiptUrl: true,
+          posReceiptUrl: true,
+          status: true,
+          recordedBy: userSelect,
+          approvedBy: userSelect,
+          reason: true,
+          flaggedAmount: true,
+          flaggedLiters: true,
+          flaggedReceipt: true,
+          debtRepayments: {
+            select: {
+              id: true,
+              amountCash: true,
+              amountPos: true,
+              amountTransfer: true,
+              status: true,
+              logDate: true,
+              cashReceiptUrl: true,
+              posReceiptUrl: true,
+              recordedBy: userSelect,
+              approvedBy: userSelect,
+              reason: true,
+              flaggedAmount: true,
+              flaggedLiters: true,
+              flaggedReceipt: true,
+            }
+          }
         },
       },
     },

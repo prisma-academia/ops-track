@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { User, Droplets, Banknote, ChartColumnIncreasing, Handbag, CalendarIcon, CheckCircle2, AlertCircle, Maximize2, Minimize2, Printer, LayoutGrid, TableProperties, Filter } from "lucide-react";
+import { User, Droplets, Banknote, ChartColumnIncreasing, Handbag, CalendarIcon, CheckCircle2, AlertCircle, Maximize2, Minimize2, Printer, LayoutGrid, TableProperties, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { cn, formatHumanReadableDate, formatShortCurrency } from "@/lib/utils";
@@ -75,6 +75,7 @@ export function SalesReportsManager({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [viewMode, setViewMode] = useState<"card" | "table">("table");
+  const [isFiltersExpanded, setIsFiltersExpanded] = useState(true);
 
   // Draft States (Bound to UI inputs)
   const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>({
@@ -121,7 +122,7 @@ export function SalesReportsManager({
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen().catch((err) => {
+      document.documentElement.requestFullscreen().catch((err) => {
         console.error("Error attempting to enable fullscreen:", err.message);
       });
     } else {
@@ -322,7 +323,7 @@ export function SalesReportsManager({
       ref={containerRef}
       className={cn(
         "space-y-6 transition-all print:m-0 print:p-0 print:bg-white print:text-black print:space-y-3",
-        isFullscreen && "bg-background p-6 overflow-auto h-full"
+        isFullscreen && "fixed inset-0 z-40 bg-background p-6 overflow-auto w-full h-screen"
       )}
     >
       <style>{`
@@ -442,9 +443,12 @@ export function SalesReportsManager({
       </Card>
 
       {/* ── Filter Bar ─────────────────────────────────────────── */}
-      <div className="bg-card text-card-foreground p-4 rounded-xl border hide-on-print shadow-xs flex flex-col gap-4">
+      <div className="bg-card text-card-foreground p-4 rounded-xl border hide-on-print shadow-xs flex flex-col gap-4 transition-all">
         <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}>
+            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full -ml-1">
+              {isFiltersExpanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+            </Button>
             <Filter className="size-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold tracking-tight">Advanced Filters</h3>
           </div>
@@ -457,7 +461,9 @@ export function SalesReportsManager({
             </Button>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        
+        {isFiltersExpanded && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 animate-in slide-in-from-top-2 fade-in duration-200">
           
           {/* Station filter */}
           <div className="space-y-1 w-full">
@@ -648,6 +654,7 @@ export function SalesReportsManager({
             </Popover>
           </div>
         </div>
+        )}
       </div>
 
       {finalGroupedSales.length === 0 ? (
@@ -857,7 +864,7 @@ export function SalesReportsManager({
                                   variant="outline" 
                                   size="sm" 
                                   className="h-7 text-[10px] px-2 hide-on-print"
-                                  onClick={() => router.push(`/admin/sales-reports/${child.id}`)}
+                                  onClick={() => router.push(`/admin/sales-reports/${parent.id}`)}
                                 >
                                   Details
                                 </Button>

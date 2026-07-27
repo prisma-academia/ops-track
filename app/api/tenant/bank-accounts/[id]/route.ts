@@ -14,7 +14,7 @@ const UpdateBankAccountSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-export async function PUT(
+export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {

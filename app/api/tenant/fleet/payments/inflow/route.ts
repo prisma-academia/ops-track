@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
-import { handleError } from "@/lib/api/errors";
+import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 
 const InflowSchema = z.object({
@@ -11,9 +11,10 @@ const InflowSchema = z.object({
   saleId: z.string().optional().nullable(),
   amount: z.number().positive(),
   paymentType: z.enum(["ADVANCE_DEPOSIT", "PART_PAYMENT", "FULL_SETTLEMENT", "DEBT_CLEARANCE"]),
-  paymentMethod: z.string().min(1),
+  paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"]),
   reference: z.string().optional().nullable(),
   receiptUrl: z.string().optional().nullable(),
+  bankAccountId: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -23,9 +24,13 @@ export async function POST(request: Request) {
     const body = InflowSchema.parse(await request.json());
     const meta = requestMeta(request);
 
+    if (body.paymentMethod !== "CASH" && body.paymentMethod !== "DEPOSIT" && !body.bankAccountId) {
+      throw new DomainError(400, "invalid_input", "Bank account is required for this payment method.");
+    }
+
     const transaction = await prisma.$transaction(async (tx) => {
       // If paying with a deposit, deduct from deposit balance first
-      if (body.paymentMethod === "Deposit") {
+      if (body.paymentMethod === "DEPOSIT") {
         const customer = await tx.customer.findFirst({
           where: { id: body.customerId, tenantId: actor.tenantId }
         });
@@ -51,11 +56,12 @@ export async function POST(request: Request) {
           receiptUrl: body.receiptUrl,
           saleId: body.saleId,
           customerId: body.customerId,
+          bankAccountId: body.bankAccountId,
         },
       });
 
       // If advance deposit without a sale, increment the customer's deposit balance
-      if (body.paymentType === "ADVANCE_DEPOSIT" && !body.saleId && body.paymentMethod !== "Deposit") {
+      if (body.paymentType === "ADVANCE_DEPOSIT" && !body.saleId && body.paymentMethod !== "DEPOSIT") {
         await tx.customer.update({
           where: { id: body.customerId },
           data: { depositBalance: { increment: body.amount } }

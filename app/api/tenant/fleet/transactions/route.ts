@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
-import { handleError } from "@/lib/api/errors";
+import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
 
@@ -13,8 +13,9 @@ const CreateTransactionSchema = z.object({
   amount: z.number().positive(),
   paymentPurpose: z.string().optional().nullable(),
   reference: z.string().optional().nullable(),
-  paymentMethod: z.string().optional().nullable(),
+  paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE"]).optional().nullable(),
   saleId: z.string().optional().nullable(),
+  bankAccountId: z.string().optional(),
 });
 
 export async function GET(request: Request) {
@@ -55,6 +56,10 @@ export async function POST(request: Request) {
     const body = CreateTransactionSchema.parse(await request.json());
     const meta = requestMeta(request);
 
+    if (body.paymentMethod && body.paymentMethod !== "CASH" && !body.bankAccountId) {
+      throw new DomainError(400, "invalid_input", "Bank account is required for non-cash payments.");
+    }
+
     const transaction = await prisma.transaction.create({
       data: {
         tenantId: actor.tenantId,
@@ -65,6 +70,7 @@ export async function POST(request: Request) {
         reference: body.reference ?? null,
         paymentMethod: body.paymentMethod ?? null,
         saleId: body.saleId ?? null,
+        bankAccountId: body.bankAccountId,
       },
     });
 

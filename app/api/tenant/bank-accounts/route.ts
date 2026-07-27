@@ -17,14 +17,18 @@ const CreateBankAccountSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_SETTINGS_READ.key);
+    const actor = await requireTenantActor();
     const url = new URL(request.url);
     const { cursor, take } = parsePagination(url.searchParams);
     const scope = url.searchParams.get("scope");
+    const isActive = url.searchParams.get("isActive");
 
     const where: any = { tenantId: actor.tenantId };
     if (scope === "STATION" || scope === "FLEET") {
       where.scope = scope;
+    }
+    if (isActive !== null) {
+      where.isActive = isActive === "true";
     }
 
     const rawRows = await prisma.bankAccount.findMany({

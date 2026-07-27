@@ -25,6 +25,7 @@ const CreateSalesLogSchema = z.object({
   clientId: z.string().optional(),
   isDebtRepayment: z.boolean().optional().default(false),
   parentSaleId: z.string().nullable().optional(),
+  bankAccountId: z.string().optional(),
 });
 
 export async function GET(
@@ -97,6 +98,10 @@ export async function POST(
       throw new DomainError(400, "invalid_input", "At least one revenue amount must be greater than zero.");
     }
 
+    if ((body.amountPos > 0 || body.amountTransfer > 0) && !body.bankAccountId) {
+      throw new DomainError(400, "invalid_input", "Bank account is required for POS and Transfer payments.");
+    }
+
     const logDate = body.logDate ? new Date(body.logDate) : new Date();
 
     if (body.clientId) {
@@ -119,6 +124,7 @@ export async function POST(
         amountCash: body.amountCash,
         amountPos: body.amountPos,
         amountTransfer: body.amountTransfer,
+        bankAccountId: body.bankAccountId,
         cashReceiptUrl: body.cashReceiptUrl,
         posReceiptUrl: body.posReceiptUrl,
         transferReceiptUrl: body.transferReceiptUrl,

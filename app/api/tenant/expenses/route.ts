@@ -10,10 +10,11 @@ import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageM
 const CreateExpenseSchema = z.object({
   stationId: z.string().min(1),
   category: z.enum(["FUEL_FOR_GEN", "MAINTENANCE", "UTILITIES", "STATIONERY", "OTHER"]),
-  paymentMethod: z.enum(["CASH", "POS"]),
+  paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE"]),
   amount: z.coerce.number().positive(),
   description: z.string().min(1).max(500),
   receiptUrl: z.string().optional().nullable(),
+  bankAccountId: z.string().optional(),
 });
 
 export async function GET(request: Request) {
@@ -108,6 +109,10 @@ export async function POST(request: Request) {
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
+    if (body.paymentMethod !== "CASH" && !body.bankAccountId) {
+      throw new DomainError(400, "invalid_input", "Bank account is required for non-cash payments.");
+    }
+
     const expense = await prisma.expense.create({
       data: {
         tenantId: actor.tenantId,
@@ -117,6 +122,7 @@ export async function POST(request: Request) {
         amount: body.amount,
         description: body.description,
         receiptUrl: body.receiptUrl ?? null,
+        bankAccountId: body.bankAccountId,
         recordedById: actor.userId,
       },
     });

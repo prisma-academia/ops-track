@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { apiPost, apiPatch } from "@/lib/client/api";
 
 const formSchema = z.object({
   scope: z.enum(["STATION", "FLEET"]),
@@ -56,21 +57,12 @@ export function BankAccountFormModal({
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
     try {
-      const url = initialData 
-        ? `/api/tenant/bank-accounts/${initialData.id}` 
-        : `/api/tenant/bank-accounts`;
-      
-      const method = initialData ? "PUT" : "POST";
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "An error occurred");
+      if (initialData) {
+        const res = await apiPatch(`/api/tenant/bank-accounts/${initialData.id}`, data);
+        if (res.error) throw new Error(res.error.message);
+      } else {
+        const res = await apiPost(`/api/tenant/bank-accounts`, data);
+        if (res.error) throw new Error(res.error.message);
       }
 
       toast.success(initialData ? "Bank account updated" : "Bank account created");

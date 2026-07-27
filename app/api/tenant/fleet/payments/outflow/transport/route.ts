@@ -3,25 +3,30 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
-import { handleError } from "@/lib/api/errors";
+import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 
-const TransportFeeSchema = z.object({
+const TransportPaymentSchema = z.object({
   transportId: z.string(),
-  transporterId: z.string(),
+  transporterId: z.string().min(1),
   amount: z.number().positive(),
-  paymentMethod: z.string().min(1),
+  paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"]),
   reference: z.string().optional().nullable(),
   receiptUrl: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
+  bankAccountId: z.string().optional(),
 });
 
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
     const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
-    const body = TransportFeeSchema.parse(await request.json());
+    const body = TransportPaymentSchema.parse(await request.json());
     const meta = requestMeta(request);
+
+    if (body.paymentMethod !== "CASH" && body.paymentMethod !== "DEPOSIT" && !body.bankAccountId) {
+      throw new DomainError(400, "invalid_input", "Bank account is required for this payment method.");
+    }
 
     const transaction = await prisma.$transaction(async (tx) => {
       const trx = await tx.transaction.create({
@@ -36,6 +41,7 @@ export async function POST(request: Request) {
           description: body.description,
           transportId: body.transportId,
           transporterId: body.transporterId,
+          bankAccountId: body.bankAccountId,
         },
       });
 

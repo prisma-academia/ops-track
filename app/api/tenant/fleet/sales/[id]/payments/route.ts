@@ -8,9 +8,11 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 
 const CreatePaymentSchema = z.object({
   amount: z.number().positive(),
-  paymentMethod: z.string().min(1, "Payment method is required"),
+  paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"]),
   description: z.string().optional(),
-  reference: z.string().optional(),
+  reference: z.string().optional().nullable(),
+  receiptUrl: z.string().optional().nullable(),
+  bankAccountId: z.string().optional(),
 });
 
 export async function POST(
@@ -23,6 +25,10 @@ export async function POST(
     const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
     const body = CreatePaymentSchema.parse(await request.json());
     const meta = requestMeta(request);
+
+    if (body.paymentMethod !== "CASH" && body.paymentMethod !== "DEPOSIT" && !body.bankAccountId) {
+      throw new DomainError(400, "invalid_input", "Bank account is required for this payment method.");
+    }
 
     const sale = await prisma.$transaction(async (tx) => {
       const existingSale = await tx.sale.findFirst({
@@ -44,7 +50,10 @@ export async function POST(
           paymentMethod: body.paymentMethod,
           description: body.description,
           reference: body.reference,
+          receiptUrl: body.receiptUrl,
           saleId: existingSale.id,
+          customerId: existingSale.customerId,
+          bankAccountId: body.bankAccountId,
           paymentPurpose: `Payment for Fleet Sale`,
         },
       });

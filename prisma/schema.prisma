@@ -388,9 +388,12 @@ enum ExpenseCategory {
   OTHER
 }
 
-enum ExpensePaymentMethod {
+enum PaymentMethod {
   CASH
   POS
+  BANK_TRANSFER
+  CHEQUE
+  DEPOSIT
 }
 
 enum ExpenseStatus {
@@ -513,6 +516,9 @@ model SalesLog {
 
   dippingClosing   DippingClosing?
   dippingClosingId String?         @unique
+
+  bankAccountId    String?
+  bankAccount      BankAccount?    @relation("SalesLogBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([stationId])
@@ -768,11 +774,14 @@ model Expense {
   stationId     String
   station       Station              @relation(fields: [stationId], references: [id], onDelete: Cascade)
   category      ExpenseCategory
-  paymentMethod ExpensePaymentMethod
+  paymentMethod PaymentMethod
   amount        Decimal              @db.Decimal(12, 2)
   description   String               @db.Text
   receiptUrl    String? // Receipt photo/doc
   status        ExpenseStatus        @default(PENDING)
+  
+  bankAccountId String?
+  bankAccount   BankAccount?         @relation("ExpenseBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
 
   recordedById String
   recordedBy   TenantUser  @relation("ExpenseRecordedBy", fields: [recordedById], references: [id], onDelete: Restrict)
@@ -1113,8 +1122,11 @@ model Transaction {
   paymentPurpose String?
   description    String?             @db.Text
   reference      String?
-  paymentMethod  String? // Bank Transfer, Cash, Cheque
+  paymentMethod  PaymentMethod?
   receiptUrl     String?
+  
+  bankAccountId  String?
+  bankAccount    BankAccount?        @relation("TransactionBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
 
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
@@ -1221,6 +1233,10 @@ model BankAccount {
   isActive      Boolean      @default(true)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
+  salesLogs     SalesLog[]   @relation("SalesLogBankAccount")
+  expenses      Expense[]    @relation("ExpenseBankAccount")
+  transactions  Transaction[] @relation("TransactionBankAccount")
 
   @@index([tenantId])
   @@map("bank_accounts")

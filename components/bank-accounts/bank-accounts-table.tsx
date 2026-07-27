@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Edit2, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import { BankAccountFormModal } from "./bank-account-form-modal";
 import { toast } from "sonner";
+import { apiDelete } from "@/lib/client/api";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,11 +64,8 @@ export function BankAccountsTable({
     if (!deletingId) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/tenant/bank-accounts/${deletingId}`, { method: "DELETE" });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Failed to delete account");
-      }
+      const res = await apiDelete(`/api/tenant/bank-accounts/${deletingId}`);
+      if (res.error) throw new Error(res.error.message);
       toast.success("Bank account deleted");
       router.refresh();
     } catch (e: any) {

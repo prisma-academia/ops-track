@@ -7,8 +7,8 @@ export async function GET(request: Request) {
   try {
     const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key);
     
-    // Fetch Customers, Transporters, Trucks, Orders, Transports, and Pending Sales
-    const [customers, transporters, trucks, orders, transports, sales, stations] = await Promise.all([
+    // Fetch Customers, Transporters, Trucks, Orders, Transports, Pending Sales, Stations, and Bank Accounts
+    const [customers, transporters, trucks, orders, transports, sales, stations, bankAccounts] = await Promise.all([
       prisma.customer.findMany({ where: { tenantId: actor.tenantId } }),
       prisma.transporter.findMany({ where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true } }),
       prisma.truck.findMany({ where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true } }),
@@ -22,9 +22,10 @@ export async function GET(request: Request) {
         include: { customer: true, station: true },
       }),
       prisma.station.findMany({ where: { tenantId: actor.tenantId } }),
+      prisma.bankAccount.findMany({ where: { tenantId: actor.tenantId, scope: "FLEET", isActive: true } }),
     ]);
 
-    return ok({ customers, transporters, trucks, orders, transports, sales, stations });
+    return ok({ customers, transporters, trucks, orders, transports, sales, stations, bankAccounts });
   } catch (e) {
     return handleError(e);
   }

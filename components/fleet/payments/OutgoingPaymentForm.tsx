@@ -37,6 +37,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
     truckId: "",
     orderId: "",
     transportId: "",
+    bankAccountId: "",
   });
 
   const maxSizeMB = 2;
@@ -128,6 +129,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
         paymentMethod: formData.paymentMethod,
         reference: formData.reference,
         receiptUrl: formData.receiptUrl,
+        bankAccountId: formData.paymentMethod !== "Cash" ? formData.bankAccountId : undefined,
       };
 
       if (category === "PERSONAL_EXPENSE") {
@@ -148,6 +150,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
           reference: formData.reference,
           receiptUrl: formData.receiptUrl,
           description: formData.description,
+          bankAccountId: formData.paymentMethod !== "Cash" ? formData.bankAccountId : undefined,
         };
       }
 
@@ -155,7 +158,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
 
       if (!res.error) {
         toast.success("Payment recorded successfully!");
-        setFormData({ ...formData, amount: "", description: "", reference: "", receiptUrl: "" });
+        setFormData({ ...formData, amount: "", description: "", reference: "", receiptUrl: "", bankAccountId: "" });
         router.push("/admin/fleet/payments");
       } else {
         toast.error(res.error?.message || "Failed to record payment.");
@@ -442,6 +445,34 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
             </SelectContent>
           </Select>
         </div>
+
+        {formData.paymentMethod !== "Cash" && (
+          <div className="space-y-2">
+            <Label>Paying Bank Account *</Label>
+            <Select 
+              value={formData.bankAccountId} 
+              onValueChange={(val) => setFormData({ ...formData, bankAccountId: val })}
+              required
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Bank Account" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {metadata?.bankAccounts?.length ? (
+                  metadata.bankAccounts.map((account: any) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.bankName} - {account.accountNumber}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-2 text-sm text-muted-foreground text-center">
+                    No active Fleet bank accounts found
+                  </div>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label>Transaction Reference</Label>

@@ -72,10 +72,11 @@ interface ExpenseRow {
   tenantId: string;
   stationId: string;
   category: "FUEL_FOR_GEN" | "MAINTENANCE" | "UTILITIES" | "STATIONERY" | "OTHER";
-  paymentMethod: "CASH" | "POS";
+  paymentMethod: string;
   amount: number;
   description: string;
   receiptUrl: string | null;
+  bankAccount: { bankName: string; accountNumber: string } | null;
   status: "PENDING" | "APPROVED" | "REJECTED";
   recordedById: string;
   approvedById: string | null;
@@ -88,7 +89,7 @@ interface ExpenseRow {
 const RecordExpenseSchema = z.object({
   stationId: z.string().min(1, "Station is required"),
   category: z.enum(["FUEL_FOR_GEN", "MAINTENANCE", "UTILITIES", "STATIONERY", "OTHER"]),
-  paymentMethod: z.enum(["CASH", "POS"]),
+  paymentMethod: z.string(),
   amount: z.coerce.number().positive("Amount must be a positive number"),
   description: z.string().min(2, "Description must be at least 2 characters").max(500),
   receiptUrl: z.string().optional().or(z.literal("")),
@@ -102,9 +103,11 @@ const CATEGORY_MAP = {
   OTHER: "Other Expenses",
 };
 
-const PAYMENT_METHOD_MAP = {
+const PAYMENT_METHOD_MAP: Record<string, string> = {
   CASH: "Cash",
   POS: "POS Machine",
+  BANK_TRANSFER: "Bank Transfer",
+  CHEQUE: "Cheque",
 };
 
 export function ExpensesManager({
@@ -220,10 +223,18 @@ export function ExpensesManager({
       header: "Method",
       cell: ({ row }) => {
         const method = row.original.paymentMethod;
+        const bankAccount = row.original.bankAccount;
         return (
-          <Badge variant="outline">
-            {PAYMENT_METHOD_MAP[method as keyof typeof PAYMENT_METHOD_MAP] || method}
-          </Badge>
+          <div className="flex flex-col gap-1 items-start">
+            <Badge variant="outline">
+              {PAYMENT_METHOD_MAP[method as keyof typeof PAYMENT_METHOD_MAP] || method}
+            </Badge>
+            {bankAccount && (
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {bankAccount.bankName} - {bankAccount.accountNumber}
+              </span>
+            )}
+          </div>
         );
       },
     },

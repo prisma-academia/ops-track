@@ -44,6 +44,9 @@ export default async function SalesReportsPage() {
           lastName: true,
         },
       },
+      bankAccount: {
+        select: { bankName: true, accountNumber: true },
+      },
     },
   });
 

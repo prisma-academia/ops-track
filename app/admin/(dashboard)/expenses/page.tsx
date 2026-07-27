@@ -24,6 +24,7 @@ export default async function ExpensesPage() {
             code: true,
           },
         },
+        bankAccount: true,
         recordedBy: {
           select: {
             id: true,

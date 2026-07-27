@@ -29,6 +29,7 @@ export default async function PaymentDetailsPage({
       order: true,
       transport: true,
       tenant: true,
+      bankAccount: true,
     },
   });
 
@@ -63,6 +64,7 @@ export default async function PaymentDetailsPage({
     } : null,
     transporter: transaction.transporter ? { name: transaction.transporter.name } : null,
     tenant: transaction.tenant ? { name: transaction.tenant.name, logoUrl } : null,
+    bankAccount: transaction.bankAccount ? { bankName: transaction.bankAccount.bankName, accountNumber: transaction.bankAccount.accountNumber } : null,
   };
 
   return (

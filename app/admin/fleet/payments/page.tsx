@@ -61,6 +61,7 @@ export default async function PaymentsPage({
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({
       where,
+      include: { bankAccount: true },
       orderBy: { createdAt: "desc" },
       skip,
       take,
@@ -74,6 +75,7 @@ export default async function PaymentsPage({
     category: t.category,
     amount: Number(t.amount),
     paymentMethod: t.paymentMethod || "Bank Transfer",
+    bankAccount: t.bankAccount ? `${t.bankAccount.bankName} - ${t.bankAccount.accountNumber}` : null,
     createdAt: t.createdAt.toISOString(),
   }));
 

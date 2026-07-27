@@ -30,6 +30,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
     paymentMethod: "Bank Transfer",
     reference: "",
     receiptUrl: "",
+    bankAccountId: "",
   });
 
   const maxSizeMB = 2;
@@ -124,12 +125,13 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
         paymentMethod: formData.paymentMethod,
         reference: formData.reference,
         receiptUrl: formData.receiptUrl,
+        bankAccountId: formData.paymentMethod !== "Cash" && formData.paymentMethod !== "Deposit" ? formData.bankAccountId : undefined,
       };
       
       const res = await apiPost<any>(`/api/tenant/fleet/payments/inflow`, payload);
       if (!res.error) {
         toast.success("Payment recorded successfully!");
-        setFormData({ ...formData, amount: "", reference: "", receiptUrl: "", saleId: "none" });
+        setFormData({ ...formData, amount: "", reference: "", receiptUrl: "", saleId: "none", bankAccountId: "" });
         router.push("/admin/fleet/payments");
       } else {
         toast.error(res.error?.message || "Failed to record payment.");
@@ -369,6 +371,34 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
             </SelectContent>
           </Select>
         </div>
+
+        {formData.paymentMethod !== "Cash" && formData.paymentMethod !== "Deposit" && (
+          <div className="space-y-2">
+            <Label>Receiving Bank Account *</Label>
+            <Select 
+              value={formData.bankAccountId} 
+              onValueChange={(val) => setFormData({ ...formData, bankAccountId: val })}
+              required
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Bank Account" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {metadata?.bankAccounts?.length ? (
+                  metadata.bankAccounts.map((account: any) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.bankName} - {account.accountNumber}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-2 text-sm text-muted-foreground text-center">
+                    No active Fleet bank accounts found
+                  </div>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label>Transaction Reference</Label>

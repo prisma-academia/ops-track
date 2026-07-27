@@ -14,6 +14,7 @@ export type PaymentRow = {
   category: string;
   amount: number;
   paymentMethod: string;
+  bankAccount: string | null;
   createdAt: string;
 };
 
@@ -31,7 +32,10 @@ const columns: ColumnDef<PaymentRow>[] = [
           </div>
           <div className="flex flex-col">
             <span className="font-semibold text-foreground">{ref}</span>
-            <span className="text-xs text-muted-foreground">{row.original.paymentMethod || "Bank Transfer"}</span>
+            <span className="text-xs text-muted-foreground">
+              {row.original.paymentMethod || "Bank Transfer"}
+              {row.original.bankAccount ? ` • ${row.original.bankAccount}` : ""}
+            </span>
           </div>
         </div>
       );

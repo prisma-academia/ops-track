@@ -128,7 +128,14 @@ export function InvoiceReceipt({ transaction }: InvoiceReceiptProps) {
         <div className="grid grid-cols-2 gap-8 pt-6 border-t border-dashed border-border/60">
           <div>
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Payment Method</p>
-            <p className="text-sm font-semibold text-foreground">{transaction.paymentMethod || "N/A"}</p>
+            <p className="text-sm font-semibold text-foreground">
+              {transaction.paymentMethod || "N/A"}
+              {transaction.bankAccount && (
+                <span className="block text-xs text-muted-foreground mt-1">
+                  Bank: {transaction.bankAccount.bankName} - {transaction.bankAccount.accountNumber}
+                </span>
+              )}
+            </p>
           </div>
           <div className="text-right">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Status</p>

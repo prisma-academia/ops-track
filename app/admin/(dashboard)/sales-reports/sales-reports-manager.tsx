@@ -1,40 +1,39 @@
 "use client";
-import { useState, useMemo, useRef, useCallback } from "react";
-import {
-  type ColumnDef,
-  type SortingState,
-  flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import React, { useState, useMemo, useRef, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-import { User, Droplets, Banknote, ChartColumnIncreasing, Handbag, CalendarIcon, Eye, CheckCircle2, AlertCircle, ChevronUpIcon, ChevronDownIcon, Maximize2, Minimize2, Printer } from "lucide-react";
+import { User, Droplets, Banknote, ChartColumnIncreasing, Handbag, CalendarIcon, CheckCircle2, AlertCircle, Maximize2, Minimize2, Printer, LayoutGrid, TableProperties, Filter } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { cn, formatHumanReadableDate, formatShortCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
+// Types
 interface SalesReportStation {
   id: string;
   name: string;
   code: string;
 }
-
 interface SalesReportUser {
   id: string;
   email: string;
   firstName: string | null;
   lastName: string | null;
 }
-
 interface SalesReportRow {
   id: string;
   tenantId: string;
@@ -63,6 +62,7 @@ interface SalesReportRow {
   isDebtRepayment?: boolean;
   parentSaleId?: string | null;
 }
+type GroupedSale = SalesReportRow & { childRepayments: SalesReportRow[], overallBalance: number };
 
 export function SalesReportsManager({
   initialReports,
@@ -74,13 +74,50 @@ export function SalesReportsManager({
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [viewMode, setViewMode] = useState<"card" | "table">("table");
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+  // Draft States (Bound to UI inputs)
+  const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>({
     from: addDays(new Date(), -30),
     to: new Date(),
   });
-  const [selectedStationIds, setSelectedStationIds] = useState<string[]>([]);
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [draftStationIds, setDraftStationIds] = useState<string[]>([]);
+  const [draftStatus, setDraftStatus] = useState<string>("ALL");
+  const [draftProduct, setDraftProduct] = useState<string>("ALL");
+  const [draftDebtOperator, setDraftDebtOperator] = useState<string>("ALL");
+  const [draftDebtAmount, setDraftDebtAmount] = useState<string>("");
+
+  // Applied States (Used for filtering logic)
+  const [appliedDateRange, setAppliedDateRange] = useState<DateRange | undefined>(draftDateRange);
+  const [appliedStationIds, setAppliedStationIds] = useState<string[]>(draftStationIds);
+  const [appliedStatus, setAppliedStatus] = useState<string>(draftStatus);
+  const [appliedProduct, setAppliedProduct] = useState<string>(draftProduct);
+  const [appliedDebtOperator, setAppliedDebtOperator] = useState<string>(draftDebtOperator);
+  const [appliedDebtAmount, setAppliedDebtAmount] = useState<string>(draftDebtAmount);
+
+  const applyFilters = useCallback(() => {
+    setAppliedDateRange(draftDateRange);
+    setAppliedStationIds(draftStationIds);
+    setAppliedStatus(draftStatus);
+    setAppliedProduct(draftProduct);
+    setAppliedDebtOperator(draftDebtOperator);
+    setAppliedDebtAmount(draftDebtAmount);
+  }, [draftDateRange, draftStationIds, draftStatus, draftProduct, draftDebtOperator, draftDebtAmount]);
+
+  const clearFilters = useCallback(() => {
+    setDraftDateRange(undefined);
+    setDraftStationIds([]);
+    setDraftStatus("ALL");
+    setDraftProduct("ALL");
+    setDraftDebtOperator("ALL");
+    setDraftDebtAmount("");
+    setAppliedDateRange(undefined);
+    setAppliedStationIds([]);
+    setAppliedStatus("ALL");
+    setAppliedProduct("ALL");
+    setAppliedDebtOperator("ALL");
+    setAppliedDebtAmount("");
+  }, []);
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
@@ -103,49 +140,119 @@ export function SalesReportsManager({
     }
   }, [handleFullscreenChange]);
 
-  const filteredReports = useMemo(() => {
+  // Step 1: Filter raw reports by Date, Station, Status, Product
+  const baseFilteredReports = useMemo(() => {
     return initialReports.filter((report) => {
-      if (selectedStationIds.length > 0 && !selectedStationIds.includes(report.stationId)) {
+      // Ignore child repayments in this base filter phase (so we don't accidentally hide them before grouping)
+      // Actually, we SHOULD allow parent sales to pass, and if they pass, their children will be attached.
+      // So we apply these filters mainly to the PARENT sale.
+      
+      // If it is a child repayment, just pass it through the base filter. It gets attached to its parent later.
+      if (report.isDebtRepayment) return true;
+
+      if (appliedStationIds.length > 0 && !appliedStationIds.includes(report.stationId)) {
         return false;
       }
+      if (appliedStatus !== "ALL" && report.status !== appliedStatus) {
+        return false;
+      }
+      if (appliedProduct !== "ALL" && report.productType !== appliedProduct) {
+        return false;
+      }
+      
       const logDate = new Date(report.logDate);
-      if (dateRange?.from) {
-        const sDate = new Date(dateRange.from);
+      if (appliedDateRange?.from) {
+        const sDate = new Date(appliedDateRange.from);
         sDate.setHours(0, 0, 0, 0);
         if (logDate < sDate) return false;
       }
-      if (dateRange?.to) {
-        const eDate = new Date(dateRange.to);
+      if (appliedDateRange?.to) {
+        const eDate = new Date(appliedDateRange.to);
         eDate.setHours(23, 59, 59, 999);
         if (logDate > eDate) return false;
       }
       return true;
     });
-  }, [initialReports, dateRange, selectedStationIds]);
+  }, [initialReports, appliedDateRange, appliedStationIds, appliedStatus, appliedProduct]);
 
+  // Step 2 & 3: Group children under parents, calculate overall balance, and then filter by Debt
+  const finalGroupedSales = useMemo<GroupedSale[]>(() => {
+    // Separate parents and children
+    const parents = baseFilteredReports.filter(r => !r.isDebtRepayment && !r.parentSaleId);
+    // Note: children were just passed through the base filter unaffected. We only attach them to VALID parents.
+    const children = initialReports.filter(r => r.isDebtRepayment && r.parentSaleId);
+
+    const grouped = parents.map(p => {
+      const childRepayments = children.filter(c => c.parentSaleId === p.id).sort((a, b) => new Date(a.logDate).getTime() - new Date(b.logDate).getTime());
+      
+      const expectedTotal = Number(p.litersSold) * Number(p.pricePerLiter);
+      const parentReceived = Number(p.amountCash) + Number(p.amountPos) + Number(p.amountTransfer);
+      const childRepaidTotal = childRepayments.reduce((sum, c) => sum + Number(c.amountCash) + Number(c.amountPos) + Number(c.amountTransfer), 0);
+      
+      const overallBalance = (parentReceived + childRepaidTotal) - expectedTotal;
+      
+      return {
+        ...p,
+        childRepayments,
+        overallBalance
+      };
+    });
+    
+    // Sort grouped by date desc
+    const sorted = grouped.sort((a, b) => new Date(b.logDate).getTime() - new Date(a.logDate).getTime());
+
+    // Filter by Debt Balance
+    if (appliedDebtOperator === "ALL" || appliedDebtAmount === "") {
+      return sorted;
+    }
+
+    const targetAmount = Number(appliedDebtAmount);
+    if (isNaN(targetAmount)) return sorted;
+
+    return sorted.filter(g => {
+      // The balance represents what the station currently holds.
+      // E.g. Balance = Received - Expected. So 0 is settled. 
+      // A negative balance means they owe the company.
+      // Usually "Debt" refers to how much they owe, so Debt = Expected - Received = - overallBalance.
+      // We will just filter based on `overallBalance` relative to the target amount.
+      // E.g., if user inputs "0" and "<=", they mean overallBalance <= 0 (which means they owe money or are settled).
+      if (appliedDebtOperator === "LESS_THAN_OR_EQUAL") return g.overallBalance <= targetAmount;
+      if (appliedDebtOperator === "GREATER_THAN_OR_EQUAL") return g.overallBalance >= targetAmount;
+      if (appliedDebtOperator === "EXACT") return g.overallBalance === targetAmount;
+      return true;
+    });
+  }, [baseFilteredReports, initialReports, appliedDebtOperator, appliedDebtAmount]);
+
+  // Step 4: Calculate stats based on final visible grouped results
   const stats = useMemo(() => {
     let totalLiters = 0;
     let expectedRevenue = 0;
     let cash = 0;
     let digital = 0;
 
-    filteredReports.forEach((r) => {
-      totalLiters += Number(r.litersSold);
-      expectedRevenue += Number(r.litersSold) * Number(r.pricePerLiter);
-      cash += Number(r.amountCash);
-      digital += Number(r.amountPos) + Number(r.amountTransfer);
+    finalGroupedSales.forEach((g) => {
+      totalLiters += Number(g.litersSold);
+      expectedRevenue += Number(g.litersSold) * Number(g.pricePerLiter);
+      cash += Number(g.amountCash);
+      digital += Number(g.amountPos) + Number(g.amountTransfer);
+      
+      // Include child repayments in the total cash/digital
+      g.childRepayments.forEach(c => {
+        cash += Number(c.amountCash);
+        digital += Number(c.amountPos) + Number(c.amountTransfer);
+      });
     });
 
     const totalReceived = cash + digital;
     const totalBalance = totalReceived - expectedRevenue;
 
     return { totalLiters, expectedRevenue, cash, digital, totalReceived, totalBalance };
-  }, [filteredReports]);
+  }, [finalGroupedSales]);
 
   const statCards = [
     {
       title: "Transactions",
-      value: filteredReports.length.toString(),
+      value: finalGroupedSales.length.toString(),
       icon: Handbag,
       badgeColor: "bg-teal-400/10 text-teal-700 dark:text-teal-400",
       badge: "Period",
@@ -181,166 +288,34 @@ export function SalesReportsManager({
     },
   ];
 
-  const columns: ColumnDef<SalesReportRow>[] = useMemo(() => [
-    {
-      accessorKey: "logDate",
-      header: "Date",
-      cell: ({ row }) => (
-        <span className="font-medium">{formatHumanReadableDate(row.original.logDate)}</span>
-      ),
-    },
-    {
-      id: "station_name",
-      accessorFn: (row) => row.station?.name,
-      header: "Station",
-      cell: ({ row }) => {
-        const station = row.original.station;
-        return (
-          <div className="flex flex-col">
-            <span className="font-semibold text-foreground whitespace-nowrap">{station?.name}</span>
-          </div>
-        );
-      },
-    },
-    {
-      accessorKey: "productType",
-      header: "Product",
-      cell: ({ row }) => (
-        <div className="flex flex-col gap-1">
-          <span className="font-mono text-[10px] uppercase tracking-wider">{row.original.productType}</span>
-          {row.original.isDebtRepayment && (
-            <span className="text-[9px] text-blue-600 bg-blue-50 px-1 py-0.5 rounded font-bold uppercase tracking-wider self-start">
-              Debt Repayment
-            </span>
-          )}
-        </div>
-      ),
-    },
-    {
-      accessorKey: "pricePerLiter",
-      header: () => <div className="text-right whitespace-nowrap">Unit Price</div>,
-      cell: ({ row }) => (
-        <div className="text-right text-xs font-mono tabular-nums text-foreground whitespace-nowrap">
-          ₦{Number(row.original.pricePerLiter || 0).toLocaleString()}/L
-        </div>
-      ),
-    },
-    {
-      id: "dippingInterval",
-      header: () => <div className="whitespace-nowrap">Dipping Interval</div>,
-      cell: ({ row }) => {
-        if (row.original.isDebtRepayment) {
-          return <span className="text-muted-foreground text-xs italic">N/A</span>;
-        }
-        const opening = Number(row.original.openingDip || 0);
-        const closing = Number(row.original.closingDip || 0);
-        return (
-          <div className="flex items-center gap-2 text-xs font-mono whitespace-nowrap">
-            <span className="text-muted-foreground">{opening.toLocaleString()} L</span>
-            <span className="text-slate-300">→</span>
-            <span className="font-medium text-foreground">{closing.toLocaleString()} L</span>
-          </div>
-        );
-      },
-    },
-    {
-      accessorKey: "litersSold",
-      header: () => <div className="text-right whitespace-nowrap">Volume Sold</div>,
-      cell: ({ row }) => (
-        <div className="text-right text-xs font-mono tabular-nums text-foreground font-semibold whitespace-nowrap">
-          {Number(row.original.litersSold).toLocaleString()} L
-        </div>
-      ),
-    },
-    {
-      id: "revenue",
-      header: () => <div className="text-right whitespace-nowrap">Expected Revenue</div>,
-      cell: ({ row }) => {
-        const expectedTotal = Number(row.original.litersSold) * Number(row.original.pricePerLiter);
-        return (
-          <div className="text-right text-xs font-mono tabular-nums font-medium text-slate-600 whitespace-nowrap">
-            {formatShortCurrency(expectedTotal)}
-          </div>
-        );
-      },
-    },
-    {
-      id: "received",
-      header: () => <div className="text-right whitespace-nowrap">Total Received</div>,
-      cell: ({ row }) => {
-        const receivedTotal = Number(row.original.amountCash) + Number(row.original.amountPos) + Number(row.original.amountTransfer);
-        return (
-          <div className="text-right text-xs font-mono tabular-nums font-bold text-foreground whitespace-nowrap">
-            {formatShortCurrency(receivedTotal)}
-          </div>
-        );
-      },
-    },
-    {
-      id: "balance",
-      header: () => <div className="text-right whitespace-nowrap">Balance</div>,
-      cell: ({ row }) => {
-        const receivedTotal = Number(row.original.amountCash) + Number(row.original.amountPos) + Number(row.original.amountTransfer);
-        const expectedTotal = Number(row.original.litersSold) * Number(row.original.pricePerLiter);
-        const balance = receivedTotal - expectedTotal;
-        
-        let colorClass = "text-muted-foreground";
-        let prefix = "";
-        
-        if (balance > 0) {
-          colorClass = "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded";
-          prefix = "+";
-        } else if (balance < 0) {
-          colorClass = "text-rose-600 bg-rose-50 dark:bg-rose-950/30 px-2 py-0.5 rounded";
-        }
+  const getStatusBadge = (status: string, flags: string[]) => {
+    const isApproved = status === "APPROVED";
+    const isRejected = status === "REJECTED";
+    return (
+      <div className="flex flex-col gap-1 items-end sm:items-start">
+        <span className={cn(
+          "text-[10px] font-bold uppercase tracking-wider whitespace-nowrap print:text-black",
+          isApproved ? "text-emerald-600" : isRejected ? "text-rose-600" : "text-amber-600",
+          "px-2 py-1 rounded bg-muted/50 print:bg-transparent print:p-0"
+        )}>
+          {status}
+        </span>
+        {flags.length > 0 && (
+          <span className="text-[9px] text-rose-500 font-bold leading-none mt-0.5 print:text-black">
+            Flags: {flags.join(", ")}
+          </span>
+        )}
+      </div>
+    );
+  };
 
-        return (
-          <div className="text-right flex justify-end items-center whitespace-nowrap">
-            <div className={`text-[11px] font-mono tabular-nums font-bold ${colorClass}`}>
-              {balance === 0 ? "—" : `${prefix}${formatShortCurrency(balance)}`}
-            </div>
-          </div>
-        );
-      },
-    },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => {
-        const report = row.original;
-        const status = report.status;
-        const flags = [];
-        if (report.flaggedAmount) flags.push("Amount");
-        if (report.flaggedLiters) flags.push("Liters");
-        if (report.flaggedReceipt) flags.push("Receipt");
-
-        return (
-          <div className="flex flex-col gap-1">
-            <span className={cn(
-              "text-[10px] font-bold uppercase tracking-wider whitespace-nowrap print:text-black",
-              status === "APPROVED" ? "text-emerald-600" : status === "REJECTED" ? "text-rose-600" : "text-amber-600"
-            )}>
-              {status}
-            </span>
-            {flags.length > 0 && (
-              <span className="text-[9px] text-rose-500 font-bold leading-none mt-0.5 print:text-black">
-                Flags: {flags.join(", ")}
-              </span>
-            )}
-          </div>
-        );
-      },
-    },
-  ], []);
-
-  const table = useReactTable({
-    data: filteredReports,
-    columns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
+  const getFlags = (r: SalesReportRow) => {
+    const f = [];
+    if (r.flaggedAmount) f.push("Amount");
+    if (r.flaggedLiters) f.push("Liters");
+    if (r.flaggedReceipt) f.push("Receipt");
+    return f;
+  };
 
   return (
     <div
@@ -353,38 +328,152 @@ export function SalesReportsManager({
       <style>{`
         @media print {
           @page { size: landscape; margin: 10mm; }
+          .hide-on-print { display: none !important; }
+          .force-show-print { display: block !important; }
+          .force-table-print { display: table !important; }
         }
       `}</style>
       
-      {/* ── Header + Filters ─────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
+      {/* ── Header ─────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-4 bg-card text-card-foreground p-3 rounded-xl border hide-on-print">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground print:text-black">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Sales Reports
           </h1>
-          <p className="hidden print:block text-[11px] text-black/80 font-medium mt-1">
-            Date: {dateRange?.from ? format(dateRange.from, "d MMMM yyyy") : "All Time"} {dateRange?.to ? ` to ${format(dateRange.to, "d MMMM yyyy")}` : ""}
-            <br />
-            Stations: {selectedStationIds.length === 0 ? "All Stations" : stations.filter(s => selectedStationIds.includes(s.id)).map(s => s.name).join(", ")}
-          </p>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-end gap-3 w-full md:w-auto print:hidden">
+        <div className="flex items-center gap-3">
+          {/* View Mode Toggle */}
+          <div className="space-y-1 shrink-0">
+            <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">View</Label>
+            <div className="flex bg-muted p-1 rounded-md">
+              <Button
+                variant={viewMode === "card" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-8 px-2"
+                onClick={() => setViewMode("card")}
+                title="Card View"
+              >
+                <LayoutGrid className="size-4" />
+              </Button>
+              <Button
+                variant={viewMode === "table" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-8 px-2"
+                onClick={() => setViewMode("table")}
+                title="Table View"
+              >
+                <TableProperties className="size-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Print & Fullscreen */}
+          <div className="space-y-1 shrink-0 flex gap-2">
+            <div>
+              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">Action</Label>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => window.print()}
+                title="Print report"
+                className="h-10 w-10"
+              >
+                <Printer className="size-4" />
+              </Button>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">FS</Label>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={toggleFullscreen}
+                title={isFullscreen ? "Exit fullscreen" : "Fullscreen view"}
+                className="h-10 w-10"
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="size-4" />
+                ) : (
+                  <Maximize2 className="size-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Print-only Header */}
+      <div className="hidden print:block mb-6">
+        <h1 className="text-2xl font-bold tracking-tight text-black">Sales Reports</h1>
+        <p className="text-[11px] text-black/80 font-medium mt-1">
+          Date: {appliedDateRange?.from ? format(appliedDateRange.from, "d MMMM yyyy") : "All Time"} {appliedDateRange?.to ? ` to ${format(appliedDateRange.to, "d MMMM yyyy")}` : ""}
+          <br />
+          Stations: {appliedStationIds.length === 0 ? "All Stations" : stations.filter(s => appliedStationIds.includes(s.id)).map(s => s.name).join(", ")}
+        </p>
+      </div>
+
+      {/* Analytics Cards */}
+      <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
+        <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
+          {statCards.map((item, index) => (
+            <div
+              key={index}
+              className="lg:w-3/12 md:w-6/12 w-full border-border border-b last:border-b-0 md:border-e md:even:border-e-0 md:nth-[n+3]:border-b-0 lg:border-b-0 lg:even:border-e lg:last:border-e-0 print:border-none print:w-auto"
+            >
+              <div className="p-4 flex items-start justify-between print:p-0">
+                <div className="flex flex-col gap-2 print:gap-0.5">
+                  <p className="text-sm font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                  <div>
+                    <p className={cn("text-xl font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
+                      {item.value}
+                    </p>
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 hide-on-print">
+                  <item.icon
+                    size={14}
+                    className={cn("text-muted-foreground", item.iconColor)}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* ── Filter Bar ─────────────────────────────────────────── */}
+      <div className="bg-card text-card-foreground p-4 rounded-xl border hide-on-print shadow-xs flex flex-col gap-4">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <Filter className="size-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold tracking-tight">Advanced Filters</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={clearFilters} className="h-8 px-3 text-xs text-muted-foreground" size="sm">
+              Clear Filters
+            </Button>
+            <Button onClick={applyFilters} className="h-8 px-4 text-xs" size="sm">
+              Apply Filters
+            </Button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          
           {/* Station filter */}
-          <div className="space-y-1 w-full sm:w-48 print:hidden">
-            <Label className="text-xs text-muted-foreground">Station(s)</Label>
+          <div className="space-y-1 w-full">
+            <Label className="text-xs text-muted-foreground font-medium">Station</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   className={cn(
-                    "w-full justify-start text-left font-normal",
-                    selectedStationIds.length === 0 && "text-muted-foreground"
+                    "w-full justify-start text-left font-normal h-9",
+                    draftStationIds.length === 0 && "text-muted-foreground"
                   )}
                 >
-                  {selectedStationIds.length === 0
+                  {draftStationIds.length === 0
                     ? "All Stations"
-                    : `${selectedStationIds.length} station(s) selected`}
+                    : `${draftStationIds.length} station(s)`}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-56 p-2" align="start">
@@ -392,9 +481,9 @@ export function SalesReportsManager({
                   <div className="flex items-center space-x-2 p-1">
                     <Checkbox
                       id="station-all"
-                      checked={selectedStationIds.length === 0}
+                      checked={draftStationIds.length === 0}
                       onCheckedChange={(checked) => {
-                        if (checked) setSelectedStationIds([]);
+                        if (checked) setDraftStationIds([]);
                       }}
                     />
                     <label
@@ -408,13 +497,13 @@ export function SalesReportsManager({
                     <div key={s.id} className="flex items-center space-x-2 p-1">
                       <Checkbox
                         id={`station-${s.id}`}
-                        checked={selectedStationIds.includes(s.id)}
+                        checked={draftStationIds.includes(s.id)}
                         onCheckedChange={(checked) => {
                           if (checked) {
-                            setSelectedStationIds([...selectedStationIds, s.id]);
+                            setDraftStationIds([...draftStationIds, s.id]);
                           } else {
-                            setSelectedStationIds(
-                              selectedStationIds.filter((id) => id !== s.id)
+                            setDraftStationIds(
+                              draftStationIds.filter((id) => id !== s.id)
                             );
                           }
                         }}
@@ -433,229 +522,386 @@ export function SalesReportsManager({
           </div>
 
           {/* Date Picker Range */}
-          <div className="space-y-1 w-full sm:w-auto">
-            <Label htmlFor="date-picker-range" className="text-xs text-muted-foreground">Date Range</Label>
+          <div className="space-y-1 w-full sm:col-span-2 md:col-span-1 lg:col-span-2">
+            <Label className="text-xs text-muted-foreground font-medium">Date Range</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  id="date-picker-range"
                   className={cn(
-                    "w-full sm:w-[260px] justify-start text-left font-normal",
-                    !dateRange && "text-muted-foreground"
+                    "w-full justify-start text-left font-normal h-9",
+                    !draftDateRange && "text-muted-foreground"
                   )}
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "LLL dd, y")} -{" "}
-                        {format(dateRange.to, "LLL dd, y")}
-                      </>
+                  <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                  {draftDateRange?.from ? (
+                    draftDateRange.to ? (
+                      <span className="truncate">
+                        {format(draftDateRange.from, "MMM d, yy")} -{" "}
+                        {format(draftDateRange.to, "MMM d, yy")}
+                      </span>
                     ) : (
-                      format(dateRange.from, "LLL dd, y")
+                      format(draftDateRange.from, "MMM d, yy")
                     )
                   ) : (
                     <span>Pick a date range</span>
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
+              <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
+                  defaultMonth={draftDateRange?.from}
+                  selected={draftDateRange}
+                  onSelect={setDraftDateRange}
                   numberOfMonths={2}
                 />
               </PopoverContent>
             </Popover>
           </div>
 
-          {/* Print button */}
-          <div className="space-y-1 shrink-0">
-            <Label className="text-xs text-muted-foreground opacity-0 select-none">
-              Print
-            </Label>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => window.print()}
-              title="Print report"
-              className="h-10 w-10"
-            >
-              <Printer className="size-4" />
-            </Button>
+          {/* Status Filter */}
+          <div className="space-y-1 w-full">
+            <Label className="text-xs text-muted-foreground font-medium">Status</Label>
+            <Select value={draftStatus} onValueChange={setDraftStatus}>
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Status</SelectItem>
+                <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="APPROVED">Approved</SelectItem>
+                <SelectItem value="REJECTED">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Fullscreen toggle */}
-          <div className="space-y-1 shrink-0">
-            <Label className="text-xs text-muted-foreground opacity-0 select-none">
-              View
-            </Label>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleFullscreen}
-              title={isFullscreen ? "Exit fullscreen" : "Fullscreen view"}
-              className="h-10 w-10"
-            >
-              {isFullscreen ? (
-                <Minimize2 className="size-4" />
-              ) : (
-                <Maximize2 className="size-4" />
-              )}
-            </Button>
+          {/* Product Filter */}
+          <div className="space-y-1 w-full">
+            <Label className="text-xs text-muted-foreground font-medium">Product</Label>
+            <Select value={draftProduct} onValueChange={setDraftProduct}>
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue placeholder="All Products" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Products</SelectItem>
+                <SelectItem value="PMS">PMS</SelectItem>
+                <SelectItem value="AGO">AGO</SelectItem>
+                <SelectItem value="DPK">DPK</SelectItem>
+                <SelectItem value="LPG">LPG</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-        </div>
-      </div>
-
-      {/* Analytics Cards */}
-      <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
-        <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
-          {statCards.map((item, index) => (
-            <div
-              key={index}
-              className="lg:w-3/12 md:w-6/12 w-full border-border border-b last:border-b-0 md:border-e md:even:border-e-0 md:nth-[n+3]:border-b-0 lg:border-b-0 lg:even:border-e lg:last:border-e-0 print:border-none print:w-auto"
-            >
-              <div className="p-4 flex items-start justify-between print:p-0">
-                <div className="flex flex-col gap-2 print:gap-0.5">
-                  <p className="text-sm font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
-                  <div>
-                    <p className={cn("text-xl font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
-                      {item.value}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1 print:hidden">
-                      <Badge
-                        className={cn(
-                          "font-medium text-[9px] uppercase tracking-wider px-1.5 py-0",
-                          item.badgeColor
-                        )}
-                      >
-                        {item.badge}
-                      </Badge>
+          {/* Debt Balance Filter (Popover Modal) */}
+          <div className="space-y-1 w-full">
+            <Label className="text-xs text-muted-foreground font-medium">Balance</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal h-9",
+                    draftDebtOperator === "ALL" && "text-muted-foreground"
+                  )}
+                >
+                  <Banknote className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="truncate">
+                    {draftDebtOperator === "ALL" 
+                      ? "Filter Balance" 
+                      : `${draftDebtOperator === "LESS_THAN_OR_EQUAL" ? "<=" : draftDebtOperator === "GREATER_THAN_OR_EQUAL" ? ">=" : "=="} ${draftDebtAmount || "0"}`}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-70" align="start">
+                <div className="space-y-4">
+                  <h4 className="font-medium leading-none">Filter by Balance</h4>
+                  <p className="text-xs text-muted-foreground">Find accounts based on their outstanding debt or credit balance.</p>
+                  <div className="grid gap-3">
+                    <div className="grid gap-2">
+                      <Label>Condition</Label>
+                      <Select value={draftDebtOperator} onValueChange={setDraftDebtOperator}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select operator" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ALL">All</SelectItem>
+                          <SelectItem value="LESS_THAN_OR_EQUAL">Less than or equal (&lt;=)</SelectItem>
+                          <SelectItem value="GREATER_THAN_OR_EQUAL">Greater than or equal (&gt;=)</SelectItem>
+                          <SelectItem value="EXACT">Exact match (==)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Amount</Label>
+                      <Input
+                        type="number"
+                        placeholder="e.g. 0"
+                        value={draftDebtAmount}
+                        onChange={(e) => setDraftDebtAmount(e.target.value)}
+                        disabled={draftDebtOperator === "ALL"}
+                      />
                     </div>
                   </div>
                 </div>
-                <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
-                  <item.icon
-                    size={14}
-                    className={cn("text-muted-foreground", item.iconColor)}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* ── Table ───────────────────────────────────────────────────────── */}
-      <Card className="w-full py-0 overflow-hidden print:shadow-none print:border-none print:bg-transparent">
-        <CardContent className="px-0">
-          <div className="overflow-x-auto border-t border-border/40 relative print:overflow-visible print:border-none print:w-full print:max-w-none">
-            <table className="min-w-max w-full text-sm border-collapse border border-border/50 print:border-black/30 print:text-[10px] print:w-full">
-              <thead className="bg-muted/50 border-b border-border/50 print:border-black/30 print:bg-transparent">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id} className="border-none">
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="h-9 px-2 py-1.5 text-[11px] font-bold text-foreground bg-muted/50 border border-border/50 print:border-black/30 uppercase tracking-wider whitespace-nowrap text-left print:text-[9px] print:text-black print:bg-transparent"
-                      >
-                        {header.isPlaceholder ? null : (
-                          <div
-                            className={cn(
-                              header.column.getCanSort() &&
-                                "flex cursor-pointer select-none items-center gap-1.5 hover:text-foreground transition-colors"
-                            )}
-                            onClick={header.column.getToggleSortingHandler()}
-                          >
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                            {
-                              {
-                                asc: <ChevronUpIcon size={13} />,
-                                desc: <ChevronDownIcon size={13} />,
-                              }[header.column.getIsSorted() as string] ?? null
-                            }
-                          </div>
-                        )}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-
-              <tbody>
-                {table.getRowModel().rows.length ? (
-                  table.getRowModel().rows.map((row, index) => (
-                    <tr
-                      key={row.id}
-                      className={cn(
-                        "hover:bg-muted/20 transition-colors group cursor-pointer",
-                        index % 2 === 0 ? "bg-background" : "bg-muted/5 print:bg-transparent",
-                        row.original.isDebtRepayment && "bg-blue-50/50"
-                      )}
-                      onClick={() => router.push(`/admin/sales-reports/${row.original.id}`)}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <td
-                          key={cell.id}
-                          className="px-2 py-1.5 whitespace-nowrap text-[13px] print:text-[10px] print:py-1 border border-border/50 print:border-black/30 print:text-black"
-                        >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={columns.length}
-                      className="h-32 text-center text-sm text-muted-foreground border border-border/50 print:border-black/30"
-                    >
-                      No sales reports found for the selected filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-              <tfoot className="bg-muted/50 font-bold border border-border/50 print:border-black/30 print:bg-transparent">
-                <tr>
-                  <td colSpan={5} className="px-2 py-2 text-right text-sm border border-border/50 print:border-black/30 print:text-black">
-                    Total:
-                  </td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {stats.totalLiters.toLocaleString()} L
-                  </td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-slate-600">
-                    {formatShortCurrency(stats.expectedRevenue)}
-                  </td>
-                  <td className={cn(
-                    "px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black",
-                    stats.totalReceived > stats.expectedRevenue ? "text-emerald-600" : stats.totalReceived < stats.expectedRevenue ? "text-rose-600" : "text-foreground"
-                  )}>
-                    {formatShortCurrency(stats.totalReceived)}
-                  </td>
-                  <td className="px-2 py-2 text-right text-[11px] font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    <span className={cn(
-                      "px-2 py-0.5 rounded inline-block",
-                      stats.totalBalance > 0 ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30" : 
-                      stats.totalBalance < 0 ? "text-rose-600 bg-rose-50 dark:bg-rose-950/30" : "text-muted-foreground"
-                    )}>
-                      {stats.totalBalance === 0 ? "—" : `${stats.totalBalance > 0 ? "+" : ""}${formatShortCurrency(stats.totalBalance)}`}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black">
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+              </PopoverContent>
+            </Popover>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {finalGroupedSales.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground border rounded-xl border-dashed bg-card">
+          No sales reports found for the selected filters.
+        </div>
+      ) : (
+        <>
+          {/* ── CARD VIEW ─────────────────────────────────────────────────── */}
+          <div className={cn("space-y-4 hide-on-print", viewMode === "card" ? "block" : "hidden")}>
+            {finalGroupedSales.map((parent) => {
+              const expectedTotal = Number(parent.litersSold) * Number(parent.pricePerLiter);
+              const parentReceived = Number(parent.amountCash) + Number(parent.amountPos) + Number(parent.amountTransfer);
+              
+              const overallBalance = parent.overallBalance;
+
+              return (
+                <Card 
+                  key={parent.id} 
+                  className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer group"
+                  onClick={() => router.push(`/admin/sales-reports/${parent.id}`)}
+                >
+                  <CardHeader className="bg-muted/30 p-4 border-b flex flex-row items-center justify-between space-y-0">
+                    <div className="flex flex-col">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        {parent.station?.name}
+                        <Badge variant="outline" className="text-[10px] font-mono tracking-wider font-semibold">
+                          {parent.productType}
+                        </Badge>
+                      </CardTitle>
+                      <span className="text-xs text-muted-foreground mt-1 font-medium">
+                        {formatHumanReadableDate(parent.logDate)}
+                      </span>
+                    </div>
+                    {getStatusBadge(parent.status, getFlags(parent))}
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {/* Parent Metrics */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 border-b group-hover:bg-muted/10 transition-colors">
+                      <div className="p-4 flex flex-col justify-center">
+                        <span className="text-xs text-muted-foreground font-medium mb-1 uppercase tracking-wider">Volume Sold</span>
+                        <span className="text-sm font-semibold font-mono tabular-nums">{Number(parent.litersSold).toLocaleString()} L <span className="text-muted-foreground text-[10px] ml-1 font-normal">@ ₦{Number(parent.pricePerLiter).toLocaleString()}/L</span></span>
+                      </div>
+                      <div className="p-4 flex flex-col justify-center">
+                        <span className="text-xs text-muted-foreground font-medium mb-1 uppercase tracking-wider">Expected</span>
+                        <span className="text-sm font-semibold font-mono tabular-nums text-slate-600">{formatShortCurrency(expectedTotal)}</span>
+                      </div>
+                      <div className="p-4 flex flex-col justify-center">
+                        <span className="text-xs text-muted-foreground font-medium mb-1 uppercase tracking-wider">Initial Received</span>
+                        <span className="text-sm font-bold font-mono tabular-nums">{formatShortCurrency(parentReceived)}</span>
+                      </div>
+                      <div className="p-4 flex flex-col justify-center">
+                        <span className="text-xs text-muted-foreground font-medium mb-1 uppercase tracking-wider">Balance</span>
+                        <span className={cn(
+                          "text-sm font-bold font-mono tabular-nums px-2 py-0.5 rounded w-max",
+                          overallBalance > 0 ? "bg-emerald-50 text-emerald-700" : overallBalance < 0 ? "bg-rose-50 text-rose-700" : "bg-muted text-muted-foreground"
+                        )}>
+                          {overallBalance === 0 ? "Settled" : `${overallBalance > 0 ? "+" : ""}${formatShortCurrency(overallBalance)}`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Child Repayments Section */}
+                    {parent.childRepayments.length > 0 && (
+                      <div className="bg-slate-50/50 p-4 pl-6 md:pl-10 relative">
+                        <div className="absolute left-[19px] md:left-[35px] top-4 bottom-4 w-px bg-border/80"></div>
+                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3 ml-2 flex items-center gap-2">
+                          <CheckCircle2 className="size-3" /> Repayment History
+                        </h4>
+                        <div className="space-y-3 relative z-10">
+                          {parent.childRepayments.map((child, idx) => {
+                            const cReceived = Number(child.amountCash) + Number(child.amountPos) + Number(child.amountTransfer);
+                            return (
+                              <div key={child.id} className="flex items-center justify-between bg-white border shadow-xs rounded-lg p-3 ml-2 hover:border-slate-300 transition-colors">
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-foreground">Debt Repayment</span>
+                                    <span className="text-[10px] text-muted-foreground">{formatHumanReadableDate(child.logDate)}</span>
+                                  </div>
+                                  {getStatusBadge(child.status, getFlags(child))}
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-xs font-bold font-mono text-emerald-600 bg-emerald-50 px-2 py-1 rounded">+{formatShortCurrency(cReceived)}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* ── TABLE VIEW / PRINT VIEW ────────────────────────────────────── */}
+          <div className={cn(
+            "w-full overflow-hidden force-table-print", 
+            viewMode === "table" ? "block hide-on-print" : "hidden print:block",
+            "print:shadow-none print:border-none print:bg-transparent"
+          )}>
+            <div className="overflow-x-auto border rounded-xl print:rounded-none print:border-none print:w-full print:max-w-none">
+              <table className="min-w-max w-full text-sm border-collapse border border-border/50 print:border-black/30 print:text-[10px] print:w-full bg-card">
+                <thead className="bg-muted/50 border-b border-border/50 print:border-black/30 print:bg-transparent text-left">
+                  <tr>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Date</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Station</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Product</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-right text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Price/L</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Dipping Interval</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-right text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Volume</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-right text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Expected Rev</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-right text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Total Received</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-right text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Balance</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Status</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-center text-muted-foreground print:text-black hide-on-print border-l">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50 print:divide-black/20">
+                  {finalGroupedSales.map((parent) => {
+                    const expectedTotal = Number(parent.litersSold) * Number(parent.pricePerLiter);
+                    const parentReceived = Number(parent.amountCash) + Number(parent.amountPos) + Number(parent.amountTransfer);
+                    
+                    const overallBalance = parent.overallBalance;
+
+                    return (
+                      <React.Fragment key={parent.id}>
+                        {/* Parent Row */}
+                        <tr 
+                          className="hover:bg-muted/20 bg-background print:bg-transparent group"
+                        >
+                          <td className="px-3 py-2 whitespace-nowrap font-medium print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
+                            {formatHumanReadableDate(parent.logDate)}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap font-semibold print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
+                            {parent.station?.name}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap border-r border-border/50 print:border-black/30">
+                            <span className="font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-muted rounded print:bg-transparent print:border print:border-black/30 print:text-[9px] print:text-black">
+                              {parent.productType}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono tabular-nums whitespace-nowrap print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
+                            ₦{Number(parent.pricePerLiter || 0).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2 font-mono tabular-nums whitespace-nowrap text-muted-foreground print:text-[10px] print:text-black/70 border-r border-border/50 print:border-black/30">
+                            {Number(parent.openingDip || 0).toLocaleString()} <span className="text-border">→</span> {Number(parent.closingDip || 0).toLocaleString()} L
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums whitespace-nowrap print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
+                            {Number(parent.litersSold).toLocaleString()} L
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono font-medium text-slate-600 tabular-nums whitespace-nowrap print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
+                            {formatShortCurrency(expectedTotal)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono font-bold tabular-nums whitespace-nowrap print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
+                            {formatShortCurrency(parentReceived)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono font-bold tabular-nums whitespace-nowrap print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
+                            <span className={cn(
+                              overallBalance === 0 ? "text-muted-foreground" : overallBalance > 0 ? "text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded print:bg-transparent print:text-black" : "text-rose-600 bg-rose-50 px-1 py-0.5 rounded print:bg-transparent print:text-black"
+                            )}>
+                              {overallBalance === 0 ? "—" : `${overallBalance > 0 ? "+" : ""}${formatShortCurrency(overallBalance)}`}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap print:text-black border-r border-border/50 print:border-black/30">
+                            {getStatusBadge(parent.status, getFlags(parent))}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-center hide-on-print border-l">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-7 text-[10px] px-2 hide-on-print"
+                              onClick={() => router.push(`/admin/sales-reports/${parent.id}`)}
+                            >
+                              Details
+                            </Button>
+                          </td>
+                        </tr>
+
+                        {/* Child Rows */}
+                        {parent.childRepayments.map(child => {
+                          const childReceived = Number(child.amountCash) + Number(child.amountPos) + Number(child.amountTransfer);
+                          return (
+                            <tr 
+                              key={child.id}
+                              className="bg-blue-50/20 hover:bg-blue-50/40 print:bg-transparent relative"
+                            >
+                              <td className="px-3 py-2 whitespace-nowrap text-muted-foreground pl-8 relative print:text-[10px] print:text-black/80 border-r border-border/50 print:border-black/30">
+                                <div className="absolute left-4 top-0 bottom-1/2 border-l border-b border-border/80 w-3 rounded-bl"></div>
+                                {formatHumanReadableDate(child.logDate)}
+                              </td>
+                              <td colSpan={6} className="px-3 py-2 text-center text-xs italic text-muted-foreground/50 print:text-[9px] print:text-black/50 border-r border-border/50 print:border-black/30">
+                                — Debt Repayment —
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono font-bold text-emerald-600 tabular-nums whitespace-nowrap print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
+                                +{formatShortCurrency(childReceived)}
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono text-muted-foreground tabular-nums whitespace-nowrap print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
+                                —
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap print:text-black border-r border-border/50 print:border-black/30">
+                                {getStatusBadge(child.status, getFlags(child))}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-center hide-on-print border-l">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="h-7 text-[10px] px-2 hide-on-print"
+                                  onClick={() => router.push(`/admin/sales-reports/${child.id}`)}
+                                >
+                                  Details
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="bg-muted/80 font-bold border-t-2 border-border/60 print:border-black/50 print:bg-transparent">
+                  <tr>
+                    <td colSpan={5} className="px-3 py-3 text-right text-sm print:text-black border-r border-border/50 print:border-black/30">
+                      Total:
+                    </td>
+                    <td className="px-3 py-3 text-right text-xs font-mono tabular-nums print:text-black border-r border-border/50 print:border-black/30">
+                      {stats.totalLiters.toLocaleString()} L
+                    </td>
+                    <td className="px-3 py-3 text-right text-xs font-mono tabular-nums text-slate-600 print:text-black border-r border-border/50 print:border-black/30">
+                      {formatShortCurrency(stats.expectedRevenue)}
+                    </td>
+                    <td className={cn(
+                      "px-3 py-3 text-right text-xs font-mono tabular-nums print:text-black border-r border-border/50 print:border-black/30",
+                      stats.totalReceived > stats.expectedRevenue ? "text-emerald-600" : stats.totalReceived < stats.expectedRevenue ? "text-rose-600" : "text-foreground"
+                    )}>
+                      {formatShortCurrency(stats.totalReceived)}
+                    </td>
+                    <td className="px-3 py-3 text-right text-[11px] font-mono tabular-nums print:text-black border-r border-border/50 print:border-black/30">
+                      <span className={cn(
+                        stats.totalBalance > 0 ? "text-emerald-600" : stats.totalBalance < 0 ? "text-rose-600" : "text-muted-foreground"
+                      )}>
+                        {stats.totalBalance === 0 ? "—" : `${stats.totalBalance > 0 ? "+" : ""}${formatShortCurrency(stats.totalBalance)}`}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 print:text-black border-r border-border/50 print:border-black/30"></td>
+                    <td className="px-3 py-3 print:text-black hide-on-print border-l"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

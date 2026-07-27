@@ -53,8 +53,21 @@ interface SalesReportRow {
   approvedBy: SalesReportUser | null;
   isDebtRepayment?: boolean;
   parentSaleId?: string | null;
+  pricePerLiter: number;
+  parentSale?: {
+    id: string;
+    logDate: string | Date;
+    productType: string;
+  } | null;
+  debtRepayments?: {
+    id: string;
+    amountCash: number;
+    amountPos: number;
+    amountTransfer: number;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    logDate: string | Date;
+  }[];
 }
-
 
 export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   const router = useRouter();
@@ -111,9 +124,16 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   };
 
   const totalRevenue = Number(report.amountCash) + Number(report.amountPos) + Number(report.amountTransfer);
+  
+  const expectedRevenue = Number(report.litersSold) * Number(report.pricePerLiter);
+  const initialShortage = expectedRevenue > totalRevenue ? expectedRevenue - totalRevenue : 0;
+  
+  const approvedRepayments = (report.debtRepayments || []).filter(r => r.status !== "REJECTED");
+  const totalRepaid = approvedRepayments.reduce((sum, r) => sum + Number(r.amountCash) + Number(r.amountPos) + Number(r.amountTransfer), 0);
+  const remainingDebt = initialShortage - totalRepaid;
 
   return (
-    <div className="flex-1 p-6 sm:p-8 md:p-10 max-w-5xl mx-auto w-full space-y-8">
+    <div className="space-y-6">
       {/* Header and Navigation */}
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" asChild className="shrink-0 h-9 w-9">
@@ -144,8 +164,8 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="md:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 space-y-4">
           {/* Summary Stats Grid */}
           <Card className="shadow-sm">
             <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
@@ -171,20 +191,26 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                     )}
                   </div>
                 </div>
-                <div className="p-4 sm:p-5">
-                  <span className="text-xs text-muted-foreground block font-medium uppercase tracking-wider mb-1">Volume Sold</span>
-                  <span className="font-bold text-foreground font-mono text-lg">{Number(report.litersSold).toLocaleString()} L</span>
+                <div className="p-4">
+                  <span className="text-[11px] text-muted-foreground block font-medium uppercase tracking-wider mb-1">Volume Sold</span>
+                  <span className="font-bold text-foreground font-mono text-base">{Number(report.litersSold).toLocaleString()} L</span>
                 </div>
-                <div className="p-4 sm:p-5">
-                  <span className="text-xs text-muted-foreground block font-medium uppercase tracking-wider mb-1">Total Revenue</span>
-                  <span className="font-bold text-primary font-mono text-lg">{formatShortCurrency(totalRevenue)}</span>
+                <div className="p-4">
+                  <span className="text-[11px] text-muted-foreground block font-medium uppercase tracking-wider mb-1">Unit Price</span>
+                  <span className="font-semibold text-foreground font-mono text-base">{formatShortCurrency(Number(report.pricePerLiter))}</span>
                 </div>
               </div>
+              {report.isDebtRepayment && report.parentSale && (
+                <div className="border-t border-border/40 p-4 bg-blue-50/50 dark:bg-blue-900/10">
+                  <span className="text-sm">Paying off shortage for <Link href={`/admin/sales-reports/${report.parentSale.id}`} className="font-semibold text-blue-600 hover:underline">{report.parentSale.productType} Sale on {formatHumanReadableDate(report.parentSale.logDate)}</Link></span>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Financial Breakdown */}
-          <Card className="shadow-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Financial Breakdown */}
+            <Card className="shadow-sm">
             <CardHeader className="pb-3 border-b border-border/40">
               <CardTitle className="text-base font-semibold">Financial Summary</CardTitle>
             </CardHeader>
@@ -209,6 +235,32 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
               </div>
             </CardContent>
           </Card>
+
+          {/* Expected vs Actual Revenue (Only for root sales) */}
+          {!report.isDebtRepayment && (
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3 border-b border-border/40">
+                <CardTitle className="text-base font-semibold">Revenue Validation</CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                <div className="space-y-3 divide-y divide-border/20 text-sm">
+                  <div className="flex justify-between items-center pb-2">
+                    <span className="text-muted-foreground">Expected Revenue</span>
+                    <span className="font-semibold font-mono text-base">{formatShortCurrency(expectedRevenue)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-muted-foreground">Total Paid (Incl. Repayments)</span>
+                    <span className="font-semibold font-mono text-base text-emerald-600">{formatShortCurrency(totalRevenue + totalRepaid)}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-3 font-bold text-base border-t border-border/40">
+                    <span>Remaining Balance</span>
+                    <span className={remainingDebt > 0 ? "text-rose-600" : "text-emerald-600"}>{remainingDebt > 0 ? formatShortCurrency(remainingDebt) : formatShortCurrency(0)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          </div>
 
           {/* Receipt Files */}
           {(report.cashReceiptUrl || report.posReceiptUrl) && (
@@ -253,6 +305,42 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                     </Button>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Debt Repayments Listing */}
+          {report.debtRepayments && report.debtRepayments.length > 0 && (
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3 border-b border-border/40">
+                <CardTitle className="text-base font-semibold">Debt Repayments</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y divide-border/40">
+                  {report.debtRepayments.map(r => {
+                    const rTotal = Number(r.amountCash) + Number(r.amountPos) + Number(r.amountTransfer);
+                    return (
+                      <div key={r.id} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                        <div>
+                          <div className="font-semibold text-sm mb-1">{formatShortCurrency(rTotal)}</div>
+                          <div className="text-xs text-muted-foreground">{formatHumanReadableDate(r.logDate)}</div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <Badge variant="outline" className={
+                            r.status === "APPROVED" ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                            r.status === "REJECTED" ? "bg-rose-50 text-rose-600 border-rose-200" :
+                            "bg-amber-50 text-amber-600 border-amber-200"
+                          }>
+                            {r.status}
+                          </Badge>
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link href={`/admin/sales-reports/${r.id}`}>View</Link>
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </CardContent>
             </Card>
           )}
@@ -309,8 +397,8 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
         </div>
 
         {/* Sidebar: Review Action Panel */}
-        <div className="md:col-span-1">
-          <div className="sticky top-6">
+        <div className="xl:col-span-1">
+          <div className="sticky top-6 space-y-6">
             <Card className={report.status === "PENDING" ? "border-primary/30 shadow-md ring-1 ring-primary/10" : "shadow-sm"}>
               <CardHeader className={report.status === "PENDING" ? "bg-primary/5 pb-4" : "pb-4"}>
                 <CardTitle className="text-lg">Review Decision</CardTitle>

@@ -60,9 +60,9 @@ async function main() {
   }
 
   // --- SHAHAF SEEDING ---
-  console.log("Seeding SHAHAF tenant...");
-  const tenantName = "SHAHAF";
-  const tenantSlug = "shahaf";
+  console.log("Seeding SAHAF tenant...");
+  const tenantName = "SAHAF NIG LTD";
+  const tenantSlug = "sahaf";
   const tenantUserEmail = "khalifamaigoro+sahaf@gmail.com";
 
   const tenant = await prisma.tenant.upsert({

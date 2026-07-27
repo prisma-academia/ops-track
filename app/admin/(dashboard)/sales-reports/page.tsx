@@ -228,7 +228,7 @@ export default async function SalesReportsPage() {
 
   const serializedReports = JSON.parse(JSON.stringify(mappedReports));
   const serializedStations = JSON.parse(JSON.stringify(stations));
-
+ 
   return (
     <SalesReportsManager
       initialReports={serializedReports}

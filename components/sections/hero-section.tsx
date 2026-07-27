@@ -61,12 +61,12 @@ export default function HeroSection({ slug, name, logoUrl }: { slug: string, nam
                             initial="hidden"
                             animate="visible"
                             variants={containerVariants}
-                            className="mask-y-from-35% mask-y-to-90% absolute inset-0 top-56 lg:top-12">
-                            <motion.div variants={itemVariants}>
+                            className="absolute inset-0 top-0">
+                            <motion.div variants={itemVariants} className="h-full">
                                 <Image
                                     src="https://images.unsplash.com/photo-1662285064441-bedb11ca7e47?q=80&w=1344&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
                                     alt="background"
-                                    className="hidden size-full mix-blend-overlay dark:block"
+                                    className="size-full object-cover opacity-40 dark:opacity-50"
                                     width="3276"
                                     height="4095"
                                 />
@@ -75,7 +75,7 @@ export default function HeroSection({ slug, name, logoUrl }: { slug: string, nam
 
                         <div
                             aria-hidden
-                            className="absolute inset-0 -z-10 size-full [background:radial-gradient(125%_125%_at_50%_100%,transparent_0%,var(--color-background)_75%)]"
+                            className="absolute inset-0 -z-10 size-full [background:radial-gradient(125%_125%_at_50%_100%,transparent_0%,var(--color-background)_95%)]"
                         />
 
                         <div className="mx-auto max-w-7xl px-6">

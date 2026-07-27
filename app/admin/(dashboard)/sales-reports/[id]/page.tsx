@@ -41,6 +41,23 @@ export default async function SalesReportDetailsPage({
           lastName: true,
         },
       },
+      debtRepayments: {
+        select: {
+          id: true,
+          amountCash: true,
+          amountPos: true,
+          amountTransfer: true,
+          status: true,
+          logDate: true,
+        },
+      },
+      parentSale: {
+        select: {
+          id: true,
+          logDate: true,
+          productType: true,
+        },
+      },
     },
   });
 

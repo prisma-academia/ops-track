@@ -2,7 +2,7 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
-import { BadgeDollarSign } from "lucide-react";
+import { BadgeDollarSign, Printer } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 
@@ -190,10 +190,6 @@ const columns: ColumnDef<SaleRow>[] = [
         </div>
       );
     }
-  },
-  {
-    id: "actions",
-    cell: ({ row }) => <LogDeductionAction row={row.original} />
   }
 ];
 

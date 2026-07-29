@@ -38,6 +38,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [clientOpen, setClientOpen] = useState(false);
+  const [bankOpen, setBankOpen] = useState(false);
 
   const [
     { files, isDragging, errors: uploadErrors },
@@ -165,69 +166,74 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
             <CardDescription>Record payments received from customers for fuel sales.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-500">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2 flex flex-col justify-end">
-          <Label>Client / Station Name *</Label>
-          <Popover open={clientOpen} onOpenChange={setClientOpen}>
-            <PopoverTrigger asChild className="w-full">
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={clientOpen}
-                className="w-full justify-between font-normal"
-              >
-                {formData.clientId
-                  ? (metadata?.customers?.find((c: any) => c.id === formData.clientId)?.name ||
-                     metadata?.stations?.find((s: any) => s.id === formData.clientId)?.name)
-                  : "Select Client or Station..."}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent 
-              className="p-0" 
-              style={{ width: 'var(--radix-popover-trigger-width)' }} 
-              align="start"
-            >
-              <Command>
-                <CommandInput placeholder="Search clients/stations..." />
-                <CommandList>
-                  <CommandEmpty>No clients or stations found.</CommandEmpty>
-                  <CommandGroup heading="Customers">
-                    {metadata?.customers?.map((c: any) => (
-                      <CommandItem
-                        key={c.id}
-                        value={c.name}
-                        onSelect={() => {
-                          setFormData({ ...formData, clientId: c.id, saleId: "none" });
-                          setClientOpen(false);
-                        }}
+            <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in duration-500">
+              {/* SECTION: General Details */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">General Details</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2 flex flex-col justify-end">
+                  <Label>Client / Station Name *</Label>
+                  <Popover open={clientOpen} onOpenChange={setClientOpen}>
+                    <PopoverTrigger asChild className="w-full">
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={clientOpen}
+                        className="w-full justify-between font-normal"
                       >
-                        <Check className={cn("mr-2 h-4 w-4", formData.clientId === c.id ? "opacity-100" : "opacity-0")} />
-                        {c.name}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                  <CommandGroup heading="Stations">
-                    {metadata?.stations?.map((s: any) => (
-                      <CommandItem
-                        key={s.id}
-                        value={`${s.name} ${s.code}`}
-                        onSelect={() => {
-                          setFormData({ ...formData, clientId: s.id, saleId: "none" });
-                          setClientOpen(false);
-                        }}
-                      >
-                        <Check className={cn("mr-2 h-4 w-4", formData.clientId === s.id ? "opacity-100" : "opacity-0")} />
-                        {s.name} ({s.code})
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        </div>
+                        {formData.clientId
+                          ? (metadata?.customers?.find((c: any) => c.id === formData.clientId)?.name ||
+                            metadata?.stations?.find((s: any) => s.id === formData.clientId)?.name)
+                          : "Select Client or Station..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent 
+                      className="p-0" 
+                      style={{ width: 'var(--radix-popover-trigger-width)' }} 
+                      align="start"
+                    >
+                      <Command>
+                        <CommandInput placeholder="Search clients/stations..." />
+                        <CommandList>
+                          <CommandEmpty>No clients or stations found.</CommandEmpty>
+                          <CommandGroup heading="Customers">
+                            {metadata?.customers?.map((c: any) => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.name}
+                                onSelect={() => {
+                                  setFormData({ ...formData, clientId: c.id, saleId: "none" });
+                                  setClientOpen(false);
+                                }}
+                                data-checked={formData.clientId === c.id}
+                              >
+                                {c.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                          <CommandGroup heading="Stations">
+                            {metadata?.stations?.map((s: any) => (
+                              <CommandItem
+                                key={s.id}
+                                value={`${s.name} ${s.code}`}
+                                onSelect={() => {
+                                  setFormData({ ...formData, clientId: s.id, saleId: "none" });
+                                  setClientOpen(false);
+                                }}
+                                data-checked={formData.clientId === s.id}
+                              >
+                                {s.name} ({s.code})
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
 
         <div className="space-y-2 flex flex-col justify-end">
           <Label>Pending Sale (Optional)</Label>
@@ -273,8 +279,8 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
                         setFormData({ ...formData, saleId: "none" });
                         setSaleOpen(false);
                       }}
+                      data-checked={formData.saleId === "none"}
                     >
-                      <Check className={cn("mr-2 h-4 w-4 shrink-0", formData.saleId === "none" ? "opacity-100" : "opacity-0")} />
                       No specific sale (Account level)
                     </CommandItem>
                     {metadata?.sales?.filter((s: any) => s.customerId === formData.clientId || s.stationId === formData.clientId).map((s: any) => {
@@ -288,12 +294,11 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
                           key={s.id}
                           value={searchValue}
                           onSelect={() => {
-                            const amount = outstanding.toString();
-                            setFormData({ ...formData, saleId: s.id, amount });
+                            setFormData({ ...formData, saleId: s.id });
                             setSaleOpen(false);
                           }}
+                          data-checked={formData.saleId === s.id}
                         >
-                          <Check className={cn("mr-2 h-4 w-4 shrink-0 mt-0.5", formData.saleId === s.id ? "opacity-100" : "opacity-0")} />
                           <div className="flex flex-col text-left">
                             <span className="font-semibold text-xs">
                               {ref} • {Number(s.litersDespatched).toLocaleString()} L
@@ -311,7 +316,15 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
             </PopoverContent>
           </Popover>
         </div>
+      </div>
+    </div>
 
+    {/* SECTION: Financial Details */}
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 pb-2 border-b">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Financial Details</h3>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <div className="flex justify-between items-center">
             <Label>Amount Paid (₦) *</Label>
@@ -373,30 +386,60 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
         </div>
 
         {formData.paymentMethod !== "Cash" && formData.paymentMethod !== "Deposit" && (
-          <div className="space-y-2">
+          <div className="space-y-2 flex flex-col justify-end">
             <Label>Receiving Bank Account *</Label>
-            <Select 
-              value={formData.bankAccountId} 
-              onValueChange={(val) => setFormData({ ...formData, bankAccountId: val })}
-              required
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select Bank Account" />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {metadata?.bankAccounts?.length ? (
-                  metadata.bankAccounts.map((account: any) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.bankName} - {account.accountNumber}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <div className="p-2 text-sm text-muted-foreground text-center">
-                    No active Fleet bank accounts found
-                  </div>
-                )}
-              </SelectContent>
-            </Select>
+            <Popover open={bankOpen} onOpenChange={setBankOpen}>
+              <PopoverTrigger asChild className="w-full">
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={bankOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  {formData.bankAccountId
+                    ? (() => {
+                        const account = metadata?.bankAccounts?.find((a: any) => a.id === formData.bankAccountId);
+                        return account 
+                          ? `${account.accountName ? account.accountName + " - " : ""} ${account.bankName}`
+                          : "Select Bank Account...";
+                      })()
+                    : "Select Bank Account..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent 
+                className="p-0" 
+                style={{ width: 'var(--radix-popover-trigger-width)' }} 
+                align="start"
+              >
+                <Command>
+                  <CommandInput placeholder="Search bank account..." />
+                  <CommandList>
+                    <CommandEmpty>No bank accounts found.</CommandEmpty>
+                    <CommandGroup>
+                      {metadata?.bankAccounts?.map((account: any) => (
+                        <CommandItem
+                          key={account.id}
+                          value={`${account.bankName} ${account.accountName || ""} ${account.accountNumber}`}
+                          onSelect={() => {
+                            setFormData({ ...formData, bankAccountId: account.id });
+                            setBankOpen(false);
+                          }}
+                          data-checked={formData.bankAccountId === account.id}
+                        >
+                          <div className="flex flex-col text-left">
+                            <span className="font-semibold text-sm">{account.bankName}</span>
+                            <span className="text-xs text-muted-foreground mt-0.5">
+                              {account.accountName ? account.accountName + " • " : ""}{account.accountNumber}
+                            </span>
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         )}
 
@@ -409,9 +452,16 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
             placeholder="e.g. TXN-12345 (Optional)"
           />
         </div>
+      </div>
+    </div>
 
-        <div className="space-y-2 md:col-span-2">
-          <Label>Attach Proof</Label>
+    {/* SECTION: Proof of Payment */}
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 pb-2 border-b">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Proof of Payment</h3>
+      </div>
+      <div className="space-y-2">
+        <Label>Attach Proof</Label>
           <div className="relative">
             <div
               className="relative flex min-h-48 flex-col items-center justify-center overflow-hidden rounded-xl border border-input border-dashed p-4 transition-colors has-[input:focus]:border-ring has-[input:focus]:ring-[3px] has-[input:focus]:ring-ring/50 data-[dragging=true]:bg-accent/50"
@@ -470,8 +520,9 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
             </div>
           )}
         </div>
-          </div>
-          <div className="flex justify-end pt-4 border-t border-border/30">
+      </div>
+
+      <div className="flex justify-end pt-4 border-t border-border/30">
             <Button 
               type="submit" 
               disabled={submitting}

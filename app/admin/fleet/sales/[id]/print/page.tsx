@@ -2,9 +2,9 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { notFound } from "next/navigation";
-import { SalesDetailsManager } from "./sales-details-manager";
+import { WaybillPrintView } from "../waybill-print-view";
 
-export default async function SaleDetailsPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PrintSaleWaybillPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
   const { id } = await params;
 
@@ -19,22 +19,17 @@ export default async function SaleDetailsPage({ params }: { params: Promise<{ id
           truck: true,
           driver: true,
           order: true,
-          lossLogs: true,
         }
       },
-      transactions: {
-        orderBy: { createdAt: "desc" }
-      }
     },
   });
 
-  if (!sale) {
-    notFound();
-  }
+  if (!sale) notFound();
 
   return (
-    <div className="space-y-6">
-      <SalesDetailsManager sale={JSON.parse(JSON.stringify(sale))} />
-    </div>
+    <>
+      <WaybillPrintView sale={JSON.parse(JSON.stringify(sale))} />
+      <script dangerouslySetInnerHTML={{ __html: 'window.onload = function() { window.print(); }' }} />
+    </>
   );
 }

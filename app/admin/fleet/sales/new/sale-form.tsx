@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save, ChevronsUpDown } from "lucide-react";
+import { ArrowLeft, Save, ChevronsUpDown, Check, Store, UserCircle } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
@@ -186,16 +186,35 @@ export function CreateSaleForm({
                         if (val === "CUSTOMER") setValue("transportCostBorneBy", "CLIENT");
                       }} 
                       defaultValue={field.value} 
-                      className="flex flex-row gap-4"
+                      className="grid grid-cols-1 md:grid-cols-2 gap-4"
                     >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="CUSTOMER" id="r-customer" />
-                        <Label htmlFor="r-customer" className="font-normal cursor-pointer">External Client</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="STATION" id="r-station" />
-                        <Label htmlFor="r-station" className="font-normal cursor-pointer">Owned Station</Label>
-                      </div>
+                      <Label 
+                        htmlFor="r-station" 
+                        className="flex cursor-pointer flex-row items-start justify-between rounded-lg border p-4 hover:bg-accent/50 [&:has([data-state=checked])]:border-primary [&:has([data-state=checked])]:bg-primary/5"
+                      >
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <Store className="h-5 w-5 text-muted-foreground" />
+                            <span className="font-semibold text-base">Owned Station</span>
+                          </div>
+                          <span className="text-sm text-muted-foreground font-normal">Internal transfer to a station</span>
+                        </div>
+                        <RadioGroupItem value="STATION" id="r-station" className="mt-1" />
+                      </Label>
+
+                      <Label 
+                        htmlFor="r-customer" 
+                        className="flex cursor-pointer flex-row items-start justify-between rounded-lg border p-4 hover:bg-accent/50 [&:has([data-state=checked])]:border-primary [&:has([data-state=checked])]:bg-primary/5"
+                      >
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <UserCircle className="h-5 w-5 text-muted-foreground" />
+                            <span className="font-semibold text-base">External Client</span>
+                          </div>
+                          <span className="text-sm text-muted-foreground font-normal">Sale to a third-party customer</span>
+                        </div>
+                        <RadioGroupItem value="CUSTOMER" id="r-customer" className="mt-1" />
+                      </Label>
                     </RadioGroup>
                   )}
                 />
@@ -235,7 +254,10 @@ export function CreateSaleForm({
                                   }}
                                   data-checked={selectedCustomerId === c.id}
                                 >
-                                  {c.name}
+                                  <div className="flex flex-col text-left">
+                                    <span className="font-semibold text-sm">{c.name}</span>
+                                    <span className="text-xs text-muted-foreground mt-0.5">External Client</span>
+                                  </div>
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -278,7 +300,10 @@ export function CreateSaleForm({
                                   }}
                                   data-checked={selectedStationId === s.id}
                                 >
-                                  {s.name} ({s.code})
+                                  <div className="flex flex-col text-left">
+                                    <span className="font-semibold text-sm">{s.name}</span>
+                                    <span className="text-xs text-muted-foreground mt-0.5">Code: {s.code}</span>
+                                  </div>
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -301,7 +326,7 @@ export function CreateSaleForm({
                         className={`w-full justify-between font-normal ${formState.errors.transportId ? "border-destructive" : ""}`}
                       >
                         <span className="truncate">
-                          {selectedTransport ? `${selectedTransport.order?.reference || 'No Ref'} • ${selectedTransport.truck.plateNumber || selectedTransport.truck.name} • ${selectedTransport.destination}` : "Select transport..."}
+                          {selectedTransport ? `${selectedTransport.order?.reference || 'No Ref'}` : "Select transport..."}
                         </span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -326,7 +351,15 @@ export function CreateSaleForm({
                                   }}
                                   data-checked={selectedTransportId === t.id}
                                 >
-                                  {`${t.order?.reference || 'No Ref'} • ${t.truck.plateNumber || t.truck.name} • ${t.destination} (${available.toLocaleString()}L)`}
+                                  {/* <Check className={`mr-2 h-4 w-4 shrink-0 ${selectedTransportId === t.id ? "opacity-100" : "opacity-0"}`} /> */}
+                                  <div className="flex flex-col text-left">
+                                    <span className="font-semibold text-sm">
+                                      {t.order?.reference || 'No Ref'} • {t.destination}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground mt-0.5">
+                                      {t.truck.plateNumber || t.truck.name} • Available: {available.toLocaleString()} L
+                                    </span>
+                                  </div>
                                 </CommandItem>
                               );
                             })}

@@ -26,6 +26,8 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
   const [transporterOpen, setTransporterOpen] = useState(false);
   const [truckOpen, setTruckOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
+  const [bankOpen, setBankOpen] = useState(false);
+  const [tripLeg, setTripLeg] = useState<"DEPOT_TO_PRIMARY" | "PRIMARY_TO_SECONDARY" | "">("");
 
   const [formData, setFormData] = useState({
     amount: "",
@@ -149,7 +151,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
           paymentMethod: formData.paymentMethod,
           reference: formData.reference,
           receiptUrl: formData.receiptUrl,
-          description: formData.description,
+          description: formData.description + (tripLeg ? ` [Leg: ${tripLeg === "DEPOT_TO_PRIMARY" ? "Depot to Primary" : "Primary to Secondary"}]` : ""),
           bankAccountId: formData.paymentMethod !== "Cash" ? formData.bankAccountId : undefined,
         };
       }
@@ -185,9 +187,14 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
             <CardDescription>Record transport fee payouts and operational expenses.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-500">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4 md:col-span-2">
+            <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in duration-500">
+              {/* SECTION: Expense Details */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Expense Details</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4 md:col-span-2">
           <Label>Expense Category</Label>
           <Select 
             value={category} 
@@ -267,6 +274,25 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                 </Command>
               </PopoverContent>
             </Popover>
+          </div>
+        )}
+
+        {category === "TRANSPORT_FEE" && (
+          <div className="space-y-2 flex flex-col justify-end">
+            <Label>Trip Leg *</Label>
+            <Select 
+              value={tripLeg} 
+              onValueChange={(val) => setTripLeg(val as any)}
+              required
+            >
+              <SelectTrigger className="w-full" size="default">
+                <SelectValue placeholder="Select Trip Leg" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem value="DEPOT_TO_PRIMARY">Depot to Primary Destination</SelectItem>
+                <SelectItem value="PRIMARY_TO_SECONDARY">Primary to Secondary (Station/Client)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         )}
 
@@ -413,7 +439,15 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
             </div>
           </>
         )}
+      </div>
+    </div>
 
+    {/* SECTION: Financial Details */}
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 pb-2 border-b">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Financial Details</h3>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <Label>Amount Paid (₦) *</Label>
           <Input 
@@ -447,30 +481,60 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
         </div>
 
         {formData.paymentMethod !== "Cash" && (
-          <div className="space-y-2">
+          <div className="space-y-2 flex flex-col justify-end">
             <Label>Paying Bank Account *</Label>
-            <Select 
-              value={formData.bankAccountId} 
-              onValueChange={(val) => setFormData({ ...formData, bankAccountId: val })}
-              required
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select Bank Account" />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {metadata?.bankAccounts?.length ? (
-                  metadata.bankAccounts.map((account: any) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.bankName} - {account.accountNumber}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <div className="p-2 text-sm text-muted-foreground text-center">
-                    No active Fleet bank accounts found
-                  </div>
-                )}
-              </SelectContent>
-            </Select>
+            <Popover open={bankOpen} onOpenChange={setBankOpen}>
+              <PopoverTrigger asChild className="w-full">
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={bankOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  {formData.bankAccountId
+                    ? (() => {
+                        const account = metadata?.bankAccounts?.find((a: any) => a.id === formData.bankAccountId);
+                        return account 
+                          ? `${account.accountName ? account.accountName + " - " : ""} ${account.bankName}`
+                          : "Select Bank Account...";
+                      })()
+                    : "Select Bank Account..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent 
+                className="p-0" 
+                style={{ width: 'var(--radix-popover-trigger-width)' }} 
+                align="start"
+              >
+                <Command>
+                  <CommandInput placeholder="Search bank account..." />
+                  <CommandList>
+                    <CommandEmpty>No bank accounts found.</CommandEmpty>
+                    <CommandGroup>
+                      {metadata?.bankAccounts?.map((account: any) => (
+                        <CommandItem
+                          key={account.id}
+                          value={`${account.bankName} ${account.accountName || ""} ${account.accountNumber}`}
+                          onSelect={() => {
+                            setFormData({ ...formData, bankAccountId: account.id });
+                            setBankOpen(false);
+                          }}
+                          data-checked={formData.bankAccountId === account.id}
+                        >
+                          <div className="flex flex-col text-left">
+                            <span className="font-semibold text-sm">{account.bankName}</span>
+                            <span className="text-xs text-muted-foreground mt-0.5">
+                              {account.accountName ? account.accountName + " • " : ""}{account.accountNumber}
+                            </span>
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         )}
 
@@ -506,9 +570,16 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
             <option value="Transport Fee Payout" />
           </datalist>
         </div>
+      </div>
+    </div>
 
-        <div className="space-y-2 md:col-span-2">
-          <Label>Attach Proof</Label>
+    {/* SECTION: Proof of Payment */}
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 pb-2 border-b">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Proof of Payment</h3>
+      </div>
+      <div className="space-y-2">
+        <Label>Attach Proof</Label>
           <div className="relative">
             <div
               className="relative flex min-h-48 flex-col items-center justify-center overflow-hidden rounded-xl border border-input border-dashed p-4 transition-colors has-[input:focus]:border-ring has-[input:focus]:ring-[3px] has-[input:focus]:ring-ring/50 data-[dragging=true]:bg-accent/50"
@@ -568,10 +639,9 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
             </div>
           )}
         </div>
+      </div>
 
-          </div>
-
-          <div className="flex justify-end pt-4 border-t border-border/30">
+      <div className="flex justify-end pt-4 border-t border-border/30">
             <Button 
               type="submit" 
               disabled={submitting}

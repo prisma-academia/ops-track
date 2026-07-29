@@ -10,17 +10,20 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, CheckCircle, MapPin, Truck, Banknote, CalendarIcon, PackageOpen } from "lucide-react";
+import { ArrowLeft, CheckCircle, MapPin, Truck, Banknote, CalendarIcon, PackageOpen, Printer, Pencil, MinusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { WaybillPrintView } from "./waybill-print-view";
 
 export function SalesDetailsManager({ sale }: { sale: any }) {
   const router = useRouter();
 
   const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [openDeductDialog, setOpenDeductDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeducting, setIsDeducting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Edit form
@@ -30,6 +33,31 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
   const totalExpected = Number(sale.totalExpectedAmount);
   const paymentReceived = Number(sale.paymentReceived);
   const outstanding = Math.max(0, totalExpected - paymentReceived);
+  
+  const litersDespatched = Number(sale.litersDespatched || 0);
+  const litersReceived = sale.litersReceived !== null ? Number(sale.litersReceived) : null;
+  const variance = litersReceived !== null ? litersDespatched - litersReceived : null;
+  const amountPerLiter = Number(sale.amountPerLiter || 0);
+  const totalDeductionAmount = variance !== null && variance > 0 ? variance * amountPerLiter : 0;
+  
+  const hasDeduction = sale.transport?.lossLogs?.some((l: any) => l.comment?.includes(sale.id)) || false;
+
+  const handleDeduct = async () => {
+    setIsDeducting(true);
+    const res = await apiPost(`/api/tenant/fleet/sales/${sale.id}/deduct-shortage`, {
+      variance,
+      pricePerLiter: amountPerLiter,
+      totalDeduction: totalDeductionAmount,
+    });
+    setIsDeducting(false);
+
+    if (!res.error) {
+      setOpenDeductDialog(false);
+      router.refresh();
+    } else {
+      alert(res.error.message);
+    }
+  };
 
 
   const handleEditSale = async () => {
@@ -86,8 +114,9 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
         </div>
       </div>
 
-      <div className="space-y-6">
-        <Tabs defaultValue="overview" className="w-full">
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex-1 space-y-6">
+          <Tabs defaultValue="overview" className="w-full">
           <TabsList className="w-full justify-start h-14 bg-muted/50 backdrop-blur-xs rounded-3xl border border-border">
             <TabsTrigger value="overview" className="text-[15px] font-semibold">Overview</TabsTrigger>
             <TabsTrigger value="payments" className="text-[15px] font-semibold">Payments ({sale.transactions?.length || 0})</TabsTrigger>
@@ -99,9 +128,6 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
                 <h3 className="font-semibold text-lg">Sales & Distribution Summary</h3>
                 <p className="text-sm text-muted-foreground">Volume delivered and financial tracking.</p>
               </div>
-              <Button onClick={() => setOpenEditDialog(true)} variant="secondary" size="sm">
-                Edit Volumes & Pricing
-              </Button>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -214,33 +240,7 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
               );
             })()}
 
-            {sale.transport && (
-              <div className="p-4 rounded-2xl border bg-card space-y-3">
-                <h3 className="font-semibold uppercase tracking-widest text-[10px] text-muted-foreground border-b pb-2 flex items-center gap-2">
-                  <Truck className="h-3 w-3" /> Transport Details
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Transporter</p>
-                    <p className="text-sm font-medium text-foreground">{sale.transport.transporter?.name || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Truck</p>
-                    <p className="text-sm font-medium text-foreground">{sale.transport.truck?.name || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Driver</p>
-                    <p className="text-sm font-medium text-foreground">{sale.transport.driver ? `${sale.transport.driver.firstName} ${sale.transport.driver.lastName}` : "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Transport Cost Borne By</p>
-                    <Badge variant={sale.transportCostBorneBy === 'COMPANY' ? 'secondary' : 'default'} className="mt-1 text-[10px]">
-                      {sale.transportCostBorneBy}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            )}
+
           </TabsContent>
 
           <TabsContent value="payments" className="mt-6 space-y-4">
@@ -295,8 +295,70 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
             </div>
           </TabsContent>
         </Tabs>
-      </div>
+        </div>
+        
+        {/* Right Sidebar Actions Card */}
+        <div className="w-full lg:w-72 shrink-0 space-y-6">
+          <div className="p-5 border rounded-2xl bg-card space-y-4">
+            <h3 className="font-semibold text-sm uppercase tracking-widest text-muted-foreground mb-1">Actions</h3>
+            
+            <Button size="lg" className="w-full justify-start" variant="outline" onClick={() => setOpenEditDialog(true)}>
+              <Pencil className="w-5 h-5 mr-3" />
+              Edit Volumes & Pricing
+            </Button>
+            
+            <Button size="lg" className="w-full justify-start" variant="outline" onClick={() => window.open(`/admin/fleet/sales/${sale.id}/print`, '_blank')}>
+              <Printer className="w-5 h-5 mr-3" />
+              Print Waybill
+            </Button>
 
+            {hasDeduction && (
+              <div className="pt-2 border-t mt-2">
+                <Badge variant="outline" className="w-full justify-center border-red-200 bg-red-50 text-red-700 py-2.5 text-sm">
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Deduction Logged (₦{totalDeductionAmount.toLocaleString()})
+                </Badge>
+              </div>
+            )}
+            {!hasDeduction && variance !== null && variance > 0 && (
+              <div className="pt-2 border-t mt-2">
+                <Button size="lg" className="w-full justify-start" variant="destructive" onClick={() => setOpenDeductDialog(true)}>
+                  <MinusCircle className="w-5 h-5 mr-3" />
+                  Log Shortage Deduction
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {sale.transport && (
+            <div className="p-5 border rounded-2xl bg-card space-y-4">
+              <h3 className="font-semibold text-sm uppercase tracking-widest text-muted-foreground border-b pb-3 mb-2 flex items-center gap-2">
+                <Truck className="h-4 w-4" /> Transport Info
+              </h3>
+              <div className="space-y-4 pt-1">
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Transporter</p>
+                  <p className="text-sm font-medium text-foreground">{sale.transport.transporter?.name || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Truck</p>
+                  <p className="text-sm font-medium text-foreground">{sale.transport.truck?.name || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Driver</p>
+                  <p className="text-sm font-medium text-foreground">{sale.transport.driver ? `${sale.transport.driver.firstName} ${sale.transport.driver.lastName}` : "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Cost Borne By</p>
+                  <Badge variant={sale.transportCostBorneBy === 'COMPANY' ? 'secondary' : 'default'} className="mt-1 text-[10px]">
+                    {sale.transportCostBorneBy}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Edit Dialog */}
       <Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>
@@ -325,6 +387,42 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Deduct Dialog */}
+      <Dialog open={openDeductDialog} onOpenChange={(val) => { if (!isDeducting) setOpenDeductDialog(val); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Log Shortage Deduction</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              A shortage of <strong>{variance?.toLocaleString()} L</strong> was detected. 
+              The driver&apos;s transport fee will be deducted by the value of the lost product.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 border rounded-md">
+                <p className="text-xs text-muted-foreground uppercase tracking-widest">Shortage</p>
+                <p className="text-lg font-semibold">{variance?.toLocaleString()} L</p>
+              </div>
+              <div className="p-3 border rounded-md">
+                <p className="text-xs text-muted-foreground uppercase tracking-widest">Price / Liter</p>
+                <p className="text-lg font-semibold">₦{amountPerLiter.toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="p-3 border rounded-md bg-destructive/10 border-destructive/20 text-destructive">
+              <p className="text-xs uppercase tracking-widest">Total Deduction</p>
+              <p className="text-xl font-bold">₦{totalDeductionAmount.toLocaleString()}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenDeductDialog(false)} disabled={isDeducting}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeduct} disabled={isDeducting}>
+              {isDeducting ? <SpinnerEllipsis /> : "Confirm Deduction"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
     </div>
   );
 }

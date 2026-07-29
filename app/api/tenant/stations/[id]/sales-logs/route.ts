@@ -1,11 +1,11 @@
-import { z } from "zod";
-import { prisma } from "@/lib/db/client";
-import { requireTenantActor } from "@/lib/auth/guards";
-import { audit, requestMeta } from "@/lib/auth/audit";
-import { ok } from "@/lib/api/respond";
-import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
+import { DomainError, handleError } from "@/lib/api/errors";
+import { buildOffsetPageMeta, parseOffsetPagination } from "@/lib/api/pagination";
+import { ok } from "@/lib/api/respond";
+import { audit, requestMeta } from "@/lib/auth/audit";
+import { requireTenantActor } from "@/lib/auth/guards";
+import { prisma } from "@/lib/db/client";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -17,6 +17,8 @@ const CreateSalesLogSchema = z.object({
   amountCash: z.coerce.number().min(0),
   amountPos: z.coerce.number().min(0),
   amountTransfer: z.coerce.number().min(0).default(0),
+  posBankAccountId: z.string().optional(),
+  transferBankAccountId: z.string().optional(),
   cashReceiptUrl: z.string().nullable().optional(),
   posReceiptUrl: z.string().nullable().optional(),
   transferReceiptUrl: z.string().nullable().optional(),
@@ -49,6 +51,8 @@ export async function GET(
     const where = { stationId, tenantId: actor.tenantId };
     const include = {
       recordedBy: { select: { firstName: true, lastName: true } },
+      posBankAccount: { select: { id: true, name: true, accountNumber: true } },
+      transferBankAccount: { select: { id: true, name: true, accountNumber: true } },
     };
 
     if (useOffset) {
@@ -102,6 +106,14 @@ export async function POST(
       throw new DomainError(400, "invalid_input", "Bank account is required for POS and Transfer payments.");
     }
 
+    if (body.amountPos > 0 && !body.posBankAccountId) {
+      throw new DomainError(400, "invalid_input", "POS bank account is required for POS payments.");
+    }
+
+    if (body.amountTransfer > 0 && !body.transferBankAccountId) {
+      throw new DomainError(400, "invalid_input", "Transfer bank account is required for bank transfer payments.");
+    }
+
     const logDate = body.logDate ? new Date(body.logDate) : new Date();
 
     if (body.clientId) {
@@ -124,7 +136,9 @@ export async function POST(
         amountCash: body.amountCash,
         amountPos: body.amountPos,
         amountTransfer: body.amountTransfer,
-        bankAccountId: body.bankAccountId,
+        bankAccountId: body.bankAccountId || null,
+        posBankAccountId: body.posBankAccountId || null,
+        transferBankAccountId: body.transferBankAccountId || null,
         cashReceiptUrl: body.cashReceiptUrl,
         posReceiptUrl: body.posReceiptUrl,
         transferReceiptUrl: body.transferReceiptUrl,

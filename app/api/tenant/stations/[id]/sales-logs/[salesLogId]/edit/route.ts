@@ -1,15 +1,18 @@
-import { z } from "zod";
-import { prisma } from "@/lib/db/client";
-import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
-import { audit, requestMeta } from "@/lib/auth/audit";
-import { ok } from "@/lib/api/respond";
-import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { DomainError, handleError } from "@/lib/api/errors";
+import { ok } from "@/lib/api/respond";
+import { audit, requestMeta } from "@/lib/auth/audit";
+import { PERMISSIONS, requireTenantActor } from "@/lib/auth/guards";
+import { prisma } from "@/lib/db/client";
+import { z } from "zod";
 
 const EditSalesLogSchema = z.object({
   amountCash: z.coerce.number().min(0),
   amountPos: z.coerce.number().min(0),
   amountTransfer: z.coerce.number().min(0),
+  posBankAccountId: z.string().optional(),
+  transferBankAccountId: z.string().optional(),
+  bankAccountId: z.string().optional(),
   cashReceiptUrl: z.string().nullable().optional(),
   posReceiptUrl: z.string().nullable().optional(),
   transferReceiptUrl: z.string().nullable().optional(),
@@ -35,6 +38,18 @@ export async function PUT(
       throw new DomainError(400, "invalid_input", "At least one revenue amount must be greater than zero.");
     }
 
+    if ((body.amountPos > 0 || body.amountTransfer > 0) && !body.bankAccountId && !body.posBankAccountId && !body.transferBankAccountId) {
+      throw new DomainError(400, "invalid_input", "Bank account is required for POS and Transfer payments.");
+    }
+
+    if (body.amountPos > 0 && !body.posBankAccountId && !body.bankAccountId) {
+      throw new DomainError(400, "invalid_input", "POS bank account is required for POS payments.");
+    }
+
+    if (body.amountTransfer > 0 && !body.transferBankAccountId && !body.bankAccountId) {
+      throw new DomainError(400, "invalid_input", "Transfer bank account is required for bank transfer payments.");
+    }
+
     const salesLog = await prisma.salesLog.findUnique({
       where: { id: salesLogId },
     });
@@ -53,6 +68,9 @@ export async function PUT(
         amountCash: body.amountCash,
         amountPos: body.amountPos,
         amountTransfer: body.amountTransfer,
+        bankAccountId: body.bankAccountId || null,
+        posBankAccountId: body.posBankAccountId ?? body.bankAccountId ?? null,
+        transferBankAccountId: body.transferBankAccountId ?? body.bankAccountId ?? null,
         cashReceiptUrl: body.cashReceiptUrl,
         posReceiptUrl: body.posReceiptUrl,
         transferReceiptUrl: body.transferReceiptUrl,

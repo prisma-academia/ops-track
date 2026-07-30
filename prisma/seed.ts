@@ -185,7 +185,7 @@ async function main() {
           name: "Main PMS Tank",
           productType: "PMS",
           capacity: 50000,
-          currentLiters: 25000,
+          currentLiters: 0,
           status: "ACTIVE",
         },
       });

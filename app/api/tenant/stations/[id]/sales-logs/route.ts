@@ -17,8 +17,8 @@ const CreateSalesLogSchema = z.object({
   amountCash: z.coerce.number().min(0),
   amountPos: z.coerce.number().min(0),
   amountTransfer: z.coerce.number().min(0).default(0),
-  posBankAccountId: z.string().optional(),
-  transferBankAccountId: z.string().optional(),
+  posBankAccountId: z.string().nullable().optional(),
+  transferBankAccountId: z.string().nullable().optional(),
   cashReceiptUrl: z.string().nullable().optional(),
   posReceiptUrl: z.string().nullable().optional(),
   transferReceiptUrl: z.string().nullable().optional(),
@@ -27,7 +27,6 @@ const CreateSalesLogSchema = z.object({
   clientId: z.string().optional(),
   isDebtRepayment: z.boolean().optional().default(false),
   parentSaleId: z.string().nullable().optional(),
-  bankAccountId: z.string().optional(),
 });
 
 export async function GET(
@@ -134,7 +133,6 @@ export async function POST(
         amountCash: body.amountCash,
         amountPos: body.amountPos,
         amountTransfer: body.amountTransfer,
-        bankAccountId: body.bankAccountId || null,
         posBankAccountId: body.posBankAccountId || null,
         transferBankAccountId: body.transferBankAccountId || null,
         cashReceiptUrl: body.cashReceiptUrl,

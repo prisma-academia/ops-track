@@ -27,7 +27,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
     saleId: "none",
     amount: "",
     paymentType: "FULL_SETTLEMENT",
-    paymentMethod: "Bank Transfer",
+    paymentMethod: "BANK_TRANSFER",
     reference: "",
     receiptUrl: "",
     bankAccountId: "",
@@ -126,9 +126,8 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
         paymentMethod: formData.paymentMethod,
         reference: formData.reference,
         receiptUrl: formData.receiptUrl,
-        bankAccountId: formData.paymentMethod !== "Cash" && formData.paymentMethod !== "Deposit" ? formData.bankAccountId : undefined,
+        bankAccountId: formData.paymentMethod !== "CASH" && formData.paymentMethod !== "DEPOSIT" ? formData.bankAccountId : undefined,
       };
-      
       const res = await apiPost<any>(`/api/tenant/fleet/payments/inflow`, payload);
       if (!res.error) {
         toast.success("Payment recorded successfully!");
@@ -328,7 +327,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
         <div className="space-y-2">
           <div className="flex justify-between items-center">
             <Label>Amount Paid (₦) *</Label>
-            {formData.paymentMethod === "Deposit" && selectedCustomer && (
+            {formData.paymentMethod === "DEPOSIT" && selectedCustomer && (
               <span className="text-xs text-muted-foreground">
                 Available Deposit: ₦{depositBalance.toLocaleString()}
               </span>
@@ -336,9 +335,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
           </div>
           <Input 
             required
-            type="number"
-            min="0"
-            max={formData.paymentMethod === "Deposit" ? depositBalance : undefined}
+            max={formData.paymentMethod === "DEPOSIT" ? depositBalance : undefined}
             step="0.01"
             value={formData.amount}
             onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
@@ -376,16 +373,16 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
               <SelectValue placeholder="Select Payment Method" />
             </SelectTrigger>
             <SelectContent position="popper">
-              <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-              <SelectItem value="Cash">Cash</SelectItem>
+              <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+              <SelectItem value="CASH">Cash</SelectItem>
               <SelectItem value="POS">POS</SelectItem>
-              <SelectItem value="Cheque">Cheque</SelectItem>
-              <SelectItem value="Deposit">Apply Deposit</SelectItem>
+              <SelectItem value="CHEQUE">Cheque</SelectItem>
+              <SelectItem value="DEPOSIT">Apply Deposit</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        {formData.paymentMethod !== "Cash" && formData.paymentMethod !== "Deposit" && (
+        {formData.paymentMethod !== "CASH" && formData.paymentMethod !== "DEPOSIT" && (
           <div className="space-y-2 flex flex-col justify-end">
             <Label>Receiving Bank Account *</Label>
             <Popover open={bankOpen} onOpenChange={setBankOpen}>

@@ -9,7 +9,7 @@ import { parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination
 
 const CreateExpenseSchema = z.object({
   category: z.enum(["FUEL_FOR_GEN", "MAINTENANCE", "UTILITIES", "STATIONERY", "OTHER"]),
-  paymentMethod: z.enum(["CASH", "POS"]),
+  paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE"]),
   amount: z.coerce.number().positive(),
   description: z.string().min(1),
   receiptUrl: z.string().nullable().optional(),

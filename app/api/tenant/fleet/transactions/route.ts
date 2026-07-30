@@ -13,7 +13,7 @@ const CreateTransactionSchema = z.object({
   amount: z.number().positive(),
   paymentPurpose: z.string().optional().nullable(),
   reference: z.string().optional().nullable(),
-  paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE"]).optional().nullable(),
+  paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"]).optional().nullable(),
   saleId: z.string().optional().nullable(),
   bankAccountId: z.string().optional(),
 });

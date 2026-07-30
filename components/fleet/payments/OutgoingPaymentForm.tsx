@@ -32,7 +32,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
   const [formData, setFormData] = useState({
     amount: "",
     description: "",
-    paymentMethod: "Bank Transfer",
+    paymentMethod: "BANK_TRANSFER",
     reference: "",
     receiptUrl: "",
     transporterId: "",
@@ -131,7 +131,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
         paymentMethod: formData.paymentMethod,
         reference: formData.reference,
         receiptUrl: formData.receiptUrl,
-        bankAccountId: formData.paymentMethod !== "Cash" ? formData.bankAccountId : undefined,
+        bankAccountId: formData.paymentMethod !== "CASH" ? formData.bankAccountId : undefined,
       };
 
       if (category === "PERSONAL_EXPENSE") {
@@ -152,7 +152,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
           reference: formData.reference,
           receiptUrl: formData.receiptUrl,
           description: formData.description + (tripLeg ? ` [Leg: ${tripLeg === "DEPOT_TO_PRIMARY" ? "Depot to Primary" : "Primary to Secondary"}]` : ""),
-          bankAccountId: formData.paymentMethod !== "Cash" ? formData.bankAccountId : undefined,
+          bankAccountId: formData.paymentMethod !== "CASH" ? formData.bankAccountId : undefined,
         };
       }
 
@@ -472,15 +472,15 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
               <SelectValue placeholder="Select Payment Method" />
             </SelectTrigger>
             <SelectContent position="popper">
-              <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-              <SelectItem value="Cash">Cash</SelectItem>
+              <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+              <SelectItem value="CASH">Cash</SelectItem>
               <SelectItem value="POS">POS</SelectItem>
-              <SelectItem value="Cheque">Cheque</SelectItem>
+              <SelectItem value="CHEQUE">Cheque</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        {formData.paymentMethod !== "Cash" && (
+        {formData.paymentMethod !== "CASH" && (
           <div className="space-y-2 flex flex-col justify-end">
             <Label>Paying Bank Account *</Label>
             <Popover open={bankOpen} onOpenChange={setBankOpen}>

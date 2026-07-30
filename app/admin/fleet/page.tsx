@@ -7,9 +7,7 @@ import { Button } from "@/components/ui/button";
 import { DatePickerWithRange } from "@/components/date-range-picker";
 import { TransportVolumeChart } from "@/components/fleet/charts/transport-volume-chart";
 import { TransportStatusChart } from "@/components/fleet/charts/transport-status-chart";
-import { TopDestinationsChart } from "@/components/fleet/charts/top-destinations-chart";
 import { TransporterPerformanceChart } from "@/components/fleet/charts/transporter-performance-chart";
-import { LossAnalysisChart } from "@/components/fleet/charts/loss-analysis-chart";
 import { VolumeOverTimeChart } from "@/components/fleet/charts/volume-over-time-chart";
 
 export default async function FleetOverviewPage() {
@@ -218,15 +216,6 @@ export default async function FleetOverviewPage() {
       {/* Bottom Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <Card className="shadow-sm border-muted/60">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-base font-semibold">Top Destinations</CardTitle>
-              <Button variant="ghost" size="icon" className="h-8 w-8 bg-muted/20 text-muted-foreground"><MoreHorizontal className="h-4 w-4"/></Button>
-            </CardHeader>
-            <CardContent>
-              <TopDestinationsChart data={destinationData} />
-            </CardContent>
-          </Card>
 
           <Card className="shadow-sm border-muted/60">
             <CardHeader className="flex flex-row items-center justify-between pb-2">

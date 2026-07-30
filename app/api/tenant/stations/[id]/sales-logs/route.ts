@@ -102,9 +102,7 @@ export async function POST(
       throw new DomainError(400, "invalid_input", "At least one revenue amount must be greater than zero.");
     }
 
-    if ((body.amountPos > 0 || body.amountTransfer > 0) && !body.bankAccountId) {
-      throw new DomainError(400, "invalid_input", "Bank account is required for POS and Transfer payments.");
-    }
+
 
     if (body.amountPos > 0 && !body.posBankAccountId) {
       throw new DomainError(400, "invalid_input", "POS bank account is required for POS payments.");

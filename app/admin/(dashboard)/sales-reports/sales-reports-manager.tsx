@@ -43,16 +43,12 @@ interface SalesReportRow {
   openingDip: number;
   closingDip: number;
   litersSold: number;
-  amountCash: number;
   amountPos: number;
   amountTransfer: number;
-  cashReceiptUrl: string | null;
   posReceiptUrl: string | null;
   logDate: string | Date;
   status: "PENDING" | "APPROVED" | "REJECTED";
-  flaggedAmount: boolean;
-  flaggedLiters: boolean;
-  flaggedReceipt: boolean;
+
   reason: string | null;
   approvedById: string | null;
   approvedAt: string | Date | null;
@@ -144,11 +140,6 @@ export function SalesReportsManager({
   // Step 1: Filter raw reports by Date, Station, Status, Product
   const baseFilteredReports = useMemo(() => {
     return initialReports.filter((report) => {
-      // Ignore child repayments in this base filter phase (so we don't accidentally hide them before grouping)
-      // Actually, we SHOULD allow parent sales to pass, and if they pass, their children will be attached.
-      // So we apply these filters mainly to the PARENT sale.
-      
-      // If it is a child repayment, just pass it through the base filter. It gets attached to its parent later.
       if (report.isDebtRepayment) return true;
 
       if (appliedStationIds.length > 0 && !appliedStationIds.includes(report.stationId)) {
@@ -178,17 +169,15 @@ export function SalesReportsManager({
 
   // Step 2 & 3: Group children under parents, calculate overall balance, and then filter by Debt
   const finalGroupedSales = useMemo<GroupedSale[]>(() => {
-    // Separate parents and children
     const parents = baseFilteredReports.filter(r => !r.isDebtRepayment && !r.parentSaleId);
-    // Note: children were just passed through the base filter unaffected. We only attach them to VALID parents.
     const children = initialReports.filter(r => r.isDebtRepayment && r.parentSaleId);
 
     const grouped = parents.map(p => {
       const childRepayments = children.filter(c => c.parentSaleId === p.id).sort((a, b) => new Date(a.logDate).getTime() - new Date(b.logDate).getTime());
       
       const expectedTotal = Number(p.litersSold) * Number(p.pricePerLiter);
-      const parentReceived = Number(p.amountCash) + Number(p.amountPos) + Number(p.amountTransfer);
-      const childRepaidTotal = childRepayments.reduce((sum, c) => sum + Number(c.amountCash) + Number(c.amountPos) + Number(c.amountTransfer), 0);
+      const parentReceived = Number(p.amountPos) + Number(p.amountTransfer);
+      const childRepaidTotal = childRepayments.reduce((sum, c) => sum + Number(c.amountPos) + Number(c.amountTransfer), 0);
       
       const overallBalance = (parentReceived + childRepaidTotal) - expectedTotal;
       
@@ -199,10 +188,8 @@ export function SalesReportsManager({
       };
     });
     
-    // Sort grouped by date desc
     const sorted = grouped.sort((a, b) => new Date(b.logDate).getTime() - new Date(a.logDate).getTime());
 
-    // Filter by Debt Balance
     if (appliedDebtOperator === "ALL" || appliedDebtAmount === "") {
       return sorted;
     }
@@ -211,12 +198,6 @@ export function SalesReportsManager({
     if (isNaN(targetAmount)) return sorted;
 
     return sorted.filter(g => {
-      // The balance represents what the station currently holds.
-      // E.g. Balance = Received - Expected. So 0 is settled. 
-      // A negative balance means they owe the company.
-      // Usually "Debt" refers to how much they owe, so Debt = Expected - Received = - overallBalance.
-      // We will just filter based on `overallBalance` relative to the target amount.
-      // E.g., if user inputs "0" and "<=", they mean overallBalance <= 0 (which means they owe money or are settled).
       if (appliedDebtOperator === "LESS_THAN_OR_EQUAL") return g.overallBalance <= targetAmount;
       if (appliedDebtOperator === "GREATER_THAN_OR_EQUAL") return g.overallBalance >= targetAmount;
       if (appliedDebtOperator === "EXACT") return g.overallBalance === targetAmount;
@@ -228,26 +209,22 @@ export function SalesReportsManager({
   const stats = useMemo(() => {
     let totalLiters = 0;
     let expectedRevenue = 0;
-    let cash = 0;
     let digital = 0;
 
     finalGroupedSales.forEach((g) => {
       totalLiters += Number(g.litersSold);
       expectedRevenue += Number(g.litersSold) * Number(g.pricePerLiter);
-      cash += Number(g.amountCash);
       digital += Number(g.amountPos) + Number(g.amountTransfer);
       
-      // Include child repayments in the total cash/digital
       g.childRepayments.forEach(c => {
-        cash += Number(c.amountCash);
         digital += Number(c.amountPos) + Number(c.amountTransfer);
       });
     });
 
-    const totalReceived = cash + digital;
+    const totalReceived = digital;
     const totalBalance = totalReceived - expectedRevenue;
 
-    return { totalLiters, expectedRevenue, cash, digital, totalReceived, totalBalance };
+    return { totalLiters, expectedRevenue, digital, totalReceived, totalBalance };
   }, [finalGroupedSales]);
 
   const statCards = [
@@ -268,15 +245,6 @@ export function SalesReportsManager({
       badge: "Period",
       valueColor: "text-blue-600",
       iconColor: "text-blue-600",
-    },
-    {
-      title: "Cash Revenue",
-      value: formatShortCurrency(stats.cash),
-      icon: Banknote,
-      badgeColor: "bg-emerald-400/10 text-emerald-700 dark:text-emerald-400",
-      badge: "Period",
-      valueColor: "text-emerald-600",
-      iconColor: "text-emerald-600",
     },
     {
       title: "Digital Revenue",
@@ -311,10 +279,8 @@ export function SalesReportsManager({
   };
 
   const getFlags = (r: SalesReportRow) => {
-    const f = [];
-    if (r.flaggedAmount) f.push("Amount");
-    if (r.flaggedLiters) f.push("Liters");
-    if (r.flaggedReceipt) f.push("Receipt");
+    const f: string[] = [];
+
     return f;
   };
 
@@ -667,7 +633,7 @@ export function SalesReportsManager({
           <div className={cn("space-y-4 hide-on-print", viewMode === "card" ? "block" : "hidden")}>
             {finalGroupedSales.map((parent) => {
               const expectedTotal = Number(parent.litersSold) * Number(parent.pricePerLiter);
-              const parentReceived = Number(parent.amountCash) + Number(parent.amountPos) + Number(parent.amountTransfer);
+              const parentReceived = Number(parent.amountPos) + Number(parent.amountTransfer);
               
               const overallBalance = parent.overallBalance;
 
@@ -726,7 +692,7 @@ export function SalesReportsManager({
                         </h4>
                         <div className="space-y-3 relative z-10">
                           {parent.childRepayments.map((child, idx) => {
-                            const cReceived = Number(child.amountCash) + Number(child.amountPos) + Number(child.amountTransfer);
+                            const cReceived = Number(child.amountPos) + Number(child.amountTransfer);
                             return (
                               <div key={child.id} className="flex items-center justify-between bg-white border shadow-xs rounded-lg p-3 ml-2 hover:border-slate-300 transition-colors">
                                 <div className="flex flex-col gap-1">
@@ -777,7 +743,7 @@ export function SalesReportsManager({
                 <tbody className="divide-y divide-border/50 print:divide-black/20">
                   {finalGroupedSales.map((parent) => {
                     const expectedTotal = Number(parent.litersSold) * Number(parent.pricePerLiter);
-                    const parentReceived = Number(parent.amountCash) + Number(parent.amountPos) + Number(parent.amountTransfer);
+                    const parentReceived = Number(parent.amountPos) + Number(parent.amountTransfer);
                     
                     const overallBalance = parent.overallBalance;
 
@@ -837,7 +803,7 @@ export function SalesReportsManager({
 
                         {/* Child Rows */}
                         {parent.childRepayments.map(child => {
-                          const childReceived = Number(child.amountCash) + Number(child.amountPos) + Number(child.amountTransfer);
+                          const childReceived = Number(child.amountPos) + Number(child.amountTransfer);
                           return (
                             <tr 
                               key={child.id}

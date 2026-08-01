@@ -14,12 +14,10 @@ const CreateSalesLogSchema = z.object({
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   litersSold: z.coerce.number().min(0), // Changed from .positive() to allow 0 for debt repayments
   pricePerLiter: z.coerce.number().min(0).default(0),
-  amountCash: z.coerce.number().min(0),
   amountPos: z.coerce.number().min(0),
   amountTransfer: z.coerce.number().min(0).default(0),
   posBankAccountId: z.string().nullable().optional(),
   transferBankAccountId: z.string().nullable().optional(),
-  cashReceiptUrl: z.string().nullable().optional(),
   posReceiptUrl: z.string().nullable().optional(),
   transferReceiptUrl: z.string().nullable().optional(),
   logDate: z.string().optional(),
@@ -97,7 +95,7 @@ export async function POST(
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
-    if (body.amountCash <= 0 && body.amountPos <= 0 && body.amountTransfer <= 0) {
+    if (body.amountPos <= 0 && body.amountTransfer <= 0) {
       throw new DomainError(400, "invalid_input", "At least one revenue amount must be greater than zero.");
     }
 
@@ -130,12 +128,10 @@ export async function POST(
         productType: body.productType,
         litersSold: body.litersSold,
         pricePerLiter: body.pricePerLiter,
-        amountCash: body.amountCash,
         amountPos: body.amountPos,
         amountTransfer: body.amountTransfer,
         posBankAccountId: body.posBankAccountId || null,
         transferBankAccountId: body.transferBankAccountId || null,
-        cashReceiptUrl: body.cashReceiptUrl,
         posReceiptUrl: body.posReceiptUrl,
         transferReceiptUrl: body.transferReceiptUrl,
         logDate,
@@ -153,7 +149,7 @@ export async function POST(
       tenantId: actor.tenantId,
       targetType: "SalesLog",
       targetId: salesLog.id,
-      after: { productType: salesLog.productType, litersSold: salesLog.litersSold, amountCash: salesLog.amountCash, amountPos: salesLog.amountPos } as object,
+      after: { productType: salesLog.productType, litersSold: salesLog.litersSold, amountPos: salesLog.amountPos, amountTransfer: salesLog.amountTransfer } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });

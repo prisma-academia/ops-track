@@ -32,19 +32,15 @@ interface SalesReportUser {
 
 interface DebtRepayment {
   id: string;
-  amountCash: number;
   amountPos: number;
   amountTransfer: number;
   status: "PENDING" | "APPROVED" | "REJECTED";
   logDate: string | Date;
-  cashReceiptUrl?: string | null;
   posReceiptUrl?: string | null;
   recordedBy?: SalesReportUser | null;
   approvedBy?: SalesReportUser | null;
   reason?: string | null;
-  flaggedAmount?: boolean;
-  flaggedLiters?: boolean;
-  flaggedReceipt?: boolean;
+
 }
 
 interface SalesReportRow {
@@ -52,17 +48,13 @@ interface SalesReportRow {
   tenantId: string;
   stationId: string;
   productType: string;
-  litersSold: number;
-  amountCash: number;
   amountPos: number;
   amountTransfer: number;
-  cashReceiptUrl: string | null;
-  posReceiptUrl: string | null;
+  litersSold: number;
+  pricePerLiter: number;
   logDate: string | Date;
   status: "PENDING" | "APPROVED" | "REJECTED";
-  flaggedAmount: boolean;
-  flaggedLiters: boolean;
-  flaggedReceipt: boolean;
+
   reason: string | null;
   approvedById: string | null;
   approvedAt: string | Date | null;
@@ -71,25 +63,21 @@ interface SalesReportRow {
   approvedBy: SalesReportUser | null;
   isDebtRepayment?: boolean;
   parentSaleId?: string | null;
-  pricePerLiter: number;
+
   parentSale?: {
     id: string;
     logDate: string | Date;
     productType: string;
     litersSold: number;
     pricePerLiter: number;
-    amountCash: number;
     amountPos: number;
     amountTransfer: number;
-    cashReceiptUrl: string | null;
     posReceiptUrl: string | null;
     status: "PENDING" | "APPROVED" | "REJECTED";
     recordedBy: SalesReportUser | null;
     approvedBy: SalesReportUser | null;
     reason: string | null;
-    flaggedAmount: boolean;
-    flaggedLiters: boolean;
-    flaggedReceipt: boolean;
+
     debtRepayments: DebtRepayment[];
   } | null;
   debtRepayments?: DebtRepayment[];
@@ -104,9 +92,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   
   // Review Form State
   const [reviewStatus, setReviewStatus] = useState<"APPROVED" | "REJECTED">("APPROVED");
-  const [flaggedAmount, setFlaggedAmount] = useState(false);
-  const [flaggedLiters, setFlaggedLiters] = useState(false);
-  const [flaggedReceipt, setFlaggedReceipt] = useState(false);
+
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -132,9 +118,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   const handleOpenReviewModal = (targetId: string, initialStatus: string) => {
     setReviewTargetId(targetId);
     setReviewStatus(initialStatus === "REJECTED" ? "REJECTED" : "APPROVED");
-    setFlaggedAmount(false);
-    setFlaggedLiters(false);
-    setFlaggedReceipt(false);
+
     setReason("");
     setApiError(null);
     setReviewModalOpen(true);
@@ -154,9 +138,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
 
     const res = await apiPatch(`/api/tenant/stations/${report.stationId}/sales-logs/${reviewTargetId}`, {
       status: reviewStatus,
-      flaggedAmount,
-      flaggedLiters,
-      flaggedReceipt,
+
       reason: reason.trim() || null,
     });
 
@@ -189,7 +171,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   
   if (flowParent) {
     const pExpected = Number(flowParent.litersSold) * Number(flowParent.pricePerLiter);
-    const pPaid = Number(flowParent.amountCash) + Number(flowParent.amountPos) + Number(flowParent.amountTransfer);
+    const pPaid = Number(flowParent.amountPos) + Number(flowParent.amountTransfer);
     currentBalance = pExpected - pPaid;
   }
 
@@ -230,13 +212,6 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                 </div>
               )}
               
-              {(rowReport.flaggedAmount || rowReport.flaggedLiters || rowReport.flaggedReceipt) && (
-                <div className="flex flex-wrap gap-2">
-                  {rowReport.flaggedAmount && <Badge variant="destructive" className="bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400 hover:bg-rose-100">Flagged: Amount</Badge>}
-                  {rowReport.flaggedLiters && <Badge variant="destructive" className="bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400 hover:bg-rose-100">Flagged: Liters</Badge>}
-                  {rowReport.flaggedReceipt && <Badge variant="destructive" className="bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400 hover:bg-rose-100">Flagged: Receipt</Badge>}
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -343,21 +318,16 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                         <td className="py-4 px-4 whitespace-nowrap">{formatHumanReadableDate(flowParent.logDate)}</td>
                         <td className="py-4 px-4 whitespace-nowrap font-medium">Initial Sale</td>
                         <td className="py-4 px-4 text-right font-mono tabular-nums whitespace-nowrap text-slate-600">{formatShortCurrency(Number(flowParent.litersSold) * Number(flowParent.pricePerLiter))}</td>
-                        <td className="py-4 px-4 text-right font-mono font-bold tabular-nums whitespace-nowrap text-emerald-600">{formatShortCurrency(Number(flowParent.amountCash) + Number(flowParent.amountPos) + Number(flowParent.amountTransfer))}</td>
+                        <td className="py-4 px-4 text-right font-mono font-bold tabular-nums whitespace-nowrap text-emerald-600">{formatShortCurrency(Number(flowParent.amountPos) + Number(flowParent.amountTransfer))}</td>
                         <td className="py-4 px-4 text-right font-mono font-bold tabular-nums whitespace-nowrap text-rose-600">{formatShortCurrency(currentBalance)}</td>
                         <td className="py-4 px-4 text-center">
                           <div className="flex items-center justify-center gap-1.5">
-                            {flowParent.cashReceiptUrl && (
-                              <Button variant="outline" size="icon" className="size-7" onClick={() => handleOpenReceipt(flowParent.cashReceiptUrl, "Cash Receipt")}>
-                                <ImageIcon className="size-3 text-muted-foreground" />
-                              </Button>
-                            )}
                             {flowParent.posReceiptUrl && (
                               <Button variant="outline" size="icon" className="size-7" onClick={() => handleOpenReceipt(flowParent.posReceiptUrl, "POS Receipt")}>
                                 <ImageIcon className="size-3 text-muted-foreground" />
                               </Button>
                             )}
-                            {!flowParent.cashReceiptUrl && !flowParent.posReceiptUrl && (
+                            {!flowParent.posReceiptUrl && (
                               <span className="text-xs text-muted-foreground">-</span>
                             )}
                           </div>
@@ -393,7 +363,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                   
                   {/* Children Rows */}
                   {flowChildren.map((child) => {
-                    const childPaid = Number(child.amountCash) + Number(child.amountPos) + Number(child.amountTransfer);
+                    const childPaid = Number(child.amountPos) + Number(child.amountTransfer);
                     if (child.status === "APPROVED") {
                       currentBalance -= childPaid;
                     }
@@ -412,17 +382,12 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                           </td>
                           <td className="py-4 px-4 text-center">
                             <div className="flex items-center justify-center gap-1.5">
-                              {child.cashReceiptUrl && (
-                                <Button variant="outline" size="icon" className="size-7" onClick={() => handleOpenReceipt(child.cashReceiptUrl, "Cash Receipt")}>
-                                  <ImageIcon className="size-3 text-muted-foreground" />
-                                </Button>
-                              )}
                               {child.posReceiptUrl && (
                                 <Button variant="outline" size="icon" className="size-7" onClick={() => handleOpenReceipt(child.posReceiptUrl, "POS Receipt")}>
                                   <ImageIcon className="size-3 text-muted-foreground" />
                                 </Button>
                               )}
-                              {!child.cashReceiptUrl && !child.posReceiptUrl && (
+                              {!child.posReceiptUrl && (
                                 <span className="text-xs text-muted-foreground">-</span>
                               )}
                             </div>
@@ -499,25 +464,6 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                   <SelectItem value="REJECTED">Reject Report</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-
-            {/* Flag Checkboxes */}
-            <div className="space-y-3 bg-muted/30 border rounded-xl p-4">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">Issue Flags (Optional)</span>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-3">
-                  <Checkbox id="flag-liters" checked={flaggedLiters} onCheckedChange={(val) => setFlaggedLiters(!!val)} />
-                  <label htmlFor="flag-liters" className="text-sm font-medium cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Volume Discrepancy</label>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <Checkbox id="flag-amount" checked={flaggedAmount} onCheckedChange={(val) => setFlaggedAmount(!!val)} />
-                  <label htmlFor="flag-amount" className="text-sm font-medium cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Revenue Amount Mismatch</label>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <Checkbox id="flag-receipt" checked={flaggedReceipt} onCheckedChange={(val) => setFlaggedReceipt(!!val)} />
-                  <label htmlFor="flag-receipt" className="text-sm font-medium cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Missing/Invalid Receipt</label>
-                </div>
-              </div>
             </div>
 
             {/* Comments / Reason Textarea */}

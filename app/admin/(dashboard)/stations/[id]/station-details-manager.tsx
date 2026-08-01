@@ -631,11 +631,7 @@ export function StationDetailsManager({
       header: () => <div className="text-right">Volume Sold</div>,
       cell: ({ row }) => <div className="text-right font-medium">{Number(row.original.litersSold).toLocaleString()} L</div>,
     },
-    {
-      id: "cash",
-      header: () => <div className="text-right">Cash</div>,
-      cell: ({ row }) => <div className="text-right text-muted-foreground">₦{Number(row.original.amountCash).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>,
-    },
+
     {
       id: "digital",
       header: () => <div className="text-right">POS / Transfer</div>,
@@ -648,7 +644,7 @@ export function StationDetailsManager({
       id: "total",
       header: () => <div className="text-right">Total Revenue</div>,
       cell: ({ row }) => {
-        const total = Number(row.original.amountCash) + Number(row.original.amountPos) + Number(row.original.amountTransfer);
+        const total = Number(row.original.amountPos) + Number(row.original.amountTransfer);
         return <div className="text-right font-bold text-foreground">₦{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>;
       },
     },
@@ -657,9 +653,7 @@ export function StationDetailsManager({
       header: () => <div className="text-center">Status</div>,
       cell: ({ row }) => {
         const flags: string[] = [];
-        if (row.original.flaggedAmount) flags.push("Amount");
-        if (row.original.flaggedLiters) flags.push("Liters");
-        if (row.original.flaggedReceipt) flags.push("Receipt");
+
         return (
           <div className="flex flex-col items-center gap-1">
             {row.original.status === "APPROVED" ? (
@@ -669,9 +663,7 @@ export function StationDetailsManager({
             ) : (
               <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 text-[10px] font-semibold">Pending</Badge>
             )}
-            {flags.length > 0 && (
-              <span className="text-[9px] text-rose-500 font-semibold leading-none">Flagged: {flags.join(", ")}</span>
-            )}
+
           </div>
         );
       },

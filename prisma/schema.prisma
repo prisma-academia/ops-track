@@ -493,17 +493,12 @@ model SalesLog {
   productType        ProductType
   litersSold         Decimal        @db.Decimal(12, 2)
   pricePerLiter      Decimal        @default(0.00) @db.Decimal(10, 2)
-  amountCash         Decimal        @db.Decimal(12, 2) // Cash collected
   amountPos          Decimal        @db.Decimal(12, 2) // POS payments
   amountTransfer     Decimal        @db.Decimal(12, 2) // Bank transfers
-  cashReceiptUrl     String?
   posReceiptUrl      String?
   transferReceiptUrl String?
   logDate            DateTime       @db.Date
   status             SalesLogStatus @default(PENDING)
-  flaggedAmount      Boolean        @default(false)
-  flaggedLiters      Boolean        @default(false)
-  flaggedReceipt     Boolean        @default(false)
   reason             String?        @db.Text
   approvedById       String?
   approvedBy         TenantUser?    @relation("SalesApprovedBy", fields: [approvedById], references: [id])
@@ -517,8 +512,6 @@ model SalesLog {
   dippingClosing   DippingClosing?
   dippingClosingId String?         @unique
 
-  bankAccountId         String?
-  bankAccount           BankAccount? @relation("SalesLogBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
   posBankAccountId      String?
   posBankAccount        BankAccount? @relation("SalesLogPosBankAccount", fields: [posBankAccountId], references: [id], onDelete: SetNull)
   transferBankAccountId String?
@@ -1238,7 +1231,6 @@ model BankAccount {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
-  salesLogs         SalesLog[]    @relation("SalesLogBankAccount")
   posSalesLogs      SalesLog[]    @relation("SalesLogPosBankAccount")
   transferSalesLogs SalesLog[]    @relation("SalesLogTransferBankAccount")
   expenses          Expense[]     @relation("ExpenseBankAccount")

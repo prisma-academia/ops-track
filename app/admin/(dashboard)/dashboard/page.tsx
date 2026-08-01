@@ -95,10 +95,9 @@ async function DashboardDataContent({ tenantId, fromDate, toDate }: { tenantId: 
       status: "APPROVED",
       logDate: { gte: fromDate, lte: toDate }
     },
-    _sum: { amountCash: true, amountPos: true, amountTransfer: true }
+    _sum: { amountPos: true, amountTransfer: true }
   });
   const totalRevenue = 
-    Number(revenueAgg._sum.amountCash || 0) + 
     Number(revenueAgg._sum.amountPos || 0) + 
     Number(revenueAgg._sum.amountTransfer || 0);
 
@@ -132,7 +131,7 @@ async function DashboardDataContent({ tenantId, fromDate, toDate }: { tenantId: 
   // 3. Fetch Monthly Data (Based on Date Picker Range)
   const salesData = await prisma.salesLog.findMany({
     where: { tenantId, status: "APPROVED", logDate: { gte: fromDate, lte: toDate } },
-    select: { logDate: true, amountCash: true, amountPos: true, amountTransfer: true }
+    select: { logDate: true, amountPos: true, amountTransfer: true }
   });
 
 
@@ -164,7 +163,7 @@ async function DashboardDataContent({ tenantId, fromDate, toDate }: { tenantId: 
     const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
     if (monthlyDataMap.has(key)) {
       const current = monthlyDataMap.get(key)!;
-      const totalSale = Number(sale.amountCash) + Number(sale.amountPos) + Number(sale.amountTransfer);
+      const totalSale = Number(sale.amountPos) + Number(sale.amountTransfer);
       current.revenue += totalSale;
     }
   });

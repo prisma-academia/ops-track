@@ -45,7 +45,7 @@ export async function GET(request: Request) {
           where: { status: "APPROVED" as const },
           orderBy: { logDate: "desc" as const },
           take: 1,
-          select: { amountCash: true, amountPos: true, amountTransfer: true },
+          select: { amountPos: true, amountTransfer: true },
         },
         waybillAllocations: {
           orderBy: { createdAt: "desc" as const },
@@ -70,12 +70,12 @@ export async function GET(request: Request) {
       const stationIds = rawRows.map((s) => s.id);
       const allStationLogs = await prisma.salesLog.findMany({
         where: { stationId: { in: stationIds }, status: { not: "REJECTED" } },
-        select: { stationId: true, litersSold: true, pricePerLiter: true, amountCash: true, amountPos: true, amountTransfer: true }
+        select: { stationId: true, litersSold: true, pricePerLiter: true, amountPos: true, amountTransfer: true }
       });
 
       const balanceByStation = allStationLogs.reduce((acc, log) => {
         const expected = Number(log.litersSold) * Number(log.pricePerLiter);
-        const collected = Number(log.amountCash) + Number(log.amountPos) + Number(log.amountTransfer);
+        const collected = Number(log.amountPos) + Number(log.amountTransfer);
         const balance = collected - expected;
         acc[log.stationId] = (acc[log.stationId] || 0) + balance;
         return acc;
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
     
         const lastSales = s.SalesLogs[0];
         const lastSalesAmount = lastSales
-          ? Number(lastSales.amountCash) + Number(lastSales.amountPos) + Number(lastSales.amountTransfer)
+          ? Number(lastSales.amountPos) + Number(lastSales.amountTransfer)
           : 0;
     
         const lastWaybillDate = s.waybillAllocations[0]?.waybill?.dispatchedAt?.toISOString() || null;
@@ -132,7 +132,7 @@ export async function GET(request: Request) {
           where: { status: "APPROVED" as const },
           orderBy: { logDate: "desc" as const },
           take: 1,
-          select: { amountCash: true, amountPos: true, amountTransfer: true },
+          select: { amountPos: true, amountTransfer: true },
         },
         waybillAllocations: {
           orderBy: { createdAt: "desc" as const },
@@ -152,12 +152,12 @@ export async function GET(request: Request) {
       const stationIds = rawRows.map((s) => s.id);
       const allStationLogs = await prisma.salesLog.findMany({
         where: { stationId: { in: stationIds }, status: { not: "REJECTED" } },
-        select: { stationId: true, litersSold: true, pricePerLiter: true, amountCash: true, amountPos: true, amountTransfer: true }
+        select: { stationId: true, litersSold: true, pricePerLiter: true, amountPos: true, amountTransfer: true }
       });
 
       const balanceByStation = allStationLogs.reduce((acc, log) => {
         const expected = Number(log.litersSold) * Number(log.pricePerLiter);
-        const collected = Number(log.amountCash) + Number(log.amountPos) + Number(log.amountTransfer);
+        const collected = Number(log.amountPos) + Number(log.amountTransfer);
         const balance = collected - expected;
         acc[log.stationId] = (acc[log.stationId] || 0) + balance;
         return acc;
@@ -176,7 +176,7 @@ export async function GET(request: Request) {
     
         const lastSales = s.SalesLogs[0];
         const lastSalesAmount = lastSales
-          ? Number(lastSales.amountCash) + Number(lastSales.amountPos) + Number(lastSales.amountTransfer)
+          ? Number(lastSales.amountPos) + Number(lastSales.amountTransfer)
           : 0;
     
         const lastWaybillDate = s.waybillAllocations[0]?.waybill?.dispatchedAt?.toISOString() || null;

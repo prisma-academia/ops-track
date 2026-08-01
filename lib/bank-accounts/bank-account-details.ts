@@ -65,7 +65,7 @@ export async function getBankAccountDetailsData({
       where: {
         tenantId,
         OR: [
-          { bankAccountId },
+
           { posBankAccountId: bankAccountId },
           { transferBankAccountId: bankAccountId },
         ],
@@ -86,7 +86,7 @@ export async function getBankAccountDetailsData({
 
     const salesTxItems: BankTransactionItem[] = salesLogs.map((s) => {
       let amount = 0;
-      if (s.bankAccountId === bankAccountId) amount += Number(s.amountCash || 0);
+
       if (s.posBankAccountId === bankAccountId) amount += Number(s.amountPos || 0);
       if (s.transferBankAccountId === bankAccountId) amount += Number(s.amountTransfer || 0);
 

@@ -59,11 +59,11 @@ export async function GET(
     // Total Payments Received - Expected Value of Liters Sold
     const salesLogs = await prisma.salesLog.findMany({
       where: { stationId: id, status: { not: "REJECTED" } },
-      select: { amountCash: true, amountPos: true, amountTransfer: true, litersSold: true, pricePerLiter: true },
+      select: { amountPos: true, amountTransfer: true, litersSold: true, pricePerLiter: true },
     });
 
     const derivedBalance = salesLogs.reduce((acc, log) => {
-      const paid = Number(log.amountCash || 0) + Number(log.amountPos || 0) + Number(log.amountTransfer || 0);
+      const paid = Number(log.amountPos || 0) + Number(log.amountTransfer || 0);
       const expected = Number(log.litersSold || 0) * Number(log.pricePerLiter || 0);
       return acc + (paid - expected);
     }, 0);

@@ -9,9 +9,7 @@ import { sendPushNotification } from "@/lib/notifications";
 
 const ReviewSalesLogSchema = z.object({
   status: z.enum(["APPROVED", "REJECTED"]),
-  flaggedAmount: z.boolean().optional().default(false),
-  flaggedLiters: z.boolean().optional().default(false),
-  flaggedReceipt: z.boolean().optional().default(false),
+
   reason: z.string().nullable().optional(),
 });
 
@@ -49,9 +47,7 @@ export async function PATCH(
       where: { id: salesLogId },
       data: {
         status: body.status,
-        flaggedAmount: body.flaggedAmount,
-        flaggedLiters: body.flaggedLiters,
-        flaggedReceipt: body.flaggedReceipt,
+
         reason: body.reason || null,
         approvedById: actor.userId,
         approvedAt: new Date(),
@@ -86,9 +82,7 @@ export async function PATCH(
       targetId: salesLogId,
       after: {
         status: body.status,
-        flaggedAmount: body.flaggedAmount,
-        flaggedLiters: body.flaggedLiters,
-        flaggedReceipt: body.flaggedReceipt,
+
         reason: body.reason,
         approvedById: actor.userId,
       } as object,

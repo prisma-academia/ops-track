@@ -35,19 +35,15 @@ export default async function SalesReportDetailsPage({
       debtRepayments: {
         select: {
           id: true,
-          amountCash: true,
           amountPos: true,
           amountTransfer: true,
           status: true,
           logDate: true,
-          cashReceiptUrl: true,
           posReceiptUrl: true,
           recordedBy: userSelect,
           approvedBy: userSelect,
           reason: true,
-          flaggedAmount: true,
-          flaggedLiters: true,
-          flaggedReceipt: true,
+
         },
       },
       parentSale: {
@@ -57,41 +53,31 @@ export default async function SalesReportDetailsPage({
           productType: true,
           litersSold: true,
           pricePerLiter: true,
-          amountCash: true,
           amountPos: true,
           amountTransfer: true,
-          cashReceiptUrl: true,
           posReceiptUrl: true,
           status: true,
           recordedBy: userSelect,
           approvedBy: userSelect,
           reason: true,
-          flaggedAmount: true,
-          flaggedLiters: true,
-          flaggedReceipt: true,
+
           debtRepayments: {
             select: {
               id: true,
-              amountCash: true,
               amountPos: true,
               amountTransfer: true,
               status: true,
               logDate: true,
-              cashReceiptUrl: true,
               posReceiptUrl: true,
               recordedBy: userSelect,
               approvedBy: userSelect,
               reason: true,
-              flaggedAmount: true,
-              flaggedLiters: true,
-              flaggedReceipt: true,
+
             }
           }
         },
       },
-      bankAccount: {
-        select: { bankName: true, accountNumber: true },
-      },
+
     },
   });
 

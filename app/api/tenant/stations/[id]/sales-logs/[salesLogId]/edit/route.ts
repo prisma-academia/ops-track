@@ -7,12 +7,10 @@ import { prisma } from "@/lib/db/client";
 import { z } from "zod";
 
 const EditSalesLogSchema = z.object({
-  amountCash: z.coerce.number().min(0),
   amountPos: z.coerce.number().min(0),
   amountTransfer: z.coerce.number().min(0),
   posBankAccountId: z.string().nullable().optional(),
   transferBankAccountId: z.string().nullable().optional(),
-  cashReceiptUrl: z.string().nullable().optional(),
   posReceiptUrl: z.string().nullable().optional(),
   transferReceiptUrl: z.string().nullable().optional(),
 });
@@ -33,7 +31,7 @@ export async function PUT(
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
-    if (body.amountCash <= 0 && body.amountPos <= 0 && body.amountTransfer <= 0) {
+    if (body.amountPos <= 0 && body.amountTransfer <= 0) {
       throw new DomainError(400, "invalid_input", "At least one revenue amount must be greater than zero.");
     }
 
@@ -60,18 +58,14 @@ export async function PUT(
     const updated = await prisma.salesLog.update({
       where: { id: salesLogId },
       data: {
-        amountCash: body.amountCash,
         amountPos: body.amountPos,
         amountTransfer: body.amountTransfer,
         posBankAccountId: body.posBankAccountId || null,
         transferBankAccountId: body.transferBankAccountId || null,
-        cashReceiptUrl: body.cashReceiptUrl !== undefined ? body.cashReceiptUrl : salesLog.cashReceiptUrl,
         posReceiptUrl: body.posReceiptUrl,
         transferReceiptUrl: body.transferReceiptUrl,
         status: "PENDING", // Resubmit for review
-        flaggedAmount: false,
-        flaggedLiters: false,
-        flaggedReceipt: false,
+
         reason: null,
       },
     });
@@ -83,12 +77,7 @@ export async function PUT(
       tenantId: actor.tenantId,
       targetType: "SalesLog",
       targetId: salesLogId,
-      after: {
-        amountCash: body.amountCash,
-        amountPos: body.amountPos,
-        amountTransfer: body.amountTransfer,
-        status: "PENDING",
-      } as object,
+      after: { amountPos: updated.amountPos, amountTransfer: updated.amountTransfer } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });

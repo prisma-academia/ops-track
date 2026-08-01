@@ -48,8 +48,8 @@ export async function GET(
     const where = { stationId, tenantId: actor.tenantId };
     const include = {
       recordedBy: { select: { firstName: true, lastName: true } },
-      posBankAccount: { select: { id: true, name: true, accountNumber: true } },
-      transferBankAccount: { select: { id: true, name: true, accountNumber: true } },
+      posBankAccount: { select: { id: true, accountName: true, accountNumber: true } },
+      transferBankAccount: { select: { id: true, accountName: true, accountNumber: true } },
     };
 
     if (useOffset) {

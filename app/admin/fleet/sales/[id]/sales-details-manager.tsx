@@ -117,7 +117,7 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1 space-y-6">
           <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="w-full justify-start h-14 bg-muted/50 backdrop-blur-xs rounded-3xl border border-border">
+          <TabsList className="w-full justify-start h-16 bg-muted/50 backdrop-blur-xs border border-border">
             <TabsTrigger value="overview" className="text-[15px] font-semibold">Overview</TabsTrigger>
             <TabsTrigger value="payments" className="text-[15px] font-semibold">Payments ({sale.transactions?.length || 0})</TabsTrigger>
           </TabsList>
@@ -176,7 +176,8 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
               
               // Loading fee
               const orderLoadingCost = Number(sale.transport?.order?.loadingCost || 0);
-              const loadingFeePerLitre = orderLoadingCost / (Number(sale.litersDespatched) || 1);
+              const orderLiters = Number(sale.transport?.order?.litersOrdered || 1);
+              const loadingFeePerLitre = orderLoadingCost / orderLiters;
               const l = loadingFeePerLitre * x;
               
               // Purchase cost
@@ -217,22 +218,22 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
                       <div className="p-4 rounded-2xl border bg-background hover:border-destructive/30 transition-colors">
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Purchase Cost (e)</p>
                         <p className="text-xl font-bold text-destructive">₦{e.toLocaleString()}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1.5 opacity-80 font-medium">@ ₦{orderPricePerLitre.toLocaleString()}/L</p>
+                        <p className="text-xs text-muted-foreground mt-1.5 opacity-80 font-semibold">@ ₦{orderPricePerLitre.toLocaleString()}/L</p>
                       </div>
                       <div className="p-4 rounded-2xl border bg-background hover:border-amber-500/30 transition-colors">
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Primary Transport (t)</p>
                         <p className="text-xl font-bold text-amber-600 dark:text-amber-500">₦{t.toLocaleString()}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1.5 opacity-80 font-medium">@ ₦{tRate.toLocaleString()}/L</p>
+                        <p className="text-xs text-muted-foreground mt-1.5 opacity-80 font-semibold">@ ₦{tRate.toLocaleString()}/L</p>
                       </div>
                       <div className="p-4 rounded-2xl border bg-background hover:border-amber-500/30 transition-colors">
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Loading Fee (l)</p>
                         <p className="text-xl font-bold text-amber-600 dark:text-amber-500">₦{l.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1.5 opacity-80 font-medium">@ ₦{loadingFeePerLitre.toLocaleString(undefined, { maximumFractionDigits: 2 })}/L</p>
+                        <p className="text-xs text-muted-foreground mt-1.5 opacity-80 font-semibold">@ ₦{loadingFeePerLitre.toLocaleString(undefined, { maximumFractionDigits: 2 })}/L</p>
                       </div>
                       <div className="p-4 rounded-2xl border bg-background hover:border-amber-500/30 transition-colors">
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Subsequent Trans. (w)</p>
                         <p className="text-xl font-bold text-amber-600 dark:text-amber-500">₦{w.toLocaleString()}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1.5 opacity-80 font-medium">@ ₦{wRate.toLocaleString(undefined, { maximumFractionDigits: 2 })}/L</p>
+                        <p className="text-xs text-muted-foreground mt-1.5 opacity-80 font-semibold">@ ₦{wRate.toLocaleString(undefined, { maximumFractionDigits: 2 })}/L</p>
                       </div>
                     </div>
                   </div>

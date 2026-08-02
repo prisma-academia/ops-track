@@ -148,7 +148,7 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="outline" className="gap-2 rounded-full relative">
+        <Button variant="outline" className="gap-2 rounded-sm relative">
           <Filter className="h-4 w-4" />
           <span>Filter</span>
           {activeCount > 0 && (

@@ -83,28 +83,7 @@ const columns: ColumnDef<StationRow>[] = [
       return val > 0 ? `${val.toLocaleString()} L` : "—";
     }
   },
-  { 
-    accessorKey: "lastSalesAmount", 
-    header: "Last Approved Sales",
-    cell: ({ row }) => {
-      const amount = row.original.lastSalesAmount;
-      return amount > 0 ? `₦${amount.toLocaleString()}` : "—";
-    }
-  },
-  { 
-    accessorKey: "derivedBalance", 
-    header: "Wallet Balance",
-    cell: ({ row }) => {
-      const balance = row.original.derivedBalance;
-      const isDebt = balance < 0;
-      const formatted = `₦${Math.abs(balance).toLocaleString()}`;
-      return (
-        <span className={isDebt ? "text-destructive font-semibold" : "text-emerald-600 font-semibold"}>
-          {isDebt ? `-${formatted}` : formatted}
-        </span>
-      );
-    }
-  },
+
   { 
     accessorKey: "lastWaybillDate", 
     header: "Last Waybill Date",

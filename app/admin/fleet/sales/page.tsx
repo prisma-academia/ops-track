@@ -6,8 +6,7 @@ import { SalesTable } from "./table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Banknote, Droplets, ReceiptText, Landmark } from "lucide-react";
 import { cn, formatShortCurrency } from "@/lib/utils";
-import { DateRangeFilter } from "@/components/date-range-filter";
-import { StatusFilter } from "@/components/status-filter";
+import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 
 export default async function SalesPage({
   searchParams,
@@ -174,19 +173,27 @@ export default async function SalesPage({
           hasPreviousPage: page > 1,
         }}
         filterNode={
-          <>
-            <StatusFilter
-              paramName="status"
-              label="Status"
-              options={[
-                { value: "UNPAID", label: "Unpaid" },
-                { value: "PART_PAID", label: "Part Paid" },
-                { value: "CLEARED", label: "Cleared" },
-                { value: "OVERDUE", label: "Overdue" },
-              ]}
-            />
-            <DateRangeFilter />
-          </>
+          <DataTableFilterDrawer
+            filters={[
+              {
+                type: "select",
+                paramName: "status",
+                label: "Status",
+                options: [
+                  { value: "UNPAID", label: "Unpaid" },
+                  { value: "PART_PAID", label: "Part Paid" },
+                  { value: "CLEARED", label: "Cleared" },
+                  { value: "OVERDUE", label: "Overdue" },
+                ],
+              },
+              {
+                type: "date-range",
+                label: "Date Range",
+                fromParam: "from",
+                toParam: "to",
+              },
+            ]}
+          />
         }
       />
     </div>

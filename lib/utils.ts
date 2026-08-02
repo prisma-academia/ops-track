@@ -42,3 +42,16 @@ export function formatHumanReadableDate(dateInput: string | Date | null | undefi
 export function formatShortCurrency(num: number): string {
   return `₦${num.toLocaleString()}`;
 }
+
+export function formatNumberInput(value: string | number): string {
+  if (value === "" || value === null || value === undefined) return "";
+  const numStr = value.toString().replace(/[^0-9.]/g, "");
+  const parts = numStr.split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return parts.join(".");
+}
+
+export function parseFormattedNumber(value: string): string {
+  if (!value) return "";
+  return value.replace(/,/g, "");
+}

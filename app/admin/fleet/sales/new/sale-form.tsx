@@ -5,6 +5,8 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
+import { formatShortCurrency } from "@/lib/utils";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -402,9 +404,8 @@ export function CreateSaleForm({
               <div className="grid grid-cols-2 gap-4 border-t border-border/50 pt-5 mt-2">
                 <div className="space-y-2">
                   <Label htmlFor="amountPerLiter" className={formState.errors.amountPerLiter ? "text-destructive" : ""}>Selling Price per Liter (₦)*</Label>
-                  <Input 
+                  <FormattedNumberInput 
                     id="amountPerLiter" 
-                    type="number"
                     placeholder="e.g. 1200" 
                     {...register("amountPerLiter")}
                     className={formState.errors.amountPerLiter ? "border-destructive" : ""}

@@ -3,7 +3,7 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { TrucksTable } from "./table";
-import { StatusFilter } from "@/components/status-filter";
+import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 
 export default async function TrucksPage({
   searchParams,
@@ -72,14 +72,19 @@ export default async function TrucksPage({
           hasPreviousPage: page > 1,
         }}
         filterNode={
-          <StatusFilter
-            paramName="status"
-            label="Status"
-            options={[
-              { value: "ACTIVE", label: "Active" },
-              { value: "MAINTENANCE", label: "Maintenance" },
-              { value: "OFFLINE", label: "Offline" },
-              { value: "ISSUE", label: "Issue" },
+          <DataTableFilterDrawer
+            filters={[
+              {
+                type: "select",
+                paramName: "status",
+                label: "Status",
+                options: [
+                  { value: "ACTIVE", label: "Active" },
+                  { value: "MAINTENANCE", label: "Maintenance" },
+                  { value: "OFFLINE", label: "Offline" },
+                  { value: "ISSUE", label: "Issue" },
+                ],
+              },
             ]}
           />
         }

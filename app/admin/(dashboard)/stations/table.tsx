@@ -14,6 +14,8 @@ export type StationRow = {
   pmsLiters: number;
   agoLiters: number;
   lpgLiters: number;
+  todaySales: { PMS: number; AGO: number; LPG: number };
+  lastClosingStock: number;
   lastSalesAmount: number;
   lastWaybillDate: string | null;
   derivedBalance: number;
@@ -58,6 +60,28 @@ const columns: ColumnDef<StationRow>[] = [
     accessorKey: "lpgLiters", 
     header: "LPG (L)",
     cell: ({ row }) => row.original.lpgLiters.toLocaleString()
+  },
+  { 
+    accessorKey: "todaySales", 
+    header: "Today's Sales",
+    cell: ({ row }) => {
+      const sales = row.original.todaySales;
+      const parts = [];
+      if (sales.PMS) parts.push(`PMS: ₦${sales.PMS.toLocaleString()}`);
+      if (sales.AGO) parts.push(`AGO: ₦${sales.AGO.toLocaleString()}`);
+      if (sales.LPG) parts.push(`LPG: ₦${sales.LPG.toLocaleString()}`);
+      return parts.length ? (
+        <span className="text-xs font-medium">{parts.join(" | ")}</span>
+      ) : "—";
+    }
+  },
+  {
+    accessorKey: "lastClosingStock",
+    header: "Last Closing Stock",
+    cell: ({ row }) => {
+      const val = row.original.lastClosingStock;
+      return val > 0 ? `${val.toLocaleString()} L` : "—";
+    }
   },
   { 
     accessorKey: "lastSalesAmount", 

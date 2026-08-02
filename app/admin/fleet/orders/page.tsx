@@ -3,7 +3,7 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { OrdersTable } from "./table";
-import { StatusFilter } from "@/components/status-filter";
+import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 
 export default async function OrdersPage({
   searchParams,
@@ -71,13 +71,18 @@ export default async function OrdersPage({
           hasPreviousPage: page > 1,
         }}
         filterNode={
-          <StatusFilter
-            paramName="status"
-            label="Status"
-            options={[
-              { value: "PENDING", label: "Pending" },
-              { value: "CONFIRMED", label: "Confirmed" },
-              { value: "CANCELLED", label: "Cancelled" },
+          <DataTableFilterDrawer
+            filters={[
+              {
+                type: "select",
+                paramName: "status",
+                label: "Status",
+                options: [
+                  { value: "PENDING", label: "Pending" },
+                  { value: "CONFIRMED", label: "Confirmed" },
+                  { value: "CANCELLED", label: "Cancelled" },
+                ],
+              },
             ]}
           />
         }

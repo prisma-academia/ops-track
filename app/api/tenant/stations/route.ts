@@ -6,6 +6,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
+import { stationIncludeQuery, formatStationRows } from "@/lib/station-format";
 
 const CreateStationSchema = z.object({
   code: z.string().min(2).max(50),
@@ -29,30 +30,7 @@ export async function GET(request: Request) {
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
       
-      const include = {
-        _count: {
-          select: {
-            staff: true,
-            tanks: true,
-            pumps: true,
-            tickets: true,
-          },
-        },
-        tanks: {
-          select: { productType: true, capacity: true },
-        },
-        SalesLogs: {
-          where: { status: "APPROVED" as const },
-          orderBy: { logDate: "desc" as const },
-          take: 1,
-          select: { amountPos: true, amountTransfer: true },
-        },
-        waybillAllocations: {
-          orderBy: { createdAt: "desc" as const },
-          take: 1,
-          select: { waybill: { select: { dispatchedAt: true } } },
-        },
-      };
+      const include = stationIncludeQuery;
 
       const [totalCount, rawRows] = await Promise.all([
         prisma.station.count({
@@ -67,79 +45,13 @@ export async function GET(request: Request) {
         }),
       ]);
       
-      const stationIds = rawRows.map((s) => s.id);
-      const allStationLogs = await prisma.salesLog.findMany({
-        where: { stationId: { in: stationIds }, status: { not: "REJECTED" } },
-        select: { stationId: true, litersSold: true, pricePerLiter: true, amountPos: true, amountTransfer: true }
-      });
-
-      const balanceByStation = allStationLogs.reduce((acc, log) => {
-        const expected = Number(log.litersSold) * Number(log.pricePerLiter);
-        const collected = Number(log.amountPos) + Number(log.amountTransfer);
-        const balance = collected - expected;
-        acc[log.stationId] = (acc[log.stationId] || 0) + balance;
-        return acc;
-      }, {} as Record<string, number>);
-
-      const rows = rawRows.map((s) => {
-        let pmsLiters = 0;
-        let agoLiters = 0;
-        let lpgLiters = 0;
-    
-        s.tanks.forEach((t) => {
-          if (t.productType === "PMS") pmsLiters += Number(t.capacity);
-          if (t.productType === "AGO") agoLiters += Number(t.capacity);
-          if (t.productType === "LPG") lpgLiters += Number(t.capacity);
-        });
-    
-        const lastSales = s.SalesLogs[0];
-        const lastSalesAmount = lastSales
-          ? Number(lastSales.amountPos) + Number(lastSales.amountTransfer)
-          : 0;
-    
-        const lastWaybillDate = s.waybillAllocations[0]?.waybill?.dispatchedAt?.toISOString() || null;
-    
-        return {
-          id: s.id,
-          code: s.code,
-          name: s.name,
-          pmsLiters,
-          agoLiters,
-          lpgLiters,
-          lastSalesAmount,
-          lastWaybillDate,
-          derivedBalance: balanceByStation[s.id] || 0,
-        };
-      });
+      const rows = await formatStationRows(rawRows);
       
       return ok(rows, buildOffsetPageMeta(totalCount, page, take));
     } else {
       const { cursor, take } = parsePagination(url.searchParams);
   
-      const include = {
-        _count: {
-          select: {
-            staff: true,
-            tanks: true,
-            pumps: true,
-            tickets: true,
-          },
-        },
-        tanks: {
-          select: { productType: true, capacity: true },
-        },
-        SalesLogs: {
-          where: { status: "APPROVED" as const },
-          orderBy: { logDate: "desc" as const },
-          take: 1,
-          select: { amountPos: true, amountTransfer: true },
-        },
-        waybillAllocations: {
-          orderBy: { createdAt: "desc" as const },
-          take: 1,
-          select: { waybill: { select: { dispatchedAt: true } } },
-        },
-      };
+      const include = stationIncludeQuery;
 
       const rawRows = await prisma.station.findMany({
         where: { tenantId: actor.tenantId },
@@ -149,50 +61,7 @@ export async function GET(request: Request) {
         include,
       });
   
-      const stationIds = rawRows.map((s) => s.id);
-      const allStationLogs = await prisma.salesLog.findMany({
-        where: { stationId: { in: stationIds }, status: { not: "REJECTED" } },
-        select: { stationId: true, litersSold: true, pricePerLiter: true, amountPos: true, amountTransfer: true }
-      });
-
-      const balanceByStation = allStationLogs.reduce((acc, log) => {
-        const expected = Number(log.litersSold) * Number(log.pricePerLiter);
-        const collected = Number(log.amountPos) + Number(log.amountTransfer);
-        const balance = collected - expected;
-        acc[log.stationId] = (acc[log.stationId] || 0) + balance;
-        return acc;
-      }, {} as Record<string, number>);
-  
-      const rows = rawRows.map((s) => {
-        let pmsLiters = 0;
-        let agoLiters = 0;
-        let lpgLiters = 0;
-    
-        s.tanks.forEach((t) => {
-          if (t.productType === "PMS") pmsLiters += Number(t.capacity);
-          if (t.productType === "AGO") agoLiters += Number(t.capacity);
-          if (t.productType === "LPG") lpgLiters += Number(t.capacity);
-        });
-    
-        const lastSales = s.SalesLogs[0];
-        const lastSalesAmount = lastSales
-          ? Number(lastSales.amountPos) + Number(lastSales.amountTransfer)
-          : 0;
-    
-        const lastWaybillDate = s.waybillAllocations[0]?.waybill?.dispatchedAt?.toISOString() || null;
-    
-        return {
-          id: s.id,
-          code: s.code,
-          name: s.name,
-          pmsLiters,
-          agoLiters,
-          lpgLiters,
-          lastSalesAmount,
-          lastWaybillDate,
-          derivedBalance: balanceByStation[s.id] || 0,
-        };
-      });
+      const rows = await formatStationRows(rawRows);
 
       return ok(rows, buildPageMeta(rows, take));
     }

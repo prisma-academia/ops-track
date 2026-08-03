@@ -175,7 +175,7 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
           </SheetDescription>
         </SheetHeader>
         
-        <div className="flex-1 overflow-y-auto py-6 space-y-6 px-4">
+        <div className="flex-1 overflow-y-auto py-6 space-y-3 px-4">
           {filters.map((filter, idx) => (
             <div key={idx} className="space-y-3">
               <Label className="text-sm font-semibold">{filter.label}</Label>

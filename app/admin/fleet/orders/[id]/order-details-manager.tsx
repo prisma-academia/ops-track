@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -523,100 +523,141 @@ export function OrderDetailsManager({
                 </div>
 
                 {/* Trip-by-Trip Breakdown */}
+                {/* Trip-by-Trip Breakdown */}
                 <div className="space-y-4 mt-6">
-                  <h4 className="text-base font-semibold">Trip-by-Trip Detailed Breakdown</h4>
-                  {pnl.trips?.map((trip: any, index: number) => {
-                    const transport = validTransports.find((t: any) => t.id === trip.transportId);
-                    if (!transport) return null;
-                    
-                    return (
-                      <div key={trip.transportId} className="border rounded-2xl bg-card shadow-sm overflow-hidden">
-                        <div className="bg-muted/30 px-4 py-3 border-b">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <h5 className="font-semibold text-sm">Trip {index + 1}: {transport.transporter?.name || "Unknown Transporter"}</h5>
-                              <p className="text-xs text-muted-foreground">{transport.truck?.plateNumber || transport.truck?.name || "Unknown Truck"} • {transport.destination}</p>
-                            </div>
-                            <div className={cn("text-right font-bold", trip.netProfit >= 0 ? "text-emerald-600" : "text-destructive")}>
-                              {trip.netProfit >= 0 ? "+" : "-"}₦{Math.abs(trip.netProfit).toLocaleString()} Net Profit
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="p-4 space-y-6">
-                          {/* Trip Revenue & COGS */}
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Trip Revenue</p>
-                              <p className="text-base font-semibold">₦{trip.totalRevenue.toLocaleString()}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Trip COGS</p>
-                              <p className="text-base font-semibold">₦{trip.totalCogs.toLocaleString()}</p>
-                            </div>
-                          </div>
-
-                          {/* Legs */}
-                          <div>
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-2">Delivery Legs</p>
-                            <div className="space-y-2">
-                              {trip.legs.map((leg: any, lIndex: number) => (
-                                <div key={lIndex} className="bg-muted/20 p-3 rounded-lg border border-border/50 flex justify-between items-center">
-                                  <div>
-                                    <p className="text-sm font-medium">{leg.legName}</p>
-                                    <p className="text-xs text-muted-foreground">Transport Fee: ₦{leg.transportFee.toLocaleString()}</p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-sm font-semibold">Revenue: ₦{leg.revenue.toLocaleString()}</p>
-                                    <p className="text-xs text-muted-foreground">COGS: ₦{leg.cogs.toLocaleString()}</p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Deductions & Expenses */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-2">Deductions (Transporter)</p>
-                              <div className="space-y-2 text-sm">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-muted-foreground">Shortage Deductions</span>
-                                  <span className="text-destructive font-medium">- ₦{trip.totalShortageDeduction.toLocaleString()}</span>
-                                </div>
-                                <div className="flex justify-between items-center border-t border-border/50 pt-2 mt-2">
-                                  <span className="font-semibold text-muted-foreground">Net Transport Fee Paid</span>
-                                  <span className="font-semibold">₦{trip.totalTransportFee.toLocaleString()}</span>
-                                </div>
-                              </div>
-                            </div>
+                  <h4 className="text-base font-semibold">Subsequent Deliveries (Trips)</h4>
+                  {pnl.trips?.length > 0 ? (
+                    <div className="border rounded-2xl bg-card shadow-sm overflow-x-auto">
+                      <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-muted/30 border-b border-border/50">
+                          <tr>
+                            <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Trip & Transporter</th>
+                            <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Revenue</th>
+                            <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">COGS Breakdown</th>
+                            <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Expenses</th>
+                            <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Net Profit</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                          {pnl.trips.map((trip: any, index: number) => {
+                            const transport = validTransports.find((t: any) => t.id === trip.transportId);
+                            if (!transport) return null;
                             
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-2">Trip Expenses</p>
-                              {trip.expenseDetails && trip.expenseDetails.length > 0 ? (
-                                <div className="space-y-2 text-sm">
-                                  {trip.expenseDetails.map((exp: any) => (
-                                    <div key={exp.id} className="flex justify-between items-center">
-                                      <span className="text-muted-foreground">{exp.description}</span>
-                                      <span className="font-medium text-destructive">₦{exp.amount.toLocaleString()}</span>
+                            // Approximate breakdown for COGS
+                            const freightCost = trip.totalTransportFee || 0;
+                            const otherCogs = (trip.totalCogs || 0) - freightCost;
+                            const totalExp = (trip.totalExpenses || 0) + (trip.totalShortageDeduction || 0);
+
+                            return (
+                              <Fragment key={trip.transportId}>
+                                {/* Trip Header Row */}
+                                <tr className="bg-muted/10 border-b border-border/20">
+                                  <td className="px-6 py-4" colSpan={5}>
+                                    <div className="flex justify-between items-center">
+                                      <div>
+                                        <div className="font-bold text-foreground">Trip {index + 1}: {transport.transporter?.name || "Unknown"}</div>
+                                        <div className="text-xs text-muted-foreground mt-0.5">{transport.truck?.plateNumber || "Unknown Truck"} • {transport.destination}</div>
+                                      </div>
+                                      
+                                      <div className="flex gap-6 text-right items-center">
+                                        <div>
+                                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Trip Revenue</p>
+                                          <p className="font-medium text-foreground">₦{trip.totalRevenue.toLocaleString()}</p>
+                                        </div>
+                                        <div>
+                                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Trip COGS</p>
+                                          <p className="font-medium text-foreground">₦{trip.totalCogs.toLocaleString()}</p>
+                                        </div>
+                                        <div>
+                                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Trip Expenses</p>
+                                          <div className="font-medium text-destructive flex flex-col items-end">
+                                            <span>- ₦{totalExp.toLocaleString()}</span>
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Net Trip Profit</p>
+                                          <p className={cn("font-bold", trip.netProfit >= 0 ? "text-emerald-600" : "text-destructive")}>
+                                            {trip.netProfit >= 0 ? "+" : "-"}₦{Math.abs(trip.netProfit).toLocaleString()}
+                                          </p>
+                                        </div>
+                                      </div>
                                     </div>
-                                  ))}
-                                  <div className="flex justify-between items-center border-t border-border/50 pt-2 mt-2">
-                                    <span className="font-semibold text-muted-foreground">Total Expenses</span>
-                                    <span className="font-semibold text-destructive">₦{trip.totalExpenses.toLocaleString()}</span>
-                                  </div>
-                                </div>
+                                  </td>
+                                </tr>
+                                
+                                {/* Legs Rows */}
+                                {trip.legs && trip.legs.length > 0 ? (
+                                  trip.legs.map((leg: any, lIdx: number) => {
+                                    const legFreight = leg.transportFee || 0;
+                                    const legOtherCogs = (leg.cogs || 0) - legFreight;
+                                    const legProfit = (leg.revenue || 0) - (leg.cogs || 0);
+
+                                    return (
+                                      <tr key={`${trip.transportId}-leg-${lIdx}`} className="hover:bg-muted/5 border-b border-border/10 last:border-b-0">
+                                        <td className="px-6 py-4 pl-12">
+                                          <div className="font-medium text-sm flex items-center gap-2">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-primary/50"></div>
+                                            {leg.legName}
+                                          </div>
+                                          <div className="text-[10px] text-muted-foreground mt-1 ml-3.5 uppercase tracking-wider font-semibold">Leg Delivery</div>
+                                        </td>
+                                        <td className="px-6 py-4 text-right align-top">
+                                          <div className="font-medium">₦{(leg.revenue || 0).toLocaleString()}</div>
+                                        </td>
+                                        <td className="px-6 py-4 text-right align-top">
+                                          <div className="font-medium mb-1">₦{(leg.cogs || 0).toLocaleString()}</div>
+                                          <div className="text-[10px] text-muted-foreground flex flex-col items-end space-y-0.5">
+                                            <span>Product & Loading: ₦{legOtherCogs.toLocaleString()}</span>
+                                            <span>Freight: ₦{legFreight.toLocaleString()}</span>
+                                          </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-right align-top">
+                                          {/* Leg specific expenses aren't typically tracked at the leg level in this schema, so we point them to the trip total or show 0 */}
+                                          <span className="text-muted-foreground italic text-xs">Included in Trip Exp.</span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right align-top">
+                                          <div className={cn("font-medium", legProfit >= 0 ? "text-emerald-600" : "text-destructive")}>
+                                            {legProfit >= 0 ? "+" : "-"}₦{Math.abs(legProfit).toLocaleString()}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                ) : (
+                                  <tr className="hover:bg-muted/5">
+                                    <td className="px-6 py-3 pl-12 text-muted-foreground italic text-xs" colSpan={5}>
+                                      No detailed delivery legs logged.
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="bg-muted/10 border-t border-border/50">
+                          <tr>
+                            <td className="px-6 py-4 font-bold text-right text-sm">Totals:</td>
+                            <td className="px-6 py-4 text-right font-mono font-bold text-foreground">
+                              ₦{pnl.trips.reduce((acc: number, t: any) => acc + (t.totalRevenue || 0), 0).toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 text-right font-mono font-bold text-foreground">
+                              ₦{pnl.trips.reduce((acc: number, t: any) => acc + (t.totalCogs || 0), 0).toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 text-right font-mono font-bold text-destructive">
+                              - ₦{pnl.trips.reduce((acc: number, t: any) => acc + (t.totalExpenses || 0) + (t.totalShortageDeduction || 0), 0).toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 text-right font-mono font-bold">
+                              {pnl.trips.reduce((acc: number, t: any) => acc + (t.netProfit || 0), 0) >= 0 ? (
+                                <span className="text-emerald-600">+ ₦{pnl.trips.reduce((acc: number, t: any) => acc + (t.netProfit || 0), 0).toLocaleString()}</span>
                               ) : (
-                                <p className="text-sm text-muted-foreground italic">No expenses logged for this trip.</p>
+                                <span className="text-destructive">- ₦{Math.abs(pnl.trips.reduce((acc: number, t: any) => acc + (t.netProfit || 0), 0)).toLocaleString()}</span>
                               )}
-                            </div>
-                          </div>
-                          
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {pnl.trips?.length === 0 && (
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  ) : (
                     <p className="text-sm text-muted-foreground italic border rounded-xl p-4 text-center">No trips have been added to this order yet.</p>
                   )}
                 </div>

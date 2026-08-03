@@ -4,6 +4,8 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { OrdersTable } from "./table";
 import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Box, Droplet, Clock, CheckCircle2 } from "lucide-react";
 
 export default async function OrdersPage({
   searchParams,
@@ -45,7 +47,7 @@ export default async function OrdersPage({
     .filter(d => !!d.sourceDepot)
     .map(d => ({ value: d.sourceDepot as string, label: d.sourceDepot as string }));
 
-  const [totalCount, orders] = await Promise.all([
+  const [totalCount, orders, statsRaw] = await Promise.all([
     prisma.order.count({ where }),
     prisma.order.findMany({
       where,
@@ -60,7 +62,17 @@ export default async function OrdersPage({
         },
       },
     }),
+    prisma.order.groupBy({
+      by: ["status"],
+      where,
+      _sum: { litersOrdered: true },
+      _count: { _all: true },
+    }),
   ]);
+
+  const totalVolume = statsRaw.reduce((acc, curr) => acc + Number(curr._sum.litersOrdered || 0), 0);
+  const activeOrders = statsRaw.filter(s => ["PENDING", "CONFIRMED", "LOADED", "CHANGED"].includes(s.status)).reduce((acc, curr) => acc + curr._count._all, 0);
+  const completedOrders = statsRaw.filter(s => s.status === "COMPLETED").reduce((acc, curr) => acc + curr._count._all, 0);
 
   const rows = orders.map((o) => ({
     id: o.id,
@@ -78,7 +90,50 @@ export default async function OrdersPage({
   const totalPages = Math.ceil(totalCount / take);
 
   return (
-    <div>
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+            <Box className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalCount}</div>
+            <p className="text-xs text-muted-foreground">Based on current filters</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Total Volume</CardTitle>
+            <Droplet className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalVolume.toLocaleString()} L</div>
+            <p className="text-xs text-muted-foreground">Volume for filtered orders</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Active Orders</CardTitle>
+            <Clock className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{activeOrders}</div>
+            <p className="text-xs text-muted-foreground">Pending, Confirmed or Loaded</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Completed Orders</CardTitle>
+            <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{completedOrders}</div>
+            <p className="text-xs text-muted-foreground">Fully delivered & settled</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <DataTableToolbar
         title="Procurement Orders"
         createHref="/admin/fleet/orders/new"

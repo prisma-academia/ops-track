@@ -17,7 +17,17 @@ const FLEET_NAV = [
   { href: "/admin/fleet/transports", key: "transports", icon: "Route", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/fleet/sales", key: "customers", icon: "BadgeDollarSign", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   { href: "/admin/fleet/payments", key: "payments", icon: "CreditCard", permission: PERMISSIONS.TENANT_FLEET_READ.key },
-  { href: "/admin/fleet/ledger", key: "transactions", icon: "Wallet", permission: PERMISSIONS.TENANT_FLEET_READ.key },
+  { 
+    href: "/admin/fleet/ledger", 
+    key: "transactions", 
+    icon: "Wallet", 
+    permission: PERMISSIONS.TENANT_FLEET_READ.key,
+    children: [
+      { href: "/admin/fleet/ledger/sales", key: "ledger_sales", icon: "CreditCard" },
+      { href: "/admin/fleet/ledger/transports", key: "ledger_transports", icon: "Truck" },
+      { href: "/admin/fleet/ledger/expenses", key: "ledger_expenses", icon: "Receipt" },
+    ]
+  },
   { href: "/admin/fleet/customers", key: "clients", icon: "Users", permission: PERMISSIONS.TENANT_CUSTOMERS_READ.key },
   { href: "/admin/fleet/bank-accounts", key: "bankAccounts", icon: "CreditCard", permission: PERMISSIONS.TENANT_SETTINGS_READ.key },
 ];
@@ -66,10 +76,23 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
     if (n.key === 'clients') title = 'Customers';
     if (n.key === 'bankAccounts') title = 'Bank Accounts';
 
+    const children = n.children?.map(c => {
+      let childTitle = c.key;
+      if (c.key === 'ledger_sales') childTitle = 'Sales';
+      if (c.key === 'ledger_transports') childTitle = 'Transport';
+      if (c.key === 'ledger_expenses') childTitle = 'Expenses';
+      return {
+        href: c.href,
+        title: childTitle,
+        icon: c.icon,
+      };
+    });
+
     return {
       href: n.href,
       title,
       icon: n.icon,
+      children,
     };
   });
 

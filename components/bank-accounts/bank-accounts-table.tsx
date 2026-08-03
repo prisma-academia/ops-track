@@ -113,52 +113,7 @@ export function BankAccountsTable({
         </div>
       ),
     },
-    {
-      id: "actions",
-      header: "",
-      cell: ({ row }) => {
-        const detailUrl = scopeFilter === "FLEET" 
-          ? `/admin/fleet/bank-accounts/${row.original.id}`
-          : `/admin/bank-accounts/${row.original.id}`;
-
-        return (
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(detailUrl);
-              }}
-            >
-              View Details
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingAccount(row.original);
-                setIsModalOpen(true);
-              }}
-            >
-              <Edit2 className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDeletingId(row.original.id);
-              }}
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          </div>
-        );
-      },
-    },
+    // Actions column removed based on user request
   ];
 
   return (
@@ -174,6 +129,10 @@ export function BankAccountsTable({
         }}
         filterColumnId="bankName"
         searchPlaceholder="Search by bank name..."
+        rowHref={(row) => scopeFilter === "FLEET" 
+          ? `/admin/fleet/bank-accounts/${row.id}`
+          : `/admin/bank-accounts/${row.id}`
+        }
         headerAction={
           <Button onClick={() => {
             setEditingAccount(null);

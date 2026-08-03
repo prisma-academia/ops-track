@@ -63,15 +63,6 @@ const columns: ColumnDef<CustomerRow>[] = [
       </span>
     ),
   },
-  {
-    accessorKey: "id",
-    header: "Customer ID",
-    cell: ({ row }) => (
-      <span className="text-xs text-stone-400 font-mono">
-        {row.original.id}
-      </span>
-    ),
-  },
 ];
 
 export function CustomersManager({

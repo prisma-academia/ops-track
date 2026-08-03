@@ -469,13 +469,14 @@ export function OrderDetailsManager({
             
             {pnl ? (
               <div className="space-y-6">
+                {/* Executive Summary */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="p-4 rounded-2xl border bg-card shadow-sm">
                     <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total Revenue</p>
                     <p className="text-xl font-bold text-foreground">₦{pnl.totalRevenue.toLocaleString()}</p>
                   </div>
                   <div className="p-4 rounded-2xl border bg-card shadow-sm">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total COGS (Transported)</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1" title="Cost of Goods Sold">Total COGS (Cost of Goods Sold)</p>
                     <p className="text-xl font-bold text-foreground">₦{pnl.totalCogs.toLocaleString()}</p>
                   </div>
                   <div className="p-4 rounded-2xl border bg-card shadow-sm">
@@ -490,65 +491,134 @@ export function OrderDetailsManager({
                   </div>
                 </div>
 
+                {/* Order-Level Expenses */}
                 <div className="border rounded-2xl overflow-hidden bg-card shadow-sm mt-6">
-                  <div className="bg-muted/30 px-4 py-3 border-b">
-                    <h5 className="font-semibold text-sm">Detailed Costs Breakdown</h5>
+                  <div className="bg-muted/30 px-4 py-3 border-b flex items-center justify-between">
+                    <h5 className="font-semibold text-sm">Order-Level Financials</h5>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border">
-                    <div className="p-4">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Net Transport Fees Paid</p>
-                      <p className="text-base font-medium">₦{pnl.totalTransportFeesPaid.toLocaleString()}</p>
+                  <div className="p-4 space-y-4">
+                    <div className="flex justify-between items-center pb-2 border-b border-border/50">
+                      <span className="text-sm font-medium text-muted-foreground">Loading Cost</span>
+                      <span className="font-semibold">₦{pnl.totalLoadingCost.toLocaleString()}</span>
                     </div>
-                    <div className="p-4">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Loading Cost</p>
-                      <p className="text-base font-medium text-muted-foreground">₦{pnl.totalLoadingCost.toLocaleString()}</p>
-                    </div>
-                    <div className="p-4">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Total Trip Expenses</p>
-                      <p className="text-base font-medium text-muted-foreground">₦{pnl.totalTripExpenses.toLocaleString()}</p>
-                    </div>
-                    <div className="p-4">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Total Order Expenses</p>
-                      <p className="text-base font-medium text-muted-foreground">₦{pnl.totalOrderExpenses.toLocaleString()}</p>
-                    </div>
+                    {pnl.orderExpenseDetails && pnl.orderExpenseDetails.length > 0 ? (
+                      <div>
+                        <span className="text-sm font-medium text-muted-foreground mb-2 block">Order Expenses</span>
+                        <div className="space-y-2">
+                          {pnl.orderExpenseDetails.map((exp: any) => (
+                            <div key={exp.id} className="flex justify-between items-center text-sm pl-4 border-l-2 border-muted">
+                              <span className="text-muted-foreground">{exp.description}</span>
+                              <span>₦{exp.amount.toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                       <div className="flex justify-between items-center text-sm">
+                         <span className="font-medium text-muted-foreground">Order Expenses</span>
+                         <span className="text-muted-foreground">None</span>
+                       </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="border rounded-2xl overflow-hidden bg-card shadow-sm mt-6">
-                  <div className="bg-muted/30 px-4 py-3 border-b">
-                    <h5 className="font-semibold text-sm">Unit Metrics Breakdown (Per Trip)</h5>
-                  </div>
-                  <div className="divide-y divide-border">
-                    {validTransports.map((t: any) => {
-                      const tripPnL = pnl.trips?.find((tp: any) => tp.transportId === t.id);
-                      if (!tripPnL) return null;
-                      
-                      const litersDelivered = Number(t.litersCarried || 0);
-                      const avgTransportCost = litersDelivered > 0 ? tripPnL.totalTransportFee / litersDelivered : 0;
-                      const avgSellingPrice = litersDelivered > 0 ? tripPnL.totalRevenue / litersDelivered : 0;
-                      
-                      return (
-                        <div key={t.id} className="p-4 grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-                          <div>
-                            <p className="font-semibold text-sm">{t.destination}</p>
-                            <p className="text-xs text-muted-foreground">{t.truck?.plateNumber || "Unknown Truck"}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Buying Price</p>
-                            <p className="text-sm font-medium">₦{Number(order.pricePerLitre).toLocaleString()}/L</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Transport Cost</p>
-                            <p className="text-sm font-medium text-muted-foreground">₦{avgTransportCost.toFixed(2)}/L</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Selling Price</p>
-                            <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">₦{avgSellingPrice.toFixed(2)}/L</p>
+                {/* Trip-by-Trip Breakdown */}
+                <div className="space-y-4 mt-6">
+                  <h4 className="text-base font-semibold">Trip-by-Trip Detailed Breakdown</h4>
+                  {pnl.trips?.map((trip: any, index: number) => {
+                    const transport = validTransports.find((t: any) => t.id === trip.transportId);
+                    if (!transport) return null;
+                    
+                    return (
+                      <div key={trip.transportId} className="border rounded-2xl bg-card shadow-sm overflow-hidden">
+                        <div className="bg-muted/30 px-4 py-3 border-b">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <h5 className="font-semibold text-sm">Trip {index + 1}: {transport.transporter?.name || "Unknown Transporter"}</h5>
+                              <p className="text-xs text-muted-foreground">{transport.truck?.plateNumber || transport.truck?.name || "Unknown Truck"} • {transport.destination}</p>
+                            </div>
+                            <div className={cn("text-right font-bold", trip.netProfit >= 0 ? "text-emerald-600" : "text-destructive")}>
+                              {trip.netProfit >= 0 ? "+" : "-"}₦{Math.abs(trip.netProfit).toLocaleString()} Net Profit
+                            </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                        
+                        <div className="p-4 space-y-6">
+                          {/* Trip Revenue & COGS */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Trip Revenue</p>
+                              <p className="text-base font-semibold">₦{trip.totalRevenue.toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Trip COGS</p>
+                              <p className="text-base font-semibold">₦{trip.totalCogs.toLocaleString()}</p>
+                            </div>
+                          </div>
+
+                          {/* Legs */}
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-2">Delivery Legs</p>
+                            <div className="space-y-2">
+                              {trip.legs.map((leg: any, lIndex: number) => (
+                                <div key={lIndex} className="bg-muted/20 p-3 rounded-lg border border-border/50 flex justify-between items-center">
+                                  <div>
+                                    <p className="text-sm font-medium">{leg.legName}</p>
+                                    <p className="text-xs text-muted-foreground">Transport Fee: ₦{leg.transportFee.toLocaleString()}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-sm font-semibold">Revenue: ₦{leg.revenue.toLocaleString()}</p>
+                                    <p className="text-xs text-muted-foreground">COGS: ₦{leg.cogs.toLocaleString()}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Deductions & Expenses */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-2">Deductions (Transporter)</p>
+                              <div className="space-y-2 text-sm">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-muted-foreground">Shortage Deductions</span>
+                                  <span className="text-destructive font-medium">- ₦{trip.totalShortageDeduction.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between items-center border-t border-border/50 pt-2 mt-2">
+                                  <span className="font-semibold text-muted-foreground">Net Transport Fee Paid</span>
+                                  <span className="font-semibold">₦{trip.totalTransportFee.toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-2">Trip Expenses</p>
+                              {trip.expenseDetails && trip.expenseDetails.length > 0 ? (
+                                <div className="space-y-2 text-sm">
+                                  {trip.expenseDetails.map((exp: any) => (
+                                    <div key={exp.id} className="flex justify-between items-center">
+                                      <span className="text-muted-foreground">{exp.description}</span>
+                                      <span className="font-medium text-destructive">₦{exp.amount.toLocaleString()}</span>
+                                    </div>
+                                  ))}
+                                  <div className="flex justify-between items-center border-t border-border/50 pt-2 mt-2">
+                                    <span className="font-semibold text-muted-foreground">Total Expenses</span>
+                                    <span className="font-semibold text-destructive">₦{trip.totalExpenses.toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-muted-foreground italic">No expenses logged for this trip.</p>
+                              )}
+                            </div>
+                          </div>
+                          
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {pnl.trips?.length === 0 && (
+                    <p className="text-sm text-muted-foreground italic border rounded-xl p-4 text-center">No trips have been added to this order yet.</p>
+                  )}
                 </div>
               </div>
             ) : (

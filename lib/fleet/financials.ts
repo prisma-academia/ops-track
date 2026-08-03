@@ -18,6 +18,7 @@ export type TripPnLSummary = {
   totalTransportFee: number;
   totalShortageDeduction: number;
   totalExpenses: number;
+  expenseDetails: { id: string; description: string; amount: number; createdAt: Date }[];
   netProfit: number;
   transporterDebtRollover: number;
 };
@@ -30,6 +31,7 @@ export type OrderPnLSummary = {
   totalTransportFeesPaid: number;
   totalTripExpenses: number;
   totalOrderExpenses: number;
+  orderExpenseDetails: { id: string; description: string; amount: number; createdAt: Date }[];
   netProfit: number;
   trips: TripPnLSummary[];
 };
@@ -159,6 +161,12 @@ export async function calculateTripPnL(transportId: string): Promise<TripPnLSumm
     totalTransportFee: netTransportFeePaid, // Adjusted for deductions
     totalShortageDeduction,
     totalExpenses,
+    expenseDetails: expenses.map(e => ({
+      id: e.id,
+      description: e.description || "General Expense",
+      amount: Number(e.amount),
+      createdAt: e.createdAt,
+    })),
     netProfit,
     transporterDebtRollover,
   };
@@ -208,6 +216,12 @@ export async function calculateOrderPnL(orderId: string): Promise<OrderPnLSummar
     totalTransportFeesPaid,
     totalTripExpenses,
     totalOrderExpenses,
+    orderExpenseDetails: orderExpensesList.map(e => ({
+      id: e.id,
+      description: e.description || "Order Expense",
+      amount: Number(e.amount),
+      createdAt: e.createdAt,
+    })),
     netProfit,
     trips,
   };

@@ -175,6 +175,10 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
 
   if (loading) return <div className="p-8 text-center text-muted-foreground"><SpinnerEllipsis /></div>;
 
+  const selectedTransport = formData.transportId 
+    ? metadata?.transports?.find((t: any) => t.id === formData.transportId)
+    : null;
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2">
@@ -190,26 +194,26 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
             <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in duration-500">
               {/* SECTION: Expense Details */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b">
+                <div className="flex items-center gap-2 border-b">
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Expense Details</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4 md:col-span-2">
-          <Label>Expense Category</Label>
-          <Select 
-            value={category} 
-            onValueChange={(val) => setCategory(val as any)}
-          >
-            <SelectTrigger className="bg-muted/50 border-primary/20 font-medium w-full">
-              <SelectValue placeholder="Select Category" />
-            </SelectTrigger>
-            <SelectContent position="popper">
-              <SelectItem value="PERSONAL_EXPENSE">Personal / Administrative Expenses</SelectItem>
-              <SelectItem value="FLEET_EXPENSE">Fleet-Related Expenses</SelectItem>
-              <SelectItem value="TRANSPORT_FEE">Transport Fee Payment</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+                  <Label>Expense Category</Label>
+                  <Select 
+                    value={category} 
+                    onValueChange={(val) => setCategory(val as any)}
+                  >
+                    <SelectTrigger className="bg-muted/50 border-primary/20 font-medium w-full">
+                      <SelectValue placeholder="Select Category" />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      <SelectItem value="PERSONAL_EXPENSE">Personal / Administrative Expenses</SelectItem>
+                      <SelectItem value="FLEET_EXPENSE">Fleet-Related Expenses</SelectItem>
+                      <SelectItem value="TRANSPORT_FEE">Transport Fee Payment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
         {(category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && (
           <div className="space-y-2 flex flex-col justify-end">
@@ -285,7 +289,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
               onValueChange={(val) => setTripLeg(val as any)}
               required
             >
-              <SelectTrigger className="w-full" size="default">
+              <SelectTrigger className="w-full h-auto py-2">
                 <SelectValue placeholder="Select Trip Leg" />
               </SelectTrigger>
               <SelectContent position="popper">
@@ -668,14 +672,52 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
   <div className="lg:col-span-1">
     <div className="sticky top-6 border rounded-2xl bg-card p-5 space-y-4">
       <div>
-        <h3 className="font-semibold text-lg">Expense Summary</h3>
-        <p className="text-sm text-muted-foreground">Details for the selected expense.</p>
+        <h3 className="font-semibold text-lg">Payment Summary</h3>
+        <p className="text-sm text-muted-foreground">Details for the selected payment.</p>
       </div>
-      <div className="pt-8 pb-4 text-center border-t border-dashed">
-        <AlertCircleIcon className="h-8 w-8 mx-auto text-muted-foreground opacity-30 mb-3" />
-        <p className="text-sm text-muted-foreground font-medium">Expense Information</p>
-        <p className="text-xs text-muted-foreground/70 mt-1">Additional details will be displayed here based on the selected outgoing payment options.</p>
-      </div>
+      
+      {selectedTransport ? (
+        <div className="space-y-3 pt-3 border-t">
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Order Ref</span>
+            <span className="font-medium text-sm">{selectedTransport.order?.reference || "N/A"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Transporter</span>
+            <span className="font-medium text-sm">{selectedTransport.transporter?.name || "N/A"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Truck</span>
+            <span className="font-medium text-sm">{selectedTransport.truck?.plateNumber || selectedTransport.truck?.name || "N/A"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Destination</span>
+            <span className="font-medium text-sm">{selectedTransport.destination || "N/A"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Product</span>
+            <span className="font-medium text-sm">{selectedTransport.productType || "N/A"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Volume Carried</span>
+            <span className="font-medium text-sm">{Number(selectedTransport.litersCarried || 0).toLocaleString()} L</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Rate</span>
+            <span className="font-medium text-sm">₦{Number(selectedTransport.ratePerLiter || 0).toLocaleString()} / L</span>
+          </div>
+          <div className="flex justify-between font-semibold border-t pt-2 mt-2">
+            <span>Primary Transport Cost</span>
+            <span>₦{(Number(selectedTransport.litersCarried || 0) * Number(selectedTransport.ratePerLiter || 0)).toLocaleString()}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="pt-8 pb-4 text-center border-t border-dashed">
+          <AlertCircleIcon className="h-8 w-8 mx-auto text-muted-foreground opacity-30 mb-3" />
+          <p className="text-sm text-muted-foreground font-medium">Payment Information</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">Additional details will be displayed here based on the selected outgoing payment options.</p>
+        </div>
+      )}
     </div>
   </div>
 </div>

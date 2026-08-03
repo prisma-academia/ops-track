@@ -558,9 +558,26 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
             <span className="font-medium text-sm">{new Date(selectedSaleDetails.createdAt).toLocaleDateString()}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Volume</span>
+            <span className="text-sm text-muted-foreground">Volume (Despatched)</span>
             <span className="font-medium text-sm">{Number(selectedSaleDetails.litersDespatched).toLocaleString()} L</span>
           </div>
+          {selectedSaleDetails.litersReceived !== null && (
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Volume (Received)</span>
+              <div className="text-right">
+                <span className="font-medium text-sm">{Number(selectedSaleDetails.litersReceived).toLocaleString()} L</span>
+                {(() => {
+                  const variance = Number(selectedSaleDetails.litersReceived) - Number(selectedSaleDetails.litersDespatched);
+                  if (variance === 0) return null;
+                  return (
+                    <span className={`text-xs ml-2 ${variance > 0 ? "text-emerald-500" : "text-destructive"}`}>
+                      ({variance > 0 ? "+" : ""}{variance.toLocaleString()} L variance)
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-sm text-muted-foreground">Expected Amount</span>
             <span className="font-medium text-sm">₦{Number(selectedSaleDetails.totalExpectedAmount).toLocaleString()}</span>

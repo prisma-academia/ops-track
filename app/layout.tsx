@@ -36,11 +36,11 @@ export default async function RootLayout({
     <html
       lang={locale}
       className={cn(
-              "h-full",
-              "antialiased",
-              publicSans.variable,
-              fontMono.variable
-            , "font-sans", publicSans.variable, fontSerif.variable)}
+        "h-full antialiased font-sans",
+        publicSans.variable,
+        fontMono.variable,
+        fontSerif.variable
+      )}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-stone-50 text-stone-900">

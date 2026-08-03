@@ -24,6 +24,12 @@ export async function GET(request: Request) {
     const useOffset = url.searchParams.has("page");
     const stationId = url.searchParams.get("stationId") || undefined;
     const category = url.searchParams.get("category") || undefined;
+    const paymentMethod = url.searchParams.get("paymentMethod") || undefined;
+    const amountMin = url.searchParams.get("amountMin") ? Number(url.searchParams.get("amountMin")) : undefined;
+    const amountMax = url.searchParams.get("amountMax") ? Number(url.searchParams.get("amountMax")) : undefined;
+    const approvedStatus = url.searchParams.get("approvedStatus") || undefined;
+    const dateStart = url.searchParams.get("dateStart") ? new Date(url.searchParams.get("dateStart") as string) : undefined;
+    const dateEnd = url.searchParams.get("dateEnd") ? new Date(url.searchParams.get("dateEnd") as string) : undefined;
 
     const include = {
       station: {
@@ -59,6 +65,10 @@ export async function GET(request: Request) {
             tenantId: actor.tenantId,
             ...(stationId ? { stationId } : {}),
             ...(category ? { category: category as any } : {}),
+            ...(paymentMethod ? { paymentMethod: paymentMethod as any } : {}),
+            ...(amountMin !== undefined || amountMax !== undefined ? { amount: { gte: amountMin, lte: amountMax } } : {}),
+            ...(approvedStatus === "APPROVED" ? { approvedById: { not: null } } : approvedStatus === "PENDING" ? { approvedById: null } : {}),
+            ...(dateStart || dateEnd ? { createdAt: { gte: dateStart, lte: dateEnd } } : {}),
           },
         }),
         prisma.expense.findMany({
@@ -66,6 +76,10 @@ export async function GET(request: Request) {
             tenantId: actor.tenantId,
             ...(stationId ? { stationId } : {}),
             ...(category ? { category: category as any } : {}),
+            ...(paymentMethod ? { paymentMethod: paymentMethod as any } : {}),
+            ...(amountMin !== undefined || amountMax !== undefined ? { amount: { gte: amountMin, lte: amountMax } } : {}),
+            ...(approvedStatus === "APPROVED" ? { approvedById: { not: null } } : approvedStatus === "PENDING" ? { approvedById: null } : {}),
+            ...(dateStart || dateEnd ? { createdAt: { gte: dateStart, lte: dateEnd } } : {}),
           },
           orderBy: { createdAt: "desc" },
           take,
@@ -82,6 +96,10 @@ export async function GET(request: Request) {
           tenantId: actor.tenantId,
           ...(stationId ? { stationId } : {}),
           ...(category ? { category: category as any } : {}),
+          ...(paymentMethod ? { paymentMethod: paymentMethod as any } : {}),
+          ...(amountMin !== undefined || amountMax !== undefined ? { amount: { gte: amountMin, lte: amountMax } } : {}),
+          ...(approvedStatus === "APPROVED" ? { approvedById: { not: null } } : approvedStatus === "PENDING" ? { approvedById: null } : {}),
+          ...(dateStart || dateEnd ? { createdAt: { gte: dateStart, lte: dateEnd } } : {}),
         },
         orderBy: { createdAt: "desc" },
         take,

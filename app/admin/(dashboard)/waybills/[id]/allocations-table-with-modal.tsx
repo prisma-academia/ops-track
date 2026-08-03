@@ -9,6 +9,7 @@ import { Truck, Clock, MapPin, ExternalLink, AlertCircle, Check, Eye, Package, C
 import { formatHumanReadableDate } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiPatch } from "@/lib/client/api";
@@ -62,13 +63,12 @@ function ReceiveWaybillModal({ allocation, onSuccess }: { allocation: Allocation
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
           <div className="space-y-2">
             <Label>Liters Received *</Label>
-            <Input 
-              type="number" 
+            <FormattedNumberInput 
               required 
               min="0"
               step="0.01"
               value={litersReceived} 
-              onChange={e => setLitersReceived(e.target.value)} 
+              onChange={(e: any) => setLitersReceived(e.target.value)} 
             />
             <p className="text-xs text-muted-foreground">Expected: {Number(allocation.litersToDispense).toLocaleString()} L</p>
           </div>

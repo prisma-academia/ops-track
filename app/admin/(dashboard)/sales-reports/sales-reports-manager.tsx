@@ -8,6 +8,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   Select,
   SelectContent,
@@ -606,11 +607,10 @@ export function SalesReportsManager({
                     </div>
                     <div className="grid gap-2">
                       <Label>Amount</Label>
-                      <Input
-                        type="number"
+                      <FormattedNumberInput
                         placeholder="e.g. 0"
                         value={draftDebtAmount}
-                        onChange={(e) => setDraftDebtAmount(e.target.value)}
+                        onChange={(e: any) => setDraftDebtAmount(e.target.value)}
                         disabled={draftDebtOperator === "ALL"}
                       />
                     </div>

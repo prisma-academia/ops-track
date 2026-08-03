@@ -42,6 +42,11 @@ export async function GET(request: Request) {
     const useOffset = url.searchParams.has("page");
     const stationId = url.searchParams.get("stationId") || undefined;
     const status = url.searchParams.get("status") || undefined;
+    const product = url.searchParams.get("product") || undefined;
+    const loadedMin = url.searchParams.get("loadedMin") ? Number(url.searchParams.get("loadedMin")) : undefined;
+    const loadedMax = url.searchParams.get("loadedMax") ? Number(url.searchParams.get("loadedMax")) : undefined;
+    const dateStart = url.searchParams.get("dateStart") ? new Date(url.searchParams.get("dateStart") as string) : undefined;
+    const dateEnd = url.searchParams.get("dateEnd") ? new Date(url.searchParams.get("dateEnd") as string) : undefined;
 
     const include = {
       station: {
@@ -76,6 +81,11 @@ export async function GET(request: Request) {
             tenantId: actor.tenantId,
             ...(stationId ? { stationId } : {}),
             ...(status ? { status: status as any } : {}),
+            waybill: {
+              ...(product ? { productType: product as any } : {}),
+              ...(loadedMin !== undefined || loadedMax !== undefined ? { litersLoaded: { gte: loadedMin, lte: loadedMax } } : {}),
+              ...(dateStart || dateEnd ? { dispatchedAt: { gte: dateStart, lte: dateEnd } } : {}),
+            }
           },
         }),
         prisma.waybillAllocation.findMany({
@@ -83,6 +93,11 @@ export async function GET(request: Request) {
             tenantId: actor.tenantId,
             ...(stationId ? { stationId } : {}),
             ...(status ? { status: status as any } : {}),
+            waybill: {
+              ...(product ? { productType: product as any } : {}),
+              ...(loadedMin !== undefined || loadedMax !== undefined ? { litersLoaded: { gte: loadedMin, lte: loadedMax } } : {}),
+              ...(dateStart || dateEnd ? { dispatchedAt: { gte: dateStart, lte: dateEnd } } : {}),
+            }
           },
           orderBy: { waybill: { dispatchedAt: "desc" } },
           take,
@@ -100,6 +115,11 @@ export async function GET(request: Request) {
           tenantId: actor.tenantId,
           ...(stationId ? { stationId } : {}),
           ...(status ? { status: status as any } : {}),
+          waybill: {
+            ...(product ? { productType: product as any } : {}),
+            ...(loadedMin !== undefined || loadedMax !== undefined ? { litersLoaded: { gte: loadedMin, lte: loadedMax } } : {}),
+            ...(dateStart || dateEnd ? { dispatchedAt: { gte: dateStart, lte: dateEnd } } : {}),
+          }
         },
         orderBy: { waybill: { dispatchedAt: "desc" } },
         take,

@@ -26,28 +26,59 @@ export async function GET(request: Request) {
     const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_READ.key);
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
+    const salesMin = url.searchParams.get("salesMin") ? Number(url.searchParams.get("salesMin")) : undefined;
+    const salesMax = url.searchParams.get("salesMax") ? Number(url.searchParams.get("salesMax")) : undefined;
+    const stockMin = url.searchParams.get("stockMin") ? Number(url.searchParams.get("stockMin")) : undefined;
+    const stockMax = url.searchParams.get("stockMax") ? Number(url.searchParams.get("stockMax")) : undefined;
+    
+    const hasPostFilters = salesMin !== undefined || salesMax !== undefined || stockMin !== undefined || stockMax !== undefined;
 
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
       
       const include = stationIncludeQuery;
 
-      const [totalCount, rawRows] = await Promise.all([
-        prisma.station.count({
-          where: { tenantId: actor.tenantId },
-        }),
-        prisma.station.findMany({
+      if (hasPostFilters) {
+        // Fetch all, format, post-filter, then paginate
+        const rawRows = await prisma.station.findMany({
           where: { tenantId: actor.tenantId },
           orderBy: { createdAt: "desc" },
-          take,
-          skip,
           include,
-        }),
-      ]);
-      
-      const rows = await formatStationRows(rawRows);
-      
-      return ok(rows, buildOffsetPageMeta(totalCount, page, take));
+        });
+        
+        let rows = await formatStationRows(rawRows);
+        
+        // Post-filtering
+        rows = rows.filter((r) => {
+          const totalSales = r.todaySales.PMS + r.todaySales.AGO + r.todaySales.LPG;
+          if (salesMin !== undefined && totalSales < salesMin) return false;
+          if (salesMax !== undefined && totalSales > salesMax) return false;
+          if (stockMin !== undefined && r.lastClosingStock < stockMin) return false;
+          if (stockMax !== undefined && r.lastClosingStock > stockMax) return false;
+          return true;
+        });
+
+        const totalCount = rows.length;
+        const pagedRows = rows.slice(skip, skip + take);
+        
+        return ok(pagedRows, buildOffsetPageMeta(totalCount, page, take));
+      } else {
+        const [totalCount, rawRows] = await Promise.all([
+          prisma.station.count({
+            where: { tenantId: actor.tenantId },
+          }),
+          prisma.station.findMany({
+            where: { tenantId: actor.tenantId },
+            orderBy: { createdAt: "desc" },
+            take,
+            skip,
+            include,
+          }),
+        ]);
+        
+        const rows = await formatStationRows(rawRows);
+        return ok(rows, buildOffsetPageMeta(totalCount, page, take));
+      }
     } else {
       const { cursor, take } = parsePagination(url.searchParams);
   

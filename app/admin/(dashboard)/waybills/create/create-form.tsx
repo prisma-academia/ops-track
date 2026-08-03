@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NumberInput } from "@/components/ui/number-input";
+import { FormattedNumberInput as NumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Save, ChevronsUpDown, Check, Plus, Trash2, Calculator, FileText, Sparkles } from "lucide-react";
@@ -372,7 +372,7 @@ export function CreateWaybillForm({
                           id="litersLoaded"
                           placeholder="e.g. 45000"
                           value={field.value as string | number}
-                          onChange={field.onChange}
+                          onChange={(e: any) => field.onChange(e.target.value)}
                           className={formState.errors.litersLoaded ? "border-destructive" : ""}
                         />
                       )}
@@ -536,7 +536,7 @@ export function CreateWaybillForm({
                               placeholder="Liters"
                               className="h-10"
                               value={field.value as string | number}
-                              onChange={field.onChange}
+                              onChange={(e: any) => field.onChange(e.target.value)}
                             />
                           )}
                         />
@@ -557,7 +557,7 @@ export function CreateWaybillForm({
                               placeholder="Cost"
                               className="h-10"
                               value={field.value as string | number}
-                              onChange={field.onChange}
+                              onChange={(e: any) => field.onChange(e.target.value)}
                             />
                           )}
                         />
@@ -578,7 +578,7 @@ export function CreateWaybillForm({
                               placeholder="Trans. cost"
                               className="h-10"
                               value={field.value as string | number}
-                              onChange={field.onChange}
+                              onChange={(e: any) => field.onChange(e.target.value)}
                             />
                           )}
                         />

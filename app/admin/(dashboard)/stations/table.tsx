@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
 import Image from 'next/image';
 import { formatDistanceToNow } from "date-fns";
 import { usePaginatedQuery } from "@/hooks/use-paginated-query";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
+import { Button } from "@/components/ui/button";
 
 export type StationRow = {
   id: string;
@@ -104,13 +108,80 @@ const columns: ColumnDef<StationRow>[] = [
 ];
 
 export function StationsTable({ initialData, initialMeta }: { initialData: StationRow[], initialMeta: any }) {
+  const [salesMin, setSalesMin] = useState<string>("");
+  const [salesMax, setSalesMax] = useState<string>("");
+  const [stockMin, setStockMin] = useState<string>("");
+  const [stockMax, setStockMax] = useState<string>("");
+
+  const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({});
+
   const { data, meta, isLoading, setPage, setPageSize, setInitialData } = usePaginatedQuery<StationRow>({
     baseUrl: "/api/tenant/stations",
+    additionalParams: appliedFilters,
   });
 
   useEffect(() => {
     setInitialData(initialData, initialMeta);
   }, [initialData, initialMeta, setInitialData]);
+
+  const handleApplyFilters = () => {
+    const filters: Record<string, string> = {};
+    if (salesMin) filters.salesMin = salesMin;
+    if (salesMax) filters.salesMax = salesMax;
+    if (stockMin) filters.stockMin = stockMin;
+    if (stockMax) filters.stockMax = stockMax;
+    
+    setAppliedFilters(filters);
+  };
+
+  const handleClearFilters = () => {
+    setSalesMin("");
+    setSalesMax("");
+    setStockMin("");
+    setStockMax("");
+    setAppliedFilters({});
+  };
+
+  const filterNode = (
+    <div className="space-y-4 px-4">
+      <div className="space-y-2">
+        <Label>Today Sales Range (₦)</Label>
+        <div className="flex items-center gap-2">
+          <NumberInput 
+            placeholder="Min" 
+            value={salesMin} 
+            onChange={(v) => setSalesMin(v.toString())} 
+          />
+          <span>-</span>
+          <NumberInput 
+            placeholder="Max" 
+            value={salesMax} 
+            onChange={(v) => setSalesMax(v.toString())} 
+          />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Last Closing Stock (L)</Label>
+        <div className="flex items-center gap-2">
+          <NumberInput 
+            placeholder="Min" 
+            value={stockMin} 
+            onChange={(v) => setStockMin(v.toString())} 
+          />
+          <span>-</span>
+          <NumberInput 
+            placeholder="Max" 
+            value={stockMax} 
+            onChange={(v) => setStockMax(v.toString())} 
+          />
+        </div>
+      </div>
+      <div className="flex items-center gap-2 pt-2">
+        <Button onClick={handleApplyFilters} className="w-full">Apply Filters</Button>
+        <Button variant="outline" onClick={handleClearFilters} className="w-full">Clear</Button>
+      </div>
+    </div>
+  );
 
   return (
     <DataTable
@@ -125,6 +196,7 @@ export function StationsTable({ initialData, initialMeta }: { initialData: Stati
       rowHref={(s) => `/admin/stations/${s.id}`}
       filterColumnId="name"
       searchPlaceholder="Search by name…"
+      filterNode={filterNode}
     />
   );
 }

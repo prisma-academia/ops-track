@@ -9,6 +9,7 @@ import { apiPost, apiPatch } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -69,9 +70,20 @@ export function WaybillsManager({
 }) {
   const router = useRouter();
   
+  const [fStationId, setFStationId] = useState("");
+  const [fStatus, setFStatus] = useState("");
+  const [fProduct, setFProduct] = useState("");
+  const [fLoadedMin, setFLoadedMin] = useState("");
+  const [fLoadedMax, setFLoadedMax] = useState("");
+  const [fDateStart, setFDateStart] = useState("");
+  const [fDateEnd, setFDateEnd] = useState("");
+
+  const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({});
+
   const query = usePaginatedQuery<WaybillRow>({
     baseUrl: "/api/tenant/waybills/list",
     syncWithUrl: true,
+    additionalParams: appliedFilters,
   });
 
   useEffect(() => {
@@ -106,6 +118,121 @@ export function WaybillsManager({
     router.refresh();
   };
 
+  const handleApplyFilters = () => {
+    const filters: Record<string, string> = {};
+    if (fStationId) filters.stationId = fStationId;
+    if (fStatus) filters.status = fStatus;
+    if (fProduct) filters.product = fProduct;
+    if (fLoadedMin) filters.loadedMin = fLoadedMin;
+    if (fLoadedMax) filters.loadedMax = fLoadedMax;
+    if (fDateStart) filters.dateStart = fDateStart;
+    if (fDateEnd) filters.dateEnd = fDateEnd;
+    
+    setAppliedFilters(filters);
+  };
+
+  const handleClearFilters = () => {
+    setFStationId("");
+    setFStatus("");
+    setFProduct("");
+    setFLoadedMin("");
+    setFLoadedMax("");
+    setFDateStart("");
+    setFDateEnd("");
+    setAppliedFilters({});
+  };
+
+  const filterNode = (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Station</Label>
+        <Popover open={openStationSelect} onOpenChange={setOpenStationSelect}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-full justify-between font-normal text-foreground">
+              <span className="truncate">{stations.find(s => s.id === fStationId)?.name || "All Stations"}</span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search station..." />
+              <CommandList className="max-h-[200px] overflow-y-auto">
+                <CommandEmpty>No station found.</CommandEmpty>
+                <CommandGroup>
+                  {stations.map((s) => (
+                    <CommandItem
+                      key={s.id}
+                      value={s.name.toLowerCase()}
+                      onSelect={() => {
+                        setFStationId(s.id === fStationId ? "" : s.id);
+                        setOpenStationSelect(false);
+                      }}
+                    >
+                      {s.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Status</Label>
+        <Select value={fStatus} onValueChange={setFStatus}>
+          <SelectTrigger>
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="PENDING">Pending</SelectItem>
+            <SelectItem value="DISPATCHED">Dispatched</SelectItem>
+            <SelectItem value="DELIVERED">Delivered</SelectItem>
+            <SelectItem value="COMPLETED">Completed</SelectItem>
+            <SelectItem value="CANCELLED">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Product</Label>
+        <Select value={fProduct} onValueChange={setFProduct}>
+          <SelectTrigger>
+            <SelectValue placeholder="All Products" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="PMS">PMS (Petrol)</SelectItem>
+            <SelectItem value="AGO">AGO (Diesel)</SelectItem>
+            <SelectItem value="DPK">DPK (Kerosene)</SelectItem>
+            <SelectItem value="LPG">LPG (Gas)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Loaded Volume Range (L)</Label>
+        <div className="flex items-center gap-2">
+          <NumberInput placeholder="Min" value={fLoadedMin} onChange={v => setFLoadedMin(v.toString())} />
+          <span>-</span>
+          <NumberInput placeholder="Max" value={fLoadedMax} onChange={v => setFLoadedMax(v.toString())} />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Dispatched Date Range</Label>
+        <div className="flex flex-col gap-2">
+          <Input type="date" placeholder="Start" value={fDateStart} onChange={e => setFDateStart(e.target.value)} />
+          <Input type="date" placeholder="End" value={fDateEnd} onChange={e => setFDateEnd(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 pt-2">
+        <Button onClick={handleApplyFilters} className="w-full">Apply Filters</Button>
+        <Button variant="outline" onClick={handleClearFilters} className="w-full">Clear</Button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <DataTableToolbar
@@ -139,6 +266,7 @@ export function WaybillsManager({
           onPageChange: query.setPage,
           onPageSizeChange: query.setPageSize,
         }}
+        filterNode={filterNode}
       />
 
       {/* ==========================================

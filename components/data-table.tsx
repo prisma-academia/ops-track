@@ -5,6 +5,13 @@ import {
   Card,
   CardContent,
 } from "@/components/ui/card";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import {
   Pagination,
@@ -46,6 +53,7 @@ import {
   ChevronRightIcon,
   ChevronUpIcon,
   Search,
+  Filter,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
@@ -157,7 +165,28 @@ export function DataTable<TData, TValue>({
             )}
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-            {filterNode}
+            {filterNode && (
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Filter size={16} />
+                    Filters
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right">
+                  <SheetHeader>
+                    <SheetTitle>Filters</SheetTitle>
+                  </SheetHeader>
+                  <div className="py-4 space-y-4">
+                    {filterNode && (
+                      <div className="space-y-2">
+                        {filterNode}
+                      </div>
+                    )}
+                  </div>
+                </SheetContent>
+              </Sheet>
+            )}
             {effectiveSearchKey && (
               <InputGroup className="max-w-xs">
                 <InputGroupInput

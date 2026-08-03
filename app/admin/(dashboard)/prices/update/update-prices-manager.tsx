@@ -26,7 +26,7 @@ import {
   InputGroup,
   InputGroupAddon,
 } from "@/components/ui/input-group"
-import { NumberInput } from "@/components/ui/number-input"
+import { FormattedNumberInput as NumberInput } from "@/components/ui/formatted-number-input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -501,7 +501,7 @@ export function UpdatePricesManager({
                           : "0.00"
                       }
                       value={editingPrices[ft]}
-                      onChange={(val) => updatePrice(ft, val.toString())}
+                      onChange={(e: any) => updatePrice(ft, e.target.value)}
                     />
                   </InputGroup>
                 </div>

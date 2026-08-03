@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn, formatHumanReadableDate, formatShortCurrency } from "@/lib/utils";
 import { z } from "zod";
@@ -17,7 +17,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { FormField, TextInput } from "@/components/form-field";
 import { Input } from "@/components/ui/input";
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -1370,7 +1370,18 @@ export function StationDetailsManager({
                   </FormField>
 
                   <FormField label="Liters Capacity" htmlFor="t_cap" error={tankForm.formState.errors.capacity?.message}>
-                    <TextInput id="t_cap" type="number" placeholder="e.g. 45000" {...tankForm.register("capacity")} />
+                    <Controller
+                      name="capacity"
+                      control={tankForm.control}
+                      render={({ field }) => (
+                        <FormattedNumberInput
+                          id="t_cap"
+                          placeholder="e.g. 45000"
+                          value={field.value as string | number}
+                          onChange={(e: any) => field.onChange(Number(e.target.value))}
+                        />
+                      )}
+                    />
                   </FormField>
 
                   {apiError && <p className="text-xs text-red-600">{apiError}</p>}

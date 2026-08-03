@@ -9,11 +9,35 @@ export async function GET(request: Request) {
     const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_READ.key);
     const url = new URL(request.url);
     const { page, take, skip } = parseOffsetPagination(url.searchParams);
+    
+    const stationId = url.searchParams.get("stationId") || undefined;
+    const status = url.searchParams.get("status") || undefined;
+    const product = url.searchParams.get("product") || undefined;
+    const loadedMin = url.searchParams.get("loadedMin") ? Number(url.searchParams.get("loadedMin")) : undefined;
+    const loadedMax = url.searchParams.get("loadedMax") ? Number(url.searchParams.get("loadedMax")) : undefined;
+    const dateStart = url.searchParams.get("dateStart") ? new Date(url.searchParams.get("dateStart") as string) : undefined;
+    const dateEnd = url.searchParams.get("dateEnd") ? new Date(url.searchParams.get("dateEnd") as string) : undefined;
+
+    const whereClause: any = {
+      tenantId: actor.tenantId,
+      ...(product ? { productType: product as any } : {}),
+      ...(loadedMin !== undefined || loadedMax !== undefined ? { litersLoaded: { gte: loadedMin, lte: loadedMax } } : {}),
+      ...(dateStart || dateEnd ? { dispatchedAt: { gte: dateStart, lte: dateEnd } } : {}),
+    };
+
+    if (stationId || status) {
+      whereClause.allocations = {
+        some: {
+          ...(stationId ? { stationId } : {}),
+          ...(status ? { status: status as any } : {}),
+        }
+      };
+    }
 
     const [totalCount, waybills] = await Promise.all([
-      prisma.waybill.count({ where: { tenantId: actor.tenantId } }),
+      prisma.waybill.count({ where: whereClause }),
       prisma.waybill.findMany({
-        where: { tenantId: actor.tenantId },
+        where: whereClause,
         orderBy: { dispatchedAt: "desc" },
         take,
         skip,

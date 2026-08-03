@@ -9,9 +9,11 @@ import { FormField, TextInput } from "@/components/form-field";
 export function RoleEditor({
   permissions,
   scope,
+  moduleContext,
 }: {
   permissions: readonly string[];
   scope: "platform" | "tenant";
+  moduleContext?: "STATION" | "FLEET";
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -35,7 +37,7 @@ export function RoleEditor({
     setPending(true);
     const res = await apiPost<{ role: { id: string } }>(
       scope === "platform" ? "/api/platform/role-templates" : "/api/tenant/role-templates",
-      { name: name.trim(), permissions: Array.from(selected) }
+      { name: name.trim(), permissions: Array.from(selected), module: moduleContext }
     );
     setPending(false);
     if (res.error) {

@@ -3,7 +3,7 @@ import { PrismaClient } from "../lib/generated/prisma/client";
 import argon2 from "argon2";
 import "dotenv/config";
 
-import { ALL_PERMISSIONS, ALL_PLATFORM_PERMISSION_KEYS } from "../lib/auth/permissions";
+import { ALL_PERMISSIONS, ALL_PLATFORM_PERMISSION_KEYS, ALL_TENANT_PERMISSION_KEYS, TENANT_BUILTIN_ROLES } from "../lib/auth/permissions";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -75,6 +75,32 @@ async function main() {
     },
   });
 
+  // Seed built-in roles for this tenant
+  for (const r of TENANT_BUILTIN_ROLES) {
+    await prisma.roleTemplate.upsert({
+      where: {
+        scope_tenantId_module_name: {
+          scope: "TENANT",
+          tenantId: tenant.id,
+          module: r.module,
+          name: r.name,
+        },
+      },
+      update: {
+        permissions: r.permissions,
+        module: r.module,
+      },
+      create: {
+        scope: "TENANT",
+        tenantId: tenant.id,
+        name: r.name,
+        permissions: r.permissions,
+        isSystem: true,
+        module: r.module,
+      },
+    });
+  }
+
   const tenantPasswordHash = await argon2.hash("password123", {
     type: argon2.argon2id,
     memoryCost: 2 ** 16,
@@ -102,6 +128,9 @@ async function main() {
       mustChangePassword: false,
       isOwner: true,
       status: "ACTIVE",
+      activeModules: ["STATION", "FLEET"],
+      stationPermissions: ALL_TENANT_PERMISSION_KEYS,
+      fleetPermissions: ALL_TENANT_PERMISSION_KEYS,
     },
   });
 

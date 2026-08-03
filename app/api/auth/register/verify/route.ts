@@ -96,7 +96,8 @@ export async function POST(request: Request) {
           passwordHash,
           mustChangePassword: false,
           isOwner: true,
-          permissions: [...ALL_TENANT_PERMISSION_KEYS],
+          stationPermissions: [...ALL_TENANT_PERMISSION_KEYS],
+          fleetPermissions: [...ALL_TENANT_PERMISSION_KEYS],
         },
       });
       await tx.tenant.update({ where: { id: tenant.id }, data: { ownerUserId: owner.id } });

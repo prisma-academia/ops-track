@@ -74,7 +74,7 @@ export async function requireTenantPage(
     userId: user.id,
     tenantId: user.tenantId,
     isOwner: user.isOwner,
-    permissions: new Set(user.permissions),
+    permissions: new Set([...user.stationPermissions, ...user.fleetPermissions]),
   };
   if (permission && !hasPermission(actor, permission)) {
     redirect("/admin/dashboard?error=unauthorized");

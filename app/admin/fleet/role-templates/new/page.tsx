@@ -9,7 +9,7 @@ export default async function NewTenantRolePage() {
     <div>
       <PageHeader title="New role" />
       <Card>
-        <RoleEditor permissions={ALL_TENANT_PERMISSION_KEYS} scope="tenant" moduleContext="STATION" />
+        <RoleEditor permissions={ALL_TENANT_PERMISSION_KEYS} scope="tenant" moduleContext="FLEET" />
       </Card>
     </div>
   );

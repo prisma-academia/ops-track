@@ -30,10 +30,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
     const allowed = new Set<string>(ALL_TENANT_PERMISSION_KEYS);
     const perms = role.permissions.filter((p) => allowed.has(p));
-    const before = target.permissions;
+    
+    const isStation = role.module === "STATION";
+    const before = isStation ? target.stationPermissions : target.fleetPermissions;
+    
     await prisma.tenantUser.update({
       where: { id },
-      data: { permissions: perms },
+      data: isStation ? { stationPermissions: perms } : { fleetPermissions: perms },
     });
     await audit({
       actorType: "TENANT_USER",
@@ -42,6 +45,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       tenantId: actor.tenantId,
       targetType: "TenantUser",
       targetId: id,
+      module: role.module,
       before: { permissions: before } as object,
       after: { permissions: perms, role: role.name } as object,
       ip: meta.ip,

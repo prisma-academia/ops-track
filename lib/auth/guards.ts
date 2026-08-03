@@ -70,7 +70,7 @@ export async function requireTenantActor(permission?: PermissionKey): Promise<Te
     userId: user.id,
     tenantId: user.tenantId,
     isOwner: user.isOwner,
-    permissions: new Set(user.permissions),
+    permissions: new Set([...user.stationPermissions, ...user.fleetPermissions]),
   };
   if (permission && !hasPermission(actor, permission)) {
     throw new AuthError(403, "Forbidden.");

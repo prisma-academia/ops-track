@@ -7,7 +7,7 @@ import { RolesTable } from "@/app/(platform)/(dashboard)/role-templates/table";
 export default async function TenantRolesPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_ROLES_READ.key);
   const roles = await prisma.roleTemplate.findMany({
-    where: { scope: "TENANT", tenantId: actor.tenantId, module: "STATION" },
+    where: { scope: "TENANT", tenantId: actor.tenantId, module: "FLEET" },
     orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     select: { id: true, name: true, isSystem: true, permissions: true, createdAt: true },
   });
@@ -18,7 +18,7 @@ export default async function TenantRolesPage() {
   }));
   return (
     <div>
-      <DataTableToolbar title="Station Role Templates" createHref="/admin/role-templates/new" createLabel="New role" />
+      <DataTableToolbar title="Fleet Role Templates" createHref="/admin/fleet/role-templates/new" createLabel="New role" />
       <RolesTable data={rows} />
     </div>
   );

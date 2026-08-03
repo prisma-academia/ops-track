@@ -7,7 +7,10 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 
-const Body = z.object({ permissions: z.array(z.string()) });
+const Body = z.object({ 
+  permissions: z.array(z.string()),
+  module: z.enum(["STATION", "FLEET"])
+});
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -26,10 +29,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
     const allowed = new Set<string>(ALL_TENANT_PERMISSION_KEYS);
     const cleaned = body.permissions.filter((p) => allowed.has(p));
-    const before = target.permissions;
+    
+    const isStation = body.module === "STATION";
+    const before = isStation ? target.stationPermissions : target.fleetPermissions;
+    
     await prisma.tenantUser.update({
       where: { id },
-      data: { permissions: cleaned },
+      data: isStation ? { stationPermissions: cleaned } : { fleetPermissions: cleaned },
     });
     await audit({
       actorType: "TENANT_USER",
@@ -38,6 +44,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       tenantId: actor.tenantId,
       targetType: "TenantUser",
       targetId: id,
+      module: body.module,
       before: { permissions: before } as object,
       after: { permissions: cleaned } as object,
       ip: meta.ip,

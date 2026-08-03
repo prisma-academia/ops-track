@@ -9,16 +9,24 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 
 const CreateBody = z.object({
   name: z.string().min(1).max(80),
+  module: z.enum(["STATION", "FLEET"]),
   permissions: z.array(z.string()).min(0),
 });
 
-export async function GET() {
-  try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_ROLES_READ.key);
-    const rows = await prisma.roleTemplate.findMany({
-      where: { scope: "TENANT", tenantId: actor.tenantId },
-      orderBy: [{ isSystem: "desc" }, { name: "asc" }],
-    });
+  export async function GET(request: Request) {
+    try {
+      const actor = await requireTenantActor(PERMISSIONS.TENANT_ROLES_READ.key);
+      const url = new URL(request.url);
+      const moduleFilter = url.searchParams.get("module") as "STATION" | "FLEET" | null;
+  
+      const rows = await prisma.roleTemplate.findMany({
+        where: { 
+          scope: "TENANT", 
+          tenantId: actor.tenantId,
+          ...(moduleFilter ? { module: moduleFilter } : {})
+        },
+        orderBy: [{ isSystem: "desc" }, { name: "asc" }],
+      });
     return ok(rows);
   } catch (e) {
     return handleError(e);
@@ -42,6 +50,7 @@ export async function POST(request: Request) {
         scope: "TENANT",
         tenantId: actor.tenantId,
         name: body.name,
+        module: body.module,
         permissions: cleaned,
         isSystem: false,
       },
@@ -53,6 +62,7 @@ export async function POST(request: Request) {
       tenantId: actor.tenantId,
       targetType: "RoleTemplate",
       targetId: created.id,
+      module: body.module,
       after: { name: created.name, permissions: cleaned } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,

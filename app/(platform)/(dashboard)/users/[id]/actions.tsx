@@ -27,9 +27,11 @@ export function UserDetailActions({
   applyRoleEndpoint,
   permissionsEndpoint,
   resetPasswordEndpoint,
+  moduleContext,
 }: {
   userId: string;
   scope: "platform" | "tenant";
+  moduleContext?: "STATION" | "FLEET";
   permissions: string[];
   allPermissions: readonly string[];
   roles: { id: string; name: string; permissions: string[] }[];
@@ -74,6 +76,7 @@ export function UserDetailActions({
     setInfo(null);
     const res = await apiPatch<{ permissions: string[] }>(permissionsEndpoint, {
       permissions: Array.from(selected),
+      module: moduleContext,
     });
     setPending(null);
     if (res.error) {

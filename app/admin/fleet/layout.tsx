@@ -30,6 +30,10 @@ const FLEET_NAV = [
   },
   { href: "/admin/fleet/customers", key: "clients", icon: "Users", permission: PERMISSIONS.TENANT_CUSTOMERS_READ.key },
   { href: "/admin/fleet/bank-accounts", key: "bankAccounts", icon: "CreditCard", permission: PERMISSIONS.TENANT_SETTINGS_READ.key },
+  { href: "/admin/fleet/users", key: "users", icon: "Users", permission: PERMISSIONS.TENANT_USERS_READ.key },
+  { href: "/admin/fleet/role-templates", key: "roles", icon: "Shield", permission: PERMISSIONS.TENANT_ROLES_READ.key },
+  { href: "/admin/fleet/activity", key: "activity", icon: "Activity", permission: PERMISSIONS.TENANT_ACTIVITY_READ.key },
+  { href: "/admin/fleet/settings", key: "settings", icon: "Settings", permission: PERMISSIONS.TENANT_SETTINGS_READ.key },
 ];
 
 export default async function FleetDashboardLayout({ children }: { children: React.ReactNode }) {
@@ -75,6 +79,10 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
     if (n.key === 'transactions') title = 'Ledger';
     if (n.key === 'clients') title = 'Customers';
     if (n.key === 'bankAccounts') title = 'Bank Accounts';
+    if (n.key === 'users') title = 'Users';
+    if (n.key === 'roles') title = 'Role Templates';
+    if (n.key === 'activity') title = 'Activity Logs';
+    if (n.key === 'settings') title = 'Settings';
 
     const children = n.children?.map(c => {
       let childTitle = c.key;

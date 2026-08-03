@@ -11,6 +11,7 @@ export async function GET(request: Request) {
     const action = url.searchParams.get("action");
     const date = url.searchParams.get("date");
     const name = url.searchParams.get("name");
+    const moduleFilter = url.searchParams.get("module") as "STATION" | "FLEET" | null;
     const useOffset = url.searchParams.has("page");
     
     let actorIdsToFilter: string[] | undefined;
@@ -31,6 +32,7 @@ export async function GET(request: Request) {
 
     const whereClause: any = {
       tenantId: actor.tenantId,
+      ...(moduleFilter ? { module: moduleFilter } : {})
     };
     if (action) {
       whereClause.action = { contains: action, mode: "insensitive" };

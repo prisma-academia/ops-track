@@ -11,9 +11,9 @@ export default async function TenantUsersPage() {
   const skip = 0;
 
   const [totalCount, users] = await Promise.all([
-    prisma.tenantUser.count({ where: { tenantId: actor.tenantId, activeModules: { has: "STATION" } } }),
+    prisma.tenantUser.count({ where: { tenantId: actor.tenantId, activeModules: { has: "FLEET" } } }),
     prisma.tenantUser.findMany({
-      where: { tenantId: actor.tenantId, activeModules: { has: "STATION" } },
+      where: { tenantId: actor.tenantId, activeModules: { has: "FLEET" } },
       orderBy: { createdAt: "desc" },
       take,
       skip,
@@ -46,8 +46,8 @@ export default async function TenantUsersPage() {
 
   return (
     <div>
-      <DataTableToolbar title="Station Users" createHref="/admin/users/new" createLabel="Invite user" />
-      <TenantUsersTable initialData={rows} initialMeta={initialMeta} moduleContext="STATION" />
+      <DataTableToolbar title="Fleet Users" createHref="/admin/fleet/users/new" createLabel="Invite user" />
+      <TenantUsersTable initialData={rows} initialMeta={initialMeta} moduleContext="FLEET" />
     </div>
   );
 }

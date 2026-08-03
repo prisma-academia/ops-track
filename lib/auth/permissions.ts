@@ -67,11 +67,13 @@ export const ALL_TENANT_PERMISSION_KEYS: PermissionKey[] = ALL_PERMISSIONS
 
 // Built-in tenant role templates seeded per-tenant on tenant creation.
 export const TENANT_BUILTIN_ROLES = [
-  { name: "Owner", permissions: ALL_TENANT_PERMISSION_KEYS, isSystem: true },
+  { name: "Owner", permissions: ALL_TENANT_PERMISSION_KEYS, isSystem: true, module: "STATION" },
+  { name: "Owner", permissions: ALL_TENANT_PERMISSION_KEYS, isSystem: true, module: "FLEET" },
   {
     name: "Admin",
     permissions: ALL_TENANT_PERMISSION_KEYS.filter((k) => !k.endsWith("settings:write")) as PermissionKey[],
     isSystem: true,
+    module: "STATION",
   },
   {
     name: "Regional Manager",
@@ -108,6 +110,7 @@ export const TENANT_BUILTIN_ROLES = [
       PERMISSIONS.MOBILE_TENANT_WAYBILLS_WRITE.key,
     ] as PermissionKey[],
     isSystem: true,
+    module: "STATION",
   },
   {
     name: "Station Manager",
@@ -140,6 +143,7 @@ export const TENANT_BUILTIN_ROLES = [
       PERMISSIONS.MOBILE_TENANT_WAYBILLS_WRITE.key,
     ] as PermissionKey[],
     isSystem: true,
+    module: "STATION",
   },
   {
     name: "Cashier",
@@ -156,6 +160,7 @@ export const TENANT_BUILTIN_ROLES = [
       PERMISSIONS.MOBILE_TENANT_EXPENSES_WRITE.key,
     ] as PermissionKey[],
     isSystem: true,
+    module: "STATION",
   },
   {
     name: "Attendant",
@@ -171,6 +176,7 @@ export const TENANT_BUILTIN_ROLES = [
       PERMISSIONS.MOBILE_TENANT_SHIFTS_WRITE.key,
     ] as PermissionKey[],
     isSystem: true,
+    module: "STATION",
   },
   {
     name: "Fleet Manager",
@@ -179,6 +185,7 @@ export const TENANT_BUILTIN_ROLES = [
       PERMISSIONS.TENANT_FLEET_WRITE.key,
     ] as PermissionKey[],
     isSystem: true,
+    module: "FLEET",
   },
 ] as const;
 

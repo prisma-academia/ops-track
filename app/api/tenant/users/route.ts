@@ -19,6 +19,7 @@ const InviteBody = z.object({
   otherName: z.string().max(100).optional(),
   phone: z.string().max(40).optional(),
   roleTemplateId: z.string().min(1),
+  activeModules: z.array(z.enum(["STATION", "FLEET"])).min(1),
   permissions: z.array(z.string()).optional(),
 });
 
@@ -27,13 +28,19 @@ export async function GET(request: Request) {
     const actor = await requireTenantActor(PERMISSIONS.TENANT_USERS_READ.key);
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
+    const moduleFilter = url.searchParams.get("module") as "STATION" | "FLEET" | null;
+
+    const whereClause = { 
+      tenantId: actor.tenantId,
+      ...(moduleFilter ? { activeModules: { has: moduleFilter } } : {})
+    };
     
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
       const [totalCount, rows] = await Promise.all([
-        prisma.tenantUser.count({ where: { tenantId: actor.tenantId } }),
+        prisma.tenantUser.count({ where: whereClause }),
         prisma.tenantUser.findMany({
-          where: { tenantId: actor.tenantId },
+          where: whereClause,
           orderBy: { createdAt: "desc" },
           take,
           skip,
@@ -43,7 +50,7 @@ export async function GET(request: Request) {
     } else {
       const { cursor, take } = parsePagination(url.searchParams);
       const rows = await prisma.tenantUser.findMany({
-        where: { tenantId: actor.tenantId },
+        where: whereClause,
         orderBy: { createdAt: "desc" },
         take,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
@@ -90,7 +97,8 @@ export async function POST(request: Request) {
         phone: body.phone ?? null,
         passwordHash,
         mustChangePassword: true,
-        permissions: perms,
+        activeModules: body.activeModules,
+        ...(role.module === "STATION" ? { stationPermissions: perms } : { fleetPermissions: perms }),
       },
     });
     await recordPassword("TENANT", user.id, passwordHash);
@@ -101,6 +109,7 @@ export async function POST(request: Request) {
       tenantId: actor.tenantId,
       targetType: "TenantUser",
       targetId: user.id,
+      module: role.module,
       after: { email: user.email, role: role.name, permissions: perms } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,

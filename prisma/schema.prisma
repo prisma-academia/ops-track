@@ -7,6 +7,11 @@ datasource db {
   provider = "postgresql"
 }
 
+enum AppModule {
+  STATION
+  FLEET
+}
+
 enum TenantStatus {
   ACTIVE
   SUSPENDED
@@ -139,9 +144,11 @@ model TenantUser {
   lastName            String?
   otherName           String?
   phone               String?
-  isOwner             Boolean    @default(false)
-  permissions         String[]   @default([])
-  createdAt           DateTime   @default(now())
+  isOwner             Boolean      @default(false)
+  activeModules       AppModule[]  @default([STATION, FLEET])
+  stationPermissions  String[]     @default([])
+  fleetPermissions    String[]     @default([])
+  createdAt           DateTime     @default(now())
   lastLoginAt         DateTime?
   failedLoginAttempts Int        @default(0)
   lockedUntil         DateTime?
@@ -224,12 +231,13 @@ model RoleTemplate {
   tenant      Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name        String
   description String?
+  module      AppModule @default(STATION)
   permissions String[]
   isSystem    Boolean   @default(false)
   createdAt   DateTime  @default(now())
 
-  @@unique([scope, tenantId, name])
-  @@index([scope, tenantId])
+  @@unique([scope, tenantId, module, name])
+  @@index([scope, tenantId, module])
 }
 
 model Permission {
@@ -244,6 +252,7 @@ model ActivityLog {
   tenant     Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   actorType  ActorType
   actorId    String?
+  module     AppModule @default(STATION)
   action     String
   targetType String?
   targetId   String?

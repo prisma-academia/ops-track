@@ -54,7 +54,7 @@ export function TenantUsersTable({ initialData, initialMeta, moduleContext }: { 
         onPageChange: setPage,
         onPageSizeChange: setPageSize,
       }}
-      rowHref={(u) => `/admin/users/${u.id}`}
+      rowHref={(u) => `/admin/fleet/users/${u.id}`}
       filterColumnId="email"
       searchPlaceholder="Search by email…"
     />

@@ -17,13 +17,13 @@ export default async function TenantUserDetailPage({
   const user = await prisma.tenantUser.findUnique({ where: { id } });
   if (!user || user.tenantId !== actor.tenantId) notFound();
   const roles = await prisma.roleTemplate.findMany({
-    where: { scope: "TENANT", tenantId: actor.tenantId, module: "STATION" },
+    where: { scope: "TENANT", tenantId: actor.tenantId, module: "FLEET" },
     orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     select: { id: true, name: true, permissions: true },
   });
   return (
     <div className="space-y-6">
-      <PageHeader title={`${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email} backHref="/admin/users" />
+      <PageHeader title={`${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email} backHref="/admin/fleet/users" />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* User Profile - Left Column */}
         <div className="lg:col-span-1 space-y-6">
@@ -93,8 +93,8 @@ export default async function TenantUserDetailPage({
           <UserDetailActions
             userId={user.id}
             scope="tenant"
-            moduleContext="STATION"
-            permissions={user.stationPermissions}
+            moduleContext="FLEET"
+            permissions={user.fleetPermissions}
             allPermissions={ALL_TENANT_PERMISSION_KEYS}
             roles={roles}
             applyRoleEndpoint={`/api/tenant/users/${user.id}/apply-role`}

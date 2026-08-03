@@ -43,6 +43,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       tenantId: actor.tenantId,
       targetType: "RoleTemplate",
       targetId: id,
+      module: updated.module,
       before: { name: existing.name, permissions: existing.permissions } as object,
       after: { name: updated.name, permissions: updated.permissions } as object,
       ip: meta.ip,

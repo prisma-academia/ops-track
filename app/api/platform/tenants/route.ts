@@ -105,6 +105,7 @@ export async function POST(request: Request) {
             name: r.name,
             permissions: [...r.permissions],
             isSystem: true,
+            module: r.module,
           },
         });
       }
@@ -119,7 +120,8 @@ export async function POST(request: Request) {
           passwordHash,
           mustChangePassword: true,
           isOwner: true,
-          permissions: [...ALL_TENANT_PERMISSION_KEYS],
+          stationPermissions: [...ALL_TENANT_PERMISSION_KEYS],
+          fleetPermissions: [...ALL_TENANT_PERMISSION_KEYS],
         },
       });
       await tx.tenant.update({ where: { id: tenant.id }, data: { ownerUserId: owner.id } });

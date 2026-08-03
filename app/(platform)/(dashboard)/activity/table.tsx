@@ -75,11 +75,13 @@ const columns: ColumnDef<ActivityRow>[] = [
 export function ActivityTable({ 
   initialData, 
   initialMeta, 
-  availableUsers = [] 
+  availableUsers = [],
+  moduleContext
 }: { 
   initialData: ActivityRow[];
   initialMeta: any;
   availableUsers?: { id: string; name: string }[];
+  moduleContext?: "STATION" | "FLEET";
 }) {
   const [date, setDate] = useState<Date | undefined>();
   const [name, setName] = useState("");
@@ -97,6 +99,7 @@ export function ActivityTable({
       ...(debouncedDate ? { date: format(debouncedDate, "yyyy-MM-dd") } : {}),
       ...(debouncedName ? { name: debouncedName } : {}),
       ...(debouncedAction ? { action: debouncedAction } : {}),
+      ...(moduleContext ? { module: moduleContext } : {}),
     }
   });
 

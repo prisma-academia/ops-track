@@ -11,9 +11,9 @@ export default async function TenantActivityPage() {
   const skip = 0;
 
   const [totalCount, rows] = await Promise.all([
-    prisma.activityLog.count({ where: { tenantId: actor.tenantId, module: "STATION" } }),
+    prisma.activityLog.count({ where: { tenantId: actor.tenantId, module: "FLEET" } }),
     prisma.activityLog.findMany({
-      where: { tenantId: actor.tenantId, module: "STATION" },
+      where: { tenantId: actor.tenantId, module: "FLEET" },
       orderBy: { createdAt: "desc" },
       take,
       skip,
@@ -105,8 +105,8 @@ export default async function TenantActivityPage() {
 
   return (
     <div>
-      <PageHeader title="Station Activity" />
-      <ActivityTable initialData={data} initialMeta={initialMeta} availableUsers={availableUsers} moduleContext="STATION" />
+      <PageHeader title="Fleet Activity" />
+      <ActivityTable initialData={data} initialMeta={initialMeta} availableUsers={availableUsers} moduleContext="FLEET" />
     </div>
   );
 }

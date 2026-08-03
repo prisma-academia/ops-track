@@ -82,7 +82,7 @@ export function InviteTenantUserForm({
       setError(res.error.message);
       return;
     }
-    if (res.data?.user.id) router.push(`/admin/users/${res.data.user.id}`);
+    if (res.data?.user.id) router.push(`/admin/fleet/users/${res.data.user.id}`);
   });
 
   const groupedPermissions = allPermissions.reduce((acc, key) => {

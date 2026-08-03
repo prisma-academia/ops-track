@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -248,22 +249,20 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor={filter.fromParam} className="text-xs text-muted-foreground">Min</Label>
-                    <Input
+                    <NumberInput
                       id={filter.fromParam}
-                      type="number"
                       placeholder="Min"
                       value={localValues[filter.fromParam] || ""}
-                      onChange={(e) => updateValue(filter.fromParam, e.target.value)}
+                      onChange={(v) => updateValue(filter.fromParam, v.toString())}
                     />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor={filter.toParam} className="text-xs text-muted-foreground">Max</Label>
-                    <Input
+                    <NumberInput
                       id={filter.toParam}
-                      type="number"
                       placeholder="Max"
                       value={localValues[filter.toParam] || ""}
-                      onChange={(e) => updateValue(filter.toParam, e.target.value)}
+                      onChange={(v) => updateValue(filter.toParam, v.toString())}
                     />
                   </div>
                 </div>

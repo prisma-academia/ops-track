@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/data-table";
+import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   Dialog,
@@ -126,20 +127,21 @@ export function ExpensesManager({
   const [openStationSelect, setOpenStationSelect] = useState(false);
   const [approvingExpenseId, setApprovingExpenseId] = useState<string | null>(null);
   const [approveConfirmOpenId, setApproveConfirmOpenId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
 
-  const [fStationId, setFStationId] = useState("");
-  const [fCategory, setFCategory] = useState("");
-  const [fMethod, setFMethod] = useState("");
-  const [fAmountMin, setFAmountMin] = useState("");
-  const [fAmountMax, setFAmountMax] = useState("");
-  const [fApprovedStatus, setFApprovedStatus] = useState("");
-  const [fDateStart, setFDateStart] = useState("");
-  const [fDateEnd, setFDateEnd] = useState("");
-
-  const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({});
+  const appliedFilters: Record<string, string> = {};
+  if (searchParams.has("stationId")) appliedFilters.stationId = searchParams.get("stationId")!;
+  if (searchParams.has("category")) appliedFilters.category = searchParams.get("category")!;
+  if (searchParams.has("paymentMethod")) appliedFilters.paymentMethod = searchParams.get("paymentMethod")!;
+  if (searchParams.has("amountMin")) appliedFilters.amountMin = searchParams.get("amountMin")!;
+  if (searchParams.has("amountMax")) appliedFilters.amountMax = searchParams.get("amountMax")!;
+  if (searchParams.has("approvedStatus")) appliedFilters.approvedStatus = searchParams.get("approvedStatus")!;
+  if (searchParams.has("dateStart")) appliedFilters.dateStart = searchParams.get("dateStart")!;
+  if (searchParams.has("dateEnd")) appliedFilters.dateEnd = searchParams.get("dateEnd")!;
 
   const { data: expenses, meta, isLoading, setPage, setPageSize, setInitialData } = usePaginatedQuery<ExpenseRow>({
     baseUrl: "/api/tenant/expenses",
+    syncWithUrl: true,
     additionalParams: appliedFilters,
   });
 
@@ -183,32 +185,6 @@ export function ExpensesManager({
     setApiError(null);
     form.reset({ paymentMethod: "CASH", stationId: "", category: "OTHER", amount: undefined, description: "", receiptUrl: "" });
     router.refresh();
-  };
-
-  const handleApplyFilters = () => {
-    const filters: Record<string, string> = {};
-    if (fStationId) filters.stationId = fStationId;
-    if (fCategory) filters.category = fCategory;
-    if (fMethod) filters.paymentMethod = fMethod;
-    if (fAmountMin) filters.amountMin = fAmountMin;
-    if (fAmountMax) filters.amountMax = fAmountMax;
-    if (fApprovedStatus) filters.approvedStatus = fApprovedStatus;
-    if (fDateStart) filters.dateStart = fDateStart;
-    if (fDateEnd) filters.dateEnd = fDateEnd;
-    
-    setAppliedFilters(filters);
-  };
-
-  const handleClearFilters = () => {
-    setFStationId("");
-    setFCategory("");
-    setFMethod("");
-    setFAmountMin("");
-    setFAmountMax("");
-    setFApprovedStatus("");
-    setFDateStart("");
-    setFDateEnd("");
-    setAppliedFilters({});
   };
 
   const activeExpenses = expenses.length > 0 ? expenses : initialExpenses;
@@ -362,106 +338,6 @@ export function ExpensesManager({
     },
   ];
 
-  const filterNode = (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label>Station</Label>
-        <Popover open={openStationSelect} onOpenChange={setOpenStationSelect}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="w-full justify-between font-normal text-foreground">
-              <span className="truncate">{stations.find(s => s.id === fStationId)?.name || "All Stations"}</span>
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Search station..." />
-              <CommandList className="max-h-[200px] overflow-y-auto">
-                <CommandEmpty>No station found.</CommandEmpty>
-                <CommandGroup>
-                  {stations.map((s) => (
-                    <CommandItem
-                      key={s.id}
-                      value={s.name.toLowerCase()}
-                      onSelect={() => {
-                        setFStationId(s.id === fStationId ? "" : s.id);
-                        setOpenStationSelect(false);
-                      }}
-                    >
-                      {s.name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Category</Label>
-        <Select value={fCategory} onValueChange={setFCategory}>
-          <SelectTrigger>
-            <SelectValue placeholder="All Categories" />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(CATEGORY_MAP).map(([key, label]) => (
-              <SelectItem key={key} value={key}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Payment Method</Label>
-        <Select value={fMethod} onValueChange={setFMethod}>
-          <SelectTrigger>
-            <SelectValue placeholder="All Methods" />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(PAYMENT_METHOD_MAP).map(([key, label]) => (
-              <SelectItem key={key} value={key}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Amount Range (₦)</Label>
-        <div className="flex items-center gap-2">
-          <NumberInput placeholder="Min" value={fAmountMin} onChange={v => setFAmountMin(v.toString())} />
-          <span>-</span>
-          <NumberInput placeholder="Max" value={fAmountMax} onChange={v => setFAmountMax(v.toString())} />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Approval Status</Label>
-        <Select value={fApprovedStatus} onValueChange={setFApprovedStatus}>
-          <SelectTrigger>
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="PENDING">Pending</SelectItem>
-            <SelectItem value="APPROVED">Approved</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Date Range</Label>
-        <div className="flex flex-col gap-2">
-          <Input type="date" placeholder="Start" value={fDateStart} onChange={e => setFDateStart(e.target.value)} />
-          <Input type="date" placeholder="End" value={fDateEnd} onChange={e => setFDateEnd(e.target.value)} />
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 pt-2">
-        <Button onClick={handleApplyFilters} className="w-full">Apply Filters</Button>
-        <Button variant="outline" onClick={handleClearFilters} className="w-full">Clear</Button>
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-6">
@@ -483,7 +359,51 @@ export function ExpensesManager({
             <Plus size={16} className="mr-1" /> Record Expense
           </Button>
         }
-        filterNode={filterNode}
+        filterNode={
+          <DataTableFilterDrawer
+            filters={[
+              {
+                type: "combobox",
+                paramName: "stationId",
+                label: "Station",
+                options: stations.map(s => ({ value: s.id, label: s.name })),
+              },
+              {
+                type: "select",
+                paramName: "category",
+                label: "Category",
+                options: Object.entries(CATEGORY_MAP).map(([value, label]) => ({ value, label })),
+              },
+              {
+                type: "select",
+                paramName: "paymentMethod",
+                label: "Payment Method",
+                options: Object.entries(PAYMENT_METHOD_MAP).map(([value, label]) => ({ value, label })),
+              },
+              {
+                type: "number-range",
+                label: "Amount Range (₦)",
+                fromParam: "amountMin",
+                toParam: "amountMax",
+              },
+              {
+                type: "select",
+                paramName: "approvedStatus",
+                label: "Approval Status",
+                options: [
+                  { value: "PENDING", label: "Pending" },
+                  { value: "APPROVED", label: "Approved" },
+                ],
+              },
+              {
+                type: "date-range",
+                label: "Date Range",
+                fromParam: "dateStart",
+                toParam: "dateEnd",
+              },
+            ]}
+          />
+        }
       />
 
       {/* ==========================================

@@ -165,28 +165,7 @@ export function DataTable<TData, TValue>({
             )}
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-            {filterNode && (
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <Filter size={16} />
-                    Filters
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right">
-                  <SheetHeader>
-                    <SheetTitle>Filters</SheetTitle>
-                  </SheetHeader>
-                  <div className="py-4 space-y-4">
-                    {filterNode && (
-                      <div className="space-y-2">
-                        {filterNode}
-                      </div>
-                    )}
-                  </div>
-                </SheetContent>
-              </Sheet>
-            )}
+            {filterNode}
             {effectiveSearchKey && (
               <InputGroup className="max-w-xs">
                 <InputGroupInput

@@ -16,6 +16,7 @@ import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 
 
 const Schema = z.object({
@@ -358,7 +359,17 @@ export function CreateTransportForm({
 
                   <div className="space-y-2">
                     <Label className={fieldErrors?.litersCarried ? "text-destructive" : ""}>Total Truck Volume (L)*</Label>
-                    <Input type="number" placeholder="45000" {...register(`assignments.${index}.litersCarried`)} className={fieldErrors?.litersCarried ? "border-destructive" : ""} />
+                    <Controller
+                      control={control}
+                      name={`assignments.${index}.litersCarried`}
+                      render={({ field }) => (
+                        <FormattedNumberInput 
+                          placeholder="45000" 
+                          {...field}
+                          className={fieldErrors?.litersCarried ? "border-destructive" : ""} 
+                        />
+                      )}
+                    />
                     {fieldErrors?.litersCarried && <p className="text-xs text-destructive">{String(fieldErrors.litersCarried.message)}</p>}
                     {(() => {
                       const selectedTruck = trucks.find(t => t.id === truckId);
@@ -377,7 +388,17 @@ export function CreateTransportForm({
 
                   <div className="space-y-2">
                     <Label className={fieldErrors?.ratePerLiter ? "text-destructive" : ""}>Transport Rate (₦/L)*</Label>
-                    <Input type="number" placeholder="15" {...register(`assignments.${index}.ratePerLiter`)} className={fieldErrors?.ratePerLiter ? "border-destructive" : ""} />
+                    <Controller
+                      control={control}
+                      name={`assignments.${index}.ratePerLiter`}
+                      render={({ field }) => (
+                        <FormattedNumberInput 
+                          placeholder="15" 
+                          {...field}
+                          className={fieldErrors?.ratePerLiter ? "border-destructive" : ""} 
+                        />
+                      )}
+                    />
                     {fieldErrors?.ratePerLiter && <p className="text-xs text-destructive">{String(fieldErrors.ratePerLiter.message)}</p>}
                   </div>
                 </div>

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -454,11 +455,8 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <Label>Amount Paid (₦) *</Label>
-          <Input 
+          <FormattedNumberInput 
             required
-            type="number"
-            min="0"
-            step="0.01"
             value={formData.amount}
             onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
             placeholder="e.g. 50000"

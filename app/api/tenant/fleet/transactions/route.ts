@@ -93,6 +93,7 @@ export async function POST(request: Request) {
     }
 
     await audit({
+      module: "FLEET",
       actorType: "TENANT_USER",
       actorId: actor.userId,
       action: "transaction.create",

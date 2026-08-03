@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PageHeader } from "@/components/shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ALL_TENANT_PERMISSION_KEYS, PERMISSIONS } from "@/lib/auth/permissions";
+import { ALL_FLEET_PERMISSION_KEYS, PERMISSIONS } from "@/lib/auth/permissions";
 import { UserDetailActions } from "@/app/(platform)/(dashboard)/users/[id]/actions";
 import { Badge } from "@/components/ui/badge";
 
@@ -95,7 +95,7 @@ export default async function TenantUserDetailPage({
             scope="tenant"
             moduleContext="FLEET"
             permissions={user.fleetPermissions}
-            allPermissions={ALL_TENANT_PERMISSION_KEYS}
+            allPermissions={ALL_FLEET_PERMISSION_KEYS}
             roles={roles}
             applyRoleEndpoint={`/api/tenant/users/${user.id}/apply-role`}
             permissionsEndpoint={`/api/tenant/users/${user.id}/permissions`}

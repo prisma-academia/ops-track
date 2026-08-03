@@ -81,6 +81,7 @@ export async function POST(
     });
 
     await audit({
+      module: "FLEET",
       actorType: "TENANT_USER",
       actorId: actor.userId,
       action: "sale.payment",

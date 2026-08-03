@@ -155,6 +155,7 @@ export async function POST(request: Request) {
     }, { timeout: 15000 });
 
     await audit({
+      module: "FLEET",
       actorType: "TENANT_USER",
       actorId: actor.userId,
       action: "sale.create",

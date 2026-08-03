@@ -131,6 +131,7 @@ export async function PATCH(
     });
 
     await audit({
+      module: "FLEET",
       actorType: "TENANT_USER",
       actorId: actor.userId,
       action: "transport.update",

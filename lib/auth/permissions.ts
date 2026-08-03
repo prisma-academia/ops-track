@@ -36,8 +36,20 @@ export const PERMISSIONS = {
   TENANT_PRICES_WRITE: { key: "tenant.prices:write", module: "tenant.prices", description: "Manage prices" },
   TENANT_EXPENSES_READ: { key: "tenant.expenses:read", module: "tenant.expenses", description: "View expenses" },
   TENANT_EXPENSES_WRITE: { key: "tenant.expenses:write", module: "tenant.expenses", description: "Manage expenses" },
-  TENANT_FLEET_READ: { key: "tenant.fleet:read", module: "tenant.fleet", description: "View fleet operations" },
-  TENANT_FLEET_WRITE: { key: "tenant.fleet:write", module: "tenant.fleet", description: "Manage fleet operations" },
+  TENANT_FLEET_READ: { key: "tenant.fleet:read", module: "tenant.fleet", description: "View fleet operations (General)" },
+  TENANT_FLEET_WRITE: { key: "tenant.fleet:write", module: "tenant.fleet", description: "Manage fleet operations (General)" },
+  TENANT_FLEET_ORDERS_READ: { key: "tenant.fleet.orders:read", module: "tenant.fleet.orders", description: "View fleet orders" },
+  TENANT_FLEET_ORDERS_WRITE: { key: "tenant.fleet.orders:write", module: "tenant.fleet.orders", description: "Manage fleet orders" },
+  TENANT_FLEET_TRANSPORTS_READ: { key: "tenant.fleet.transports:read", module: "tenant.fleet.transports", description: "View fleet transports" },
+  TENANT_FLEET_TRANSPORTS_WRITE: { key: "tenant.fleet.transports:write", module: "tenant.fleet.transports", description: "Manage fleet transports" },
+  TENANT_FLEET_SALES_READ: { key: "tenant.fleet.sales:read", module: "tenant.fleet.sales", description: "View fleet sales" },
+  TENANT_FLEET_SALES_WRITE: { key: "tenant.fleet.sales:write", module: "tenant.fleet.sales", description: "Manage fleet sales" },
+  TENANT_FLEET_PAYMENTS_READ: { key: "tenant.fleet.payments:read", module: "tenant.fleet.payments", description: "View fleet payments" },
+  TENANT_FLEET_PAYMENTS_WRITE: { key: "tenant.fleet.payments:write", module: "tenant.fleet.payments", description: "Manage fleet payments" },
+  TENANT_FLEET_TRUCKS_READ: { key: "tenant.fleet.trucks:read", module: "tenant.fleet.trucks", description: "View fleet trucks & transporters" },
+  TENANT_FLEET_TRUCKS_WRITE: { key: "tenant.fleet.trucks:write", module: "tenant.fleet.trucks", description: "Manage fleet trucks & transporters" },
+  TENANT_FLEET_DRIVERS_READ: { key: "tenant.fleet.drivers:read", module: "tenant.fleet.drivers", description: "View fleet drivers" },
+  TENANT_FLEET_DRIVERS_WRITE: { key: "tenant.fleet.drivers:write", module: "tenant.fleet.drivers", description: "Manage fleet drivers" },
   // Mobile app permissions
   MOBILE_TENANT_DIPPINGS_READ: { key: "mobile.tenant.dippings:read", module: "mobile.tenant.dippings", description: "Mobile app: View dippings" },
   MOBILE_TENANT_DIPPINGS_WRITE: { key: "mobile.tenant.dippings:write", module: "mobile.tenant.dippings", description: "Mobile app: Manage dippings" },
@@ -59,6 +71,14 @@ export const ALL_PERMISSIONS = Object.values(PERMISSIONS);
 
 export const ALL_PLATFORM_PERMISSION_KEYS: PermissionKey[] = ALL_PERMISSIONS
   .filter((p) => p.key.startsWith("platform."))
+  .map((p) => p.key as PermissionKey);
+
+export const ALL_MOBILE_PERMISSION_KEYS: PermissionKey[] = ALL_PERMISSIONS
+  .filter((p) => p.key.startsWith("mobile.tenant."))
+  .map((p) => p.key as PermissionKey);
+
+export const ALL_FLEET_PERMISSION_KEYS: PermissionKey[] = ALL_PERMISSIONS
+  .filter((p) => p.key.startsWith("tenant.fleet"))
   .map((p) => p.key as PermissionKey);
 
 export const ALL_TENANT_PERMISSION_KEYS: PermissionKey[] = ALL_PERMISSIONS

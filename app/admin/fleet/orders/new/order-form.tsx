@@ -56,8 +56,8 @@ export function CreateOrderForm() {
   const [newLookupName, setNewLookupName] = useState("");
   const [isAddingLookup, setIsAddingLookup] = useState(false);
 
-  const { register, handleSubmit, formState, setValue, watch, control } = useForm({
-    resolver: zodResolver(Schema),
+  const { register, handleSubmit, formState, setValue, watch, control } = useForm<Values>({
+    resolver: zodResolver(Schema) as any,
     defaultValues: {
       reference: "",
       productType: "" as any,
@@ -326,20 +326,32 @@ export function CreateOrderForm() {
                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/30">
                   <div className="space-y-2">
                     <Label htmlFor="pricePerLitre" className={formState.errors.pricePerLitre ? "text-destructive" : ""}>Price Per Litre (₦)</Label>
-                    <FormattedNumberInput 
-                      id="pricePerLitre" 
-                      placeholder="e.g. 950"
-                      {...register("pricePerLitre")}
-                      className={formState.errors.pricePerLitre ? "border-destructive" : ""}
+                    <Controller
+                      control={control}
+                      name="pricePerLitre"
+                      render={({ field }) => (
+                        <FormattedNumberInput 
+                          id="pricePerLitre" 
+                          placeholder="e.g. 950"
+                          {...field}
+                          className={formState.errors.pricePerLitre ? "border-destructive" : ""}
+                        />
+                      )}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="loadingCost" className={formState.errors.loadingCost ? "text-destructive" : ""}>Flat Loading Fee (₦)</Label>
-                    <FormattedNumberInput 
-                      id="loadingCost" 
-                      placeholder="e.g. 15000"
-                      {...register("loadingCost")}
-                      className={formState.errors.loadingCost ? "border-destructive" : ""}
+                    <Controller
+                      control={control}
+                      name="loadingCost"
+                      render={({ field }) => (
+                        <FormattedNumberInput 
+                          id="loadingCost" 
+                          placeholder="e.g. 15000"
+                          {...field}
+                          className={formState.errors.loadingCost ? "border-destructive" : ""}
+                        />
+                      )}
                     />
                   </div>
                 </div>

@@ -65,6 +65,7 @@ export function CreateSaleForm({
   const [openCustomerSelect, setOpenCustomerSelect] = useState(false);
   const [openStationSelect, setOpenStationSelect] = useState(false);
   const [openTransportSelect, setOpenTransportSelect] = useState(false);
+  const [showReceivedInput, setShowReceivedInput] = useState(false);
 
   const FormSchema = BaseSchema.superRefine((data, ctx) => {
     if (data.recipientType === "CUSTOMER" && !data.customerId) {
@@ -377,38 +378,71 @@ export function CreateSaleForm({
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="litersDespatched" className={formState.errors.litersDespatched ? "text-destructive" : ""}>Volume Despatched (L)*</Label>
-                  <Input 
-                    id="litersDespatched" 
-                    type="number"
-                    placeholder="e.g. 10000" 
-                    {...register("litersDespatched")}
-                    className={formState.errors.litersDespatched ? "border-destructive" : ""}
+                  <Controller
+                    control={control}
+                    name="litersDespatched"
+                    render={({ field }) => (
+                      <FormattedNumberInput 
+                        id="litersDespatched" 
+                        placeholder="e.g. 10000" 
+                        {...field}
+                        className={formState.errors.litersDespatched ? "border-destructive" : ""}
+                      />
+                    )}
                   />
                   {formState.errors.litersDespatched && <p className="text-xs text-destructive">{formState.errors.litersDespatched.message}</p>}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="litersReceived" className={formState.errors.litersReceived ? "text-destructive" : ""}>Volume Received (L) (Optional)</Label>
-                  <Input 
-                    id="litersReceived" 
-                    type="number"
-                    placeholder="e.g. 10000" 
-                    {...register("litersReceived")}
-                    className={formState.errors.litersReceived ? "border-destructive" : ""}
-                  />
-                  <p className="text-[10px] text-muted-foreground mt-1">Leave blank if pending delivery confirmation.</p>
-                  {formState.errors.litersReceived && <p className="text-xs text-destructive">{formState.errors.litersReceived.message}</p>}
+                <div className="space-y-2 flex flex-col justify-end">
+                  {!showReceivedInput ? (
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      className="w-full text-muted-foreground border-dashed h-10"
+                      onClick={() => setShowReceivedInput(true)}
+                    >
+                      Already Received?
+                    </Button>
+                  ) : (
+                    <>
+                      <Label htmlFor="litersReceived" className={formState.errors.litersReceived ? "text-destructive" : ""}>Volume Received (L) (Optional)</Label>
+                      <Controller
+                        control={control}
+                        name="litersReceived"
+                        render={({ field }) => (
+                          <FormattedNumberInput 
+                            id="litersReceived" 
+                            placeholder="e.g. 10000" 
+                            {...field}
+                            value={field.value ?? ""}
+                            className={formState.errors.litersReceived ? "border-destructive" : ""}
+                          />
+                        )}
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1 flex justify-between">
+                        <span>Leave blank if pending.</span>
+                        <button type="button" onClick={() => { setShowReceivedInput(false); setValue("litersReceived", undefined); }} className="text-destructive hover:underline cursor-pointer">Cancel</button>
+                      </p>
+                      {formState.errors.litersReceived && <p className="text-xs text-destructive">{formState.errors.litersReceived.message}</p>}
+                    </>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 border-t border-border/50 pt-5 mt-2">
                 <div className="space-y-2">
                   <Label htmlFor="amountPerLiter" className={formState.errors.amountPerLiter ? "text-destructive" : ""}>Selling Price per Liter (₦)*</Label>
-                  <FormattedNumberInput 
-                    id="amountPerLiter" 
-                    placeholder="e.g. 1200" 
-                    {...register("amountPerLiter")}
-                    className={formState.errors.amountPerLiter ? "border-destructive" : ""}
+                  <Controller
+                    control={control}
+                    name="amountPerLiter"
+                    render={({ field }) => (
+                      <FormattedNumberInput 
+                        id="amountPerLiter" 
+                        placeholder="e.g. 1200" 
+                        {...field}
+                        className={formState.errors.amountPerLiter ? "border-destructive" : ""}
+                      />
+                    )}
                   />
                   {formState.errors.amountPerLiter && <p className="text-xs text-destructive">{formState.errors.amountPerLiter.message}</p>}
                 </div>

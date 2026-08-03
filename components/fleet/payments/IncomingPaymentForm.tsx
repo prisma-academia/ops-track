@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -333,10 +334,9 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
               </span>
             )}
           </div>
-          <Input 
+          <FormattedNumberInput 
             required
             max={formData.paymentMethod === "DEPOSIT" ? depositBalance : undefined}
-            step="0.01"
             value={formData.amount}
             onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
             placeholder="e.g. 50000"

@@ -8,10 +8,10 @@ import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; page?: string; take?: string }>;
+  searchParams: Promise<{ status?: string; productType?: string; depot?: string; minVol?: string; maxVol?: string; from?: string; to?: string; page?: string; take?: string }>;
 }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
-  const { status, page: pageParam, take: takeParam } = await searchParams;
+  const { status, productType, depot, minVol, maxVol, from, to, page: pageParam, take: takeParam } = await searchParams;
 
   const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
   const take = Math.min(100, Math.max(1, parseInt(takeParam || "25", 10) || 25));
@@ -19,6 +19,31 @@ export default async function OrdersPage({
 
   const where: any = { tenantId: actor.tenantId };
   if (status) where.status = status;
+  if (productType) where.productType = productType;
+  if (depot) where.sourceDepot = depot;
+  if (minVol || maxVol) {
+    where.litersOrdered = {
+      ...(minVol ? { gte: Number(minVol) } : {}),
+      ...(maxVol ? { lte: Number(maxVol) } : {}),
+    };
+  }
+  if (from || to) {
+    where.createdAt = {
+      ...(from ? { gte: new Date(from) } : {}),
+      ...(to ? { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) } : {}),
+    };
+  }
+
+  // Get distinct depots for combobox
+  const depots = await prisma.order.findMany({
+    where: { tenantId: actor.tenantId, sourceDepot: { not: null } },
+    select: { sourceDepot: true },
+    distinct: ["sourceDepot"],
+    orderBy: { sourceDepot: "asc" },
+  });
+  const depotOptions = depots
+    .filter(d => !!d.sourceDepot)
+    .map(d => ({ value: d.sourceDepot as string, label: d.sourceDepot as string }));
 
   const [totalCount, orders] = await Promise.all([
     prisma.order.count({ where }),
@@ -82,6 +107,35 @@ export default async function OrdersPage({
                   { value: "CONFIRMED", label: "Confirmed" },
                   { value: "CANCELLED", label: "Cancelled" },
                 ],
+              },
+              {
+                type: "select",
+                paramName: "productType",
+                label: "Product Type",
+                options: [
+                  { value: "PMS", label: "PMS (Petrol)" },
+                  { value: "AGO", label: "AGO (Diesel)" },
+                  { value: "DPK", label: "DPK (Kerosene)" },
+                  { value: "LPG", label: "LPG (Gas)" },
+                ],
+              },
+              {
+                type: "combobox",
+                paramName: "depot",
+                label: "Source Depot",
+                options: depotOptions,
+              },
+              {
+                type: "number-range",
+                label: "Volume Range (Liters)",
+                fromParam: "minVol",
+                toParam: "maxVol",
+              },
+              {
+                type: "date-range",
+                label: "Date Range",
+                fromParam: "from",
+                toParam: "to",
               },
             ]}
           />

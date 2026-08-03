@@ -11,10 +11,10 @@ import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 export default async function SalesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; status?: string; page?: string; take?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; status?: string; customerStationId?: string; minVol?: string; maxVol?: string; page?: string; take?: string }>;
 }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
-  const { from, to, status, page: pageParam, take: takeParam } = await searchParams;
+  const { from, to, status, customerStationId, minVol, maxVol, page: pageParam, take: takeParam } = await searchParams;
 
   const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
   const take = Math.min(100, Math.max(1, parseInt(takeParam || "25", 10) || 25));
@@ -22,12 +22,34 @@ export default async function SalesPage({
 
   const where: any = { tenantId: actor.tenantId };
   if (status) where.status = status;
+  if (customerStationId) {
+    if (customerStationId.startsWith("c-")) {
+      where.customerId = customerStationId.replace("c-", "");
+    } else if (customerStationId.startsWith("s-")) {
+      where.stationId = customerStationId.replace("s-", "");
+    }
+  }
+  if (minVol || maxVol) {
+    where.litersDespatched = {
+      ...(minVol ? { gte: Number(minVol) } : {}),
+      ...(maxVol ? { lte: Number(maxVol) } : {}),
+    };
+  }
   if (from || to) {
     where.createdAt = {
       ...(from ? { gte: new Date(from) } : {}),
       ...(to ? { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) } : {}),
     };
   }
+
+  const [customers, stations] = await Promise.all([
+    prisma.customer.findMany({ where: { tenantId: actor.tenantId }, select: { id: true, name: true } }),
+    prisma.station.findMany({ where: { tenantId: actor.tenantId }, select: { id: true, name: true } })
+  ]);
+  const csOptions = [
+    ...customers.map(c => ({ value: `c-${c.id}`, label: `Customer: ${c.name}` })),
+    ...stations.map(s => ({ value: `s-${s.id}`, label: `Station: ${s.name}` }))
+  ];
 
   // Aggregates: always computed on ALL data regardless of filters/pagination
   const allSales = await prisma.sale.findMany({
@@ -176,6 +198,12 @@ export default async function SalesPage({
           <DataTableFilterDrawer
             filters={[
               {
+                type: "combobox",
+                paramName: "customerStationId",
+                label: "Customer / Station",
+                options: csOptions,
+              },
+              {
                 type: "select",
                 paramName: "status",
                 label: "Status",
@@ -185,6 +213,12 @@ export default async function SalesPage({
                   { value: "CLEARED", label: "Cleared" },
                   { value: "OVERDUE", label: "Overdue" },
                 ],
+              },
+              {
+                type: "number-range",
+                label: "Volume Range (Liters)",
+                fromParam: "minVol",
+                toParam: "maxVol",
               },
               {
                 type: "date-range",

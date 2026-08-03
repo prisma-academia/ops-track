@@ -3,16 +3,15 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { TransportsTable } from "./table";
-import { DateRangeFilter } from "@/components/date-range-filter";
-import { StatusFilter } from "@/components/status-filter";
+import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 
 export default async function TransportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; status?: string; page?: string; take?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; status?: string; productType?: string; minVol?: string; maxVol?: string; page?: string; take?: string }>;
 }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
-  const { from, to, status, page: pageParam, take: takeParam } = await searchParams;
+  const { from, to, status, productType, minVol, maxVol, page: pageParam, take: takeParam } = await searchParams;
 
   const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
   const take = Math.min(100, Math.max(1, parseInt(takeParam || "25", 10) || 25));
@@ -20,6 +19,13 @@ export default async function TransportsPage({
 
   const where: any = { tenantId: actor.tenantId };
   if (status) where.status = status;
+  if (productType) where.productType = productType;
+  if (minVol || maxVol) {
+    where.litersCarried = {
+      ...(minVol ? { gte: Number(minVol) } : {}),
+      ...(maxVol ? { lte: Number(maxVol) } : {}),
+    };
+  }
   if (from || to) {
     where.createdAt = {
       ...(from ? { gte: new Date(from) } : {}),
@@ -84,18 +90,43 @@ export default async function TransportsPage({
           hasPreviousPage: page > 1,
         }}
         filterNode={
-          <>
-            <StatusFilter
-              paramName="status"
-              label="Status"
-              options={[
-                { value: "IN_TRANSIT", label: "In Transit" },
-                { value: "COMPLETED", label: "Completed" },
-                { value: "CANCELLED", label: "Cancelled" },
-              ]}
-            />
-            <DateRangeFilter />
-          </>
+          <DataTableFilterDrawer
+            filters={[
+              {
+                type: "select",
+                paramName: "status",
+                label: "Status",
+                options: [
+                  { value: "IN_TRANSIT", label: "In Transit" },
+                  { value: "COMPLETED", label: "Completed" },
+                  { value: "CANCELLED", label: "Cancelled" },
+                ],
+              },
+              {
+                type: "select",
+                paramName: "productType",
+                label: "Product Type",
+                options: [
+                  { value: "PMS", label: "PMS (Petrol)" },
+                  { value: "AGO", label: "AGO (Diesel)" },
+                  { value: "DPK", label: "DPK (Kerosene)" },
+                  { value: "LPG", label: "LPG (Gas)" },
+                ],
+              },
+              {
+                type: "number-range",
+                label: "Volume Range (Liters)",
+                fromParam: "minVol",
+                toParam: "maxVol",
+              },
+              {
+                type: "date-range",
+                label: "Date Range",
+                fromParam: "from",
+                toParam: "to",
+              },
+            ]}
+          />
         }
       />
     </div>

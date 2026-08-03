@@ -24,16 +24,24 @@ import {
 import { Filter, X } from "lucide-react";
 import { useDataTable } from "./data-table-context";
 import { Badge } from "@/components/ui/badge";
+import {
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxEmpty,
+} from "@/components/ui/combobox";
 
 export type FilterConfig = 
   | { 
-      type: "select"; 
+      type: "select" | "combobox"; 
       paramName: string; 
       label: string; 
       options: { value: string; label: string }[];
     }
   | { 
-      type: "date-range"; 
+      type: "date-range" | "number-range"; 
       label: string; 
       fromParam: string; 
       toParam: string;
@@ -52,10 +60,10 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
 
   // Active filters count
   const activeCount = filters.reduce((acc, filter) => {
-    if (filter.type === "select") {
+    if (filter.type === "select" || filter.type === "combobox") {
       return searchParams.has(filter.paramName) ? acc + 1 : acc;
     }
-    if (filter.type === "date-range") {
+    if (filter.type === "date-range" || filter.type === "number-range") {
       return (searchParams.has(filter.fromParam) || searchParams.has(filter.toParam)) ? acc + 1 : acc;
     }
     return acc;
@@ -66,9 +74,9 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
     if (open) {
       const newValues: Record<string, string> = {};
       filters.forEach(filter => {
-        if (filter.type === "select") {
-          newValues[filter.paramName] = searchParams.get(filter.paramName) || "ALL";
-        } else if (filter.type === "date-range") {
+        if (filter.type === "select" || filter.type === "combobox") {
+          newValues[filter.paramName] = searchParams.get(filter.paramName) || (filter.type === "select" ? "ALL" : "");
+        } else if (filter.type === "date-range" || filter.type === "number-range") {
           newValues[filter.fromParam] = searchParams.get(filter.fromParam) || "";
           newValues[filter.toParam] = searchParams.get(filter.toParam) || "";
         }
@@ -81,14 +89,14 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
     const params = new URLSearchParams(searchParams.toString());
     
     filters.forEach(filter => {
-      if (filter.type === "select") {
+      if (filter.type === "select" || filter.type === "combobox") {
         const val = localValues[filter.paramName];
         if (val && val !== "ALL") {
           params.set(filter.paramName, val);
         } else {
           params.delete(filter.paramName);
         }
-      } else if (filter.type === "date-range") {
+      } else if (filter.type === "date-range" || filter.type === "number-range") {
         const fromVal = localValues[filter.fromParam];
         const toVal = localValues[filter.toParam];
         
@@ -113,9 +121,9 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
     const params = new URLSearchParams(searchParams.toString());
     
     filters.forEach(filter => {
-      if (filter.type === "select") {
+      if (filter.type === "select" || filter.type === "combobox") {
         params.delete(filter.paramName);
-      } else if (filter.type === "date-range") {
+      } else if (filter.type === "date-range" || filter.type === "number-range") {
         params.delete(filter.fromParam);
         params.delete(filter.toParam);
       }
@@ -127,7 +135,8 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
     const emptyValues: Record<string, string> = {};
     filters.forEach(filter => {
       if (filter.type === "select") emptyValues[filter.paramName] = "ALL";
-      else if (filter.type === "date-range") {
+      else if (filter.type === "combobox") emptyValues[filter.paramName] = "";
+      else if (filter.type === "date-range" || filter.type === "number-range") {
         emptyValues[filter.fromParam] = "";
         emptyValues[filter.toParam] = "";
       }
@@ -206,6 +215,53 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
                     <Input
                       id={filter.toParam}
                       type="date"
+                      value={localValues[filter.toParam] || ""}
+                      onChange={(e) => updateValue(filter.toParam, e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {filter.type === "combobox" && (
+                <Combobox
+                  value={localValues[filter.paramName] || ""}
+                  onValueChange={(val) => updateValue(filter.paramName, val || "")}
+                >
+                  <ComboboxInput showClear placeholder={`Search ${filter.label}`} />
+                  <ComboboxContent>
+                    <ComboboxEmpty>No results found.</ComboboxEmpty>
+                    <ComboboxList>
+                      <ComboboxItem value="">
+                        All {filter.label}
+                      </ComboboxItem>
+                      {filter.options.map((opt) => (
+                        <ComboboxItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </ComboboxItem>
+                      ))}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
+              )}
+
+              {filter.type === "number-range" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor={filter.fromParam} className="text-xs text-muted-foreground">Min</Label>
+                    <Input
+                      id={filter.fromParam}
+                      type="number"
+                      placeholder="Min"
+                      value={localValues[filter.fromParam] || ""}
+                      onChange={(e) => updateValue(filter.fromParam, e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={filter.toParam} className="text-xs text-muted-foreground">Max</Label>
+                    <Input
+                      id={filter.toParam}
+                      type="number"
+                      placeholder="Max"
                       value={localValues[filter.toParam] || ""}
                       onChange={(e) => updateValue(filter.toParam, e.target.value)}
                     />

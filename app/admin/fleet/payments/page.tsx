@@ -3,8 +3,7 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { PaymentsTable } from "./table";
-import { DateRangeFilter } from "@/components/date-range-filter";
-import { StatusFilter } from "@/components/status-filter";
+import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Activity } from "lucide-react";
 import Link from "next/link";
@@ -14,10 +13,10 @@ import { formatShortCurrency } from "@/lib/utils";
 export default async function PaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; type?: string; category?: string; page?: string; take?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; type?: string; category?: string; bankAccountId?: string; minAmt?: string; maxAmt?: string; page?: string; take?: string }>;
 }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
-  const { from, to, type, category, page: pageParam, take: takeParam } = await searchParams;
+  const { from, to, type, category, bankAccountId, minAmt, maxAmt, page: pageParam, take: takeParam } = await searchParams;
 
   const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
   const take = Math.min(100, Math.max(1, parseInt(takeParam || "25", 10) || 25));
@@ -26,6 +25,13 @@ export default async function PaymentsPage({
   const where: any = { tenantId: actor.tenantId };
   if (type) where.type = type;
   if (category) where.category = category;
+  if (bankAccountId) where.bankAccountId = bankAccountId;
+  if (minAmt || maxAmt) {
+    where.amount = {
+      ...(minAmt ? { gte: Number(minAmt) } : {}),
+      ...(maxAmt ? { lte: Number(maxAmt) } : {}),
+    };
+  }
   if (from || to) {
     where.createdAt = {
       ...(from ? { gte: new Date(from) } : {}),
@@ -54,6 +60,17 @@ export default async function PaymentsPage({
   const categoryOptions = categories.map(c => ({
     value: c.category,
     label: c.category.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+  }));
+
+  // Get bank accounts for combobox
+  const banks = await prisma.bankAccount.findMany({
+    where: { tenantId: actor.tenantId },
+    select: { id: true, bankName: true, accountNumber: true },
+    orderBy: { bankName: "asc" },
+  });
+  const bankOptions = banks.map(b => ({
+    value: b.id,
+    label: `${b.bankName} - ${b.accountNumber}`,
   }));
 
   // Filtered + paginated data
@@ -147,22 +164,43 @@ export default async function PaymentsPage({
             hasPreviousPage: page > 1,
           }}
           filterNode={
-            <>
-              <StatusFilter
-                paramName="type"
-                label="Type"
-                options={[
-                  { value: "INFLOW", label: "Inflow" },
-                  { value: "OUTFLOW", label: "Outflow" },
-                ]}
-              />
-              <StatusFilter
-                paramName="category"
-                label="Category"
-                options={categoryOptions}
-              />
-              <DateRangeFilter />
-            </>
+            <DataTableFilterDrawer
+              filters={[
+                {
+                  type: "combobox",
+                  paramName: "bankAccountId",
+                  label: "Bank Account",
+                  options: bankOptions,
+                },
+                {
+                  type: "select",
+                  paramName: "type",
+                  label: "Type",
+                  options: [
+                    { value: "INFLOW", label: "Inflow" },
+                    { value: "OUTFLOW", label: "Outflow" },
+                  ],
+                },
+                {
+                  type: "select",
+                  paramName: "category",
+                  label: "Category",
+                  options: categoryOptions,
+                },
+                {
+                  type: "number-range",
+                  label: "Amount Range",
+                  fromParam: "minAmt",
+                  toParam: "maxAmt",
+                },
+                {
+                  type: "date-range",
+                  label: "Date Range",
+                  fromParam: "from",
+                  toParam: "to",
+                },
+              ]}
+            />
           }
         />
       </div>

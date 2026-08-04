@@ -85,7 +85,13 @@ export function InviteTenantUserForm({
     if (res.data?.user.id) router.push(`/admin/users/${res.data.user.id}`);
   });
 
-  const groupedPermissions = allPermissions.reduce((acc, key) => {
+  const filteredPermissions = allPermissions.filter((key) => {
+    if (moduleContext === "STATION") return !key.startsWith("tenant.fleet");
+    if (moduleContext === "FLEET") return key.startsWith("tenant.fleet");
+    return true;
+  });
+
+  const groupedPermissions = filteredPermissions.reduce((acc, key) => {
     const perm = Object.values(PERMISSIONS).find(p => p.key === key);
     if (!perm) return acc;
     const moduleName = perm.module;

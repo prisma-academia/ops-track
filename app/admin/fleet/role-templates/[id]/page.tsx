@@ -27,6 +27,7 @@ export default async function TenantRoleDetailPage({
           initial={role.permissions}
           allPermissions={ALL_TENANT_PERMISSION_KEYS}
           endpoint={`/api/tenant/role-templates/${role.id}`}
+          moduleContext="FLEET"
         />
       </Card>
     </div>

@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/shell";
 import { ActivityTable } from "@/app/(platform)/(dashboard)/activity/table";
 
 export default async function TenantActivityPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_ACTIVITY_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_ACTIVITY_READ.key);
   
   const take = 25;
   const skip = 0;

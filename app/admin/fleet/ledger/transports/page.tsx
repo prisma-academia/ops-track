@@ -1,5 +1,6 @@
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { prisma } from "@/lib/db/client";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { TransportsTable } from "./transports-table";
 import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 
@@ -7,7 +8,7 @@ export default async function TransportsLedgerPage(props: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const searchParams = await props.searchParams;
-  const actor = await requireTenantPage();
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_LEDGER_READ.key);
 
   const page = parseInt(searchParams.page as string || "1", 10);
   const pageSize = 100;

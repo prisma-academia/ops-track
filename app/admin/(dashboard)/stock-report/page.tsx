@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { StockReportManager } from "./stock-report-manager";
 
 export default async function StockReportPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_STOCK_REPORTS_READ.key);
 
   const allocations = await prisma.waybillAllocation.findMany({
     where: { tenantId: actor.tenantId },

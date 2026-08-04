@@ -63,6 +63,24 @@ export const PERMISSIONS = {
   MOBILE_TENANT_ATTENDANTS_WRITE: { key: "mobile.tenant.attendants:write", module: "mobile.tenant.attendants", description: "Mobile app: Manage attendants" },
   MOBILE_TENANT_WAYBILLS_READ: { key: "mobile.tenant.waybills:read", module: "mobile.tenant.waybills", description: "Mobile app: View waybills" },
   MOBILE_TENANT_WAYBILLS_WRITE: { key: "mobile.tenant.waybills:write", module: "mobile.tenant.waybills", description: "Mobile app: Manage waybills" },
+  // Missing Station Modules
+  TENANT_BANK_ACCOUNTS_READ: { key: "tenant.bank-accounts:read", module: "tenant.bank-accounts", description: "View bank accounts" },
+  TENANT_BANK_ACCOUNTS_WRITE: { key: "tenant.bank-accounts:write", module: "tenant.bank-accounts", description: "Manage bank accounts" },
+  TENANT_PNL_REPORTS_READ: { key: "tenant.pnl-reports:read", module: "tenant.pnl-reports", description: "View PNL reports" },
+  TENANT_SALES_REPORTS_READ: { key: "tenant.sales-reports:read", module: "tenant.sales-reports", description: "View sales reports" },
+  TENANT_STOCK_REPORTS_READ: { key: "tenant.stock-reports:read", module: "tenant.stock-reports", description: "View stock reports" },
+  TENANT_VARIANCE_AUDIT_READ: { key: "tenant.variance-audit:read", module: "tenant.variance-audit", description: "View variance audit" },
+  TENANT_VARIANCE_AUDIT_WRITE: { key: "tenant.variance-audit:write", module: "tenant.variance-audit", description: "Manage variance audit" },
+  // Missing Fleet Modules
+  TENANT_FLEET_LEDGER_READ: { key: "tenant.fleet.ledger:read", module: "tenant.fleet.ledger", description: "View fleet ledger" },
+  TENANT_FLEET_LEDGER_WRITE: { key: "tenant.fleet.ledger:write", module: "tenant.fleet.ledger", description: "Manage fleet ledger" },
+  TENANT_FLEET_CUSTOMERS_READ: { key: "tenant.fleet.customers:read", module: "tenant.fleet.customers", description: "View fleet customers" },
+  TENANT_FLEET_CUSTOMERS_WRITE: { key: "tenant.fleet.customers:write", module: "tenant.fleet.customers", description: "Manage fleet customers" },
+  TENANT_FLEET_BANK_ACCOUNTS_READ: { key: "tenant.fleet.bank-accounts:read", module: "tenant.fleet.bank-accounts", description: "View fleet bank accounts" },
+  TENANT_FLEET_BANK_ACCOUNTS_WRITE: { key: "tenant.fleet.bank-accounts:write", module: "tenant.fleet.bank-accounts", description: "Manage fleet bank accounts" },
+  TENANT_FLEET_ACTIVITY_READ: { key: "tenant.fleet.activity:read", module: "tenant.fleet.activity", description: "View fleet activity log" },
+  TENANT_FLEET_SETTINGS_READ: { key: "tenant.fleet.settings:read", module: "tenant.fleet.settings", description: "View fleet settings" },
+  TENANT_FLEET_SETTINGS_WRITE: { key: "tenant.fleet.settings:write", module: "tenant.fleet.settings", description: "Manage fleet settings" },
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]["key"];

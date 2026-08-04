@@ -12,7 +12,7 @@ export default async function CustomerDetailsPage({
   params: Promise<{ id: string }>;
 }) {
   const resolvedParams = await params;
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_CUSTOMERS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_CUSTOMERS_READ.key);
 
   const customer = await prisma.customer.findUnique({
     where: {

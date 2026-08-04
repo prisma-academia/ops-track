@@ -9,7 +9,7 @@ import { PageHeader, Card } from "@/components/shell";
 import { SettingsForm } from "./form";
 
 export default async function TenantSettingsPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_SETTINGS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_SETTINGS_READ.key);
   const tenant = await prisma.tenant.findUnique({
     where: { id: actor.tenantId },
   });

@@ -13,6 +13,7 @@ export function RoleDetailEditor({
   initial,
   allPermissions,
   endpoint,
+  moduleContext,
 }: {
   id: string;
   name: string;
@@ -20,6 +21,7 @@ export function RoleDetailEditor({
   initial: string[];
   allPermissions: readonly string[];
   endpoint: string;
+  moduleContext?: "STATION" | "FLEET";
 }) {
   void id;
   const [n, setN] = useState(name);
@@ -64,12 +66,18 @@ export function RoleDetailEditor({
         </p>
       ) : null}
       <div className="grid grid-cols-2 gap-2 rounded border border-stone-200 dark:border-stone-800 p-3 text-sm">
-        {allPermissions.map((p) => (
-          <label key={p} className="flex items-center gap-2">
-            <input type="checkbox" checked={selected.has(p)} onChange={() => toggle(p)} />
-            <span className="font-mono text-xs">{p}</span>
-          </label>
-        ))}
+        {allPermissions
+          .filter((p) => {
+            if (moduleContext === "STATION") return !p.startsWith("tenant.fleet");
+            if (moduleContext === "FLEET") return p.startsWith("tenant.fleet");
+            return true;
+          })
+          .map((p) => (
+            <label key={p} className="flex items-center gap-2">
+              <input type="checkbox" checked={selected.has(p)} onChange={() => toggle(p)} disabled={isSystem && selected.has(p)} />
+              <span className="font-mono text-xs">{p}</span>
+            </label>
+          ))}
       </div>
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       {info ? <p className="text-sm text-green-700 dark:text-green-400">{info}</p> : null}

@@ -39,6 +39,7 @@ export function UserDetailActions({
   permissionsEndpoint: string;
   resetPasswordEndpoint: string;
 }) {
+  const [isEditMode, setIsEditMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set(permissions));
   const [roleId, setRoleId] = useState("");
   const [openRoleSelect, setOpenRoleSelect] = useState(false);
@@ -47,6 +48,7 @@ export function UserDetailActions({
   const [pending, setPending] = useState<string | null>(null);
 
   function toggle(p: string) {
+    if (!isEditMode) return;
     const next = new Set(selected);
     if (next.has(p)) next.delete(p);
     else next.add(p);
@@ -84,6 +86,7 @@ export function UserDetailActions({
       return;
     }
     setInfo("Permissions saved successfully.");
+    setIsEditMode(false);
   }
 
   async function resetPassword() {
@@ -100,7 +103,14 @@ export function UserDetailActions({
     setInfo("Password reset emailed.");
   }
 
-  const groupedPermissions = allPermissions.reduce((acc, key) => {
+  // Filter out fleet permissions if we are in STATION context.
+  const filteredPermissions = allPermissions.filter((key) => {
+    if (moduleContext === "STATION") return !key.startsWith("tenant.fleet");
+    if (moduleContext === "FLEET") return key.startsWith("tenant.fleet");
+    return true;
+  });
+
+  const groupedPermissions = filteredPermissions.reduce((acc, key) => {
     const perm = Object.values(PERMISSIONS).find(p => p.key === key);
     if (!perm) return acc;
     const moduleName = perm.module;
@@ -134,55 +144,67 @@ export function UserDetailActions({
         </div>
         {title === "Web Portal Permissions" && (
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <div className="flex-1 sm:w-48">
-              <Popover open={openRoleSelect} onOpenChange={setOpenRoleSelect}>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-8 text-xs w-full justify-between font-normal"
-                  >
-                    <span className="truncate">
-                      {roles.find((r) => r.id === roleId)?.name || "Apply Template..."}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[180px] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search template..." className="h-8 text-xs" />
-                    <CommandList>
-                      <CommandEmpty className="py-2 text-center text-xs">No templates.</CommandEmpty>
-                      <CommandGroup>
-                        {roles.map((r) => (
-                          <CommandItem
-                            key={r.id}
-                            value={r.name.toLowerCase()}
-                            onSelect={() => {
-                              setRoleId(r.id);
-                              setOpenRoleSelect(false);
-                            }}
-                            className="flex items-center justify-between cursor-pointer text-xs py-1.5"
-                          >
-                            <span>{r.name}</span>
-                            {roleId === r.id && (
-                              <Check className="h-3.5 w-3.5 text-primary" />
-                            )}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-            <Button onClick={applyRole} disabled={pending !== null || !roleId} variant="outline" size="sm" className="h-8 px-3">
-              {pending === "apply" ? "..." : "Apply"}
-            </Button>
-            <Button onClick={savePermissions} disabled={pending !== null} size="sm" className="h-8 gap-2 ml-1">
-              <Save className="h-4 w-4" />
-              {pending === "save" ? "Saving…" : "Save"}
-            </Button>
+            {isEditMode && (
+              <>
+                <div className="flex-1 sm:w-48">
+                  <Popover open={openRoleSelect} onOpenChange={setOpenRoleSelect}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-8 text-xs w-full justify-between font-normal"
+                      >
+                        <span className="truncate">
+                          {roles.find((r) => r.id === roleId)?.name || "Apply Template..."}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[180px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search template..." className="h-8 text-xs" />
+                        <CommandList>
+                          <CommandEmpty className="py-2 text-center text-xs">No templates.</CommandEmpty>
+                          <CommandGroup>
+                            {roles.map((r) => (
+                              <CommandItem
+                                key={r.id}
+                                value={r.name.toLowerCase()}
+                                onSelect={() => {
+                                  setRoleId(r.id);
+                                  setOpenRoleSelect(false);
+                                }}
+                                className="flex items-center justify-between cursor-pointer text-xs py-1.5"
+                              >
+                                <span>{r.name}</span>
+                                {roleId === r.id && (
+                                  <Check className="h-3.5 w-3.5 text-primary" />
+                                )}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <Button onClick={applyRole} disabled={pending !== null || !roleId} variant="outline" size="sm" className="h-8 px-3">
+                  {pending === "apply" ? "..." : "Apply"}
+                </Button>
+                <Button onClick={savePermissions} disabled={pending !== null} size="sm" className="h-8 gap-2 ml-1">
+                  <Save className="h-4 w-4" />
+                  {pending === "save" ? "Saving…" : "Save"}
+                </Button>
+                <Button onClick={() => setIsEditMode(false)} variant="ghost" size="sm" className="h-8 px-3 ml-1">
+                  Cancel
+                </Button>
+              </>
+            )}
+            {!isEditMode && (
+              <Button onClick={() => setIsEditMode(true)} variant="outline" size="sm" className="h-8 px-3">
+                Edit Permissions
+              </Button>
+            )}
           </div>
         )}
       </CardHeader>
@@ -221,7 +243,8 @@ export function UserDetailActions({
                       id={`perm-${readPerm.key}`}
                       checked={selected.has(readPerm.key)}
                       onCheckedChange={() => toggle(readPerm.key)}
-                      className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                      disabled={!isEditMode}
+                      className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   ) : (
                     <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
@@ -233,7 +256,8 @@ export function UserDetailActions({
                       id={`perm-${writePerm.key}`}
                       checked={selected.has(writePerm.key)}
                       onCheckedChange={() => toggle(writePerm.key)}
-                      className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                      disabled={!isEditMode}
+                      className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   ) : (
                     <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
@@ -245,7 +269,8 @@ export function UserDetailActions({
                       id={`perm-${approvePerm.key}`}
                       checked={selected.has(approvePerm.key)}
                       onCheckedChange={() => toggle(approvePerm.key)}
-                      className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                      disabled={!isEditMode}
+                      className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   ) : (
                     <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />

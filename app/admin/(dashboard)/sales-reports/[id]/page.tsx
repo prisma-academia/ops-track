@@ -18,7 +18,7 @@ export default async function SalesReportDetailsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_SHIFTS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_SALES_REPORTS_READ.key);
   const resolvedParams = await params;
 
   const report = await prisma.salesLog.findUnique({

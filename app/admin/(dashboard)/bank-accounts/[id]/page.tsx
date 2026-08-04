@@ -9,7 +9,7 @@ export default async function StationBankAccountDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_SETTINGS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key);
   const { id } = await params;
 
   const details = await getBankAccountDetailsData({

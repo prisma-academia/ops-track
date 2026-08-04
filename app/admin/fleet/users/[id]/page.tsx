@@ -24,29 +24,27 @@ export default async function TenantUserDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader title={`${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email} backHref="/admin/fleet/users" />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* User Profile - Left Column */}
-        <div className="lg:col-span-1 space-y-6">
+      <div className="space-y-6">
+        {/* User Profile - Top */}
+        <div className="w-full">
           <Card className="border-border/40 shadow-sm">
             <CardHeader className="pb-4 border-b border-border/40">
               <CardTitle className="text-lg font-semibold text-foreground">User Profile</CardTitle>
               <CardDescription className="text-xs">System details and login statistics.</CardDescription>
             </CardHeader>
             <CardContent className="pt-4">
-              <dl className="grid grid-cols-1 gap-x-4 gap-y-6 text-sm">
+              <dl className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-6 text-sm">
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Email</dt>
                   <dd className="mt-1 font-medium">{user.email}</dd>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">First name</dt>
-                    <dd className="mt-1">{user.firstName ?? "—"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Last name</dt>
-                    <dd className="mt-1">{user.lastName ?? "—"}</dd>
-                  </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">First name</dt>
+                  <dd className="mt-1">{user.firstName ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Last name</dt>
+                  <dd className="mt-1">{user.lastName ?? "—"}</dd>
                 </div>
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Other name</dt>
@@ -56,15 +54,13 @@ export default async function TenantUserDetailPage({
                   <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Phone</dt>
                   <dd className="mt-1">{user.phone ?? "—"}</dd>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</dt>
-                    <dd className="mt-1"><Badge variant={user.status === "ACTIVE" ? "default" : "secondary"}>{user.status}</Badge></dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Owner</dt>
-                    <dd className="mt-1">{user.isOwner ? "Yes" : "No"}</dd>
-                  </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</dt>
+                  <dd className="mt-1"><Badge variant={user.status === "ACTIVE" ? "default" : "secondary"}>{user.status}</Badge></dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Owner</dt>
+                  <dd className="mt-1">{user.isOwner ? "Yes" : "No"}</dd>
                 </div>
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Login Attempts</dt>
@@ -73,23 +69,21 @@ export default async function TenantUserDetailPage({
                     {user.lockedUntil && <span> (Locked until: {user.lockedUntil.toLocaleString()})</span>}
                   </dd>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Created at</dt>
-                    <dd className="mt-1 text-xs text-muted-foreground">{user.createdAt.toLocaleDateString()}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Last login</dt>
-                    <dd className="mt-1 text-xs text-muted-foreground">{user.lastLoginAt ? user.lastLoginAt.toLocaleDateString() : "Never"}</dd>
-                  </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Created at</dt>
+                  <dd className="mt-1 text-xs text-muted-foreground">{user.createdAt.toLocaleDateString()}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Last login</dt>
+                  <dd className="mt-1 text-xs text-muted-foreground">{user.lastLoginAt ? user.lastLoginAt.toLocaleDateString() : "Never"}</dd>
                 </div>
               </dl>
             </CardContent>
           </Card>
         </div>
         
-        {/* Permissions & Actions - Right Column */}
-        <div className="lg:col-span-2">
+        {/* Permissions & Actions - Bottom */}
+        <div className="w-full">
           <UserDetailActions
             userId={user.id}
             scope="tenant"

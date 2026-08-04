@@ -1,4 +1,5 @@
 import { requireTenantPage } from "@/lib/auth/page-guards"
+import { PERMISSIONS } from "@/lib/auth/permissions"
 
 import { getFleetOverviewData } from "./_data/fleet-overview"
 
@@ -7,7 +8,7 @@ import { VolumeByProduct } from "./_components/volume-by-product"
 import { VolumeOverTime } from "./_components/volume-over-time"
 
 export default async function FleetOverviewPage() {
-  const actor = await requireTenantPage()
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key)
   const data = await getFleetOverviewData(actor.tenantId)
 
   return (

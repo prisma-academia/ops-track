@@ -55,12 +55,18 @@ export function RoleEditor({
         <TextInput id="rname" value={name} onChange={(e) => setName(e.target.value)} />
       </FormField>
       <div className="grid grid-cols-2 gap-2 rounded border border-stone-200 p-3 text-sm">
-        {permissions.map((p) => (
-          <label key={p} className="flex items-center gap-2">
-            <input type="checkbox" checked={selected.has(p)} onChange={() => toggle(p)} />
-            <span className="font-mono text-xs">{p}</span>
-          </label>
-        ))}
+        {permissions
+          .filter((p) => {
+            if (moduleContext === "STATION") return !p.startsWith("tenant.fleet");
+            if (moduleContext === "FLEET") return p.startsWith("tenant.fleet");
+            return true;
+          })
+          .map((p) => (
+            <label key={p} className="flex items-center gap-2">
+              <input type="checkbox" checked={selected.has(p)} onChange={() => toggle(p)} />
+              <span className="font-mono text-xs">{p}</span>
+            </label>
+          ))}
       </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <div>

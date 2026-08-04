@@ -5,7 +5,7 @@ import { BankAccountsTable } from "@/components/bank-accounts/bank-accounts-tabl
 import { PageHeader } from "@/components/shell";
 
 export default async function StationBankAccountsPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_SETTINGS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key);
 
   const take = 25;
   const skip = 0;

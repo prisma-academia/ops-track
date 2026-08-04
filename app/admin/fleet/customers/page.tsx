@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { CustomersManager } from "./customers-manager";
 
 export default async function CustomersPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_CUSTOMERS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_CUSTOMERS_READ.key);
 
   const take = 25;
   const skip = 0;

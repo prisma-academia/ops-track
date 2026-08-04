@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { SalesReportsManager } from "./sales-reports-manager";
 
 export default async function SalesReportsPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_SHIFTS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_SALES_REPORTS_READ.key);
 
   const salesReports = await prisma.salesLog.findMany({
     where: { tenantId: actor.tenantId },

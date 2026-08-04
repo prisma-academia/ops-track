@@ -108,10 +108,78 @@ async function main() {
     },
   });
 
+  // Owner 2
+  await prisma.tenantUser.upsert({
+    where: {
+      tenantId_email: {
+        tenantId: tenant.id,
+        email: "assunusi@gmail.com",
+      },
+    },
+    update: {
+      passwordHash: tenantPasswordHash,
+      firstName: "Chairman",
+      lastName: "Sahaf",
+      phone: "0000000000",
+      isOwner: true,
+      activeModules: ["STATION", "FLEET"],
+      stationPermissions: ALL_TENANT_PERMISSION_KEYS,
+      fleetPermissions: ALL_TENANT_PERMISSION_KEYS,
+    },
+    create: {
+      tenantId: tenant.id,
+      email: "assunusi@gmail.com",
+      passwordHash: tenantPasswordHash,
+      firstName: "Chairman",
+      lastName: "Sahaf",
+      phone: "0000000000",
+      mustChangePassword: false,
+      isOwner: true,
+      status: "ACTIVE",
+      activeModules: ["STATION", "FLEET"],
+      stationPermissions: ALL_TENANT_PERMISSION_KEYS,
+      fleetPermissions: ALL_TENANT_PERMISSION_KEYS,
+    },
+  });
 
+  // Admin
+  await prisma.tenantUser.upsert({
+    where: {
+      tenantId_email: {
+        tenantId: tenant.id,
+        email: "amuhammadmusaa@gmail.com",
+      },
+    },
+    update: {
+      passwordHash: tenantPasswordHash,
+      firstName: "Auwal",
+      lastName: "Sahaf",
+      phone: "0000000000",
+      isOwner: false,
+      activeModules: ["STATION", "FLEET"],
+      stationPermissions: ALL_TENANT_PERMISSION_KEYS,
+      fleetPermissions: ALL_TENANT_PERMISSION_KEYS,
+    },
+    create: {
+      tenantId: tenant.id,
+      email: "amuhammadmusaa@gmail.com",
+      passwordHash: tenantPasswordHash,
+      firstName: "Auwal",
+      lastName: "Sahaf",
+      phone: "0000000000",
+      mustChangePassword: false,
+      isOwner: false,
+      status: "ACTIVE",
+      activeModules: ["STATION", "FLEET"],
+      stationPermissions: ALL_TENANT_PERMISSION_KEYS,
+      fleetPermissions: ALL_TENANT_PERMISSION_KEYS,
+    },
+  });
 
   console.log(`Seed complete.`);
-  console.log(`Tenant User: ${tenantUserEmail} (Password: password123)`);
+  console.log(`Tenant User 1: ${tenantUserEmail} (Password: password123)`);
+  console.log(`Tenant User 2: assunusi@gmail.com (Password: password123)`);
+  console.log(`Tenant User 3: amuhammadmusaa@gmail.com (Password: password123)`);
 }
 
 async function ensurePlatformRole(name: string, permissions: string[]) {

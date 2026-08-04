@@ -16,33 +16,38 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
+
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetDescription,
+  SheetFooter,
+} from "@/components/ui/sheet";
 import { cn, formatShortCurrency } from "@/lib/utils";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import {
-  CalendarIcon,
   Truck,
   Layers,
   TrendingUp,
   TrendingDown,
-  BarChart3,
   ChevronDownIcon,
   ChevronUpIcon,
-  ChevronFirstIcon,
-  ChevronLastIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   Maximize2,
   Minimize2,
   Printer,
+  Filter,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface ReconciliationRow {
+interface StockReportRow {
   id: string;
   sn: number;
   deliveryDate: string;
@@ -62,6 +67,12 @@ interface ReconciliationRow {
   reconciledStation: string;
   reconciledQty: number | null;
   status: string;
+  buyingPrice: number;
+  approvedSalesLiters: number | null;
+  sellingPrice: number | null;
+  salesRevenue: number | null;
+  remainingLiters: number | null;
+  remainingStockValue: number | null;
 }
 
 interface Station {
@@ -71,7 +82,7 @@ interface Station {
 }
 
 interface Props {
-  initialRows: ReconciliationRow[];
+  initialRows: StockReportRow[];
   stations: Station[];
 }
 
@@ -83,26 +94,44 @@ function fmtDate(iso: string | null) {
 }
 
 function fmtQty(n: number | null) {
-  if (n === null) return "—";
+  if (n === null || isNaN(n)) return "—";
   return n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function fmtMoney(n: number | null) {
-  if (n === null) return "—";
+  if (n === null || isNaN(n)) return "—";
   return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function ReconciliationReportManager({ initialRows, stations }: Props) {
+export function PnlReportManager({ initialRows, stations }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+  const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>({
     from: addDays(new Date(), -30),
     to: new Date(),
   });
+  const [draftSelectedStationIds, setDraftSelectedStationIds] = useState<string[]>([]);
+
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(draftDateRange);
   const [selectedStationIds, setSelectedStationIds] = useState<string[]>([]);
+
+  const applyFilters = useCallback(() => {
+    setDateRange(draftDateRange);
+    setSelectedStationIds(draftSelectedStationIds);
+    setIsOpen(false);
+  }, [draftDateRange, draftSelectedStationIds]);
+
+  const clearFilters = useCallback(() => {
+    setDraftDateRange(undefined);
+    setDraftSelectedStationIds([]);
+    setDateRange(undefined);
+    setSelectedStationIds([]);
+    setIsOpen(false);
+  }, []);
 
   // ── Fullscreen toggle ─────────────────────────────────────────────────────
   const toggleFullscreen = useCallback(() => {
@@ -147,22 +176,23 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     let totalVolume = 0;
-    let totalStockValue = 0;
     let totalPnl = 0;
     let totalVariance = 0;
+    let totalSalesRevenue = 0;
+
     filteredRows.forEach((r) => {
       totalVolume += r.deliveryQty;
-      totalStockValue += r.stockValue;
       if (r.pnl !== null) totalPnl += r.pnl;
       if (r.reconciledQty !== null) {
         totalVariance += (r.reconciledQty - r.totalDelivery);
       }
+      if (r.salesRevenue) totalSalesRevenue += r.salesRevenue;
     });
-    return { count: filteredRows.length, totalVolume, totalStockValue, totalPnl, totalVariance };
+    return { count: filteredRows.length, totalVolume, totalPnl, totalVariance, totalSalesRevenue };
   }, [filteredRows]);
 
   // ── Column defs ───────────────────────────────────────────────────────────
-  const columns = useMemo<ColumnDef<ReconciliationRow>[]>(
+  const columns = useMemo<ColumnDef<StockReportRow>[]>(
     () => [
       {
         id: "sn",
@@ -222,28 +252,7 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
           </div>
         ),
       },
-      {
-        id: "deliveryCost",
-        accessorKey: "deliveryCost",
-        header: () => <div className="text-right whitespace-nowrap">Delivery Cost</div>,
-        size: 120,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums">
-            {fmtMoney(row.original.deliveryCost)}
-          </div>
-        ),
-      },
-      {
-        id: "stockValue",
-        accessorKey: "stockValue",
-        header: () => <div className="text-right whitespace-nowrap">Stock Value</div>,
-        size: 140,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono font-semibold text-foreground tabular-nums">
-            {fmtMoney(row.original.stockValue)}
-          </div>
-        ),
-      },
+
       {
         id: "reconciledDate",
         accessorKey: "reconciledDate",
@@ -255,6 +264,51 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
           </span>
         ),
       },
+      {
+        id: "reconciledQty",
+        accessorKey: "reconciledQty",
+        header: () => <div className="text-right whitespace-nowrap">Reconciled Qty</div>,
+        size: 130,
+        cell: ({ row }) => (
+          <div className="text-right text-xs font-mono tabular-nums">
+            {fmtQty(row.original.reconciledQty)}
+          </div>
+        ),
+      },
+      {
+        id: "approvedSalesLiters",
+        accessorKey: "approvedSalesLiters",
+        header: () => <div className="text-right whitespace-nowrap">Sales Liters</div>,
+        size: 130,
+        cell: ({ row }) => (
+          <div className="text-right text-xs font-mono tabular-nums">
+            {fmtQty(row.original.approvedSalesLiters)}
+          </div>
+        ),
+      },
+      {
+        id: "sellingPrice",
+        accessorKey: "sellingPrice",
+        header: () => <div className="text-right whitespace-nowrap">Selling Price</div>,
+        size: 130,
+        cell: ({ row }) => (
+          <div className="text-right text-xs font-mono tabular-nums">
+            {fmtMoney(row.original.sellingPrice)}
+          </div>
+        ),
+      },
+      {
+        id: "salesRevenue",
+        accessorKey: "salesRevenue",
+        header: () => <div className="text-right whitespace-nowrap">Sales Revenue</div>,
+        size: 140,
+        cell: ({ row }) => (
+          <div className="text-right text-xs font-mono font-semibold text-foreground tabular-nums">
+            {fmtMoney(row.original.salesRevenue)}
+          </div>
+        ),
+      },
+
       {
         id: "reconciledDeposit",
         accessorKey: "reconciledDeposit",
@@ -287,18 +341,6 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
             </div>
           );
         },
-      },
-
-      {
-        id: "reconciledQty",
-        accessorKey: "reconciledQty",
-        header: () => <div className="text-right whitespace-nowrap">Reconciled Qty</div>,
-        size: 130,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums">
-            {fmtQty(row.original.reconciledQty)}
-          </div>
-        ),
       },
       {
         id: "variance",
@@ -363,12 +405,15 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
       badge: "Filtered",
       badgeColor: "bg-blue-400/10 text-blue-700 dark:text-blue-400",
     },
+
     {
-      title: "Stock Value",
-      value: formatShortCurrency(stats.totalStockValue),
-      icon: BarChart3,
+      title: "Sales Revenue",
+      value: formatShortCurrency(stats.totalSalesRevenue),
+      icon: TrendingUp,
+      valueColor: "text-emerald-600",
+      iconColor: "text-emerald-600",
       badge: "Filtered",
-      badgeColor: "bg-indigo-400/10 text-indigo-700 dark:text-indigo-400",
+      badgeColor: "bg-emerald-400/10 text-emerald-700 dark:text-emerald-400",
     },
     {
       title: "Profit & Loss",
@@ -402,7 +447,7 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
       <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold tracking-tight text-foreground print:text-black">
-            Reconciliation Report
+            Profit & Loss Report
           </h1>
           <p className="hidden print:block text-[11px] text-black/80 font-medium mt-1">
             Date: {dateRange?.from ? format(dateRange.from, "d MMMM yyyy") : "All Time"} {dateRange?.to ? ` to ${format(dateRange.to, "d MMMM yyyy")}` : ""}
@@ -412,141 +457,161 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
         </div>
 
         <div className="flex flex-col sm:flex-row items-end gap-3 w-full md:w-auto print:hidden">
-          {/* Station filter */}
-          <div className="space-y-1 w-full sm:w-48 print:hidden">
-            <Label className="text-xs text-muted-foreground">Station(s)</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    selectedStationIds.length === 0 && "text-muted-foreground"
-                  )}
-                >
-                  {selectedStationIds.length === 0
-                    ? "All Stations"
-                    : `${selectedStationIds.length} station(s) selected`}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-2" align="start">
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2 p-1">
-                    <Checkbox
-                      id="station-all"
-                      checked={selectedStationIds.length === 0}
-                      onCheckedChange={(checked) => {
-                        if (checked) setSelectedStationIds([]);
-                      }}
-                    />
-                    <label
-                      htmlFor="station-all"
-                      className="text-sm font-medium leading-none cursor-pointer"
-                    >
-                      All Stations
-                    </label>
-                  </div>
-                  {stations.map((s) => (
-                    <div key={s.id} className="flex items-center space-x-2 p-1">
-                      <Checkbox
-                        id={`station-${s.id}`}
-                        checked={selectedStationIds.includes(s.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedStationIds([...selectedStationIds, s.id]);
-                          } else {
-                            setSelectedStationIds(
-                              selectedStationIds.filter((id) => id !== s.id)
-                            );
-                          }
-                        }}
-                      />
-                      <label
-                        htmlFor={`station-${s.id}`}
-                        className="text-sm font-medium leading-none cursor-pointer"
-                      >
-                        {s.name}
-                      </label>
+          <div className="space-y-1 shrink-0 flex gap-2">
+            {/* Filter Sheet */}
+            <div>
+              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">Filter</Label>
+              <Sheet open={isOpen} onOpenChange={setIsOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" className="gap-2 rounded-sm relative h-10">
+                    <Filter className="h-4 w-4" />
+                    <span>Filter</span>
+                    {(draftSelectedStationIds.length > 0 || draftDateRange) && (
+                      <Badge className="ml-1 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px]">
+                        {[
+                          draftSelectedStationIds.length > 0,
+                          !!draftDateRange
+                        ].filter(Boolean).length}
+                      </Badge>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-[400px] sm:w-[540px] flex flex-col">
+                  <SheetHeader>
+                    <SheetTitle>Filter Records</SheetTitle>
+                    <SheetDescription>
+                      Apply filters to narrow down the table results.
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="flex-1 overflow-y-auto py-6 space-y-3 px-4">
+                    {/* Station filter */}
+                    <div className="space-y-1 w-full">
+                      <Label className="text-xs text-muted-foreground">Station(s)</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              draftSelectedStationIds.length === 0 && "text-muted-foreground"
+                            )}
+                          >
+                            {draftSelectedStationIds.length === 0
+                              ? "All Stations"
+                              : `${draftSelectedStationIds.length} station(s) selected`}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 p-2" align="start">
+                          <div className="space-y-2">
+                            <div className="flex items-center space-x-2 p-1">
+                              <Checkbox
+                                id="station-all"
+                                checked={draftSelectedStationIds.length === 0}
+                                onCheckedChange={(checked) => {
+                                  if (checked) setDraftSelectedStationIds([]);
+                                }}
+                              />
+                              <label
+                                htmlFor="station-all"
+                                className="text-sm font-medium leading-none cursor-pointer"
+                              >
+                                All Stations
+                              </label>
+                            </div>
+                            {stations.map((s) => (
+                              <div key={s.id} className="flex items-center space-x-2 p-1">
+                                <Checkbox
+                                  id={`station-${s.id}`}
+                                  checked={draftSelectedStationIds.includes(s.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setDraftSelectedStationIds([...draftSelectedStationIds, s.id]);
+                                    } else {
+                                      setDraftSelectedStationIds(
+                                        draftSelectedStationIds.filter((id) => id !== s.id)
+                                      );
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`station-${s.id}`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
+                                  {s.name}
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
 
-          {/* Date range */}
-          <div className="space-y-1 w-full sm:w-auto">
-            <Label className="text-xs text-muted-foreground">Date Range</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full sm:w-[260px] justify-start text-left font-normal",
-                    !dateRange && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "LLL dd, y")} –{" "}
-                        {format(dateRange.to, "LLL dd, y")}
-                      </>
-                    ) : (
-                      format(dateRange.from, "LLL dd, y")
-                    )
-                  ) : (
-                    <span>Pick a date range</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
+                    {/* Date Range */}
+                    <div className="space-y-3 w-full">
+                      <Label className="text-sm font-semibold">Date Range</Label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">From</Label>
+                          <Input
+                            type="date"
+                            value={draftDateRange?.from ? format(draftDateRange.from, "yyyy-MM-dd") : ""}
+                            onChange={(e) => setDraftDateRange(prev => ({ from: e.target.value ? new Date(e.target.value) : undefined, to: prev?.to }))}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">To</Label>
+                          <Input
+                            type="date"
+                            value={draftDateRange?.to ? format(draftDateRange.to, "yyyy-MM-dd") : ""}
+                            onChange={(e) => setDraftDateRange(prev => ({ from: prev?.from, to: e.target.value ? new Date(e.target.value) : undefined }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <SheetFooter className="border-t pt-4">
+                    <Button variant="outline" onClick={clearFilters} className="w-full">
+                      Reset Filters
+                    </Button>
+                    <Button onClick={applyFilters} className="w-full">
+                      Apply Filters
+                    </Button>
+                  </SheetFooter>
+                </SheetContent>
+              </Sheet>
+            </div>
 
-          {/* Print button */}
-          <div className="space-y-1 shrink-0">
-            <Label className="text-xs text-muted-foreground opacity-0 select-none">
-              Print
-            </Label>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => window.print()}
-              title="Print report"
-              className="h-10 w-10"
-            >
-              <Printer className="size-4" />
-            </Button>
-          </div>
+            {/* Print button */}
+            <div>
+              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">Print</Label>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => window.print()}
+                title="Print report"
+                className="h-10 w-10"
+              >
+                <Printer className="size-4" />
+              </Button>
+            </div>
 
-          {/* Fullscreen toggle */}
-          <div className="space-y-1 shrink-0">
-            <Label className="text-xs text-muted-foreground opacity-0 select-none">
-              View
-            </Label>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleFullscreen}
-              title={isFullscreen ? "Exit fullscreen" : "Fullscreen view"}
-              className="h-10 w-10"
-            >
-              {isFullscreen ? (
-                <Minimize2 className="size-4" />
-              ) : (
-                <Maximize2 className="size-4" />
-              )}
-            </Button>
+            {/* Fullscreen toggle */}
+            <div>
+              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">View</Label>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={toggleFullscreen}
+                title={isFullscreen ? "Exit fullscreen" : "Fullscreen view"}
+                className="h-10 w-10"
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="size-4" />
+                ) : (
+                  <Maximize2 className="size-4" />
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -557,7 +622,7 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
           {statCards.map((item, index) => (
             <div
               key={index}
-              className="lg:w-3/12 md:w-6/12 w-full border-border border-b last:border-b-0 md:border-e md:even:border-e-0 md:nth-[n+3]:border-b-0 lg:border-b-0 lg:even:border-e lg:last:border-e-0 print:border-none print:w-auto"
+              className="lg:w-1/6 md:w-1/3 w-full border-border border-b last:border-b-0 md:border-e md:nth-[3n]:border-e-0 md:nth-[n+4]:border-b-0 lg:border-b-0 lg:border-e lg:last:border-e-0 print:border-none print:w-auto"
             >
               <div className="p-4 flex items-start justify-between print:p-0">
                 <div className="flex flex-col gap-2 print:gap-0.5">
@@ -677,7 +742,7 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
                       colSpan={columns.length}
                       className="h-32 text-center text-sm text-muted-foreground"
                     >
-                      No reconciliation records found for the selected filters.
+                      No stock report records found for the selected filters.
                     </td>
                   </tr>
                 )}
@@ -690,13 +755,21 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {fmtQty(stats.totalVolume)}
                   </td>
+                  <td className="px-2 py-2 border border-border/50 print:border-black/30"></td>
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {/* Delivery Cost is per liter, summing it makes no sense */}
+                    {fmtQty(
+                      filteredRows.reduce((acc, row) => acc + (row.reconciledQty || 0), 0)
+                    )}
                   </td>
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtMoney(stats.totalStockValue)}
+                    {fmtQty(
+                      filteredRows.reduce((acc, row) => acc + (row.approvedSalesLiters || 0), 0)
+                    )}
                   </td>
                   <td className="px-2 py-2 border border-border/50 print:border-black/30"></td>
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
+                    {fmtMoney(stats.totalSalesRevenue)}
+                  </td>
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {fmtMoney(
                       filteredRows.reduce((acc, row) => acc + (row.reconciledDeposit || 0), 0)
@@ -708,11 +781,6 @@ export function ReconciliationReportManager({ initialRows, stations }: Props) {
                   )}>
                     {stats.totalPnl >= 0 ? "+" : ""}
                     {fmtMoney(stats.totalPnl)}
-                  </td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtQty(
-                      filteredRows.reduce((acc, row) => acc + (row.reconciledQty || 0), 0)
-                    )}
                   </td>
                   <td className={cn(
                     "px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black",

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save, ChevronsUpDown, Check, Store, UserCircle } from "lucide-react";
+import { ArrowLeft, Save, ChevronsUpDown, Check, Store, UserCircle, Droplet } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
@@ -387,6 +387,7 @@ export function CreateSaleForm({
                         placeholder="e.g. 10000" 
                         {...field}
                         className={formState.errors.litersDespatched ? "border-destructive" : ""}
+                        prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
                       />
                     )}
                   />
@@ -416,6 +417,7 @@ export function CreateSaleForm({
                             {...field}
                             value={field.value ?? ""}
                             className={formState.errors.litersReceived ? "border-destructive" : ""}
+                            prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
                           />
                         )}
                       />
@@ -441,6 +443,7 @@ export function CreateSaleForm({
                         placeholder="e.g. 1200" 
                         {...field}
                         className={formState.errors.amountPerLiter ? "border-destructive" : ""}
+                        prefixText="₦"
                       />
                     )}
                   />

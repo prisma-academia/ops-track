@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -16,8 +16,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetDescription,
+  SheetFooter,
+} from "@/components/ui/sheet";
 
-import { User, Droplets, Banknote, ChartColumnIncreasing, Handbag, CalendarIcon, CheckCircle2, AlertCircle, Maximize2, Minimize2, Printer, LayoutGrid, TableProperties, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { Droplets, ChartColumnIncreasing, Handbag, CheckCircle2, Maximize2, Minimize2, Printer, LayoutGrid, TableProperties, Filter } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { cn, formatHumanReadableDate, formatShortCurrency } from "@/lib/utils";
@@ -72,7 +81,7 @@ export function SalesReportsManager({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [viewMode, setViewMode] = useState<"card" | "table">("table");
-  const [isFiltersExpanded, setIsFiltersExpanded] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   // Draft States (Bound to UI inputs)
   const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>({
@@ -100,6 +109,7 @@ export function SalesReportsManager({
     setAppliedProduct(draftProduct);
     setAppliedDebtOperator(draftDebtOperator);
     setAppliedDebtAmount(draftDebtAmount);
+    setIsOpen(false);
   }, [draftDateRange, draftStationIds, draftStatus, draftProduct, draftDebtOperator, draftDebtAmount]);
 
   const clearFilters = useCallback(() => {
@@ -115,6 +125,7 @@ export function SalesReportsManager({
     setAppliedProduct("ALL");
     setAppliedDebtOperator("ALL");
     setAppliedDebtAmount("");
+    setIsOpen(false);
   }, []);
 
   const toggleFullscreen = useCallback(() => {
@@ -279,7 +290,7 @@ export function SalesReportsManager({
     );
   };
 
-  const getFlags = (r: SalesReportRow) => {
+  const getFlags = (_r: SalesReportRow) => {
     const f: string[] = [];
 
     return f;
@@ -336,8 +347,197 @@ export function SalesReportsManager({
             </div>
           </div>
 
-          {/* Print & Fullscreen */}
+          {/* Filters, Print & Fullscreen */}
           <div className="space-y-1 shrink-0 flex gap-2">
+            <div>
+              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">Filter</Label>
+              <Sheet open={isOpen} onOpenChange={setIsOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" className="gap-2 rounded-sm relative h-10">
+                    <Filter className="h-4 w-4" />
+                    <span>Filter</span>
+                    {(appliedStationIds.length > 0 || appliedStatus !== "ALL" || appliedProduct !== "ALL" || appliedDateRange || appliedDebtOperator !== "ALL") && (
+                      <Badge className="ml-1 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px]">
+                        {[
+                          appliedStationIds.length > 0,
+                          appliedStatus !== "ALL",
+                          appliedProduct !== "ALL",
+                          !!appliedDateRange,
+                          appliedDebtOperator !== "ALL"
+                        ].filter(Boolean).length}
+                      </Badge>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-[400px] sm:w-[540px] flex flex-col">
+                  <SheetHeader>
+                    <SheetTitle>Filter Records</SheetTitle>
+                    <SheetDescription>
+                      Apply filters to narrow down the table results.
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="flex-1 overflow-y-auto py-6 space-y-3 px-4">
+                    {/* Station filter */}
+                    <div className="space-y-1 w-full">
+                      <Label className="text-xs text-muted-foreground font-medium">Station</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal h-9",
+                              draftStationIds.length === 0 && "text-muted-foreground"
+                            )}
+                          >
+                            {draftStationIds.length === 0
+                              ? "All Stations"
+                              : `${draftStationIds.length} station(s)`}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 p-2" align="start">
+                          <div className="space-y-2">
+                            <div className="flex items-center space-x-2 p-1">
+                              <Checkbox
+                                id="station-all"
+                                checked={draftStationIds.length === 0}
+                                onCheckedChange={(checked) => {
+                                  if (checked) setDraftStationIds([]);
+                                }}
+                              />
+                              <label
+                                htmlFor="station-all"
+                                className="text-sm font-medium leading-none cursor-pointer"
+                              >
+                                All Stations
+                              </label>
+                            </div>
+                            {stations.map((s) => (
+                              <div key={s.id} className="flex items-center space-x-2 p-1">
+                                <Checkbox
+                                  id={`station-${s.id}`}
+                                  checked={draftStationIds.includes(s.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setDraftStationIds([...draftStationIds, s.id]);
+                                    } else {
+                                      setDraftStationIds(
+                                        draftStationIds.filter((id) => id !== s.id)
+                                      );
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`station-${s.id}`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
+                                  {s.name}
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    {/* Date Range */}
+                    <div className="space-y-3 w-full">
+                      <Label className="text-sm font-semibold">Date Range</Label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">From</Label>
+                          <Input
+                            type="date"
+                            value={draftDateRange?.from ? format(draftDateRange.from, "yyyy-MM-dd") : ""}
+                            onChange={(e) => setDraftDateRange(prev => ({ from: e.target.value ? new Date(e.target.value) : undefined, to: prev?.to }))}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">To</Label>
+                          <Input
+                            type="date"
+                            value={draftDateRange?.to ? format(draftDateRange.to, "yyyy-MM-dd") : ""}
+                            onChange={(e) => setDraftDateRange(prev => ({ from: prev?.from, to: e.target.value ? new Date(e.target.value) : undefined }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status Filter */}
+                    <div className="space-y-1 w-full">
+                      <Label className="text-xs text-muted-foreground font-medium">Status</Label>
+                      <Select value={draftStatus} onValueChange={setDraftStatus}>
+                        <SelectTrigger className="h-9 w-full">
+                          <SelectValue placeholder="All Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ALL">All Status</SelectItem>
+                          <SelectItem value="PENDING">Pending</SelectItem>
+                          <SelectItem value="APPROVED">Approved</SelectItem>
+                          <SelectItem value="REJECTED">Rejected</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Product Filter */}
+                    <div className="space-y-1 w-full">
+                      <Label className="text-xs text-muted-foreground font-medium">Product</Label>
+                      <Select value={draftProduct} onValueChange={setDraftProduct}>
+                        <SelectTrigger className="h-9 w-full">
+                          <SelectValue placeholder="All Products" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ALL">All Products</SelectItem>
+                          <SelectItem value="PMS">PMS</SelectItem>
+                          <SelectItem value="AGO">AGO</SelectItem>
+                          <SelectItem value="DPK">DPK</SelectItem>
+                          <SelectItem value="LPG">LPG</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Debt Balance Filter */}
+                    <div className="space-y-3 w-full">
+                      <Label className="text-sm font-semibold">Balance</Label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Condition</Label>
+                          <Select value={draftDebtOperator} onValueChange={setDraftDebtOperator}>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select operator" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ALL">All</SelectItem>
+                              <SelectItem value="LESS_THAN_OR_EQUAL">Less than or equal (&lt;=)</SelectItem>
+                              <SelectItem value="GREATER_THAN_OR_EQUAL">Greater than or equal (&gt;=)</SelectItem>
+                              <SelectItem value="EXACT">Exact match (==)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Amount</Label>
+                          <FormattedNumberInput
+                            placeholder="e.g. 0"
+                            value={draftDebtAmount}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraftDebtAmount(e.target.value)}
+                            disabled={draftDebtOperator === "ALL"}
+                            prefixText="₦"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                  </div>
+                  <SheetFooter className="border-t pt-4">
+                    <Button variant="outline" onClick={clearFilters} className="w-full">
+                      Reset Filters
+                    </Button>
+                    <Button onClick={applyFilters} className="w-full">
+                      Apply Filters
+                    </Button>
+                  </SheetFooter>
+                </SheetContent>
+              </Sheet>
+            </div>
             <div>
               <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">Action</Label>
               <Button
@@ -409,219 +609,7 @@ export function SalesReportsManager({
         </CardContent>
       </Card>
 
-      {/* ── Filter Bar ─────────────────────────────────────────── */}
-      <div className="bg-card text-card-foreground p-4 rounded-xl border hide-on-print shadow-xs flex flex-col gap-4 transition-all">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}>
-            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full -ml-1">
-              {isFiltersExpanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
-            </Button>
-            <Filter className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold tracking-tight">Advanced Filters</h3>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={clearFilters} className="h-8 px-3 text-xs text-muted-foreground" size="sm">
-              Clear Filters
-            </Button>
-            <Button onClick={applyFilters} className="h-8 px-4 text-xs" size="sm">
-              Apply Filters
-            </Button>
-          </div>
-        </div>
-        
-        {isFiltersExpanded && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 animate-in slide-in-from-top-2 fade-in duration-200">
-          
-          {/* Station filter */}
-          <div className="space-y-1 w-full">
-            <Label className="text-xs text-muted-foreground font-medium">Station</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal h-9",
-                    draftStationIds.length === 0 && "text-muted-foreground"
-                  )}
-                >
-                  {draftStationIds.length === 0
-                    ? "All Stations"
-                    : `${draftStationIds.length} station(s)`}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-2" align="start">
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2 p-1">
-                    <Checkbox
-                      id="station-all"
-                      checked={draftStationIds.length === 0}
-                      onCheckedChange={(checked) => {
-                        if (checked) setDraftStationIds([]);
-                      }}
-                    />
-                    <label
-                      htmlFor="station-all"
-                      className="text-sm font-medium leading-none cursor-pointer"
-                    >
-                      All Stations
-                    </label>
-                  </div>
-                  {stations.map((s) => (
-                    <div key={s.id} className="flex items-center space-x-2 p-1">
-                      <Checkbox
-                        id={`station-${s.id}`}
-                        checked={draftStationIds.includes(s.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setDraftStationIds([...draftStationIds, s.id]);
-                          } else {
-                            setDraftStationIds(
-                              draftStationIds.filter((id) => id !== s.id)
-                            );
-                          }
-                        }}
-                      />
-                      <label
-                        htmlFor={`station-${s.id}`}
-                        className="text-sm font-medium leading-none cursor-pointer"
-                      >
-                        {s.name}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
 
-          {/* Date Picker Range */}
-          <div className="space-y-1 w-full sm:col-span-2 md:col-span-1 lg:col-span-2">
-            <Label className="text-xs text-muted-foreground font-medium">Date Range</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal h-9",
-                    !draftDateRange && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                  {draftDateRange?.from ? (
-                    draftDateRange.to ? (
-                      <span className="truncate">
-                        {format(draftDateRange.from, "MMM d, yy")} -{" "}
-                        {format(draftDateRange.to, "MMM d, yy")}
-                      </span>
-                    ) : (
-                      format(draftDateRange.from, "MMM d, yy")
-                    )
-                  ) : (
-                    <span>Pick a date range</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="range"
-                  defaultMonth={draftDateRange?.from}
-                  selected={draftDateRange}
-                  onSelect={setDraftDateRange}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          {/* Status Filter */}
-          <div className="space-y-1 w-full">
-            <Label className="text-xs text-muted-foreground font-medium">Status</Label>
-            <Select value={draftStatus} onValueChange={setDraftStatus}>
-              <SelectTrigger className="h-9 w-full">
-                <SelectValue placeholder="All Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Status</SelectItem>
-                <SelectItem value="PENDING">Pending</SelectItem>
-                <SelectItem value="APPROVED">Approved</SelectItem>
-                <SelectItem value="REJECTED">Rejected</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Product Filter */}
-          <div className="space-y-1 w-full">
-            <Label className="text-xs text-muted-foreground font-medium">Product</Label>
-            <Select value={draftProduct} onValueChange={setDraftProduct}>
-              <SelectTrigger className="h-9 w-full">
-                <SelectValue placeholder="All Products" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Products</SelectItem>
-                <SelectItem value="PMS">PMS</SelectItem>
-                <SelectItem value="AGO">AGO</SelectItem>
-                <SelectItem value="DPK">DPK</SelectItem>
-                <SelectItem value="LPG">LPG</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Debt Balance Filter (Popover Modal) */}
-          <div className="space-y-1 w-full">
-            <Label className="text-xs text-muted-foreground font-medium">Balance</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal h-9",
-                    draftDebtOperator === "ALL" && "text-muted-foreground"
-                  )}
-                >
-                  <Banknote className="mr-2 h-4 w-4 shrink-0" />
-                  <span className="truncate">
-                    {draftDebtOperator === "ALL" 
-                      ? "Filter Balance" 
-                      : `${draftDebtOperator === "LESS_THAN_OR_EQUAL" ? "<=" : draftDebtOperator === "GREATER_THAN_OR_EQUAL" ? ">=" : "=="} ${draftDebtAmount || "0"}`}
-                  </span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-70" align="start">
-                <div className="space-y-4">
-                  <h4 className="font-medium leading-none">Filter by Balance</h4>
-                  <p className="text-xs text-muted-foreground">Find accounts based on their outstanding debt or credit balance.</p>
-                  <div className="grid gap-3">
-                    <div className="grid gap-2">
-                      <Label>Condition</Label>
-                      <Select value={draftDebtOperator} onValueChange={setDraftDebtOperator}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select operator" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ALL">All</SelectItem>
-                          <SelectItem value="LESS_THAN_OR_EQUAL">Less than or equal (&lt;=)</SelectItem>
-                          <SelectItem value="GREATER_THAN_OR_EQUAL">Greater than or equal (&gt;=)</SelectItem>
-                          <SelectItem value="EXACT">Exact match (==)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Amount</Label>
-                      <FormattedNumberInput
-                        placeholder="e.g. 0"
-                        value={draftDebtAmount}
-                        onChange={(e: any) => setDraftDebtAmount(e.target.value)}
-                        disabled={draftDebtOperator === "ALL"}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-        )}
-      </div>
 
       {finalGroupedSales.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground border rounded-xl border-dashed bg-card">
@@ -691,7 +679,7 @@ export function SalesReportsManager({
                           <CheckCircle2 className="size-3" /> Repayment History
                         </h4>
                         <div className="space-y-3 relative z-10">
-                          {parent.childRepayments.map((child, idx) => {
+                          {parent.childRepayments.map((child) => {
                             const cReceived = Number(child.amountPos) + Number(child.amountTransfer);
                             return (
                               <div key={child.id} className="flex items-center justify-between bg-white border shadow-xs rounded-lg p-3 ml-2 hover:border-slate-300 transition-colors">

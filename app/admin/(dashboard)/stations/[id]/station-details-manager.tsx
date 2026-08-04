@@ -1379,6 +1379,7 @@ export function StationDetailsManager({
                           placeholder="e.g. 45000"
                           value={field.value as string | number}
                           onChange={(e: any) => field.onChange(Number(e.target.value))}
+                          prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
                         />
                       )}
                     />

@@ -489,21 +489,17 @@ export function UpdatePricesManager({
               {FUEL_TYPES.map((ft) => (
                 <div key={ft} className="space-y-2">
                   <Label htmlFor={`price-${ft}`}>{FUEL_LABELS[ft]}</Label>
-                  <InputGroup>
-                    <InputGroupAddon>₦</InputGroupAddon>
-                    <NumberInput
-                      id={`price-${ft}`}
-                      data-slot="input-group-control"
-                      className="flex-1 rounded-none border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0 aria-invalid:ring-0 dark:bg-transparent"
-                      placeholder={
-                        averages[ft]
-                          ? `Current avg: ${averages[ft].toFixed(2)}`
-                          : "0.00"
-                      }
-                      value={editingPrices[ft]}
-                      onChange={(e: any) => updatePrice(ft, e.target.value)}
-                    />
-                  </InputGroup>
+                  <NumberInput
+                    id={`price-${ft}`}
+                    placeholder={
+                      averages[ft]
+                        ? `Current avg: ${averages[ft].toFixed(2)}`
+                        : "0.00"
+                    }
+                    value={editingPrices[ft]}
+                    onChange={(e: any) => updatePrice(ft, e.target.value)}
+                    prefixText="₦"
+                  />
                 </div>
               ))}
             </div>

@@ -32,7 +32,7 @@ export function VolumeOverTimeChart({ data }: { data: ChartData[] }) {
   
   return (
     <ChartContainer config={chartConfig} className="min-h-[250px] w-full mt-4">
-      <BarChart data={data} margin={{ top: 20, left: 0, right: 10, bottom: 0 }} barGap={8} barCategoryGap="25%">
+      <BarChart accessibilityLayer data={data} margin={{ top: 20, left: 0, right: 10, bottom: 0 }} barGap={8} barCategoryGap="25%">
         <CartesianGrid vertical={false} strokeDasharray="3 3" />
         <XAxis 
           dataKey="name" 

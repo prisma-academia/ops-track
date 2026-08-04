@@ -1,0 +1,1 @@
+import { PrismaClient } from './lib/generated/prisma'; const prisma = new PrismaClient(); async function main() { console.log(await prisma.transport.groupBy({by: ['productType'], _sum: {litersCarried: true}})); } main().finally(async () => await prisma.$disconnect());

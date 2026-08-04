@@ -45,7 +45,8 @@ const NAV: NavItemConfig[] = [
     permission: null,
     children: [
       { href: "/admin/sales-reports", key: "salesReports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_SHIFTS_READ.key },
-      { href: "/admin/reconciliation-report", key: "reconciliationReport", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+      { href: "/admin/stock-report", key: "stockReport", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+      { href: "/admin/pnl-report", key: "pnlReport", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
     ],
   },
   // { href: "/admin/customers", key: "customers", module: "customers" as ModuleKey, icon: "Users", permission: PERMISSIONS.TENANT_CUSTOMERS_READ.key },

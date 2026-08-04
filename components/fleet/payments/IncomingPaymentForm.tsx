@@ -340,6 +340,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
             value={formData.amount}
             onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
             placeholder="e.g. 50000"
+            prefixText="₦"
           />
         </div>
 

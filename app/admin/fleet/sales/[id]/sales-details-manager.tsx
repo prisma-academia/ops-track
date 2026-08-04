@@ -16,6 +16,8 @@ import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WaybillPrintView } from "./waybill-print-view";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
+import { Droplet } from "lucide-react";
 
 export function SalesDetailsManager({ sale }: { sale: any }) {
   const router = useRouter();
@@ -370,12 +372,12 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Liters Received</Label>
-              <Input type="number" min="0" value={editLitersReceived} onChange={(e) => setEditLitersReceived(e.target.value)} />
+              <FormattedNumberInput min="0" value={editLitersReceived} onChange={(e) => setEditLitersReceived(e.target.value)} prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />} />
             </div>
             
             <div className="space-y-2">
               <Label>Price per Liter (₦)</Label>
-              <Input type="number" min="0" value={editAmountPerLiter} onChange={(e) => setEditAmountPerLiter(e.target.value)} />
+              <FormattedNumberInput min="0" value={editAmountPerLiter} onChange={(e) => setEditAmountPerLiter(e.target.value)} prefixText="₦" />
             </div>
             
             {error && <p className="text-sm text-destructive">{error}</p>}

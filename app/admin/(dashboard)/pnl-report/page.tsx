@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { ReconciliationReportManager } from "./reconciliation-report-manager";
+import { PnlReportManager } from "./pnl-report-manager";
 
-export default async function ReconciliationReportPage() {
+export default async function PnlReportPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_READ.key);
 
   const allocations = await prisma.waybillAllocation.findMany({
@@ -17,6 +17,7 @@ export default async function ReconciliationReportPage() {
           code: true,
         },
       },
+      sale: true,
       waybill: {
         select: {
           id: true,
@@ -66,6 +67,15 @@ export default async function ReconciliationReportPage() {
         ? (deliveryQty - reconciledQty) * productPrice
         : null;
 
+    // Sales and Stock logic
+    const buyingPrice = productPrice;
+    const approvedSalesLiters = a.sale ? Number(a.sale.litersDespatched) : null;
+    const sellingPrice = a.sale ? Number(a.sale.amountPerLiter) : null;
+    const salesRevenue = a.sale ? Number(a.sale.totalExpectedAmount) : null;
+
+    const remainingLiters = (reconciledQty ?? deliveryQty) - (approvedSalesLiters ?? 0);
+    const remainingStockValue = sellingPrice !== null ? remainingLiters * sellingPrice : null;
+
     return {
       id: a.id,
       sn: index + 1,
@@ -86,6 +96,12 @@ export default async function ReconciliationReportPage() {
       reconciledStation: a.station.name,
       reconciledQty,
       status: a.status,
+      buyingPrice,
+      approvedSalesLiters,
+      sellingPrice,
+      salesRevenue,
+      remainingLiters,
+      remainingStockValue,
     };
   });
 
@@ -93,7 +109,7 @@ export default async function ReconciliationReportPage() {
   const serializedStations = JSON.parse(JSON.stringify(stations));
 
   return (
-    <ReconciliationReportManager
+    <PnlReportManager
       initialRows={serialized}
       stations={serializedStations}
     />

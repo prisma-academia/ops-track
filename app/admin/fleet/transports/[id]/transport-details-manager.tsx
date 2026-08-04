@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
 import { AssetTank } from "@/components/asset-tank";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
+import { Droplet } from "lucide-react";
 
 export function TransportDetailsManager({ transport, stations = [] }: { transport: any, stations?: any[] }) {
   const router = useRouter();
@@ -905,7 +907,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                 
                 <div className="space-y-1.5">
                   <Label className="text-xs">Transport Rate / L (₦)</Label>
-                  <Input type="number" min="0" value={assignTransportRate} onChange={(e) => setAssignTransportRate(e.target.value)} placeholder="0.00" />
+                  <FormattedNumberInput min="0" value={assignTransportRate} onChange={(e) => setAssignTransportRate(e.target.value)} placeholder="0.00" prefixText="₦" />
                 </div>
               </div>
 
@@ -996,11 +998,11 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Lost Quantity (L)*</Label>
-                <Input type="number" min="0" value={lostQuantity} onChange={(e) => setLostQuantity(e.target.value)} placeholder="0" />
+                <FormattedNumberInput min="0" value={lostQuantity} onChange={(e) => setLostQuantity(e.target.value)} placeholder="0" prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />} />
               </div>
               <div className="space-y-2">
                 <Label>Direct Expenses (₦)</Label>
-                <Input type="number" min="0" value={expensesIncurred} onChange={(e) => setExpensesIncurred(e.target.value)} placeholder="0" />
+                <FormattedNumberInput min="0" value={expensesIncurred} onChange={(e) => setExpensesIncurred(e.target.value)} placeholder="0" prefixText="₦" />
               </div>
             </div>
 

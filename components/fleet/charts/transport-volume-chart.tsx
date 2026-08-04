@@ -42,7 +42,7 @@ export function TransportVolumeChart({ data }: { data: ChartData[] }) {
   const chartData = data.map(item => ({
     ...item,
     fill: COLORS[item.productType] || "#e4e4e7",
-    percentage: ((item.volume / totalVolume) * 100).toFixed(0),
+    percentage: totalVolume === 0 ? "0" : ((item.volume / totalVolume) * 100).toFixed(0),
   }));
 
   return (
@@ -50,7 +50,7 @@ export function TransportVolumeChart({ data }: { data: ChartData[] }) {
       {/* Donut Chart (Left Side) */}
       <div className="w-[120px] h-[120px] relative">
         <ChartContainer config={chartConfig} className="w-full h-full">
-          <PieChart>
+          <PieChart accessibilityLayer>
             <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
             <Pie
               data={chartData}

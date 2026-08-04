@@ -3,7 +3,7 @@
 import React, { useState, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { formatHumanReadableDate } from "@/lib/utils";
@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/componen
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils"
 
@@ -30,7 +31,8 @@ import {
   Archive,
   Calculator,
   ChevronsUpDown,
-  Check
+  Check,
+  Droplet
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -87,7 +89,7 @@ export function OrderDetailsManager({
   const averageTransportCostPerLiter = totalTransportedLiters > 0 ? totalTransportCost / totalTransportedLiters : 0;
 
   // Edit Form
-  const { register, handleSubmit, formState, setValue, watch, reset } = useForm({
+  const { register, handleSubmit, formState, setValue, watch, reset, control } = useForm({
     resolver: zodResolver(EditOrderSchema),
     defaultValues: {
       productType: order.productType as any,
@@ -715,7 +717,18 @@ export function OrderDetailsManager({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="litersOrdered">Volume Ordered (Liters)*</Label>
-                  <Input id="litersOrdered" type="number" {...register("litersOrdered")} />
+                  <Controller
+                    control={control}
+                    name="litersOrdered"
+                    render={({ field }) => (
+                      <FormattedNumberInput 
+                        id="litersOrdered" 
+                        {...field}
+                        value={(field.value as string | number) ?? ""} 
+                        prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />} 
+                      />
+                    )}
+                  />
                 </div>
               </div>
 
@@ -783,14 +796,36 @@ export function OrderDetailsManager({
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="pricePerLitre">Product Cost Per Litre (₦)*</Label>
-                  <Input id="pricePerLitre" type="number" {...register("pricePerLitre")} />
+                  <Controller
+                    control={control}
+                    name="pricePerLitre"
+                    render={({ field }) => (
+                      <FormattedNumberInput 
+                        id="pricePerLitre" 
+                        {...field} 
+                        value={(field.value as string | number) ?? ""} 
+                        prefixText="₦" 
+                      />
+                    )}
+                  />
                   {formState.errors.pricePerLitre && (
                     <p className="text-xs text-red-500">{formState.errors.pricePerLitre.message as string}</p>
                   )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="loadingCost">Flat Loading Fee (₦)</Label>
-                  <Input id="loadingCost" type="number" {...register("loadingCost")} />
+                  <Controller
+                    control={control}
+                    name="loadingCost"
+                    render={({ field }) => (
+                      <FormattedNumberInput 
+                        id="loadingCost" 
+                        {...field} 
+                        value={(field.value as string | number) ?? ""} 
+                        prefixText="₦" 
+                      />
+                    )}
+                  />
                 </div>
               </div>
 

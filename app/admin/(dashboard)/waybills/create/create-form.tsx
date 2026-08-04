@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { FormattedNumberInput as NumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save, ChevronsUpDown, Check, Plus, Trash2, Calculator, FileText, Sparkles } from "lucide-react";
+import { ArrowLeft, Save, ChevronsUpDown, Check, Plus, Trash2, Calculator, FileText, Sparkles, Droplet } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
@@ -374,6 +374,7 @@ export function CreateWaybillForm({
                           value={field.value as string | number}
                           onChange={(e: any) => field.onChange(e.target.value)}
                           className={formState.errors.litersLoaded ? "border-destructive" : ""}
+                          prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
                         />
                       )}
                     />
@@ -537,6 +538,7 @@ export function CreateWaybillForm({
                               className="h-10"
                               value={field.value as string | number}
                               onChange={(e: any) => field.onChange(e.target.value)}
+                              prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
                             />
                           )}
                         />
@@ -558,6 +560,7 @@ export function CreateWaybillForm({
                               className="h-10"
                               value={field.value as string | number}
                               onChange={(e: any) => field.onChange(e.target.value)}
+                              prefixText="₦"
                             />
                           )}
                         />
@@ -579,6 +582,7 @@ export function CreateWaybillForm({
                               className="h-10"
                               value={field.value as string | number}
                               onChange={(e: any) => field.onChange(e.target.value)}
+                              prefixText="₦"
                             />
                           )}
                         />

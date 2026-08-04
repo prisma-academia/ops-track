@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ArrowLeft, Save, ChevronsUpDown, Check, Plus, Calculator, FileText } from "lucide-react";
+import { ArrowLeft, Save, ChevronsUpDown, Check, Plus, Calculator, FileText, Droplet } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
@@ -280,12 +280,19 @@ export function CreateOrderForm() {
 
                   <div className="space-y-2">
                     <Label htmlFor="litersOrdered" className={formState.errors.litersOrdered ? "text-destructive" : ""}>Volume Ordered (Liters)*</Label>
-                    <Input 
-                      id="litersOrdered" 
-                      type="number"
-                      placeholder="e.g. 45000" 
-                      {...register("litersOrdered")}
-                      className={formState.errors.litersOrdered ? "border-destructive" : ""}
+                    <Controller
+                      control={control}
+                      name="litersOrdered"
+                      render={({ field }) => (
+                        <FormattedNumberInput 
+                          id="litersOrdered" 
+                          placeholder="e.g. 45000" 
+                          {...field}
+                          value={field.value ?? ""}
+                          className={formState.errors.litersOrdered ? "border-destructive" : ""}
+                          prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
+                        />
+                      )}
                     />
                     {formState.errors.litersOrdered && <p className="text-xs text-destructive">{formState.errors.litersOrdered.message}</p>}
                   </div>
@@ -335,6 +342,7 @@ export function CreateOrderForm() {
                           placeholder="e.g. 950"
                           {...field}
                           className={formState.errors.pricePerLitre ? "border-destructive" : ""}
+                          prefixText="₦"
                         />
                       )}
                     />
@@ -350,6 +358,7 @@ export function CreateOrderForm() {
                           placeholder="e.g. 15000"
                           {...field}
                           className={formState.errors.loadingCost ? "border-destructive" : ""}
+                          prefixText="₦"
                         />
                       )}
                     />

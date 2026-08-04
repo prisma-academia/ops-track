@@ -5,7 +5,7 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { Truck, Clock, MapPin, ExternalLink, AlertCircle, Check, Eye, Package, ClipboardCheck, Loader2 } from "lucide-react";
+import { Truck, Clock, MapPin, ExternalLink, AlertCircle, Check, Eye, Package, ClipboardCheck, Loader2, Droplet } from "lucide-react";
 import { formatHumanReadableDate } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -69,6 +69,7 @@ function ReceiveWaybillModal({ allocation, onSuccess }: { allocation: Allocation
               step="0.01"
               value={litersReceived} 
               onChange={(e: any) => setLitersReceived(e.target.value)} 
+              prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
             />
             <p className="text-xs text-muted-foreground">Expected: {Number(allocation.litersToDispense).toLocaleString()} L</p>
           </div>

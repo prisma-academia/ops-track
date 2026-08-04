@@ -25,6 +25,12 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import { Droplets, ChartColumnIncreasing, Handbag, CheckCircle2, Maximize2, Minimize2, Printer, LayoutGrid, TableProperties, Filter } from "lucide-react";
 import { addDays, format } from "date-fns";
@@ -243,6 +249,7 @@ export function SalesReportsManager({
     {
       title: "Transactions",
       value: finalGroupedSales.length.toString(),
+      fullValue: null,
       icon: Handbag,
       badgeColor: "bg-teal-400/10 text-teal-700 dark:text-teal-400",
       badge: "Period",
@@ -251,7 +258,8 @@ export function SalesReportsManager({
     },
     {
       title: "Volume Sold",
-      value: `${stats.totalLiters.toLocaleString()} L`,
+      value: `${Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(stats.totalLiters)} L`,
+      fullValue: `${stats.totalLiters.toLocaleString()} L`,
       icon: Droplets,
       badgeColor: "bg-blue-400/10 text-blue-700 dark:text-blue-400",
       badge: "Period",
@@ -261,6 +269,7 @@ export function SalesReportsManager({
     {
       title: "Digital Revenue",
       value: formatShortCurrency(stats.digital),
+      fullValue: `₦${stats.digital.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: ChartColumnIncreasing,
       badgeColor: "bg-indigo-400/10 text-indigo-700 dark:text-indigo-400",
       badge: "Period",
@@ -314,43 +323,39 @@ export function SalesReportsManager({
       `}</style>
       
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-4 bg-card text-card-foreground p-3 rounded-xl border hide-on-print">
+      <div className="flex flex-col md:flex-row justify-between items-center md:items-center gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          <h1 className="text-xl font-bold tracking-tight text-foreground print:text-black">
             Sales Reports
           </h1>
         </div>
         
         <div className="flex items-center gap-3">
           {/* View Mode Toggle */}
-          <div className="space-y-1 shrink-0">
-            <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">View</Label>
-            <div className="flex bg-muted p-1 rounded-md">
-              <Button
-                variant={viewMode === "card" ? "secondary" : "ghost"}
-                size="sm"
-                className="h-8 px-2"
-                onClick={() => setViewMode("card")}
-                title="Card View"
-              >
-                <LayoutGrid className="size-4" />
-              </Button>
-              <Button
-                variant={viewMode === "table" ? "secondary" : "ghost"}
-                size="sm"
-                className="h-8 px-2"
-                onClick={() => setViewMode("table")}
-                title="Table View"
-              >
-                <TableProperties className="size-4" />
-              </Button>
-            </div>
+          <div className="flex bg-muted p-1 rounded-md">
+            <Button
+              variant={viewMode === "card" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => setViewMode("card")}
+              title="Card View"
+            >
+              <LayoutGrid className="size-4" />
+            </Button>
+            <Button
+              variant={viewMode === "table" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => setViewMode("table")}
+              title="Table View"
+            >
+              <TableProperties className="size-4" />
+            </Button>
           </div>
 
-          {/* Filters, Print & Fullscreen */}
-          <div className="space-y-1 shrink-0 flex gap-2">
-            <div>
-              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">Filter</Label>
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto print:hidden">
+            <div className="shrink-0 flex gap-2">
+              {/* Filter Sheet */}
               <Sheet open={isOpen} onOpenChange={setIsOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" className="gap-2 rounded-sm relative h-10">
@@ -537,9 +542,8 @@ export function SalesReportsManager({
                   </SheetFooter>
                 </SheetContent>
               </Sheet>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">Action</Label>
+              
+              {/* Print button */}
               <Button
                 variant="outline"
                 size="icon"
@@ -549,9 +553,8 @@ export function SalesReportsManager({
               >
                 <Printer className="size-4" />
               </Button>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">FS</Label>
+
+              {/* Fullscreen toggle */}
               <Button
                 variant="outline"
                 size="icon"
@@ -580,36 +583,67 @@ export function SalesReportsManager({
         </p>
       </div>
 
-      {/* Analytics Cards */}
-      <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
-        <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
-          {statCards.map((item, index) => (
-            <div
-              key={index}
-              className="lg:w-3/12 md:w-6/12 w-full border-border border-b last:border-b-0 md:border-e md:even:border-e-0 md:nth-[n+3]:border-b-0 lg:border-b-0 lg:even:border-e lg:last:border-e-0 print:border-none print:w-auto"
-            >
-              <div className="p-4 flex items-start justify-between print:p-0">
-                <div className="flex flex-col gap-2 print:gap-0.5">
-                  <p className="text-sm font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
-                  <div>
-                    <p className={cn("text-xl font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
-                      {item.value}
-                    </p>
+      {/* ── Stat Cards ──────────────────────────────────────────────────── */}
+      <TooltipProvider delayDuration={200}>
+        <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
+          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
+            {statCards.map((item, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "w-full md:w-1/3 border-border print:border-none print:w-auto",
+                  index === statCards.length - 1 ? "border-b-0" : "border-b",
+                  "md:border-b-0",
+                  index === statCards.length - 1 ? "md:border-e-0" : "md:border-e"
+                )}
+              >
+                {item.fullValue ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="p-4 flex items-start justify-between print:p-0 cursor-default hover:bg-muted/30 transition-colors h-full">
+                        <div className="flex flex-col gap-2 print:gap-0.5">
+                          <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                          <div>
+                            <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
+                              {item.value}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
+                          <item.icon
+                            size={14}
+                            className={cn("text-muted-foreground", item.iconColor)}
+                          />
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                      {item.fullValue}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div className="p-4 flex items-start justify-between print:p-0 h-full">
+                    <div className="flex flex-col gap-2 print:gap-0.5">
+                      <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                      <div>
+                        <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
+                          {item.value}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
+                      <item.icon
+                        size={14}
+                        className={cn("text-muted-foreground", item.iconColor)}
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 hide-on-print">
-                  <item.icon
-                    size={14}
-                    className={cn("text-muted-foreground", item.iconColor)}
-                  />
-                </div>
+                )}
               </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-
+            ))}
+          </CardContent>
+        </Card>
+      </TooltipProvider>
 
       {finalGroupedSales.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground border rounded-xl border-dashed bg-card">

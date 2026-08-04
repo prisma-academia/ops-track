@@ -29,6 +29,12 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn, formatShortCurrency } from "@/lib/utils";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
@@ -42,6 +48,7 @@ import {
   Minimize2,
   Printer,
   Filter,
+  Wallet,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -62,6 +69,7 @@ interface StockReportRow {
   stockValue: number;
   reconciledDate: string | null;
   reconciledDeposit: number | null;
+  totalExpense: number;
   pnl: number | null;
   reconciledStation: string;
   reconciledQty: number | null;
@@ -176,14 +184,22 @@ export function StockReportManager({ initialRows, stations }: Props) {
   const stats = useMemo(() => {
     let totalVolume = 0;
     let totalStockValue = 0;
-    let totalRemainingStockValue = 0;
+    let totalReceived = 0;
+    let totalVariance = 0;
+    let totalDeposit = 0;
+    let totalExpenseSum = 0;
+    let totalPnl = 0;
 
     filteredRows.forEach((r) => {
       totalVolume += r.deliveryQty;
       totalStockValue += r.stockValue;
-      if (r.remainingStockValue) totalRemainingStockValue += r.remainingStockValue;
+      if (r.reconciledQty) totalReceived += r.reconciledQty;
+      totalVariance += ((r.reconciledQty ?? r.deliveryQty) - r.deliveryQty);
+      if (r.reconciledDeposit) totalDeposit += r.reconciledDeposit;
+      totalExpenseSum += (r.totalExpense || 0);
+      if (r.pnl) totalPnl += r.pnl;
     });
-    return { count: filteredRows.length, totalVolume, totalStockValue, totalRemainingStockValue };
+    return { count: filteredRows.length, totalVolume, totalStockValue, totalReceived, totalVariance, totalDeposit, totalExpenseSum, totalPnl };
   }, [filteredRows]);
 
   // ── Column defs ───────────────────────────────────────────────────────────
@@ -248,17 +264,6 @@ export function StockReportManager({ initialRows, stations }: Props) {
         ),
       },
       {
-        id: "buyingPrice",
-        accessorKey: "buyingPrice",
-        header: () => <div className="text-right whitespace-nowrap">Buying Price</div>,
-        size: 120,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums">
-            {fmtMoney(row.original.buyingPrice)}
-          </div>
-        ),
-      },
-      {
         id: "deliveryCost",
         accessorKey: "deliveryCost",
         header: () => <div className="text-right whitespace-nowrap">Delivery Cost</div>,
@@ -282,24 +287,71 @@ export function StockReportManager({ initialRows, stations }: Props) {
       },
 
       {
-        id: "remainingLiters",
-        accessorKey: "remainingLiters",
-        header: () => <div className="text-right whitespace-nowrap">Remaining Liters</div>,
+        id: "reconciledQty",
+        accessorKey: "reconciledQty",
+        header: () => <div className="text-right whitespace-nowrap">Volume Received</div>,
         size: 140,
         cell: ({ row }) => (
           <div className="text-right text-xs font-mono tabular-nums">
-            {fmtQty(row.original.remainingLiters)}
+            {fmtQty(row.original.reconciledQty)}
           </div>
         ),
       },
       {
-        id: "remainingStockValue",
-        accessorKey: "remainingStockValue",
-        header: () => <div className="text-right whitespace-nowrap">Remaining Stock Value</div>,
-        size: 160,
+        id: "variance",
+        accessorKey: "variance",
+        header: () => <div className="text-right whitespace-nowrap">Variance</div>,
+        size: 120,
+        cell: ({ row }) => {
+          const variance = (row.original.reconciledQty ?? row.original.deliveryQty) - (row.original.deliveryQty ?? 0);
+          return (
+            <div className={cn("text-right text-xs font-mono tabular-nums", variance < 0 ? "text-red-500 font-semibold" : "")}>
+              {fmtQty(variance)}
+            </div>
+          );
+        },
+      },
+      {
+        id: "reconciledDate",
+        accessorKey: "reconciledDate",
+        header: "Reconciled Date",
+        size: 130,
+        cell: ({ row }) => (
+          <span className="text-xs font-medium whitespace-nowrap">
+            {fmtDate(row.original.reconciledDate)}
+          </span>
+        ),
+      },
+      {
+        id: "reconciledDeposit",
+        accessorKey: "reconciledDeposit",
+        header: () => <div className="text-right whitespace-nowrap">Deposit</div>,
+        size: 140,
         cell: ({ row }) => (
           <div className="text-right text-xs font-mono font-semibold text-foreground tabular-nums">
-            {fmtMoney(row.original.remainingStockValue)}
+            {fmtMoney(row.original.reconciledDeposit)}
+          </div>
+        ),
+      },
+      {
+        id: "totalExpense",
+        accessorKey: "totalExpense",
+        header: () => <div className="text-right whitespace-nowrap">Total Expense</div>,
+        size: 140,
+        cell: ({ row }) => (
+          <div className="text-right text-xs font-mono text-red-500 tabular-nums">
+            {fmtMoney(row.original.totalExpense)}
+          </div>
+        ),
+      },
+      {
+        id: "pnl",
+        accessorKey: "pnl",
+        header: () => <div className="text-right whitespace-nowrap">Profit/Loss</div>,
+        size: 140,
+        cell: ({ row }) => (
+          <div className={cn("text-right text-xs font-mono font-semibold tabular-nums", (row.original.pnl ?? 0) < 0 ? "text-red-500" : "text-green-600")}>
+            {fmtMoney(row.original.pnl)}
           </div>
         ),
       },
@@ -331,30 +383,50 @@ export function StockReportManager({ initialRows, stations }: Props) {
     {
       title: "Deliveries",
       value: stats.count.toLocaleString(),
+      fullValue: null,
       icon: Truck,
       badge: "Filtered",
       badgeColor: "bg-teal-400/10 text-teal-700 dark:text-teal-400",
     },
     {
       title: "Total Volume",
-      value: `${fmtQty(stats.totalVolume)} L`,
+      value: `${Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(stats.totalVolume)} L`,
+      fullValue: `${fmtQty(stats.totalVolume)} L`,
       icon: Layers,
+      valueColor: "text-blue-600",
+      iconColor: "text-blue-600",
       badge: "Filtered",
       badgeColor: "bg-blue-400/10 text-blue-700 dark:text-blue-400",
     },
     {
       title: "Stock Value",
       value: formatShortCurrency(stats.totalStockValue),
+      fullValue: fmtMoney(stats.totalStockValue),
       icon: BarChart3,
+      valueColor: "text-indigo-600",
+      iconColor: "text-indigo-600",
       badge: "Filtered",
       badgeColor: "bg-indigo-400/10 text-indigo-700 dark:text-indigo-400",
     },
     {
-      title: "Remaining Stock Value",
-      value: formatShortCurrency(stats.totalRemainingStockValue),
-      icon: BarChart3,
+      title: "Volume Received",
+      value: `${Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(stats.totalReceived)} L`,
+      fullValue: `${fmtQty(stats.totalReceived)} L`,
+      icon: Layers,
+      valueColor: "text-orange-600",
+      iconColor: "text-orange-600",
       badge: "Filtered",
-      badgeColor: "bg-indigo-400/10 text-indigo-700 dark:text-indigo-400",
+      badgeColor: "bg-orange-400/10 text-orange-700 dark:text-orange-400",
+    },
+    {
+      title: "Reconciled Deposit",
+      value: formatShortCurrency(stats.totalDeposit),
+      fullValue: fmtMoney(stats.totalDeposit),
+      icon: Wallet,
+      valueColor: "text-teal-600",
+      iconColor: "text-teal-600",
+      badge: "Filtered",
+      badgeColor: "bg-teal-400/10 text-teal-700 dark:text-teal-400",
     },
   ];
 
@@ -373,9 +445,9 @@ export function StockReportManager({ initialRows, stations }: Props) {
         }
       `}</style>
       {/* ── Header + Filters ─────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
+      <div className="flex flex-col md:flex-row justify-between items-center md:items-center gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground print:text-black">
+          <h1 className="text-xl font-bold tracking-tight text-foreground print:text-black">
             Stock Report
           </h1>
           <p className="hidden print:block text-[11px] text-black/80 font-medium mt-1">
@@ -385,11 +457,10 @@ export function StockReportManager({ initialRows, stations }: Props) {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-end gap-3 w-full md:w-auto print:hidden">
-          <div className="space-y-1 shrink-0 flex gap-2">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto print:hidden">
+          <div className="shrink-0 flex gap-2">
             {/* Filter Sheet */}
             <div>
-              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">Filter</Label>
               <Sheet open={isOpen} onOpenChange={setIsOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" className="gap-2 rounded-sm relative h-10">
@@ -512,7 +583,6 @@ export function StockReportManager({ initialRows, stations }: Props) {
 
             {/* Print button */}
             <div>
-              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">Print</Label>
               <Button
                 variant="outline"
                 size="icon"
@@ -526,7 +596,6 @@ export function StockReportManager({ initialRows, stations }: Props) {
 
             {/* Fullscreen toggle */}
             <div>
-              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">View</Label>
               <Button
                 variant="outline"
                 size="icon"
@@ -546,33 +615,68 @@ export function StockReportManager({ initialRows, stations }: Props) {
       </div>
 
       {/* ── Stat Cards ──────────────────────────────────────────────────── */}
-      <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
-        <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
-          {statCards.map((item, index) => (
-            <div
-              key={index}
-              className="lg:w-1/6 md:w-1/3 w-full border-border border-b last:border-b-0 md:border-e md:nth-[3n]:border-e-0 md:nth-[n+4]:border-b-0 lg:border-b-0 lg:border-e lg:last:border-e-0 print:border-none print:w-auto"
-            >
-              <div className="p-4 flex items-start justify-between print:p-0">
-                <div className="flex flex-col gap-2 print:gap-0.5">
-                  <p className="text-sm font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
-                  <div>
-                    <p className="text-xl font-semibold text-card-foreground print:text-[13px] print:text-black">
-                      {item.value}
-                    </p>
+      <TooltipProvider delayDuration={200}>
+        <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
+          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
+            {statCards.map((item, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "w-full lg:w-1/5 md:w-1/2 border-border print:border-none print:w-auto",
+                  index === statCards.length - 1 ? "border-b-0" : "border-b",
+                  (index + 1) % 2 === 0 ? "md:border-e-0" : "md:border-e",
+                  index >= 3 ? "md:border-b-0" : "md:border-b",
+                  "lg:border-b-0",
+                  index === statCards.length - 1 ? "lg:border-e-0" : "lg:border-e"
+                )}
+              >
+                {item.fullValue ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="p-4 flex items-start justify-between print:p-0 cursor-default hover:bg-muted/30 transition-colors h-full">
+                        <div className="flex flex-col gap-2 print:gap-0.5">
+                          <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                          <div>
+                            <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", (item as any).valueColor)}>
+                              {item.value}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
+                          <item.icon
+                            size={14}
+                            className={cn("text-muted-foreground", (item as any).iconColor)}
+                          />
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                      {item.fullValue}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div className="p-4 flex items-start justify-between print:p-0 h-full">
+                    <div className="flex flex-col gap-2 print:gap-0.5">
+                      <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                      <div>
+                        <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", (item as any).valueColor)}>
+                          {item.value}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
+                      <item.icon
+                        size={14}
+                        className={cn("text-muted-foreground", (item as any).iconColor)}
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
-                  <item.icon
-                    size={14}
-                    className="text-muted-foreground"
-                  />
-                </div>
+                )}
               </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+            ))}
+          </CardContent>
+        </Card>
+      </TooltipProvider>
 
       {/* ── Table ───────────────────────────────────────────────────────── */}
       <Card className="w-full py-0 overflow-hidden print:shadow-none print:border-none print:bg-transparent">
@@ -685,17 +789,24 @@ export function StockReportManager({ initialRows, stations }: Props) {
                     {fmtQty(stats.totalVolume)}
                   </td>
                   <td className="px-2 py-2 border border-border/50 print:border-black/30"></td>
-                  <td className="px-2 py-2 border border-border/50 print:border-black/30"></td>
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {fmtMoney(stats.totalStockValue)}
                   </td>
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtQty(
-                      filteredRows.reduce((acc, row) => acc + (row.remainingLiters || 0), 0)
-                    )}
+                    {fmtQty(stats.totalReceived)}
+                  </td>
+                  <td className={cn("px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black", stats.totalVariance < 0 ? "text-red-500" : "")}>
+                    {fmtQty(stats.totalVariance)}
+                  </td>
+                  <td className="px-2 py-2 border border-border/50 print:border-black/30"></td>
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
+                    {fmtMoney(stats.totalDeposit)}
                   </td>
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtMoney(stats.totalRemainingStockValue)}
+                    {fmtMoney(stats.totalExpenseSum)}
+                  </td>
+                  <td className={cn("px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black", stats.totalPnl < 0 ? "text-red-500" : "text-green-600")}>
+                    {fmtMoney(stats.totalPnl)}
                   </td>
                 </tr>
               </tfoot>

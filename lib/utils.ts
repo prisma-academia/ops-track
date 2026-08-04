@@ -40,7 +40,8 @@ export function formatHumanReadableDate(dateInput: string | Date | null | undefi
 }
 
 export function formatShortCurrency(num: number): string {
-  return `₦${num.toLocaleString()}`;
+  if (num === null || num === undefined) return "₦0";
+  return `₦${Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(num)}`;
 }
 
 export function formatNumberInput(value: string | number): string {

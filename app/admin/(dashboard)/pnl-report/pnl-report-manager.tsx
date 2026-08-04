@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback, Fragment } from "react";
 import {
   type ColumnDef,
   type ColumnPinningState,
@@ -29,6 +29,12 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn, formatShortCurrency } from "@/lib/utils";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
@@ -43,6 +49,9 @@ import {
   Minimize2,
   Printer,
   Filter,
+  History,
+  Wallet,
+  Receipt,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -63,6 +72,7 @@ interface StockReportRow {
   stockValue: number;
   reconciledDate: string | null;
   reconciledDeposit: number | null;
+  totalExpense: number;
   pnl: number | null;
   reconciledStation: string;
   reconciledQty: number | null;
@@ -71,8 +81,9 @@ interface StockReportRow {
   approvedSalesLiters: number | null;
   sellingPrice: number | null;
   salesRevenue: number | null;
-  remainingLiters: number | null;
+  remainingLiters: number;
   remainingStockValue: number | null;
+  salesBreakdown?: Array<{ id: string, date: string, liters: number, price: number, revenue: number }>;
 }
 
 interface Station {
@@ -175,20 +186,22 @@ export function PnlReportManager({ initialRows, stations }: Props) {
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    let totalVolume = 0;
     let totalPnl = 0;
-    let totalVariance = 0;
     let totalSalesRevenue = 0;
+    let totalReconciledQty = 0;
+    let totalReconciledDeposit = 0;
+    let totalExpenseSum = 0;
+    let totalVolume = 0;
 
     filteredRows.forEach((r) => {
-      totalVolume += r.deliveryQty;
       if (r.pnl !== null) totalPnl += r.pnl;
-      if (r.reconciledQty !== null) {
-        totalVariance += (r.reconciledQty - r.totalDelivery);
-      }
-      if (r.salesRevenue) totalSalesRevenue += r.salesRevenue;
+      if (r.reconciledQty !== null) totalReconciledQty += r.reconciledQty;
+      if (r.salesRevenue !== null) totalSalesRevenue += r.salesRevenue;
+      if (r.reconciledDeposit !== null) totalReconciledDeposit += r.reconciledDeposit;
+      if (r.totalExpense) totalExpenseSum += r.totalExpense;
+      if (r.deliveryQty) totalVolume += r.deliveryQty;
     });
-    return { count: filteredRows.length, totalVolume, totalPnl, totalVariance, totalSalesRevenue };
+    return { count: filteredRows.length, totalPnl, totalReconciledQty, totalSalesRevenue, totalReconciledDeposit, totalExpenseSum, totalVolume };
   }, [filteredRows]);
 
   // ── Column defs ───────────────────────────────────────────────────────────
@@ -242,32 +255,20 @@ export function PnlReportManager({ initialRows, stations }: Props) {
       },
 
       {
-        id: "totalDelivery",
-        accessorKey: "totalDelivery",
-        header: () => <div className="text-right whitespace-nowrap">Total Delivery</div>,
-        size: 120,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono font-semibold tabular-nums">
-            {fmtQty(row.original.totalDelivery)}
-          </div>
-        ),
-      },
-
-      {
-        id: "reconciledDate",
-        accessorKey: "reconciledDate",
-        header: () => <div className="whitespace-nowrap">Reconciled Date</div>,
+        id: "buyingPrice",
+        accessorKey: "buyingPrice",
+        header: () => <div className="text-right whitespace-nowrap">Purchase Price</div>,
         size: 130,
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground whitespace-nowrap">
-            {fmtDate(row.original.reconciledDate)}
-          </span>
+          <div className="text-right text-xs font-mono tabular-nums">
+            {fmtMoney(row.original.buyingPrice)}
+          </div>
         ),
       },
       {
         id: "reconciledQty",
         accessorKey: "reconciledQty",
-        header: () => <div className="text-right whitespace-nowrap">Reconciled Qty</div>,
+        header: () => <div className="text-right whitespace-nowrap">Receive Qty</div>,
         size: 130,
         cell: ({ row }) => (
           <div className="text-right text-xs font-mono tabular-nums">
@@ -276,24 +277,13 @@ export function PnlReportManager({ initialRows, stations }: Props) {
         ),
       },
       {
-        id: "approvedSalesLiters",
-        accessorKey: "approvedSalesLiters",
-        header: () => <div className="text-right whitespace-nowrap">Sales Liters</div>,
-        size: 130,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums">
-            {fmtQty(row.original.approvedSalesLiters)}
-          </div>
-        ),
-      },
-      {
         id: "sellingPrice",
         accessorKey: "sellingPrice",
-        header: () => <div className="text-right whitespace-nowrap">Selling Price</div>,
+        header: () => <div className="text-right whitespace-nowrap">Sold Price</div>,
         size: 130,
         cell: ({ row }) => (
           <div className="text-right text-xs font-mono tabular-nums">
-            {fmtMoney(row.original.sellingPrice)}
+            {row.original.sellingPrice !== null ? fmtMoney(row.original.sellingPrice) : "—"}
           </div>
         ),
       },
@@ -303,12 +293,11 @@ export function PnlReportManager({ initialRows, stations }: Props) {
         header: () => <div className="text-right whitespace-nowrap">Sales Revenue</div>,
         size: 140,
         cell: ({ row }) => (
-          <div className="text-right text-xs font-mono font-semibold text-foreground tabular-nums">
+          <div className="text-right text-xs font-mono font-semibold tabular-nums">
             {fmtMoney(row.original.salesRevenue)}
           </div>
         ),
       },
-
       {
         id: "reconciledDeposit",
         accessorKey: "reconciledDeposit",
@@ -321,9 +310,20 @@ export function PnlReportManager({ initialRows, stations }: Props) {
         ),
       },
       {
+        id: "totalExpense",
+        accessorKey: "totalExpense",
+        header: () => <div className="text-right whitespace-nowrap">Expenses</div>,
+        size: 130,
+        cell: ({ row }) => (
+          <div className="text-right text-xs font-mono tabular-nums text-red-500">
+            {fmtMoney(row.original.totalExpense)}
+          </div>
+        ),
+      },
+      {
         id: "pnl",
         accessorKey: "pnl",
-        header: () => <div className="text-right">P&L</div>,
+        header: () => <div className="text-right">Profit/Loss</div>,
         size: 130,
         cell: ({ row }) => {
           const v = row.original.pnl;
@@ -338,31 +338,6 @@ export function PnlReportManager({ initialRows, stations }: Props) {
             >
               {isPos ? "+" : ""}
               {fmtMoney(v)}
-            </div>
-          );
-        },
-      },
-      {
-        id: "variance",
-        accessorKey: "variance",
-        header: () => <div className="text-right whitespace-nowrap">Variance</div>,
-        size: 130,
-        cell: ({ row }) => {
-          const rq = row.original.reconciledQty;
-          const td = row.original.totalDelivery;
-          if (rq === null || td === null) return <div className="text-right text-xs text-muted-foreground">—</div>;
-          const variance = rq - td;
-          const isPos = variance > 0;
-          const isNeg = variance < 0;
-          return (
-            <div
-              className={cn(
-                "text-right text-xs font-mono font-semibold tabular-nums",
-                isPos ? "text-amber-500" : isNeg ? "text-rose-600" : "text-emerald-600"
-              )}
-            >
-              {isPos ? "+" : ""}
-              {fmtQty(variance)}
             </div>
           );
         },
@@ -394,13 +369,15 @@ export function PnlReportManager({ initialRows, stations }: Props) {
     {
       title: "Deliveries",
       value: stats.count.toLocaleString(),
+      fullValue: null,
       icon: Truck,
       badge: "Filtered",
       badgeColor: "bg-teal-400/10 text-teal-700 dark:text-teal-400",
     },
     {
       title: "Total Volume",
-      value: `${fmtQty(stats.totalVolume)} L`,
+      value: `${Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(stats.totalVolume)} L`,
+      fullValue: `${fmtQty(stats.totalVolume)} L`,
       icon: Layers,
       badge: "Filtered",
       badgeColor: "bg-blue-400/10 text-blue-700 dark:text-blue-400",
@@ -409,6 +386,7 @@ export function PnlReportManager({ initialRows, stations }: Props) {
     {
       title: "Sales Revenue",
       value: formatShortCurrency(stats.totalSalesRevenue),
+      fullValue: fmtMoney(stats.totalSalesRevenue),
       icon: TrendingUp,
       valueColor: "text-emerald-600",
       iconColor: "text-emerald-600",
@@ -416,8 +394,29 @@ export function PnlReportManager({ initialRows, stations }: Props) {
       badgeColor: "bg-emerald-400/10 text-emerald-700 dark:text-emerald-400",
     },
     {
+      title: "Reconciled Deposit",
+      value: formatShortCurrency(stats.totalReconciledDeposit),
+      fullValue: fmtMoney(stats.totalReconciledDeposit),
+      icon: Wallet,
+      valueColor: "text-indigo-600",
+      iconColor: "text-indigo-600",
+      badge: "Filtered",
+      badgeColor: "bg-indigo-400/10 text-indigo-700 dark:text-indigo-400",
+    },
+    {
+      title: "Expenses",
+      value: formatShortCurrency(stats.totalExpenseSum),
+      fullValue: fmtMoney(stats.totalExpenseSum),
+      icon: Receipt,
+      valueColor: "text-rose-500",
+      iconColor: "text-rose-500",
+      badge: "Filtered",
+      badgeColor: "bg-rose-400/10 text-rose-700 dark:text-rose-400",
+    },
+    {
       title: "Profit & Loss",
       value: formatShortCurrency(Math.abs(stats.totalPnl)),
+      fullValue: fmtMoney(Math.abs(stats.totalPnl)),
       valueColor: stats.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600",
       icon: stats.totalPnl >= 0 ? TrendingUp : TrendingDown,
       iconColor: stats.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600",
@@ -441,12 +440,13 @@ export function PnlReportManager({ initialRows, stations }: Props) {
       <style>{`
         @media print {
           @page { size: landscape; margin: 10mm; }
+          .hide-on-print { display: none; }
         }
       `}</style>
       {/* ── Header + Filters ─────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
+      <div className="flex flex-col md:flex-row justify-between items-center md:items-center gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground print:text-black">
+          <h1 className="text-xl font-bold tracking-tight text-foreground print:text-black">
             Profit & Loss Report
           </h1>
           <p className="hidden print:block text-[11px] text-black/80 font-medium mt-1">
@@ -456,11 +456,10 @@ export function PnlReportManager({ initialRows, stations }: Props) {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-end gap-3 w-full md:w-auto print:hidden">
-          <div className="space-y-1 shrink-0 flex gap-2">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto print:hidden">
+          <div className="shrink-0 flex gap-2">
             {/* Filter Sheet */}
             <div>
-              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">Filter</Label>
               <Sheet open={isOpen} onOpenChange={setIsOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" className="gap-2 rounded-sm relative h-10">
@@ -583,7 +582,6 @@ export function PnlReportManager({ initialRows, stations }: Props) {
 
             {/* Print button */}
             <div>
-              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">Print</Label>
               <Button
                 variant="outline"
                 size="icon"
@@ -597,7 +595,6 @@ export function PnlReportManager({ initialRows, stations }: Props) {
 
             {/* Fullscreen toggle */}
             <div>
-              <Label className="text-xs text-muted-foreground opacity-0 select-none hidden md:block">View</Label>
               <Button
                 variant="outline"
                 size="icon"
@@ -617,33 +614,68 @@ export function PnlReportManager({ initialRows, stations }: Props) {
       </div>
 
       {/* ── Stat Cards ──────────────────────────────────────────────────── */}
-      <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
-        <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
-          {statCards.map((item, index) => (
-            <div
-              key={index}
-              className="lg:w-1/6 md:w-1/3 w-full border-border border-b last:border-b-0 md:border-e md:nth-[3n]:border-e-0 md:nth-[n+4]:border-b-0 lg:border-b-0 lg:border-e lg:last:border-e-0 print:border-none print:w-auto"
-            >
-              <div className="p-4 flex items-start justify-between print:p-0">
-                <div className="flex flex-col gap-2 print:gap-0.5">
-                  <p className="text-sm font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
-                  <div>
-                    <p className={cn("text-xl font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
-                      {item.value}
-                    </p>
+      <TooltipProvider delayDuration={200}>
+        <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
+          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
+            {statCards.map((item, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "w-full lg:w-1/6 md:w-1/3 border-border print:border-none print:w-auto",
+                  index === statCards.length - 1 ? "border-b-0" : "border-b",
+                  (index + 1) % 3 === 0 ? "md:border-e-0" : "md:border-e",
+                  index >= 3 ? "md:border-b-0" : "md:border-b",
+                  "lg:border-b-0",
+                  index === statCards.length - 1 ? "lg:border-e-0" : "lg:border-e"
+                )}
+              >
+                {item.fullValue ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="p-4 flex items-start justify-between print:p-0 cursor-default hover:bg-muted/30 transition-colors h-full">
+                        <div className="flex flex-col gap-2 print:gap-0.5">
+                          <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                          <div>
+                            <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
+                              {item.value}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
+                          <item.icon
+                            size={14}
+                            className={cn("text-muted-foreground", item.iconColor)}
+                          />
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                      {item.fullValue}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div className="p-4 flex items-start justify-between print:p-0 h-full">
+                    <div className="flex flex-col gap-2 print:gap-0.5">
+                      <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                      <div>
+                        <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
+                          {item.value}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
+                      <item.icon
+                        size={14}
+                        className={cn("text-muted-foreground", item.iconColor)}
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
-                  <item.icon
-                    size={14}
-                    className={cn("text-muted-foreground", item.iconColor)}
-                  />
-                </div>
+                )}
               </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+            ))}
+          </CardContent>
+        </Card>
+      </TooltipProvider>
 
       {/* ── Table ───────────────────────────────────────────────────────── */}
       <Card className="w-full py-0 overflow-hidden print:shadow-none print:border-none print:bg-transparent">
@@ -703,38 +735,64 @@ export function PnlReportManager({ initialRows, stations }: Props) {
               <tbody>
                 {table.getRowModel().rows.length ? (
                   table.getRowModel().rows.map((row, index) => (
-                    <tr
-                      key={row.id}
-                      className={cn(
-                        "hover:bg-muted/20 transition-colors group",
-                        index % 2 === 0 ? "bg-background" : "bg-muted/5 print:bg-transparent"
-                      )}
-                    >
-                      {row.getVisibleCells().map((cell) => {
-                        const isPinned = cell.column.getIsPinned();
-                        const pinOffset =
-                          isPinned === "left"
-                            ? cell.column.getStart("left")
-                            : undefined;
+                    <Fragment key={row.id}>
+                      <tr
+                        className={cn(
+                          "hover:bg-muted/20 transition-colors group",
+                          index % 2 === 0 ? "bg-background" : "bg-muted/5 print:bg-transparent"
+                        )}
+                      >
+                        {row.getVisibleCells().map((cell) => {
+                          const isPinned = cell.column.getIsPinned();
+                          const pinOffset =
+                            isPinned === "left"
+                              ? cell.column.getStart("left")
+                              : undefined;
 
-                        return (
-                          <td
-                            key={cell.id}
-                            style={{
-                              width: cell.column.getSize(),
-                              minWidth: cell.column.getSize(),
-                              left: isPinned === "left" ? pinOffset : undefined,
-                            }}
-                            className={cn(
-                              "px-2 py-1.5 whitespace-nowrap text-[13px] print:text-[10px] print:py-1 border border-border/50 print:border-black/30 print:text-black",
-                              isPinned === "left" && "sticky z-10 bg-inherit"
-                            )}
-                          >
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        );
-                      })}
-                    </tr>
+                          return (
+                            <td
+                              key={cell.id}
+                              style={{
+                                width: cell.column.getSize(),
+                                minWidth: cell.column.getSize(),
+                                left: isPinned === "left" ? pinOffset : undefined,
+                              }}
+                              className={cn(
+                                "h-11 px-2 py-1.5 border border-border/50 print:border-black/30",
+                                isPinned === "left" &&
+                                  "sticky z-10 bg-inherit group-hover:bg-muted/20"
+                              )}
+                            >
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      {row.original.salesBreakdown && row.original.salesBreakdown.length > 0 && (
+                        <tr className="bg-slate-50/50 hover:bg-slate-50/80 print:bg-transparent relative hide-on-print">
+                           <td colSpan={row.getVisibleCells().length} className="px-3 py-3 border border-border/50 border-t-0 print:border-black/30">
+                              <div className="pl-8 lg:pl-24 space-y-3">
+                                <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                  <History className="size-3" /> Sales Breakdown
+                                </h4>
+                                <div className="space-y-1.5">
+                                  {row.original.salesBreakdown.map((sb, i) => (
+                                    <div key={sb.id || i} className="flex items-center gap-4 text-xs bg-white border shadow-sm rounded-lg p-2 max-w-lg hover:border-slate-300 transition-colors">
+                                      <span className="w-28 text-muted-foreground font-medium">{format(new Date(sb.date), "dd/MM/yyyy HH:mm")}</span>
+                                      <span className="w-24 font-mono font-semibold">{fmtQty(sb.liters)} L</span>
+                                      <span className="w-24 font-mono text-muted-foreground">@ {fmtMoney(sb.price)}/L</span>
+                                      <span className="flex-1 text-right font-mono font-bold text-emerald-600">+{fmtMoney(sb.revenue)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                           </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))
                 ) : (
                   <tr>
@@ -752,28 +810,19 @@ export function PnlReportManager({ initialRows, stations }: Props) {
                   <td colSpan={4} className="px-2 py-2 text-right text-sm border border-border/50 print:border-black/30 print:text-black">
                     Total:
                   </td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtQty(stats.totalVolume)}
-                  </td>
                   <td className="px-2 py-2 border border-border/50 print:border-black/30"></td>
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtQty(
-                      filteredRows.reduce((acc, row) => acc + (row.reconciledQty || 0), 0)
-                    )}
-                  </td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtQty(
-                      filteredRows.reduce((acc, row) => acc + (row.approvedSalesLiters || 0), 0)
-                    )}
+                    {fmtQty(stats.totalReconciledQty)}
                   </td>
                   <td className="px-2 py-2 border border-border/50 print:border-black/30"></td>
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {fmtMoney(stats.totalSalesRevenue)}
                   </td>
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtMoney(
-                      filteredRows.reduce((acc, row) => acc + (row.reconciledDeposit || 0), 0)
-                    )}
+                    {fmtMoney(stats.totalReconciledDeposit)}
+                  </td>
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-red-500">
+                    {fmtMoney(stats.totalExpenseSum)}
                   </td>
                   <td className={cn(
                     "px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black",
@@ -781,13 +830,6 @@ export function PnlReportManager({ initialRows, stations }: Props) {
                   )}>
                     {stats.totalPnl >= 0 ? "+" : ""}
                     {fmtMoney(stats.totalPnl)}
-                  </td>
-                  <td className={cn(
-                    "px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black",
-                    stats.totalVariance > 0 ? "text-amber-500 print:text-black" : stats.totalVariance < 0 ? "text-rose-600 print:text-black" : "text-emerald-600 print:text-black"
-                  )}>
-                    {stats.totalVariance > 0 ? "+" : ""}
-                    {fmtQty(stats.totalVariance)}
                   </td>
                 </tr>
               </tfoot>

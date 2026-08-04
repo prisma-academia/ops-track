@@ -226,8 +226,7 @@ export function UpdatePricesManager({
   })
 
   const [selectedStations, setSelectedStations] = useState<RowSelectionState>({})
-  const [effectiveDate, setEffectiveDate] = useState<Date>()
-  const [effectiveTime, setEffectiveTime] = useState<string>("00:00")
+  const [effectiveDateTime, setEffectiveDateTime] = useState<string>("")
   const [searchQuery, setSearchQuery] = useState("")
 
   // Build price history index: stationId → productType → PriceControlRow[]
@@ -281,8 +280,7 @@ export function UpdatePricesManager({
   const handleCancel = () => {
     setEditingPrices({ PMS: "", AGO: "", DPK: "", LPG: "" })
     setSelectedStations({})
-    setEffectiveDate(undefined)
-    setEffectiveTime("00:00")
+    setEffectiveDateTime("")
     setShowConfirmDialog(false)
   }
 
@@ -318,11 +316,8 @@ export function UpdatePricesManager({
     setIsSubmitting(true)
 
     let effectiveFrom: string | undefined = undefined
-    if (effectiveDate) {
-      const [hours, minutes] = effectiveTime.split(":")
-      const dt = new Date(effectiveDate)
-      dt.setHours(Number(hours), Number(minutes))
-      effectiveFrom = dt.toISOString()
+    if (effectiveDateTime) {
+      effectiveFrom = new Date(effectiveDateTime).toISOString()
     }
 
     const res = await apiPost("/api/tenant/prices/bulk", {
@@ -508,36 +503,12 @@ export function UpdatePricesManager({
 
             <div className="space-y-2">
               <Label>Effective Date & Time</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !effectiveDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {effectiveDate ? format(effectiveDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={effectiveDate}
-                    onSelect={setEffectiveDate}
-                  />
-                  <div className="p-3 border-t border-border">
-                    <Label htmlFor="time" className="text-xs text-muted-foreground mb-1 block">Time</Label>
-                    <Input
-                      id="time"
-                      type="time"
-                      value={effectiveTime}
-                      onChange={(e) => setEffectiveTime(e.target.value)}
-                    />
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="datetime-local"
+                value={effectiveDateTime}
+                onChange={(e) => setEffectiveDateTime(e.target.value)}
+                className="w-full"
+              />
               <p className="text-xs text-muted-foreground">
                 Leave blank to apply immediately.
               </p>
@@ -724,11 +695,11 @@ export function UpdatePricesManager({
                   ))}
                 </div>
                 <Separator />
-                {effectiveDate ? (
+                {effectiveDateTime ? (
                   <p className="text-sm">
                     These prices will take effect on{" "}
                     <strong className="text-foreground">
-                      {format(effectiveDate, "PPP")} at {effectiveTime}
+                      {format(new Date(effectiveDateTime), "PPP 'at' p")}
                     </strong>
                     .
                   </p>

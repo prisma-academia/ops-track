@@ -60,7 +60,9 @@ export async function PATCH(
     });
     if (!existing) throw new DomainError(404, "not_found", "Sale not found.");
 
-    const newLitersReceived = body.litersReceived ?? Number(existing.litersReceived ?? 0);
+    const newLitersReceived = body.litersReceived !== undefined && body.litersReceived !== null 
+      ? body.litersReceived 
+      : Number(existing.litersReceived !== null ? existing.litersReceived : existing.litersDespatched);
     const newAmountPerLiter = body.amountPerLiter ?? Number(existing.amountPerLiter);
     const totalExpectedAmount = newLitersReceived * newAmountPerLiter;
 

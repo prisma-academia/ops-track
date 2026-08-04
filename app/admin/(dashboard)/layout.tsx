@@ -37,7 +37,7 @@ const NAV: NavItemConfig[] = [
   { href: "/admin/waybills", key: "waybills", module: "operations" as ModuleKey, icon: "Truck", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   { href: "/admin/expenses", key: "expenses", module: "operations" as ModuleKey, icon: "Coins", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },
   { href: "/admin/prices", key: "prices", module: "operations" as ModuleKey, icon: "ChartNoAxesCombined", permission: PERMISSIONS.TENANT_PRICES_READ.key },
-  // { href: "/admin/variance-audit", key: "varianceAudit", module: "operations" as ModuleKey, icon: "Scale", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+  { href: "/admin/tickets", key: "tickets", module: "operations" as ModuleKey, icon: "Ticket", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   {
     key: "reports",
     module: "operations" as ModuleKey,
@@ -49,10 +49,9 @@ const NAV: NavItemConfig[] = [
       { href: "/admin/pnl-report", key: "pnlReport", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
     ],
   },
-  // { href: "/admin/customers", key: "customers", module: "customers" as ModuleKey, icon: "Users", permission: PERMISSIONS.TENANT_CUSTOMERS_READ.key },
+  { href: "/admin/bank-accounts", key: "bankAccounts", module: null, icon: "CreditCard", permission: PERMISSIONS.TENANT_SETTINGS_READ.key },
   { href: "/admin/role-templates", key: "roles", module: "roles" as ModuleKey, icon: "Shield", permission: PERMISSIONS.TENANT_ROLES_READ.key },
   { href: "/admin/activity", key: "activity", module: "activity" as ModuleKey, icon: "Activity", permission: PERMISSIONS.TENANT_ACTIVITY_READ.key },
-  { href: "/admin/bank-accounts", key: "bankAccounts", module: null, icon: "CreditCard", permission: PERMISSIONS.TENANT_SETTINGS_READ.key },
 ];
 
 export default async function AdminDashboardLayout({ children }: { children: React.ReactNode }) {

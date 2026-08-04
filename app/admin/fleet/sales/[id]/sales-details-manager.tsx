@@ -370,10 +370,19 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
             <DialogTitle>Update Sales Volumes & Pricing</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Liters Received</Label>
-              <FormattedNumberInput min="0" value={editLitersReceived} onChange={(e) => setEditLitersReceived(e.target.value)} prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />} />
-            </div>
+            {sale.station ? (
+              <div className="space-y-2">
+                <Label>Liters Received</Label>
+                <div className="text-xs text-muted-foreground p-3 border border-dashed rounded-lg bg-muted/20">
+                  Volume received must be logged by the station via Waybill Delivery.
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Liters Received</Label>
+                <FormattedNumberInput min="0" value={editLitersReceived} onChange={(e) => setEditLitersReceived(e.target.value)} prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />} />
+              </div>
+            )}
             
             <div className="space-y-2">
               <Label>Price per Liter (₦)</Label>

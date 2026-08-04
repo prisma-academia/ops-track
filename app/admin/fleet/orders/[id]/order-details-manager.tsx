@@ -127,7 +127,6 @@ export function OrderDetailsManager({
   const onSaveEdit = handleSubmit(async (values) => {
     const res = await apiPatch(`/api/tenant/fleet/orders/${order.id}`, {
       ...values,
-      status: "CHANGED", // Automatically mark as changed if edited
     });
     if (res.error) {
       toast.error(res.error.message);

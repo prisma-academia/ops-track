@@ -394,41 +394,49 @@ export function CreateSaleForm({
                   {formState.errors.litersDespatched && <p className="text-xs text-destructive">{formState.errors.litersDespatched.message}</p>}
                 </div>
 
-                <div className="space-y-2 flex flex-col justify-end">
-                  {!showReceivedInput ? (
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      className="w-full text-muted-foreground border-dashed h-10"
-                      onClick={() => setShowReceivedInput(true)}
-                    >
-                      Already Received?
-                    </Button>
-                  ) : (
-                    <>
-                      <Label htmlFor="litersReceived" className={formState.errors.litersReceived ? "text-destructive" : ""}>Volume Received (L) (Optional)</Label>
-                      <Controller
-                        control={control}
-                        name="litersReceived"
-                        render={({ field }) => (
-                          <FormattedNumberInput 
-                            id="litersReceived" 
-                            placeholder="e.g. 10000" 
-                            {...field}
-                            value={field.value ?? ""}
-                            className={formState.errors.litersReceived ? "border-destructive" : ""}
-                            prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
-                          />
-                        )}
-                      />
-                      <p className="text-[10px] text-muted-foreground mt-1 flex justify-between">
-                        <span>Leave blank if pending.</span>
-                        <button type="button" onClick={() => { setShowReceivedInput(false); setValue("litersReceived", undefined); }} className="text-destructive hover:underline cursor-pointer">Cancel</button>
-                      </p>
-                      {formState.errors.litersReceived && <p className="text-xs text-destructive">{formState.errors.litersReceived.message}</p>}
-                    </>
-                  )}
-                </div>
+                {recipientType === "CUSTOMER" ? (
+                  <div className="space-y-2 flex flex-col justify-end">
+                    {!showReceivedInput ? (
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="w-full text-muted-foreground border-dashed h-10"
+                        onClick={() => setShowReceivedInput(true)}
+                      >
+                        Already Received?
+                      </Button>
+                    ) : (
+                      <>
+                        <Label htmlFor="litersReceived" className={formState.errors.litersReceived ? "text-destructive" : ""}>Volume Received (L) (Optional)</Label>
+                        <Controller
+                          control={control}
+                          name="litersReceived"
+                          render={({ field }) => (
+                            <FormattedNumberInput 
+                              id="litersReceived" 
+                              placeholder="e.g. 10000" 
+                              {...field}
+                              value={field.value ?? ""}
+                              className={formState.errors.litersReceived ? "border-destructive" : ""}
+                              prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
+                            />
+                          )}
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-1 flex justify-between">
+                          <span>Leave blank if pending.</span>
+                          <button type="button" onClick={() => { setShowReceivedInput(false); setValue("litersReceived", undefined); }} className="text-destructive hover:underline cursor-pointer">Cancel</button>
+                        </p>
+                        {formState.errors.litersReceived && <p className="text-xs text-destructive">{formState.errors.litersReceived.message}</p>}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2 flex flex-col justify-end h-full">
+                     <div className="text-xs text-muted-foreground p-3 border border-dashed rounded-lg bg-muted/20 h-10 flex items-center justify-center">
+                        Volume received must be logged by the station via Waybill Delivery.
+                     </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4 border-t border-border/50 pt-5 mt-2">

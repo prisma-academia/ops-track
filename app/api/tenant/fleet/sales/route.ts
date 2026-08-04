@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     }
 
     // null = not yet received (will be set after dipping). 0 is a valid received value.
-    const litersReceivedForCalc = body.litersReceived ?? 0;
+    const litersReceivedForCalc = body.litersReceived !== undefined && body.litersReceived !== null ? body.litersReceived : body.litersDespatched;
     const totalExpectedAmount = litersReceivedForCalc * body.amountPerLiter;
     
     // Default transport cost rule if not provided (Company for own station, Client for external)
@@ -90,6 +90,8 @@ export async function POST(request: Request) {
           stationId: body.stationId ?? null,
           transportId: body.transportId ?? null,
           transportCostBorneBy: transportCostBorneBy,
+          transportRate: body.transportCostPerLiter ?? 0,
+          transportCost: (body.transportCostPerLiter ?? 0) * body.litersDespatched,
           litersDespatched: body.litersDespatched,
           litersReceived: body.litersReceived ?? null,
           amountPerLiter: body.amountPerLiter,

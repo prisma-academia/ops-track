@@ -853,9 +853,10 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
             const distributedVolume = salesVol + locsVol;
             const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
             
-            // Available sales that haven't been assigned a transport rate yet
+            // Available sales that haven't been assigned a transport destination yet
             const availableSales = (transport.sales || []).filter((s: any) => {
-              return s.transportRate === null || s.transportRate === undefined;
+              const isAssigned = subsequentLocs.some((loc: any) => loc.saleId === s.id);
+              return !isAssigned;
             });
 
             return (
@@ -883,7 +884,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
 
               <Separator />
 
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Select Linked Sale</Label>
                   <Select value={assignSaleId} onValueChange={setAssignSaleId}>
@@ -908,6 +909,15 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                 <div className="space-y-1.5">
                   <Label className="text-xs">Transport Rate / L (₦)</Label>
                   <FormattedNumberInput min="0" value={assignTransportRate} onChange={(e) => setAssignTransportRate(e.target.value)} placeholder="0.00" prefixText="₦" />
+                  
+                  {assignSaleId && assignTransportRate && Number(assignTransportRate) > 0 && (
+                    <div className="pt-2 text-xs font-medium text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 p-2 rounded border border-emerald-100 dark:border-emerald-500/20 mt-2 flex justify-between items-center">
+                      <span>Total expected cost:</span>
+                      <span className="font-bold">
+                        ₦{(Number(transport.sales?.find((s: any) => s.id === assignSaleId)?.litersDespatched || 0) * Number(assignTransportRate)).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 

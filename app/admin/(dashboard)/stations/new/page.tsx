@@ -18,9 +18,17 @@ export default async function NewStationPage() {
     orderBy: { email: "asc" },
   });
 
+  const stations = await prisma.station.findMany({
+    where: { tenantId: actor.tenantId },
+    select: {
+      code: true,
+      state: true,
+    }
+  });
+
   return (
     <div className="space-y-6">
-      <CreateStationForm users={users} />
+      <CreateStationForm users={users} existingStations={stations} />
     </div>
   );
 }

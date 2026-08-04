@@ -164,6 +164,7 @@ export default async function WaybillDetailsPage({
               deliveredAt: a.deliveredAt ? a.deliveredAt.toISOString() : null,
               createdAt: a.createdAt.toISOString(),
               updatedAt: a.updatedAt.toISOString(),
+              productType: waybill.productType,
               station: {
                 ...a.station,
                 latitude: a.station.latitude ? Number(a.station.latitude) : null,

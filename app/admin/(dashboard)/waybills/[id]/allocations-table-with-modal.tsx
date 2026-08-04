@@ -1,49 +1,49 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { Truck, Clock, MapPin, ExternalLink, AlertCircle, Check, Eye, Package, ClipboardCheck, Loader2, Droplet } from "lucide-react";
+import { Truck, Clock, MapPin, ExternalLink, AlertCircle, Check, Eye, Package, ClipboardCheck, Loader2, Droplet, Container } from "lucide-react";
 import { formatHumanReadableDate } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { apiPatch } from "@/lib/client/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { apiPost, apiPatch, apiGet } from "@/lib/client/api";
 
-function ReceiveWaybillModal({ allocation, onSuccess }: { allocation: Allocation; onSuccess: () => void }) {
+export function ConfirmArrivalModal({ allocation, onSuccess }: { allocation: any; onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [litersReceived, setLitersReceived] = useState(allocation.litersToDispense?.toString() || "");
-  const [truckNumberVerified, setTruckNumberVerified] = useState(false);
-  const [driverVerified, setDriverVerified] = useState(false);
-  const [waybillVerified, setWaybillVerified] = useState(false);
+  const [truckNumberVerified, setTruckNumberVerified] = useState(allocation.truckNumberVerified || false);
+  const [driverVerified, setDriverVerified] = useState(allocation.driverVerified || false);
+  const [waybillVerified, setWaybillVerified] = useState(allocation.waybillVerified || false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       const res = await apiPatch<any>(`/api/tenant/waybills/${allocation.id}`, {
-        litersReceived: Number(litersReceived),
         truckNumberVerified,
         driverVerified,
         waybillVerified,
         arrivalTime: new Date().toISOString(),
       });
-      if (!res.error) {
-        toast.success("Waybill received successfully!");
+      
+      if (res.error) {
+        toast.error(res.error.message || "Failed to confirm arrival.");
+      } else {
+        toast.success("Arrival confirmed successfully!");
         setOpen(false);
         onSuccess();
-      } else {
-        toast.error(res.error.message || "Failed to receive waybill.");
       }
     } catch (err: any) {
-      toast.error(err.message || "Failed to receive waybill.");
+      toast.error(err.message || "Failed to confirm arrival.");
     } finally {
       setLoading(false);
     }
@@ -53,50 +53,218 @@ function ReceiveWaybillModal({ allocation, onSuccess }: { allocation: Allocation
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button className="w-full md:w-auto" variant="default">
-          <ClipboardCheck className="mr-2 h-4 w-4" /> Receive Delivery
+          <MapPin className="mr-2 h-4 w-4" /> Confirm Arrival
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Receive Delivery - {allocation.station.name}</DialogTitle>
+          <DialogTitle>Confirm Arrival - {allocation.station.name}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+          <div className="bg-muted/30 p-4 rounded-lg space-y-4">
+            <h4 className="text-sm font-semibold">Verify Credentials</h4>
+            <p className="text-xs text-muted-foreground pb-2">Please verify the delivery details.</p>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                <Checkbox id="truck" checked={truckNumberVerified} onCheckedChange={(c) => setTruckNumberVerified(c as boolean)} />
+                <Label htmlFor="truck" className="font-normal text-sm cursor-pointer">Truck Number Verified</Label>
+              </div>
+              <div className="flex items-center space-x-3">
+                <Checkbox id="driver" checked={driverVerified} onCheckedChange={(c) => setDriverVerified(c as boolean)} />
+                <Label htmlFor="driver" className="font-normal text-sm cursor-pointer">Driver Verified</Label>
+              </div>
+              <div className="flex items-center space-x-3">
+                <Checkbox id="waybill" checked={waybillVerified} onCheckedChange={(c) => setWaybillVerified(c as boolean)} />
+                <Label htmlFor="waybill" className="font-normal text-sm cursor-pointer">Waybill Document Verified</Label>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex justify-end pt-2">
+            <Button 
+              type="submit" 
+              disabled={loading || !truckNumberVerified || !driverVerified || !waybillVerified}
+            >
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm Arrival
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function LogDippingModal({ allocation, onSuccess }: { allocation: any; onSuccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  const [tankId, setTankId] = useState("");
+  const [loadingTanks, setLoadingTanks] = useState(false);
+  const [tanks, setTanks] = useState<any[]>([]);
+  
+  const [afterLiters, setAfterLiters] = useState("");
+  const [beforeLiters, setBeforeLiters] = useState("");
+
+  const selectedTank = tanks.find(t => t.id === tankId);
+  const expectedLiters = Number(allocation.litersToDispense);
+  
+  // Update beforeLiters when tank changes
+  useEffect(() => {
+    if (selectedTank) {
+      setBeforeLiters(selectedTank.currentLiters?.toString() || "0");
+    } else {
+      setBeforeLiters("");
+    }
+  }, [selectedTank]);
+
+  const currentBeforeLiters = beforeLiters ? Number(beforeLiters) : 0;
+  const dippingReceivedLiters = afterLiters ? Number(afterLiters) - currentBeforeLiters : 0;
+  const variance = dippingReceivedLiters - expectedLiters;
+
+  useEffect(() => {
+    if (open) {
+      setLoadingTanks(true);
+      apiGet(`/api/tenant/stations/${allocation.stationId}/tanks`)
+        .then((res) => {
+          if (!res.error && res.data) {
+            const compatibleTanks = (res.data as any[]).filter(t => t.productType === allocation.productType);
+            setTanks(compatibleTanks);
+          }
+        })
+        .finally(() => setLoadingTanks(false));
+    }
+  }, [open, allocation.stationId, allocation.productType]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tankId) return toast.error("Please select a discharge tank.");
+
+    setLoading(true);
+    try {
+      if (afterLiters) {
+        if (Number(afterLiters) <= currentBeforeLiters) {
+          toast.error("After liters must be greater than before liters.");
+          setLoading(false);
+          return;
+        }
+        if (selectedTank && Number(afterLiters) > Number(selectedTank.capacity)) {
+          toast.error(`After liters exceeds tank capacity of ${Number(selectedTank.capacity).toLocaleString()} L`);
+          setLoading(false);
+          return;
+        }
+      }
+
+      const dipRes = await apiPost<any>(`/api/tenant/waybills/${allocation.id}/dippings`, {
+        dippings: [{
+          tankId,
+          beforeLiters: currentBeforeLiters,
+          afterLiters: Number(afterLiters)
+        }],
+        completeWithShortage: true
+      });
+
+      if (dipRes.error) {
+        toast.error(dipRes.error.message || "Failed to record dipping.");
+      } else {
+        toast.success("Physical dipping recorded successfully!");
+        setOpen(false);
+        onSuccess();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to record dipping.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="w-full md:w-auto" variant="default">
+          <ClipboardCheck className="mr-2 h-4 w-4" /> Log Physical Dipping
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Physical Dipping - {allocation.station.name}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
           <div className="space-y-2">
-            <Label>Liters Received *</Label>
-            <FormattedNumberInput 
-              required 
-              min="0"
-              step="0.01"
-              value={litersReceived} 
-              onChange={(e: any) => setLitersReceived(e.target.value)} 
-              prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
-            />
-            <p className="text-xs text-muted-foreground">Expected: {Number(allocation.litersToDispense).toLocaleString()} L</p>
+            <Label>Discharge To Tank *</Label>
+            <Select value={tankId} onValueChange={setTankId} disabled={loadingTanks}>
+              <SelectTrigger>
+                <div className="flex items-center gap-2">
+                  <Container className="w-4 h-4 text-muted-foreground" />
+                  <SelectValue placeholder={loadingTanks ? "Loading tanks..." : tanks.length === 0 ? "No compatible tanks" : "Select a tank"} />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {tanks.map((tank) => (
+                  <SelectItem key={tank.id} value={tank.id}>
+                    {tank.name} (Cap: {Number(tank.capacity).toLocaleString()} L | Cur: {Number(tank.currentLiters).toLocaleString()} L)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Fuel will be immediately transferred and the tank volume will update.
+            </p>
           </div>
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center space-x-2">
-              <Checkbox id="truck" checked={truckNumberVerified} onCheckedChange={(c) => setTruckNumberVerified(c as boolean)} />
-              <label htmlFor="truck" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Truck plate number verified
-              </label>
+
+          {!tankId ? (
+            <div className="p-4 bg-muted/20 border border-dashed rounded-lg text-center text-sm text-muted-foreground mt-4">
+              Please select a discharge tank above to proceed with physical dipping.
             </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox id="driver" checked={driverVerified} onCheckedChange={(c) => setDriverVerified(c as boolean)} />
-              <label htmlFor="driver" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Driver credentials verified
-              </label>
+          ) : (
+            <div className="space-y-3 bg-muted/20 p-4 border border-dashed rounded-lg mt-4">
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="text-sm font-semibold">Dipping Logs</span>
+                <span className="text-xs text-muted-foreground">Expected: {expectedLiters.toLocaleString()} L</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Before Liters *</Label>
+                  <FormattedNumberInput 
+                    required 
+                    min="0"
+                    step="0.01"
+                    value={beforeLiters} 
+                    onChange={(e: any) => setBeforeLiters(e.target.value)} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>After Liters *</Label>
+                  <FormattedNumberInput 
+                    required 
+                    min={currentBeforeLiters.toString()}
+                    step="0.01"
+                    value={afterLiters} 
+                    onChange={(e: any) => setAfterLiters(e.target.value)} 
+                  />
+                </div>
+              </div>
+              {afterLiters && Number(afterLiters) > currentBeforeLiters && (
+                <div className="flex items-center justify-between pt-2">
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Received: </span>
+                    <span className="font-semibold">{dippingReceivedLiters.toLocaleString()} L</span>
+                  </div>
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Variance: </span>
+                    <span className={`font-semibold ${variance < 0 ? 'text-destructive' : variance > 0 ? 'text-emerald-500' : ''}`}>
+                      {variance > 0 ? '+' : ''}{variance.toLocaleString()} L
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox id="waybill" checked={waybillVerified} onCheckedChange={(c) => setWaybillVerified(c as boolean)} />
-              <label htmlFor="waybill" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Waybill manifest verified
-              </label>
-            </div>
-          </div>
-          <div className="flex justify-end pt-4">
-            <Button type="submit" disabled={loading}>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button type="submit" disabled={loading || !tankId || !afterLiters}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirm Receipt
+              Submit Dipping
             </Button>
           </div>
         </form>
@@ -108,6 +276,7 @@ function ReceiveWaybillModal({ allocation, onSuccess }: { allocation: Allocation
 type Allocation = {
   id: string;
   stationId: string;
+  productType: string;
   litersToDispense: any;
   litersReceived: any;
   costPerLiter: any;
@@ -340,7 +509,19 @@ export function AllocationsTableWithModal({
                                   This allocation has been dispatched and is pending receipt at the station.
                                 </p>
                               </div>
-                              <ReceiveWaybillModal allocation={a} onSuccess={() => router.refresh()} />
+                              <ConfirmArrivalModal allocation={a} onSuccess={() => router.refresh()} />
+                            </div>
+                          )}
+
+                          {a.status === "DELIVERED" && (
+                            <div className="bg-background rounded-lg p-4 border border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/20 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-4">
+                              <div>
+                                <h4 className="font-semibold text-blue-800 dark:text-blue-400">Log Physical Dipping</h4>
+                                <p className="text-xs text-blue-600 dark:text-blue-500/80 mt-1">
+                                  The truck has arrived. Please record the physical dipping to finalize receipt.
+                                </p>
+                              </div>
+                              <LogDippingModal allocation={a} onSuccess={() => router.refresh()} />
                             </div>
                           )}
                         </div>

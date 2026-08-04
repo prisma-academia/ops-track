@@ -49,8 +49,10 @@ type Values = z.infer<typeof Schema>;
 
 export function CreateStationForm({
   users,
+  existingStations = [],
 }: {
   users: { id: string; email: string; firstName: string | null; lastName: string | null; phone?: string | null; permissions?: string[] }[];
+  existingStations?: { code: string; state: string | null }[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -81,17 +83,33 @@ export function CreateStationForm({
   const selectedLga = watch("lga");
   const selectedWard = watch("ward");
   const watchName = watch("name");
+  
+  const [hasManuallyEditedCode, setHasManuallyEditedCode] = useState(false);
 
   useEffect(() => {
-    if (watchName) {
-      const prefix = watchName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
-      if (prefix) {
-        setValue("code", `${prefix}-001`, { shouldValidate: true });
-      } else {
-        setValue("code", "", { shouldValidate: true });
-      }
+    if (selectedState && !hasManuallyEditedCode) {
+      const statePrefixMap: Record<string, string> = {
+        "Abia": "ABI", "Adamawa": "ADA", "Akwa Ibom": "AKW", "Anambra": "ANA",
+        "Bauchi": "BAU", "Bayelsa": "BAY", "Benue": "BEN", "Borno": "BOR",
+        "Cross River": "CRS", "Delta": "DEL", "Ebonyi": "EBO", "Edo": "EDO",
+        "Ekiti": "EKI", "Enugu": "ENU", "Federal Capital Territory": "FCT", "FCT": "FCT",
+        "Gombe": "GOM", "Imo": "IMO", "Jigawa": "JIG", "Kaduna": "KDN",
+        "Kano": "KAN", "Katsina": "KAT", "Kebbi": "KEB", "Kogi": "KOG",
+        "Kwara": "KWA", "Lagos": "LAG", "Nasarawa": "NAS", "Niger": "NIG",
+        "Ogun": "OGU", "Ondo": "OND", "Osun": "OSU", "Oyo": "OYO",
+        "Plateau": "PLA", "Rivers": "RIV", "Sokoto": "SOK", "Taraba": "TAR",
+        "Yobe": "YOB", "Zamfara": "ZAM"
+      };
+
+      const prefix = statePrefixMap[selectedState] || selectedState.substring(0, 3).toUpperCase();
+      
+      const stationsInState = existingStations.filter(s => s.state === selectedState);
+      const nextNumber = stationsInState.length + 1;
+      const formattedNumber = nextNumber.toString().padStart(3, "0");
+
+      setValue("code", `STN-${prefix}-${formattedNumber}`, { shouldValidate: true });
     }
-  }, [watchName, setValue]);
+  }, [selectedState, setValue, hasManuallyEditedCode, existingStations]);
 
   useEffect(() => {
     setValue("lga", "", { shouldValidate: false });
@@ -201,9 +219,10 @@ export function CreateStationForm({
                 <Input 
                   id="code" 
                   placeholder="e.g. AP-LAG-01" 
-                  readOnly
-                  {...register("code")}
-                  className={formState.errors.code ? "border-destructive bg-muted opacity-70 cursor-not-allowed" : "bg-muted opacity-70 cursor-not-allowed"}
+                  {...register("code", {
+                    onChange: () => setHasManuallyEditedCode(true)
+                  })}
+                  className={formState.errors.code ? "border-destructive" : ""}
                 />
                 {formState.errors.code && <p className="text-xs text-destructive">{formState.errors.code.message}</p>}
               </div>

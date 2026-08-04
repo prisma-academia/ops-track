@@ -110,6 +110,7 @@ model Tenant {
   transportLossLogs TransportLossLog[]
   dippingSessions   DippingSession[]
   bankAccounts      BankAccount[]
+  varianceLogs      VarianceLog[]
 
   @@index([status])
 }
@@ -469,6 +470,7 @@ model Tank {
   waybillDippings WaybillDipping[]
   pumps           Pump[]
   dippingSessions DippingSession[]
+  varianceLogs    VarianceLog[]
 
   @@index([tenantId])
   @@index([stationId])
@@ -596,11 +598,41 @@ model Ticket {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
+  varianceLog  VarianceLog?
+
   @@index([tenantId])
   @@index([stationId])
   @@index([raisedById])
   @@index([approvedById])
   @@map("tickets")
+}
+
+enum VarianceType {
+  TANK_DIPPING
+  WAYBILL_DELIVERY
+}
+
+model VarianceLog {
+  id              String      @id @default(uuid())
+  tenantId        String
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticketId        String      @unique
+  ticket          Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  varianceType    VarianceType
+  expectedVolume  Decimal     @db.Decimal(12, 2)
+  actualVolume    Decimal     @db.Decimal(12, 2)
+  varianceVolume  Decimal     @db.Decimal(12, 2)
+  
+  tankId          String?
+  tank            Tank?       @relation(fields: [tankId], references: [id], onDelete: SetNull)
+  waybillId       String?
+  waybill         Waybill?    @relation(fields: [waybillId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime    @default(now())
+
+  @@index([tenantId])
+  @@index([ticketId])
+  @@map("variance_logs")
 }
 
 // B2B Customers tied directly to a specific Tenant Company
@@ -651,6 +683,7 @@ model Waybill {
 
   allocations WaybillAllocation[]
   dippings    WaybillDipping[]
+  varianceLogs VarianceLog[]
 
   @@unique([tenantId, number])
   @@index([tenantId])

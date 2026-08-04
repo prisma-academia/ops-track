@@ -33,6 +33,8 @@ export const tenantSettingsSchema = z.object({
   enabledModules: z
     .array(z.enum(MODULE_KEYS))
     .default([...MODULE_KEYS]),
+  varianceThreshold: z.number().min(0).default(0),
+  blockOnUnresolvedVariance: z.boolean().default(false),
 });
 
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;

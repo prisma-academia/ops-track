@@ -97,6 +97,11 @@ export function CreateTransportForm({
   const isOverAllocated = selectedOrderId ? totalRequested > totalOrdered : false;
   const remainingVolume = Math.max(0, totalOrdered - previouslyTransported - currentlyAllocated);
 
+  const availableOrders = orders.filter((o) => {
+    const prev = o.transports.reduce((sum, t) => sum + Number(t.litersCarried), 0);
+    return Number(o.litersOrdered) - prev > 0 || o.id === selectedOrderId;
+  });
+
   useEffect(() => {
     if (selectedOrderId) {
       if (selectedOrder) {
@@ -118,7 +123,7 @@ export function CreateTransportForm({
   });
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6 animate-in fade-in duration-500 pb-20">
+    <form onSubmit={onSubmit} className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button type="button" variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={() => router.push("/admin/fleet/transports")}>
@@ -159,7 +164,7 @@ export function CreateTransportForm({
                       <CommandList className="max-h-[200px] overflow-y-auto">
                         <CommandEmpty>No order found.</CommandEmpty>
                         <CommandGroup>
-                          {orders.map((o) => (
+                          {availableOrders.map((o) => (
                             <CommandItem key={o.id} value={o.reference?.toLowerCase() || o.id} onSelect={() => { setValue("orderId", o.id, { shouldValidate: true }); setOpenOrderSelect(false); }}>
                               {o.reference || "Unnamed Order"} ({Number(o.litersOrdered).toLocaleString()}L) - {o.productType}
                             </CommandItem>
@@ -418,8 +423,8 @@ export function CreateTransportForm({
 
         <Button 
           type="button" 
-          variant="outline" 
-          className="w-full border-dashed py-8 font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          variant="secondary" 
+          className="w-full py-6 font-semibold shadow-sm"
           onClick={() => {
             if (selectedOrderId && remainingVolume <= 0) {
               toast.error("Cannot add another truck: Order volume has been fully allocated.");
@@ -445,19 +450,17 @@ export function CreateTransportForm({
 
 
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t z-10 flex justify-end gap-3 lg:pl-64">
-        <div className="max-w-4xl w-full flex justify-end gap-3 mx-auto">
-          <Button type="button" variant="outline" onClick={() => router.push("/admin/fleet/transports")} className="h-10 rounded-full px-5">
-            Cancel
-          </Button>
-          <Button type="submit" disabled={formState.isSubmitting || isOverAllocated} className="h-10 rounded-full px-5 gap-2 min-w-[140px]">
-            {formState.isSubmitting ? (
-              <><SpinnerEllipsis /><span>Saving...</span></>
-            ) : (
-              <><Save className="h-4 w-4" /><span>Dispatch {fields.length} {fields.length === 1 ? 'Truck' : 'Trucks'}</span></>
-            )}
-          </Button>
-        </div>
+      <div className="max-w-4xl pt-6 mt-8 border-t border-border flex justify-end gap-3">
+        <Button type="button" variant="outline" onClick={() => router.push("/admin/fleet/transports")} className="h-10 rounded-full px-5">
+          Cancel
+        </Button>
+        <Button type="submit" disabled={formState.isSubmitting || isOverAllocated} className="h-10 rounded-full px-5 gap-2 min-w-[140px]">
+          {formState.isSubmitting ? (
+            <><SpinnerEllipsis /><span>Saving...</span></>
+          ) : (
+            <><Save className="h-4 w-4" /><span>Dispatch {fields.length} {fields.length === 1 ? 'Truck' : 'Trucks'}</span></>
+          )}
+        </Button>
       </div>
     </form>
   );

@@ -28,6 +28,8 @@ export function SettingsForm({
   const [timezone, setTimezone] = useState(initial.settings.timezone);
   const [locale, setLocale] = useState(initial.settings.locale);
   const [currency, setCurrency] = useState(initial.settings.currency);
+  const [varianceThreshold, setVarianceThreshold] = useState(initial.settings.varianceThreshold);
+  const [blockOnUnresolvedVariance, setBlockOnUnresolvedVariance] = useState(initial.settings.blockOnUnresolvedVariance);
   const [enabled, setEnabled] = useState<ModuleKey[]>(initial.settings.enabledModules);
   const [logoKey, setLogoKey] = useState<string | undefined>(initial.settings.logoKey);
   const [logoUrl, setLogoUrl] = useState<string | null>(initial.logoUrl);
@@ -136,6 +138,8 @@ export function SettingsForm({
         timezone,
         locale,
         currency,
+        varianceThreshold,
+        blockOnUnresolvedVariance,
         enabledModules: enabled,
         ...(logoKey ? { logoKey } : {}),
       },
@@ -298,10 +302,49 @@ export function SettingsForm({
           </div>
         </div>
 
-        {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
-        {info ? <p className="text-sm font-medium text-emerald-600">{info}</p> : null}
+        <div className="pt-6 pb-2 border-b">
+          <h3 className="text-lg font-medium">Inventory Variance</h3>
+          <p className="text-sm text-muted-foreground">Configure thresholds and blocking behavior for inventory tracking.</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 pt-2">
+          <div className="space-y-2">
+            <Label htmlFor="varianceThreshold">Variance Threshold (Liters)</Label>
+            <Input
+              id="varianceThreshold"
+              type="number"
+              min={0}
+              value={varianceThreshold}
+              onChange={(e) => setVarianceThreshold(Number(e.target.value))}
+              placeholder="e.g. 100"
+            />
+            <p className="text-xs text-muted-foreground">Alerts trigger above this volume difference.</p>
+          </div>
+        </div>
         
-        <div className="pt-4 border-t">
+        <div className="flex items-center space-x-2 pt-2">
+          <Checkbox
+            id="blockOnUnresolvedVariance"
+            checked={blockOnUnresolvedVariance}
+            onCheckedChange={(checked) => setBlockOnUnresolvedVariance(!!checked)}
+          />
+          <div className="grid gap-1.5 leading-none">
+            <label
+              htmlFor="blockOnUnresolvedVariance"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Block on unresolved variance
+            </label>
+            <p className="text-sm text-muted-foreground">
+              Prevent new dipping sessions if there is an unresolved variance ticket for the tank.
+            </p>
+          </div>
+        </div>
+
+        {error ? <p className="text-sm font-medium text-destructive mt-4">{error}</p> : null}
+        {info ? <p className="text-sm font-medium text-emerald-600 mt-4">{info}</p> : null}
+        
+        <div className="pt-6 border-t mt-6">
           <Button onClick={submit} disabled={pending || uploading}>
             {pending ? "Saving…" : "Save Changes"}
           </Button>

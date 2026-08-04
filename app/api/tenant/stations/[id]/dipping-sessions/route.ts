@@ -5,6 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { checkAndCreateVarianceTicket } from "@/lib/variance";
 
 const OpenSessionSchema = z.object({
   clientId: z.string().optional(),
@@ -60,6 +61,58 @@ export async function POST(
       throw new DomainError(400, "active_shifts_running", "Cannot record dipping: Active shifts must be closed first.");
     }
 
+    // Variance detection: fetch last session for this tank
+    const lastSession = await prisma.dippingSession.findFirst({
+      where: { tankId: body.tankId, tenantId: actor.tenantId },
+      orderBy: { openedAt: "desc" },
+      include: { closings: { orderBy: { recordedAt: "desc" }, take: 1 } },
+    });
+
+    let varianceExpected = 0;
+    let shouldCheckVariance = false;
+
+    if (lastSession && lastSession.closings.length > 0) {
+      const lastClosing = lastSession.closings[0];
+      let expectedVolume = lastClosing.closingLiters;
+
+      // Add waybill deliveries that occurred after the last closing
+      const deliveries = await prisma.waybillDipping.findMany({
+        where: {
+          tankId: body.tankId,
+          createdAt: { gt: lastClosing.recordedAt },
+        },
+      });
+
+      for (const d of deliveries) {
+        if (d.afterLiters && d.beforeLiters) {
+          expectedVolume = expectedVolume.plus(d.afterLiters.minus(d.beforeLiters));
+        }
+      }
+
+      varianceExpected = expectedVolume.toNumber();
+      shouldCheckVariance = true;
+    }
+
+    // Check if unresolved variance tickets block this operation
+    const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId } });
+    const settings = (tenant?.settingsJson as Record<string, unknown>) || {};
+    const blockOnVariance = settings.blockOnUnresolvedVariance === true;
+
+    if (blockOnVariance) {
+      const unresolvedVariance = await prisma.ticket.findFirst({
+        where: {
+          tenantId: actor.tenantId,
+          status: { in: ["OPEN", "PENDING_APPROVAL"] },
+          varianceLog: {
+            tankId: body.tankId,
+          }
+        },
+      });
+      if (unresolvedVariance) {
+        throw new DomainError(400, "unresolved_variance", "Cannot open session: There is an unresolved variance ticket for this tank.");
+      }
+    }
+
     const session = await prisma.$transaction(async (tx) => {
       // Create price control for this new price
       await tx.priceControl.create({
@@ -101,6 +154,20 @@ export async function POST(
         where: { id: body.tankId },
         data: { currentLiters: body.openingLiters },
       });
+
+      if (shouldCheckVariance) {
+        await checkAndCreateVarianceTicket({
+          tenantId: actor.tenantId,
+          stationId,
+          raisedById: actor.userId,
+          varianceType: "TANK_DIPPING",
+          expectedVolume: varianceExpected,
+          actualVolume: body.openingLiters,
+          tankId: body.tankId,
+          referenceNumber: tank.name, // Use tank name for reference
+          tx,
+        });
+      }
 
       return newSession;
     });

@@ -35,17 +35,22 @@ export async function PATCH(
       return new Response("Order not found", { status: 404 });
     }
 
+    let newReference = existing.reference;
+    if (body.productType && body.productType !== existing.productType && existing.reference) {
+      newReference = existing.reference.replace(`-${existing.productType}-`, `-${body.productType}-`);
+    }
+
     const order = await prisma.order.update({
       where: { id },
       data: {
         ...(body.status && { status: body.status }),
         ...(body.productType && { productType: body.productType }),
+        ...(newReference !== existing.reference && { reference: newReference }),
         ...(body.litersOrdered && { litersOrdered: body.litersOrdered }),
         ...(body.supplier !== undefined && { supplier: body.supplier }),
         ...(body.sourceDepot !== undefined && { sourceDepot: body.sourceDepot }),
         ...(body.pricePerLitre !== undefined && { pricePerLitre: body.pricePerLitre }),
         ...(body.loadingCost !== undefined && { loadingCost: body.loadingCost }),
-        ...(body.status === "CHANGED" && { status: "CHANGED" }),
       },
     });
 

@@ -46,6 +46,7 @@ import {
   CreditCard,
   Banknote,
   Landmark,
+  Ticket,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -80,6 +81,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number }>> = {
   CreditCard,
   Banknote,
   Landmark,
+  Ticket,
 };
 
 export type NavItem = {

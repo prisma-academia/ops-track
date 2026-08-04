@@ -5,9 +5,11 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { checkAndCreateVarianceTicket } from "@/lib/variance";
 
 const DeliverWaybillSchema = z.object({
   litersReceived: z.coerce.number().positive().optional().nullable(),
+  tankId: z.string().optional().nullable(),
   gpsLatitude: z.number().optional().nullable(),
   gpsLongitude: z.number().optional().nullable(),
   pictures: z.array(z.string()).optional(),
@@ -137,10 +139,12 @@ export async function PATCH(
     const incomingPictures = Array.isArray(body.pictures) ? body.pictures : [];
     const updatedPictures = [...existingPictures, ...incomingPictures];
 
+    const isCompleted = !!(body.tankId && body.litersReceived);
+
     const allocation = await prisma.waybillAllocation.update({
       where: { id },
       data: {
-        status: "DELIVERED",
+        status: isCompleted ? "COMPLETED" : "DELIVERED",
         litersReceived: body.litersReceived,
         gpsLatitude: body.gpsLatitude !== undefined ? body.gpsLatitude : existing.gpsLatitude,
         gpsLongitude: body.gpsLongitude !== undefined ? body.gpsLongitude : existing.gpsLongitude,
@@ -155,6 +159,19 @@ export async function PATCH(
         waybill: true
       }
     });
+
+    if (isCompleted && body.litersReceived !== undefined) {
+      await checkAndCreateVarianceTicket({
+        tenantId: actor.tenantId,
+        stationId: existing.stationId,
+        raisedById: actor.userId,
+        varianceType: "WAYBILL_DELIVERY",
+        expectedVolume: Number(existing.litersToDispense),
+        actualVolume: Number(body.litersReceived),
+        waybillId: existing.waybillId,
+        referenceNumber: existing.waybill.number,
+      });
+    }
 
     // Update dispatch pictures if any new dispatch pictures were uploaded
     if (body.pictures && body.pictures.length > 0) {

@@ -228,6 +228,8 @@ export function SalesReportsManager({
     let totalLiters = 0;
     let expectedRevenue = 0;
     let digital = 0;
+    let overpayment = 0;
+    let underpayment = 0;
 
     finalGroupedSales.forEach((g) => {
       totalLiters += Number(g.litersSold);
@@ -237,12 +239,18 @@ export function SalesReportsManager({
       g.childRepayments.forEach(c => {
         digital += Number(c.amountPos) + Number(c.amountTransfer);
       });
+
+      if (g.overallBalance > 0) {
+        overpayment += g.overallBalance;
+      } else if (g.overallBalance < 0) {
+        underpayment += Math.abs(g.overallBalance);
+      }
     });
 
     const totalReceived = digital;
     const totalBalance = totalReceived - expectedRevenue;
 
-    return { totalLiters, expectedRevenue, digital, totalReceived, totalBalance };
+    return { totalLiters, expectedRevenue, digital, totalReceived, totalBalance, overpayment, underpayment };
   }, [finalGroupedSales]);
 
   const statCards = [
@@ -275,6 +283,26 @@ export function SalesReportsManager({
       badge: "Period",
       valueColor: "text-indigo-600",
       iconColor: "text-indigo-600",
+    },
+    {
+      title: "Overpayment",
+      value: formatShortCurrency(stats.overpayment),
+      fullValue: `₦${stats.overpayment.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      icon: ChartColumnIncreasing,
+      badgeColor: "bg-emerald-400/10 text-emerald-700 dark:text-emerald-400",
+      badge: "Period",
+      valueColor: "text-emerald-600",
+      iconColor: "text-emerald-600",
+    },
+    {
+      title: "Underpayment",
+      value: formatShortCurrency(stats.underpayment),
+      fullValue: `₦${stats.underpayment.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      icon: ChartColumnIncreasing,
+      badgeColor: "bg-rose-400/10 text-rose-700 dark:text-rose-400",
+      badge: "Period",
+      valueColor: "text-rose-600",
+      iconColor: "text-rose-600",
     },
   ];
 
@@ -591,7 +619,7 @@ export function SalesReportsManager({
               <div
                 key={index}
                 className={cn(
-                  "w-full md:w-1/3 border-border print:border-none print:w-auto",
+                  "w-full md:flex-1 min-w-[150px] border-border print:border-none print:w-auto",
                   index === statCards.length - 1 ? "border-b-0" : "border-b",
                   "md:border-b-0",
                   index === statCards.length - 1 ? "md:border-e-0" : "md:border-e"

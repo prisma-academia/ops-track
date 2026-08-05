@@ -688,11 +688,11 @@ export function SalesReportsManager({
                       </div>
                       <div className="p-4 flex flex-col justify-center">
                         <span className="text-xs text-muted-foreground font-medium mb-1 uppercase tracking-wider">Expected</span>
-                        <span className="text-sm font-semibold font-mono tabular-nums text-slate-600">{formatShortCurrency(expectedTotal)}</span>
+                        <span className="text-sm font-semibold font-mono tabular-nums text-slate-600">₦{expectedTotal.toLocaleString()}</span>
                       </div>
                       <div className="p-4 flex flex-col justify-center">
                         <span className="text-xs text-muted-foreground font-medium mb-1 uppercase tracking-wider">Initial Received</span>
-                        <span className="text-sm font-bold font-mono tabular-nums">{formatShortCurrency(parentReceived)}</span>
+                        <span className="text-sm font-bold font-mono tabular-nums">₦{parentReceived.toLocaleString()}</span>
                       </div>
                       <div className="p-4 flex flex-col justify-center">
                         <span className="text-xs text-muted-foreground font-medium mb-1 uppercase tracking-wider">Balance</span>
@@ -700,7 +700,7 @@ export function SalesReportsManager({
                           "text-sm font-bold font-mono tabular-nums px-2 py-0.5 rounded w-max",
                           overallBalance > 0 ? "bg-emerald-50 text-emerald-700" : overallBalance < 0 ? "bg-rose-50 text-rose-700" : "bg-muted text-muted-foreground"
                         )}>
-                          {overallBalance === 0 ? "Settled" : `${overallBalance > 0 ? "+" : ""}${formatShortCurrency(overallBalance)}`}
+                          {overallBalance === 0 ? "Settled" : `${overallBalance > 0 ? "+" : "-"}₦${Math.abs(overallBalance).toLocaleString()}`}
                         </span>
                       </div>
                     </div>
@@ -725,7 +725,7 @@ export function SalesReportsManager({
                                   {getStatusBadge(child.status, getFlags(child))}
                                 </div>
                                 <div className="text-right">
-                                  <span className="text-xs font-bold font-mono text-emerald-600 bg-emerald-50 px-2 py-1 rounded">+{formatShortCurrency(cReceived)}</span>
+                                  <span className="text-xs font-bold font-mono text-emerald-600 bg-emerald-50 px-2 py-1 rounded">+₦{cReceived.toLocaleString()}</span>
                                 </div>
                               </div>
                             );
@@ -796,16 +796,16 @@ export function SalesReportsManager({
                             {Number(parent.litersSold).toLocaleString()} L
                           </td>
                           <td className="px-3 py-2 text-right font-mono font-medium text-slate-600 tabular-nums whitespace-nowrap print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
-                            {formatShortCurrency(expectedTotal)}
+                            ₦{expectedTotal.toLocaleString()}
                           </td>
                           <td className="px-3 py-2 text-right font-mono font-bold tabular-nums whitespace-nowrap print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
-                            {formatShortCurrency(parentReceived)}
+                            ₦{parentReceived.toLocaleString()}
                           </td>
                           <td className="px-3 py-2 text-right font-mono font-bold tabular-nums whitespace-nowrap print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
                             <span className={cn(
                               overallBalance === 0 ? "text-muted-foreground" : overallBalance > 0 ? "text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded print:bg-transparent print:text-black" : "text-rose-600 bg-rose-50 px-1 py-0.5 rounded print:bg-transparent print:text-black"
                             )}>
-                              {overallBalance === 0 ? "—" : `${overallBalance > 0 ? "+" : ""}${formatShortCurrency(overallBalance)}`}
+                              {overallBalance === 0 ? "—" : `${overallBalance > 0 ? "+" : "-"}₦${Math.abs(overallBalance).toLocaleString()}`}
                             </span>
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap print:text-black border-r border-border/50 print:border-black/30">
@@ -839,7 +839,7 @@ export function SalesReportsManager({
                                 — Debt Repayment —
                               </td>
                               <td className="px-3 py-2 text-right font-mono font-bold text-emerald-600 tabular-nums whitespace-nowrap print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
-                                +{formatShortCurrency(childReceived)}
+                                +₦{childReceived.toLocaleString()}
                               </td>
                               <td className="px-3 py-2 text-right font-mono text-muted-foreground tabular-nums whitespace-nowrap print:text-[10px] print:text-black border-r border-border/50 print:border-black/30">
                                 —
@@ -873,19 +873,19 @@ export function SalesReportsManager({
                       {stats.totalLiters.toLocaleString()} L
                     </td>
                     <td className="px-3 py-3 text-right text-xs font-mono tabular-nums text-slate-600 print:text-black border-r border-border/50 print:border-black/30">
-                      {formatShortCurrency(stats.expectedRevenue)}
+                      ₦{stats.expectedRevenue.toLocaleString()}
                     </td>
                     <td className={cn(
                       "px-3 py-3 text-right text-xs font-mono tabular-nums print:text-black border-r border-border/50 print:border-black/30",
                       stats.totalReceived > stats.expectedRevenue ? "text-emerald-600" : stats.totalReceived < stats.expectedRevenue ? "text-rose-600" : "text-foreground"
                     )}>
-                      {formatShortCurrency(stats.totalReceived)}
+                      ₦{stats.totalReceived.toLocaleString()}
                     </td>
                     <td className="px-3 py-3 text-right text-[11px] font-mono tabular-nums print:text-black border-r border-border/50 print:border-black/30">
                       <span className={cn(
                         stats.totalBalance > 0 ? "text-emerald-600" : stats.totalBalance < 0 ? "text-rose-600" : "text-muted-foreground"
                       )}>
-                        {stats.totalBalance === 0 ? "—" : `${stats.totalBalance > 0 ? "+" : ""}${formatShortCurrency(stats.totalBalance)}`}
+                        {stats.totalBalance === 0 ? "—" : `${stats.totalBalance > 0 ? "+" : "-"}₦${Math.abs(stats.totalBalance).toLocaleString()}`}
                       </span>
                     </td>
                     <td className="px-3 py-3 print:text-black border-r border-border/50 print:border-black/30"></td>

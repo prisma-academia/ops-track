@@ -81,7 +81,9 @@ interface StockReportRow {
   approvedSalesLiters: number | null;
   sellingPrice: number | null;
   salesRevenue: number | null;
-  remainingLiters: number;
+  expectedRevenue: number | null;
+  amountSold: number;
+  remainToComplete: number;
   remainingStockValue: number | null;
   salesBreakdown?: Array<{ id: string, date: string, liters: number, price: number, revenue: number }>;
 }
@@ -192,16 +194,22 @@ export function PnlReportManager({ initialRows, stations }: Props) {
     let totalReconciledDeposit = 0;
     let totalExpenseSum = 0;
     let totalVolume = 0;
+    let totalExpectedRevenue = 0;
+    let totalAmountSold = 0;
+    let totalRemainToComplete = 0;
 
     filteredRows.forEach((r) => {
       if (r.pnl !== null) totalPnl += r.pnl;
       if (r.reconciledQty !== null) totalReconciledQty += r.reconciledQty;
       if (r.salesRevenue !== null) totalSalesRevenue += r.salesRevenue;
+      if (r.expectedRevenue !== null) totalExpectedRevenue += r.expectedRevenue;
+      if (r.amountSold !== null) totalAmountSold += r.amountSold;
+      if (r.remainToComplete !== null) totalRemainToComplete += r.remainToComplete;
       if (r.reconciledDeposit !== null) totalReconciledDeposit += r.reconciledDeposit;
       if (r.totalExpense) totalExpenseSum += r.totalExpense;
       if (r.deliveryQty) totalVolume += r.deliveryQty;
     });
-    return { count: filteredRows.length, totalPnl, totalReconciledQty, totalSalesRevenue, totalReconciledDeposit, totalExpenseSum, totalVolume };
+    return { count: filteredRows.length, totalPnl, totalReconciledQty, totalSalesRevenue, totalExpectedRevenue, totalAmountSold, totalRemainToComplete, totalReconciledDeposit, totalExpenseSum, totalVolume };
   }, [filteredRows]);
 
   // ── Column defs ───────────────────────────────────────────────────────────
@@ -288,6 +296,17 @@ export function PnlReportManager({ initialRows, stations }: Props) {
         ),
       },
       {
+        id: "expectedRevenue",
+        accessorKey: "expectedRevenue",
+        header: () => <div className="text-right whitespace-nowrap">Total Expected Revenue</div>,
+        size: 140,
+        cell: ({ row }) => (
+          <div className="text-right text-xs font-mono font-semibold tabular-nums text-slate-600">
+            {fmtMoney(row.original.expectedRevenue)}
+          </div>
+        ),
+      },
+      {
         id: "salesRevenue",
         accessorKey: "salesRevenue",
         header: () => <div className="text-right whitespace-nowrap">Sales Revenue</div>,
@@ -297,6 +316,31 @@ export function PnlReportManager({ initialRows, stations }: Props) {
             {fmtMoney(row.original.salesRevenue)}
           </div>
         ),
+      },
+      {
+        id: "amountSold",
+        accessorKey: "amountSold",
+        header: () => <div className="text-right whitespace-nowrap">Amount Sold</div>,
+        size: 130,
+        cell: ({ row }) => (
+          <div className="text-right text-xs font-mono tabular-nums">
+            {fmtQty(row.original.amountSold)} L
+          </div>
+        ),
+      },
+      {
+        id: "remainToComplete",
+        accessorKey: "remainToComplete",
+        header: () => <div className="text-right whitespace-nowrap">Remaining</div>,
+        size: 130,
+        cell: ({ row }) => {
+          const v = row.original.remainToComplete;
+          return (
+            <div className={cn("text-right text-xs font-mono font-semibold tabular-nums", v > 0 ? "text-amber-600" : "text-emerald-600")}>
+              {fmtQty(v)} L
+            </div>
+          );
+        },
       },
       {
         id: "reconciledDeposit",
@@ -341,6 +385,23 @@ export function PnlReportManager({ initialRows, stations }: Props) {
             </div>
           );
         },
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-center hide-on-print">Action</div>,
+        size: 100,
+        cell: ({ row }) => (
+          <div className="text-center hide-on-print">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[10px] px-2"
+              onClick={() => window.location.href = `/admin/pnl-report/${row.original.id}`}
+            >
+              Details
+            </Button>
+          </div>
+        ),
       },
     ],
     []
@@ -771,27 +832,6 @@ export function PnlReportManager({ initialRows, stations }: Props) {
                           );
                         })}
                       </tr>
-                      {row.original.salesBreakdown && row.original.salesBreakdown.length > 0 && (
-                        <tr className="bg-slate-50/50 hover:bg-slate-50/80 print:bg-transparent relative hide-on-print">
-                           <td colSpan={row.getVisibleCells().length} className="px-3 py-3 border border-border/50 border-t-0 print:border-black/30">
-                              <div className="pl-8 lg:pl-24 space-y-3">
-                                <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                  <History className="size-3" /> Sales Breakdown
-                                </h4>
-                                <div className="space-y-1.5">
-                                  {row.original.salesBreakdown.map((sb, i) => (
-                                    <div key={sb.id || i} className="flex items-center gap-4 text-xs bg-white border shadow-sm rounded-lg p-2 max-w-lg hover:border-slate-300 transition-colors">
-                                      <span className="w-28 text-muted-foreground font-medium">{format(new Date(sb.date), "dd/MM/yyyy HH:mm")}</span>
-                                      <span className="w-24 font-mono font-semibold">{fmtQty(sb.liters)} L</span>
-                                      <span className="w-24 font-mono text-muted-foreground">@ {fmtMoney(sb.price)}/L</span>
-                                      <span className="flex-1 text-right font-mono font-bold text-emerald-600">+{fmtMoney(sb.revenue)}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                           </td>
-                        </tr>
-                      )}
                     </Fragment>
                   ))
                 ) : (
@@ -807,23 +847,43 @@ export function PnlReportManager({ initialRows, stations }: Props) {
               </tbody>
               <tfoot className="bg-muted/50 font-bold border border-border/50 print:border-black/30 print:bg-transparent">
                 <tr>
+                  {/* Col 0, 1, 2, 3 */}
                   <td colSpan={4} className="px-2 py-2 text-right text-sm border border-border/50 print:border-black/30 print:text-black">
                     Total:
                   </td>
+                  {/* Col 4: Purchase Price */}
                   <td className="px-2 py-2 border border-border/50 print:border-black/30"></td>
+                  {/* Col 5: Receive Qty */}
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtQty(stats.totalReconciledQty)}
+                    {fmtQty(stats.totalReconciledQty)} L
                   </td>
+                  {/* Col 6: Sold Price */}
                   <td className="px-2 py-2 border border-border/50 print:border-black/30"></td>
+                  {/* Col 7: Total Expected Revenue */}
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-slate-600">
+                    {fmtMoney(stats.totalExpectedRevenue)}
+                  </td>
+                  {/* Col 8: Sales Revenue */}
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {fmtMoney(stats.totalSalesRevenue)}
                   </td>
+                  {/* Col 9: Amount Sold */}
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
+                    {fmtQty(stats.totalAmountSold)} L
+                  </td>
+                  {/* Col 10: Remaining */}
+                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-amber-600">
+                    {fmtQty(stats.totalRemainToComplete)} L
+                  </td>
+                  {/* Col 11: Reconciled Deposit */}
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {fmtMoney(stats.totalReconciledDeposit)}
                   </td>
+                  {/* Col 12: Expense */}
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-red-500">
                     {fmtMoney(stats.totalExpenseSum)}
                   </td>
+                  {/* Col 13: Profit/Loss */}
                   <td className={cn(
                     "px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black",
                     stats.totalPnl >= 0 ? "text-emerald-600 print:text-black" : "text-rose-600 print:text-black"
@@ -831,6 +891,8 @@ export function PnlReportManager({ initialRows, stations }: Props) {
                     {stats.totalPnl >= 0 ? "+" : ""}
                     {fmtMoney(stats.totalPnl)}
                   </td>
+                  {/* Col 14: Action */}
+                  <td className="px-2 py-2 border border-border/50 print:border-black/30 hide-on-print"></td>
                 </tr>
               </tfoot>
             </table>

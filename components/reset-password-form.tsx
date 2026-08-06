@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -27,16 +28,14 @@ export function ResetPasswordForm({ token, backHref, backLabel }: { token: strin
   const { register, handleSubmit, formState } = useForm<Values>({
     resolver: zodResolver(Schema),
   });
-  const [error, setError] = useState<string | null>(null);
 
   const onSubmit = handleSubmit(async (values) => {
-    setError(null);
     const res = await apiPost<{ redirect: string }>("/api/auth/reset-password", {
       token,
       password: values.password,
     });
     if (res.error) {
-      setError(res.error.message);
+      toast.error(res.error.message);
       return;
     }
     if (res.data?.redirect) window.location.assign(res.data.redirect);
@@ -44,21 +43,22 @@ export function ResetPasswordForm({ token, backHref, backLabel }: { token: strin
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-6">
-      <FormField label="New password" htmlFor="pw" error={formState.errors.password?.message}>
-        <PasswordInput id="pw" autoComplete="new-password" {...register("password")} />
-      </FormField>
-      <FormField label="Confirm new password" htmlFor="cf" error={formState.errors.confirm?.message}>
-        <PasswordInput id="cf" autoComplete="new-password" {...register("confirm")} />
-      </FormField>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <Button type="submit" disabled={formState.isSubmitting} className="w-full">
+      <div className="flex flex-col gap-4">
+        <FormField label="New password" htmlFor="pw" required error={formState.errors.password?.message}>
+          <PasswordInput id="pw" autoComplete="new-password" placeholder="Enter your new password" className="dark:bg-background h-9 shadow-xs" {...register("password")} />
+        </FormField>
+        <FormField label="Confirm new password" htmlFor="cf" required error={formState.errors.confirm?.message}>
+          <PasswordInput id="cf" autoComplete="new-password" placeholder="Confirm your new password" className="dark:bg-background h-9 shadow-xs" {...register("confirm")} />
+        </FormField>
+      </div>
+      <Button type="submit" size="lg" disabled={formState.isSubmitting} className="rounded-lg h-10 hover:bg-primary/80 cursor-pointer w-full">
         {formState.isSubmitting ? "Saving…" : "Update password"}
       </Button>
-      <p className="text-center text-xs text-stone-500">
-        <Link href={backHref} className="underline">
+      <Button asChild variant="outline" size="lg" className="rounded-lg h-10 cursor-pointer w-full">
+        <Link href={backHref}>
           {backLabel}
         </Link>
-      </p>
+      </Button>
     </form>
   );
 }

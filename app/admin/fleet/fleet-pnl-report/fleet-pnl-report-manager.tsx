@@ -49,34 +49,32 @@ import {
   Filter,
   Receipt,
   Wallet,
+  ArrowRight,
 } from "lucide-react";
+import Link from "next/link";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface FleetPnlRow {
-  id: string;
+  id: string; // The order ID
   sn: number;
-  saleDate: string;
+  orderDate: string;
   orderReference: string;
+  depot: string;
   productType: string;
   litersOrdered: number;
   orderCost: number;
   loadingCost: number;
   priceBought: number;
-  transporterName: string;
-  truckNo: string;
-  transportRate: number;
-  transportCost: number;
-  fleetExpenses: number;
-  lossDeduction: number;
+  totalTransportCost: number;
+  totalFleetExpenses: number;
+  totalLossDeduction: number;
   totalCost: number;
-  soldTo: string;
-  litersSold: number;
-  sellingPrice: number;
-  salesRevenue: number;
-  paymentReceived: number;
-  balance: number;
-  paymentStatus: string;
+  totalAmountSoldQty: number;
+  qtyBalance: number;
+  amountSoldRev: number;
+  amountPaid: number;
+  debtRemaining: number;
   pnl: number;
 }
 
@@ -115,26 +113,21 @@ export function FleetPnlReportManager({ initialRows }: Props) {
   
   // Custom Filters
   const [draftOrderRef, setDraftOrderRef] = useState("");
-  const [draftTransporter, setDraftTransporter] = useState("");
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(draftDateRange);
   const [orderRefFilter, setOrderRefFilter] = useState("");
-  const [transporterFilter, setTransporterFilter] = useState("");
 
   const applyFilters = useCallback(() => {
     setDateRange(draftDateRange);
     setOrderRefFilter(draftOrderRef);
-    setTransporterFilter(draftTransporter);
     setIsOpen(false);
-  }, [draftDateRange, draftOrderRef, draftTransporter]);
+  }, [draftDateRange, draftOrderRef]);
 
   const clearFilters = useCallback(() => {
     setDraftDateRange(undefined);
     setDraftOrderRef("");
-    setDraftTransporter("");
     setDateRange(undefined);
     setOrderRefFilter("");
-    setTransporterFilter("");
     setIsOpen(false);
   }, []);
 
@@ -162,8 +155,7 @@ export function FleetPnlReportManager({ initialRows }: Props) {
     return initialRows
       .filter((row) => {
         if (orderRefFilter && !row.orderReference.toLowerCase().includes(orderRefFilter.toLowerCase())) return false;
-        if (transporterFilter && !row.transporterName.toLowerCase().includes(transporterFilter.toLowerCase())) return false;
-        const d = new Date(row.saleDate);
+        const d = new Date(row.orderDate);
         if (dateRange?.from) {
           const s = new Date(dateRange.from);
           s.setHours(0, 0, 0, 0);
@@ -177,7 +169,7 @@ export function FleetPnlReportManager({ initialRows }: Props) {
         return true;
       })
       .map((row, i) => ({ ...row, sn: i + 1 })); // Re-number after filter
-  }, [initialRows, orderRefFilter, transporterFilter, dateRange]);
+  }, [initialRows, orderRefFilter, dateRange]);
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -186,7 +178,7 @@ export function FleetPnlReportManager({ initialRows }: Props) {
     let totalOrderCost = 0;
     let totalTransportCost = 0;
     let totalVolume = 0;
-    let totalBalance = 0;
+    let totalBalance = 0; // mapping to debtRemaining
     let totalLoadingCost = 0;
     let totalFleetExpenses = 0;
     let totalLossDeduction = 0;
@@ -194,14 +186,14 @@ export function FleetPnlReportManager({ initialRows }: Props) {
 
     filteredRows.forEach((r) => {
       totalPnl += r.pnl;
-      totalSalesRevenue += r.salesRevenue;
+      totalSalesRevenue += r.amountSoldRev;
       totalOrderCost += r.orderCost;
-      totalTransportCost += r.transportCost;
-      totalVolume += r.litersSold;
-      totalBalance += r.balance;
+      totalTransportCost += r.totalTransportCost;
+      totalVolume += r.litersOrdered;
+      totalBalance += r.debtRemaining;
       totalLoadingCost += r.loadingCost;
-      totalFleetExpenses += r.fleetExpenses;
-      totalLossDeduction += r.lossDeduction;
+      totalFleetExpenses += r.totalFleetExpenses;
+      totalLossDeduction += r.totalLossDeduction;
       totalTotalCost += r.totalCost;
     });
     
@@ -223,13 +215,24 @@ export function FleetPnlReportManager({ initialRows }: Props) {
         ),
       },
       {
-        id: "saleDate",
-        accessorKey: "saleDate",
-        header: "Sale Date",
+        id: "orderDate",
+        accessorKey: "orderDate",
+        header: "Date",
         size: 100,
         cell: ({ row }) => (
           <span className="text-xs font-medium whitespace-nowrap">
-            {fmtDate(row.original.saleDate)}
+            {fmtDate(row.original.orderDate)}
+          </span>
+        ),
+      },
+      {
+        id: "depot",
+        accessorKey: "depot",
+        header: "Depot",
+        size: 110,
+        cell: ({ row }) => (
+          <span className="text-xs font-semibold text-foreground whitespace-nowrap">
+            {row.original.depot}
           </span>
         ),
       },
@@ -245,25 +248,25 @@ export function FleetPnlReportManager({ initialRows }: Props) {
         ),
       },
       {
-        id: "transporterName",
-        accessorKey: "transporterName",
-        header: "Transporter",
-        size: 140,
+        id: "productType",
+        accessorKey: "productType",
+        header: "Product",
+        size: 90,
         cell: ({ row }) => (
           <span className="text-xs font-semibold text-foreground whitespace-nowrap">
-            {row.original.transporterName}
+            {row.original.productType}
           </span>
         ),
       },
       {
-        id: "truckNo",
-        accessorKey: "truckNo",
-        header: "Truck No",
-        size: 100,
+        id: "litersOrdered",
+        accessorKey: "litersOrdered",
+        header: () => <div className="text-right whitespace-nowrap">Liters Ordered</div>,
+        size: 110,
         cell: ({ row }) => (
-          <span className="text-xs font-medium text-foreground whitespace-nowrap">
-            {row.original.truckNo}
-          </span>
+          <div className="text-right text-xs font-mono tabular-nums text-foreground font-bold">
+            {fmtQty(row.original.litersOrdered)}
+          </div>
         ),
       },
       {
@@ -300,35 +303,35 @@ export function FleetPnlReportManager({ initialRows }: Props) {
         ),
       },
       {
-        id: "transportCost",
-        accessorKey: "transportCost",
+        id: "totalTransportCost",
+        accessorKey: "totalTransportCost",
         header: () => <div className="text-right whitespace-nowrap">Transport Cost</div>,
         size: 120,
         cell: ({ row }) => (
           <div className="text-right text-xs font-mono tabular-nums text-slate-500">
-            {fmtMoney(row.original.transportCost)}
+            {fmtMoney(row.original.totalTransportCost)}
           </div>
         ),
       },
       {
-        id: "fleetExpenses",
-        accessorKey: "fleetExpenses",
+        id: "totalFleetExpenses",
+        accessorKey: "totalFleetExpenses",
         header: () => <div className="text-right whitespace-nowrap">Fleet Expenses</div>,
         size: 120,
         cell: ({ row }) => (
           <div className="text-right text-xs font-mono tabular-nums text-slate-500">
-            {fmtMoney(row.original.fleetExpenses)}
+            {fmtMoney(row.original.totalFleetExpenses)}
           </div>
         ),
       },
       {
-        id: "lossDeduction",
-        accessorKey: "lossDeduction",
+        id: "totalLossDeduction",
+        accessorKey: "totalLossDeduction",
         header: () => <div className="text-right whitespace-nowrap">Loss Deduction</div>,
         size: 120,
         cell: ({ row }) => (
           <div className="text-right text-xs font-mono tabular-nums text-rose-500">
-            {fmtMoney(row.original.lossDeduction)}
+            {fmtMoney(row.original.totalLossDeduction)}
           </div>
         ),
       },
@@ -344,56 +347,56 @@ export function FleetPnlReportManager({ initialRows }: Props) {
         ),
       },
       {
-        id: "soldTo",
-        accessorKey: "soldTo",
-        header: "Sold To",
-        size: 140,
-        cell: ({ row }) => (
-          <span className="text-xs font-medium text-foreground whitespace-nowrap">
-            {row.original.soldTo}
-          </span>
-        ),
-      },
-      {
-        id: "litersSold",
-        accessorKey: "litersSold",
-        header: () => <div className="text-right whitespace-nowrap">Liters Sold</div>,
+        id: "totalAmountSoldQty",
+        accessorKey: "totalAmountSoldQty",
+        header: () => <div className="text-right whitespace-nowrap">Qty Sold</div>,
         size: 100,
         cell: ({ row }) => (
           <div className="text-right text-xs font-mono tabular-nums">
-            {fmtQty(row.original.litersSold)} L
+            {fmtQty(row.original.totalAmountSoldQty)} L
           </div>
         ),
       },
       {
-        id: "sellingPrice",
-        accessorKey: "sellingPrice",
-        header: () => <div className="text-right whitespace-nowrap">Sold Price</div>,
-        size: 110,
+        id: "qtyBalance",
+        accessorKey: "qtyBalance",
+        header: () => <div className="text-right whitespace-nowrap">Qty Balance</div>,
+        size: 100,
         cell: ({ row }) => (
           <div className="text-right text-xs font-mono tabular-nums">
-            {fmtMoney(row.original.sellingPrice)}
+            {fmtQty(row.original.qtyBalance)} L
           </div>
         ),
       },
       {
-        id: "salesRevenue",
-        accessorKey: "salesRevenue",
-        header: () => <div className="text-right whitespace-nowrap">Sales Rev</div>,
-        size: 120,
+        id: "amountSoldRev",
+        accessorKey: "amountSoldRev",
+        header: () => <div className="text-right whitespace-nowrap">Amount Sold Rev</div>,
+        size: 130,
         cell: ({ row }) => (
           <div className="text-right text-xs font-mono font-semibold tabular-nums">
-            {fmtMoney(row.original.salesRevenue)}
+            {fmtMoney(row.original.amountSoldRev)}
           </div>
         ),
       },
       {
-        id: "balance",
-        accessorKey: "balance",
-        header: () => <div className="text-right whitespace-nowrap">Balance</div>,
+        id: "amountPaid",
+        accessorKey: "amountPaid",
+        header: () => <div className="text-right whitespace-nowrap">Amount Paid</div>,
+        size: 120,
+        cell: ({ row }) => (
+          <div className="text-right text-xs font-mono font-semibold tabular-nums text-emerald-600">
+            {fmtMoney(row.original.amountPaid)}
+          </div>
+        ),
+      },
+      {
+        id: "debtRemaining",
+        accessorKey: "debtRemaining",
+        header: () => <div className="text-right whitespace-nowrap">Debt Remaining</div>,
         size: 120,
         cell: ({ row }) => {
-          const v = row.original.balance;
+          const v = row.original.debtRemaining;
           return (
             <div className={cn("text-right text-xs font-mono font-semibold tabular-nums", v > 0 ? "text-amber-600" : "text-emerald-600")}>
               {fmtMoney(v)}
@@ -422,6 +425,23 @@ export function FleetPnlReportManager({ initialRows }: Props) {
           );
         },
       },
+      {
+        id: "actions",
+        accessorKey: "actions",
+        header: () => <div className="text-right">Actions</div>,
+        size: 100,
+        cell: ({ row }) => {
+          return (
+            <div className="flex justify-end">
+              <Button size="sm" variant="ghost" asChild className="h-8 print:hidden">
+                <Link href={`/admin/fleet/fleet-pnl-report/${row.original.id}`}>
+                  Details <ArrowRight className="size-3.5 ml-1" />
+                </Link>
+              </Button>
+            </div>
+          );
+        }
+      }
     ],
     []
   );
@@ -447,7 +467,7 @@ export function FleetPnlReportManager({ initialRows }: Props) {
   // ── Stat cards config ─────────────────────────────────────────────────────
   const statCards = [
     {
-      title: "Sales Count",
+      title: "Order Count",
       value: stats.count.toLocaleString(),
       fullValue: null,
       icon: Truck,
@@ -455,7 +475,7 @@ export function FleetPnlReportManager({ initialRows }: Props) {
       badgeColor: "bg-teal-400/10 text-teal-700 dark:text-teal-400",
     },
     {
-      title: "Total Volume",
+      title: "Liters Ordered",
       value: `${Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(stats.totalVolume)} L`,
       fullValue: `${fmtQty(stats.totalVolume)} L`,
       icon: Layers,
@@ -525,12 +545,12 @@ export function FleetPnlReportManager({ initialRows }: Props) {
       <div className="flex flex-col md:flex-row justify-between items-center md:items-center gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
         <div className="space-y-1">
           <h1 className="text-xl font-bold tracking-tight text-foreground print:text-black">
-            Fleet Profit & Loss
+            Fleet Profit & Loss (By Order)
           </h1>
           <p className="hidden print:block text-[11px] text-black/80 font-medium mt-1">
             Date: {dateRange?.from ? format(dateRange.from, "d MMMM yyyy") : "All Time"} {dateRange?.to ? ` to ${format(dateRange.to, "d MMMM yyyy")}` : ""}
             <br />
-            {orderRefFilter ? `Order Ref: ${orderRefFilter}` : ""} {transporterFilter ? `Transporter: ${transporterFilter}` : ""}
+            {orderRefFilter ? `Order Ref: ${orderRefFilter}` : ""}
           </p>
         </div>
 
@@ -543,11 +563,10 @@ export function FleetPnlReportManager({ initialRows }: Props) {
                   <Button variant="outline" className="gap-2 rounded-sm relative h-10">
                     <Filter className="h-4 w-4" />
                     <span>Filter</span>
-                    {(!!draftOrderRef || !!draftTransporter || !!draftDateRange) && (
+                    {(!!draftOrderRef || !!draftDateRange) && (
                       <Badge className="ml-1 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px]">
                         {[
                           !!draftOrderRef,
-                          !!draftTransporter,
                           !!draftDateRange
                         ].filter(Boolean).length}
                       </Badge>
@@ -592,16 +611,6 @@ export function FleetPnlReportManager({ initialRows }: Props) {
                         placeholder="e.g. ORD-1001" 
                         value={draftOrderRef}
                         onChange={(e) => setDraftOrderRef(e.target.value)}
-                      />
-                    </div>
-
-                    {/* Transporter Filter */}
-                    <div className="space-y-3 w-full pt-2">
-                      <Label className="text-sm font-semibold">Transporter Name</Label>
-                      <Input 
-                        placeholder="Search transporter..." 
-                        value={draftTransporter}
-                        onChange={(e) => setDraftTransporter(e.target.value)}
                       />
                     </div>
                   </div>
@@ -823,7 +832,8 @@ export function FleetPnlReportManager({ initialRows }: Props) {
               </tbody>
               <tfoot className="bg-muted/50 font-bold border border-border/50 print:border-black/30 print:bg-transparent">
                 <tr>
-                  <td colSpan={5} className="px-2 py-2 text-right text-sm border border-border/50 print:border-black/30 print:text-black">
+                  {/* SN(1) + orderDate(2) + depot(3) + orderReference(4) + productType(5) + litersOrdered(6) */}
+                  <td colSpan={6} className="px-2 py-2 text-right text-sm border border-border/50 print:border-black/30 print:text-black">
                     Total:
                   </td>
                   <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black"></td>
@@ -846,13 +856,11 @@ export function FleetPnlReportManager({ initialRows }: Props) {
                     {fmtMoney(stats.totalTotalCost)}
                   </td>
                   <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black"></td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtQty(stats.totalVolume)} L
-                  </td>
                   <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black"></td>
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {fmtMoney(stats.totalSalesRevenue)}
                   </td>
+                  <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black"></td>
                   <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
                     {fmtMoney(stats.totalBalance)}
                   </td>
@@ -863,6 +871,7 @@ export function FleetPnlReportManager({ initialRows }: Props) {
                     {stats.totalPnl >= 0 ? "+" : ""}
                     {fmtMoney(stats.totalPnl)}
                   </td>
+                  <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black"></td>
                 </tr>
               </tfoot>
             </table>

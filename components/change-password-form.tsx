@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -27,16 +28,14 @@ export function ChangePasswordForm() {
   const { register, handleSubmit, formState } = useForm<Values>({
     resolver: zodResolver(Schema),
   });
-  const [error, setError] = useState<string | null>(null);
 
   const onSubmit = handleSubmit(async (values) => {
-    setError(null);
     const res = await apiPost<{ redirect: string }>("/api/auth/change-password", {
       currentPassword: values.currentPassword,
       newPassword: values.newPassword,
     });
     if (res.error) {
-      setError(res.error.message);
+      toast.error(res.error.message);
       return;
     }
     if (res.data?.redirect) window.location.assign(res.data.redirect);
@@ -44,17 +43,18 @@ export function ChangePasswordForm() {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-6">
-      <FormField label="Current password" htmlFor="cur" error={formState.errors.currentPassword?.message}>
-        <PasswordInput id="cur" autoComplete="current-password" {...register("currentPassword")} />
-      </FormField>
-      <FormField label="New password" htmlFor="new" error={formState.errors.newPassword?.message}>
-        <PasswordInput id="new" autoComplete="new-password" {...register("newPassword")} />
-      </FormField>
-      <FormField label="Confirm new password" htmlFor="conf" error={formState.errors.confirm?.message}>
-        <PasswordInput id="conf" autoComplete="new-password" {...register("confirm")} />
-      </FormField>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <Button type="submit" disabled={formState.isSubmitting} className="w-full">
+      <div className="flex flex-col gap-4">
+        <FormField label="Current password" htmlFor="cur" required error={formState.errors.currentPassword?.message}>
+          <PasswordInput id="cur" autoComplete="current-password" placeholder="Enter your current password" className="dark:bg-background h-9 shadow-xs" {...register("currentPassword")} />
+        </FormField>
+        <FormField label="New password" htmlFor="new" required error={formState.errors.newPassword?.message}>
+          <PasswordInput id="new" autoComplete="new-password" placeholder="Enter your new password" className="dark:bg-background h-9 shadow-xs" {...register("newPassword")} />
+        </FormField>
+        <FormField label="Confirm new password" htmlFor="conf" required error={formState.errors.confirm?.message}>
+          <PasswordInput id="conf" autoComplete="new-password" placeholder="Confirm your new password" className="dark:bg-background h-9 shadow-xs" {...register("confirm")} />
+        </FormField>
+      </div>
+      <Button type="submit" size="lg" disabled={formState.isSubmitting} className="rounded-lg h-10 hover:bg-primary/80 cursor-pointer w-full">
         {formState.isSubmitting ? "Saving…" : "Update password"}
       </Button>
     </form>

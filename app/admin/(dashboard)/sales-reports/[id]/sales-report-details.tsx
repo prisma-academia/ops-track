@@ -37,6 +37,7 @@ interface DebtRepayment {
   status: "PENDING" | "APPROVED" | "REJECTED";
   logDate: string | Date;
   posReceiptUrl?: string | null;
+  transferReceiptUrl?: string | null;
   recordedBy?: SalesReportUser | null;
   approvedBy?: SalesReportUser | null;
   reason?: string | null;
@@ -73,6 +74,7 @@ interface SalesReportRow {
     amountPos: number;
     amountTransfer: number;
     posReceiptUrl: string | null;
+    transferReceiptUrl: string | null;
     status: "PENDING" | "APPROVED" | "REJECTED";
     recordedBy: SalesReportUser | null;
     approvedBy: SalesReportUser | null;
@@ -327,7 +329,12 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                                 <ImageIcon className="size-3 text-muted-foreground" />
                               </Button>
                             )}
-                            {!flowParent.posReceiptUrl && (
+                            {flowParent.transferReceiptUrl && (
+                              <Button variant="outline" size="icon" className="size-7" onClick={() => handleOpenReceipt(flowParent.transferReceiptUrl, "Transfer Receipt")}>
+                                <ImageIcon className="size-3 text-muted-foreground text-blue-500" />
+                              </Button>
+                            )}
+                            {!flowParent.posReceiptUrl && !flowParent.transferReceiptUrl && (
                               <span className="text-xs text-muted-foreground">-</span>
                             )}
                           </div>
@@ -387,7 +394,12 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                                   <ImageIcon className="size-3 text-muted-foreground" />
                                 </Button>
                               )}
-                              {!child.posReceiptUrl && (
+                              {child.transferReceiptUrl && (
+                                <Button variant="outline" size="icon" className="size-7" onClick={() => handleOpenReceipt(child.transferReceiptUrl, "Transfer Receipt")}>
+                                  <ImageIcon className="size-3 text-muted-foreground text-blue-500" />
+                                </Button>
+                              )}
+                              {!child.posReceiptUrl && !child.transferReceiptUrl && (
                                 <span className="text-xs text-muted-foreground">-</span>
                               )}
                             </div>

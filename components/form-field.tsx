@@ -4,16 +4,21 @@ export function FormField({
   label,
   htmlFor,
   error,
+  required,
   children,
 }: {
   label: string;
   htmlFor: string;
   error?: string;
+  required?: boolean;
   children: ReactNode;
 }) {
   return (
     <label className="flex flex-col gap-1 text-sm" htmlFor={htmlFor}>
-      <span className="text-foreground">{label}</span>
+      <span className="text-foreground">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </span>
       {children}
       {error ? <span className="text-xs text-red-600">{error}</span> : null}
     </label>

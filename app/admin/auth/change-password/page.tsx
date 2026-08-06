@@ -1,9 +1,10 @@
 import { AdminChangePasswordForm } from "./form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthLayoutWrapper } from "@/components/auth-layout-wrapper";
 
 export default function AdminChangePasswordPage() {
   return (
-    <main className="flex flex-1 items-center justify-center p-8">
+    <AuthLayoutWrapper>
       <Card className="w-full max-w-lg px-6 py-8 sm:p-12 relative gap-6">
         <CardHeader className="text-center gap-6 p-0">
           <div className="flex flex-col gap-1">
@@ -16,7 +17,7 @@ export default function AdminChangePasswordPage() {
           <AdminChangePasswordForm />
         </CardContent>
       </Card>
-    </main>
+    </AuthLayoutWrapper>
   );
 }
 

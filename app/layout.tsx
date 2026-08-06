@@ -49,7 +49,7 @@ export default async function RootLayout({
             <TooltipProvider>
               {children}
             </TooltipProvider>
-            <Toaster />
+            <Toaster position="top-center"/>
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

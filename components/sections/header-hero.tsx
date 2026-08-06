@@ -4,9 +4,6 @@ import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import React from 'react'
 import { cn } from '@/lib/utils'
-import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription, DialogHeader } from "@/components/ui/dialog"
-import { AdminLoginForm } from "@/app/admin/auth/(auth)/login/form"
-import { ClientRegisterForm } from "@/app/c/auth/(auth)/register/client-register-form"
 
 const menuItems = [
     { name: 'Features', href: '#link' },
@@ -86,49 +83,20 @@ export const HeroHeader = ({ slug = "App", logoUrl }: { slug?: string, logoUrl?:
                                 </ul>
                             </div>
                             <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
-                                <Dialog>
-                                    <DialogTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            size="default"
-                                            className={cn(isScrolled && 'lg:hidden')}>
-                                            <span>Login</span>
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="max-w-md">
-                                        <DialogHeader className="text-center gap-1">
-                                            <DialogTitle className="text-2xl font-medium">Sign in</DialogTitle>
-                                            <DialogDescription>Use your email and password to access your account.</DialogDescription>
-                                        </DialogHeader>
-                                        <div className="py-4 flex flex-col gap-6">
-                                            <AdminLoginForm />
-                                            <p className="text-xs text-stone-500 text-center">
-                                                <Link href="/admin/auth/forgot-password" className="underline">
-                                                    Forgot password?
-                                                </Link>
-                                            </p>
-                                        </div>
-                                    </DialogContent>
-                                </Dialog>
+                                <Button
+                                    variant="outline"
+                                    size="default"
+                                    asChild
+                                    className={cn(isScrolled && 'lg:hidden')}>
+                                    <Link href="/admin/auth/login">Login</Link>
+                                </Button>
 
-                                {/* <Dialog>
-                                    <DialogTrigger asChild>
-                                        <Button
-                                            size="sm"
-                                            className={cn(isScrolled && 'lg:hidden')}>
-                                            <span>Sign Up</span>
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="sm:max-w-xl">
-                                        <DialogHeader className="text-center gap-1">
-                                            <DialogTitle className="text-2xl font-medium">Create an account</DialogTitle>
-                                            <DialogDescription>Enter your details to create a new account.</DialogDescription>
-                                        </DialogHeader>
-                                        <div className="py-4">
-                                            <ClientRegisterForm />
-                                        </div>
-                                    </DialogContent>
-                                </Dialog> */}
+                                <Button
+                                    size="default"
+                                    asChild
+                                    className={cn(isScrolled && 'lg:hidden')}>
+                                    <Link href="/c/auth/register">Register Fleet</Link>
+                                </Button>
                             </div>
                         </div>
                     </div>

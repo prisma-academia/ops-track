@@ -23,6 +23,7 @@ export type ModuleKey = (typeof MODULE_KEYS)[number];
 
 export const tenantSettingsSchema = z.object({
   logoKey: z.string().min(1).max(300).optional(),
+  backgroundKey: z.string().min(1).max(300).optional(),
   primaryColor: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex color like #1e293b")

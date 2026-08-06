@@ -14,6 +14,7 @@ type Initial = {
   name: string;
   settings: TenantSettings;
   logoUrl: string | null;
+  backgroundUrl: string | null;
 };
 
 export function SettingsForm({
@@ -33,6 +34,8 @@ export function SettingsForm({
   const [enabled, setEnabled] = useState<ModuleKey[]>(initial.settings.enabledModules);
   const [logoKey, setLogoKey] = useState<string | undefined>(initial.settings.logoKey);
   const [logoUrl, setLogoUrl] = useState<string | null>(initial.logoUrl);
+  const [backgroundKey, setBackgroundKey] = useState<string | undefined>(initial.settings.backgroundKey);
+  const [backgroundUrl, setBackgroundUrl] = useState<string | null>(initial.backgroundUrl);
 
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -124,8 +127,86 @@ export function SettingsForm({
     }
   });
 
+  const [
+    { files: bgFiles, isDragging: isBgDragging, errors: bgUploadErrors },
+    {
+      handleDragEnter: handleBgDragEnter,
+      handleDragLeave: handleBgDragLeave,
+      handleDragOver: handleBgDragOver,
+      handleDrop: handleBgDrop,
+      openFileDialog: openBgFileDialog,
+      removeFile: removeBgFile,
+      getInputProps: getBgInputProps,
+    },
+  ] = useFileUpload({
+    accept: "image/png,image/jpeg,image/jpg,image/webp",
+    maxSize,
+    onFilesAdded: async (addedFiles) => {
+      const file = addedFiles[0]?.file;
+      if (!file || !(file instanceof File)) return;
+      setError(null);
+      setUploading(true);
+      try {
+        const res = await apiPost<any>(
+          "/api/tenant/settings/logo", // Same endpoint can handle background images
+          { contentType: file.type }
+        );
+        if (res.error || !res.data) {
+          setError(res.error?.message ?? "Upload could not be started.");
+          return;
+        }
+
+        let publicUrl = "";
+        let publicId = "";
+
+        if (res.data.uploadType === "cloudinary") {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("api_key", res.data.apiKey);
+          formData.append("timestamp", res.data.timestamp.toString());
+          formData.append("signature", res.data.signature);
+
+          const uploadRes = await fetch(res.data.url, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!uploadRes.ok) {
+            setError("Cloudinary upload failed.");
+            return;
+          }
+
+          const cloudinaryData = await uploadRes.json();
+          publicId = cloudinaryData.secure_url;
+          publicUrl = cloudinaryData.secure_url;
+        } else {
+          const put = await fetch(res.data.url, {
+            method: "PUT",
+            headers: { "Content-Type": file.type },
+            body: file,
+          });
+          if (!put.ok) {
+            setError("S3 Upload failed.");
+            return;
+          }
+          publicId = res.data.key;
+          publicUrl = res.data.publicUrl;
+        }
+
+        setBackgroundKey(publicId);
+        setBackgroundUrl(publicUrl);
+        setInfo("Background uploaded. Remember to Save.");
+      } finally {
+        setUploading(false);
+      }
+    }
+  });
+
   const previewUrl = logoUrl || (files[0]?.preview || null);
   const displayFileName = files[0]?.file.name || "Tenant Logo";
+
+  const bgPreviewUrl = backgroundUrl || (bgFiles[0]?.preview || null);
+  const bgDisplayFileName = bgFiles[0]?.file.name || "Tenant Background";
 
   async function submit() {
     setError(null);
@@ -142,6 +223,7 @@ export function SettingsForm({
         blockOnUnresolvedVariance,
         enabledModules: enabled,
         ...(logoKey ? { logoKey } : {}),
+        ...(backgroundKey ? { backgroundKey } : {}),
       },
     });
     setPending(false);
@@ -156,6 +238,98 @@ export function SettingsForm({
     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
       {/* Left Column - General Settings */}
       <div className="md:col-span-2 space-y-6 max-w-xl">
+        <div className="space-y-4 pb-2 border-b">
+          <div className="flex flex-col gap-2">
+            <Label>Background Banner</Label>
+            <p className="text-sm text-muted-foreground">Upload a background banner image for your company profile.</p>
+          </div>
+          
+          <div className="relative max-w-full">
+            <div
+              className="relative flex min-h-48 flex-col items-center justify-center overflow-hidden rounded-xl border border-input border-dashed p-4 transition-colors has-[input:focus]:border-ring has-[input:focus]:ring-[3px] has-[input:focus]:ring-ring/50 data-[dragging=true]:bg-accent/50"
+              data-dragging={isBgDragging || undefined}
+              onDragEnter={handleBgDragEnter}
+              onDragLeave={handleBgDragLeave}
+              onDragOver={handleBgDragOver}
+              onDrop={handleBgDrop}
+            >
+              <input
+                {...getBgInputProps()}
+                aria-label="Upload background file"
+                className="sr-only"
+                disabled={uploading}
+              />
+              
+              {uploading ? (
+                <div className="flex flex-col items-center justify-center p-4">
+                   <Loader2 className="size-8 animate-spin text-muted-foreground mb-4" />
+                   <p className="text-sm font-medium">Uploading background...</p>
+                </div>
+              ) : bgPreviewUrl ? (
+                <div className="absolute inset-0 flex items-center justify-center p-0 bg-stone-200">
+                  <img
+                    alt={bgDisplayFileName}
+                    className="h-full w-full object-cover"
+                    src={bgPreviewUrl}
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
+                  <div
+                    aria-hidden="true"
+                    className="mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border bg-background"
+                  >
+                    <ImageIcon className="size-4 opacity-60" />
+                  </div>
+                  <p className="mb-1.5 font-medium text-sm">Drop your background here</p>
+                  <p className="text-muted-foreground text-xs">
+                    PNG, JPG or WEBP (max. {maxSizeMB}MB)
+                  </p>
+                  <Button
+                    className="mt-4"
+                    onClick={openBgFileDialog}
+                    variant="outline"
+                    type="button"
+                  >
+                    <UploadIcon
+                      aria-hidden="true"
+                      className="-ms-1 size-4 opacity-60"
+                    />
+                    Select image
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {bgPreviewUrl && !uploading && (
+              <div className="absolute top-4 right-4">
+                <button
+                  aria-label="Remove image"
+                  className="z-50 flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white outline-none transition-[color,box-shadow] hover:bg-black/80 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  onClick={() => {
+                     removeBgFile(bgFiles[0]?.id);
+                     setBackgroundUrl(null);
+                     setBackgroundKey(undefined);
+                  }}
+                  type="button"
+                >
+                  <XIcon aria-hidden="true" className="size-4" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {bgUploadErrors.length > 0 && (
+            <div
+              className="flex items-center gap-1 text-destructive text-xs mt-2"
+              role="alert"
+            >
+              <AlertCircleIcon className="size-3 shrink-0" />
+              <span>{bgUploadErrors[0]}</span>
+            </div>
+          )}
+        </div>
+
         <div className="space-y-4 pb-2 border-b">
           <div className="flex flex-col gap-2">
             <Label>Logo</Label>

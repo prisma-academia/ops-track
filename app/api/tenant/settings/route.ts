@@ -13,11 +13,13 @@ const PatchBody = z.object({
   settings: tenantSettingsSchema.partial().optional(),
 });
 
-function withLogoUrl(settings: ReturnType<typeof parseTenantSettings>) {
+function withUrls(settings: ReturnType<typeof parseTenantSettings>) {
   return {
     ...settings,
     logoUrl:
       settings.logoKey && s3Configured() ? publicUrlForKey(settings.logoKey) : null,
+    backgroundUrl:
+      settings.backgroundKey && s3Configured() ? publicUrlForKey(settings.backgroundKey) : null,
   };
 }
 
@@ -29,7 +31,7 @@ export async function GET() {
     const settings = parseTenantSettings(tenant.settingsJson);
     return ok({
       tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
-      settings: withLogoUrl(settings),
+      settings: withUrls(settings),
     });
   } catch (e) {
     return handleError(e);
@@ -74,7 +76,7 @@ export async function PATCH(request: Request) {
     });
     return ok({
       tenant: { id: updated.id, name: updated.name, slug: updated.slug },
-      settings: withLogoUrl(merged),
+      settings: withUrls(merged),
     });
   } catch (e) {
     return handleError(e);

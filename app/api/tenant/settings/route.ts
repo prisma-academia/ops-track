@@ -10,6 +10,15 @@ import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 
 const PatchBody = z.object({
   name: z.string().min(1).max(200).optional(),
+  companyEmail: z.string().email().max(255).optional().nullable(),
+  companyPhone: z.string().max(100).optional().nullable(),
+  website: z.string().url().max(255).optional().nullable().or(z.literal("")),
+  addressLine1: z.string().max(255).optional().nullable(),
+  addressLine2: z.string().max(255).optional().nullable(),
+  city: z.string().max(100).optional().nullable(),
+  region: z.string().max(100).optional().nullable(),
+  postalCode: z.string().max(50).optional().nullable(),
+  country: z.string().max(100).optional().nullable(),
   settings: tenantSettingsSchema.partial().optional(),
 });
 
@@ -30,7 +39,20 @@ export async function GET() {
     if (!tenant) throw new DomainError(404, "not_found", "Tenant not found.");
     const settings = parseTenantSettings(tenant.settingsJson);
     return ok({
-      tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+      tenant: { 
+        id: tenant.id, 
+        name: tenant.name, 
+        slug: tenant.slug,
+        companyEmail: tenant.companyEmail,
+        companyPhone: tenant.companyPhone,
+        website: tenant.website,
+        addressLine1: tenant.addressLine1,
+        addressLine2: tenant.addressLine2,
+        city: tenant.city,
+        region: tenant.region,
+        postalCode: tenant.postalCode,
+        country: tenant.country,
+      },
       settings: withUrls(settings),
     });
   } catch (e) {
@@ -59,6 +81,15 @@ export async function PATCH(request: Request) {
       where: { id: actor.tenantId },
       data: {
         ...(body.name ? { name: body.name } : {}),
+        ...(body.companyEmail !== undefined ? { companyEmail: body.companyEmail } : {}),
+        ...(body.companyPhone !== undefined ? { companyPhone: body.companyPhone } : {}),
+        ...(body.website !== undefined ? { website: body.website === "" ? null : body.website } : {}),
+        ...(body.addressLine1 !== undefined ? { addressLine1: body.addressLine1 } : {}),
+        ...(body.addressLine2 !== undefined ? { addressLine2: body.addressLine2 } : {}),
+        ...(body.city !== undefined ? { city: body.city } : {}),
+        ...(body.region !== undefined ? { region: body.region } : {}),
+        ...(body.postalCode !== undefined ? { postalCode: body.postalCode } : {}),
+        ...(body.country !== undefined ? { country: body.country } : {}),
         settingsJson: merged as object,
       },
     });
@@ -75,7 +106,20 @@ export async function PATCH(request: Request) {
       userAgent: meta.userAgent,
     });
     return ok({
-      tenant: { id: updated.id, name: updated.name, slug: updated.slug },
+      tenant: { 
+        id: updated.id, 
+        name: updated.name, 
+        slug: updated.slug,
+        companyEmail: updated.companyEmail,
+        companyPhone: updated.companyPhone,
+        website: updated.website,
+        addressLine1: updated.addressLine1,
+        addressLine2: updated.addressLine2,
+        city: updated.city,
+        region: updated.region,
+        postalCode: updated.postalCode,
+        country: updated.country,
+      },
       settings: withUrls(merged),
     });
   } catch (e) {

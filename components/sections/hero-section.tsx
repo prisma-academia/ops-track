@@ -43,7 +43,7 @@ const itemVariants: Variants = {
     },
 }
 
-export default function HeroSection({ slug, name, logoUrl }: { slug: string, name?: string, logoUrl?: string | null }) {
+export default function HeroSection({ slug, name, logoUrl, backgroundUrl }: { slug: string, name?: string, logoUrl?: string | null, backgroundUrl?: string | null }) {
     return (
         <>
             <HeroHeader slug={slug} logoUrl={logoUrl} />
@@ -64,7 +64,7 @@ export default function HeroSection({ slug, name, logoUrl }: { slug: string, nam
                             className="absolute inset-0 top-0">
                             <motion.div variants={itemVariants} className="h-full">
                                 <Image
-                                    src="https://images.unsplash.com/photo-1662285064441-bedb11ca7e47?q=80&w=1344&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+                                    src={backgroundUrl || "https://images.unsplash.com/photo-1662285064441-bedb11ca7e47?q=80&w=1344&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"}
                                     alt="background"
                                     className="size-full object-cover opacity-40 dark:opacity-50"
                                     width="3276"

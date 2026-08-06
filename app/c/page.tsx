@@ -13,10 +13,17 @@ export default async function TenantLandingPage() {
       : settings?.logoKey && s3Configured()
       ? publicUrlForKey(settings.logoKey)
       : null;
+      
+  const backgroundUrl =
+    settings?.backgroundKey?.startsWith("http")
+      ? settings.backgroundKey
+      : settings?.backgroundKey && s3Configured()
+      ? publicUrlForKey(settings.backgroundKey)
+      : null;
   
   return (
     <div className="min-h-screen bg-stone-50">
-      <HeroSection slug={tenant?.slug || "App"} name={tenant?.name || "App"} logoUrl={logoUrl} />
+      <HeroSection slug={tenant?.slug || "App"} name={tenant?.name || "App"} logoUrl={logoUrl} backgroundUrl={backgroundUrl} />
       <FooterSection slug={tenant?.slug || "App"} name={tenant?.name || "App"} logoUrl={logoUrl} />
     </div>
   );

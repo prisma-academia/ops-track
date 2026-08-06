@@ -51,7 +51,21 @@ export default async function TenantSettingsEditPage() {
       </div>
       <Card>
         <SettingsForm
-          initial={{ name: tenant.name, settings, logoUrl, backgroundUrl }}
+          initial={{ 
+            name: tenant.name, 
+            companyEmail: tenant.companyEmail,
+            companyPhone: tenant.companyPhone,
+            website: tenant.website,
+            addressLine1: tenant.addressLine1,
+            addressLine2: tenant.addressLine2,
+            city: tenant.city,
+            region: tenant.region,
+            postalCode: tenant.postalCode,
+            country: tenant.country,
+            settings, 
+            logoUrl, 
+            backgroundUrl 
+          }}
           storageEnabled={s3Configured()}
         />
       </Card>

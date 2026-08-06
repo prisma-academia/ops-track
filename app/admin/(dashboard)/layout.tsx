@@ -99,6 +99,15 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
   });
   if (!tenant || tenant.status !== "ACTIVE") redirect("/maintenance");
 
+  // Check if Station is enabled
+  if (!tenant.activeModules.includes("STATION")) {
+    if (tenant.activeModules.includes("FLEET")) {
+      redirect("/admin/fleet");
+    } else {
+      redirect("/admin/modules");
+    }
+  }
+
   const tNav = await getTranslations("nav");
   const settings = parseTenantSettings(tenant?.settingsJson);
   const enabled = Array.from(new Set([

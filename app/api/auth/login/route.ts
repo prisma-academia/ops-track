@@ -168,9 +168,20 @@ async function loginTenant(slug: string, email: string, password: string, meta: 
     ip: meta.ip,
     userAgent: meta.userAgent,
   });
+  let defaultRedirect = "/admin/dashboard";
+  const availableModules = user.activeModules.filter((m) => tenant.activeModules.includes(m));
+  
+  if (availableModules.includes("STATION") && availableModules.includes("FLEET")) {
+    defaultRedirect = "/admin/modules";
+  } else if (availableModules.includes("FLEET")) {
+    defaultRedirect = "/admin/fleet";
+  } else if (availableModules.includes("STATION")) {
+    defaultRedirect = "/admin/dashboard";
+  }
+
   return { 
     mustChangePassword: user.mustChangePassword, 
-    redirect: user.mustChangePassword ? "/admin/auth/change-password" : "/admin/dashboard",
+    redirect: user.mustChangePassword ? "/admin/auth/change-password" : defaultRedirect,
     token,
     user: {
       id: user.id,

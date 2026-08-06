@@ -70,7 +70,11 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
 
   // Check if Fleet is enabled
   if (!tenant.activeModules.includes("FLEET")) {
-    redirect("/admin/dashboard");
+    if (tenant.activeModules.includes("STATION")) {
+      redirect("/admin/dashboard");
+    } else {
+      redirect("/admin/modules");
+    }
   }
   const settings = parseTenantSettings(tenant.settingsJson);
   

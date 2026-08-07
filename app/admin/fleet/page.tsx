@@ -4,19 +4,29 @@ import { PERMISSIONS } from "@/lib/auth/permissions"
 import { getFleetOverviewData } from "./_data/fleet-overview"
 
 import { Overview } from "./_components/overview"
-import { VolumeByProduct } from "./_components/volume-by-product"
-import { VolumeOverTime } from "./_components/volume-over-time"
+import SalesOverviewChart from "@/components/charts/sales-overview"
+import EarningReportChart from "@/components/charts/earn-report"
+import { TopTransporters } from "./_components/top-transporters"
+import { TopClients } from "./_components/top-clients"
 
 export default async function FleetOverviewPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key)
   const data = await getFleetOverviewData(actor.tenantId)
 
   return (
-    <section className="grid gap-4 p-4 md:grid-cols-2">
+    <section className="grid gap-3 p-4 md:grid-cols-2 space-y-3">
       <Overview data={data} />
       <div className="col-span-full grid gap-4 md:grid-cols-3">
-        <VolumeOverTime data={data} className="md:col-span-2" />
-        <VolumeByProduct data={data} />
+        <div className="md:col-span-2">
+          <SalesOverviewChart data={data} />
+        </div>
+        <div>
+          <EarningReportChart data={data} />
+        </div>
+      </div>
+      <div className="col-span-full grid gap-4 md:grid-cols-2">
+        <TopTransporters data={data} />
+        <TopClients data={data} />
       </div>
     </section>
   )

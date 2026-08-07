@@ -148,7 +148,7 @@ export async function getFleetOverviewData(
   })
 
   // ── Grouped queries ───────────────────────────────────────────────────
-  const [volumeRaw, statusRaw, transporterGroupRaw] = await Promise.all([
+  const [volumeRaw, statusRaw, transporterGroupRaw, saleGroupRaw] = await Promise.all([
     prisma.transport.groupBy({
       by: ["productType"],
       where: { tenantId, productType: { not: null } },
@@ -162,10 +162,18 @@ export async function getFleetOverviewData(
     prisma.transport.groupBy({
       by: ["transporterId"],
       where: { tenantId },
-      _sum: { litersDelivered: true, litersCarried: true },
+      _sum: { litersDelivered: true, litersCarried: true, netTransportFeePaid: true },
       _count: { id: true },
       orderBy: { _sum: { litersCarried: "desc" } },
       take: 5,
+    }),
+    prisma.sale.groupBy({
+      by: ["stationId", "customerId"],
+      where: { tenantId },
+      _sum: { litersDespatched: true, totalExpectedAmount: true },
+      _count: { id: true },
+      orderBy: { _sum: { litersDespatched: "desc" } },
+      take: 10,
     }),
   ])
 
@@ -198,8 +206,33 @@ export async function getFleetOverviewData(
       volume:
         Number(t._sum.litersDelivered) || Number(t._sum.litersCarried) || 0,
       trips: t._count.id,
+      amount: Number(t._sum.netTransportFeePaid) || 0,
     }
   })
+
+  // ── Top Stations / Clients with names ─────────────────────────────────
+  const stationIds = saleGroupRaw.map(s => s.stationId).filter(Boolean) as string[]
+  const customerIds = saleGroupRaw.map(s => s.customerId).filter(Boolean) as string[]
+  
+  const [stations, customers] = await Promise.all([
+    prisma.station.findMany({ where: { id: { in: stationIds } }, select: { id: true, name: true } }),
+    prisma.customer.findMany({ where: { id: { in: customerIds } }, select: { id: true, name: true } }),
+  ])
+  
+  const clientPerformance = saleGroupRaw.map(s => {
+    let name = "Unknown"
+    if (s.stationId) {
+      name = stations.find(x => x.id === s.stationId)?.name || name
+    } else if (s.customerId) {
+      name = customers.find(x => x.id === s.customerId)?.name || name
+    }
+    return {
+      name,
+      volume: Number(s._sum.litersDespatched) || 0,
+      trips: s._count.id,
+      amount: Number(s._sum.totalExpectedAmount) || 0,
+    }
+  }).slice(0, 5)
 
   // ── Assemble result ───────────────────────────────────────────────────
   return {
@@ -245,6 +278,7 @@ export async function getFleetOverviewData(
     },
     comparativeVolume,
     transporterPerformance,
+    clientPerformance,
     transportStatus,
     productVolume,
   }

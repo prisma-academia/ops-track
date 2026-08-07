@@ -2,7 +2,8 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { prisma } from "@/lib/db/client";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { SalesTable } from "./sales-table";
-import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
+import { DataTableFilterDrawer, FilterConfig } from "@/components/data-table-filter-drawer";
+const PAYMENT_METHODS = ["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"];
 
 export default async function SalesLedgerPage(props: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -13,22 +14,55 @@ export default async function SalesLedgerPage(props: {
   const page = parseInt(searchParams.page as string || "1", 10);
   const pageSize = 100;
   const search = (searchParams.search as string) || "";
+  
+  const entityId = searchParams.entity as string;
+  const method = searchParams.method as string;
+  const minAmount = searchParams.minAmount as string;
+  const maxAmount = searchParams.maxAmount as string;
+  const dateFrom = searchParams.dateFrom as string;
+  const dateTo = searchParams.dateTo as string;
 
-  const where = {
+  const where: any = {
     tenantId: actor.tenantId,
-    category: "CLIENT_PAYMENT" as any,
+    category: "CLIENT_PAYMENT",
     ...(search
       ? {
-          // Temporarily omitting deep relation search to resolve TS issues quickly.
-          // In Prisma, searching deep nullable relations can cause type mismatches.
           OR: [
-            { paymentMethod: search as any }, // Assuming a simple string map or fallback
+            { paymentMethod: search as any },
           ],
         }
       : {}),
   };
 
-  const [totalCount, rows] = await Promise.all([
+  if (entityId) {
+    if (entityId.startsWith("client_")) {
+      where.customerId = entityId.replace("client_", "");
+    } else if (entityId.startsWith("station_")) {
+      where.sale = { stationId: entityId.replace("station_", "") };
+    }
+  }
+
+  if (method) {
+    where.paymentMethod = method;
+  }
+
+  if (minAmount || maxAmount) {
+    where.amount = {};
+    if (minAmount) where.amount.gte = parseFloat(minAmount);
+    if (maxAmount) where.amount.lte = parseFloat(maxAmount);
+  }
+
+  if (dateFrom || dateTo) {
+    where.createdAt = {};
+    if (dateFrom) where.createdAt.gte = new Date(dateFrom);
+    if (dateTo) {
+      const to = new Date(dateTo);
+      to.setHours(23, 59, 59, 999);
+      where.createdAt.lte = to;
+    }
+  }
+
+  const [totalCount, rows, customers, stations] = await Promise.all([
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({
       where,
@@ -41,9 +75,26 @@ export default async function SalesLedgerPage(props: {
         },
       },
     }),
+    prisma.customer.findMany({ where: { tenantId: actor.tenantId }, select: { id: true, name: true } }),
+    prisma.station.findMany({ where: { tenantId: actor.tenantId }, select: { id: true, name: true } }),
   ]);
 
   const totalPages = Math.ceil(totalCount / pageSize);
+
+  const filters: FilterConfig[] = [
+    { type: "date-range", label: "Date Range", fromParam: "dateFrom", toParam: "dateTo" },
+    { 
+      type: "combobox", 
+      label: "Client / Station", 
+      paramName: "entity", 
+      groups: [
+        { label: "Clients", options: customers.map(c => ({ value: `client_${c.id}`, label: c.name })) },
+        { label: "Stations", options: stations.map(s => ({ value: `station_${s.id}`, label: s.name })) }
+      ]
+    },
+    { type: "select", label: "Payment Method", paramName: "method", options: PAYMENT_METHODS.map(m => ({ value: m, label: m.replace(/_/g, " ") })) },
+    { type: "number-range", label: "Amount Range", fromParam: "minAmount", toParam: "maxAmount" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -58,11 +109,7 @@ export default async function SalesLedgerPage(props: {
         currentPage={page} 
         pageSize={pageSize}
         filterNode={
-          <DataTableFilterDrawer
-            filters={[
-              { type: "date-range", label: "Date Range", fromParam: "dateFrom", toParam: "dateTo" }
-            ]}
-          />
+          <DataTableFilterDrawer filters={filters} />
         }
       />
     </div>

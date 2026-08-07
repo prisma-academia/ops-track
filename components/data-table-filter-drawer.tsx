@@ -22,24 +22,25 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Filter, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check, ChevronsUpDown, Filter, X } from "lucide-react";
 import { useDataTable } from "./data-table-context";
 import { Badge } from "@/components/ui/badge";
-import {
-  Combobox,
-  ComboboxInput,
-  ComboboxContent,
-  ComboboxList,
-  ComboboxItem,
-  ComboboxEmpty,
-} from "@/components/ui/combobox";
-
+import { cn } from "@/lib/utils";
 export type FilterConfig = 
   | { 
-      type: "select" | "combobox"; 
+      type: "select"; 
       paramName: string; 
       label: string; 
       options: { value: string; label: string }[];
+    }
+  | {
+      type: "combobox";
+      paramName: string;
+      label: string;
+      options?: { value: string; label: string; disabled?: boolean }[];
+      groups?: { label: string; options: { value: string; label: string; disabled?: boolean }[] }[];
     }
   | { 
       type: "date-range" | "number-range"; 
@@ -58,6 +59,7 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
   const dataTable = useDataTable();
   const [open, setOpen] = useState(false);
   const [localValues, setLocalValues] = useState<Record<string, string>>({});
+  const [openCombobox, setOpenCombobox] = useState<string | null>(null);
 
   // Active filters count
   const activeCount = filters.reduce((acc, filter) => {
@@ -224,25 +226,105 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
               )}
 
               {filter.type === "combobox" && (
-                <Combobox
-                  value={localValues[filter.paramName] || ""}
-                  onValueChange={(val) => updateValue(filter.paramName, val || "")}
+                <Popover 
+                  open={openCombobox === filter.paramName} 
+                  onOpenChange={(isOpen) => setOpenCombobox(isOpen ? filter.paramName : null)}
                 >
-                  <ComboboxInput showClear placeholder={`Search ${filter.label}`} />
-                  <ComboboxContent>
-                    <ComboboxEmpty>No results found.</ComboboxEmpty>
-                    <ComboboxList>
-                      <ComboboxItem value="">
-                        All {filter.label}
-                      </ComboboxItem>
-                      {filter.options.map((opt) => (
-                        <ComboboxItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </ComboboxItem>
-                      ))}
-                    </ComboboxList>
-                  </ComboboxContent>
-                </Combobox>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openCombobox === filter.paramName}
+                      className="w-full justify-between"
+                    >
+                      <span className="truncate">
+                        {localValues[filter.paramName]
+                          ? (() => {
+                              const val = localValues[filter.paramName];
+                              let foundLabel = val;
+                              if (filter.options) {
+                                const found = filter.options.find(o => o.value === val);
+                                if (found) foundLabel = found.label;
+                              }
+                              if (filter.groups) {
+                                filter.groups.forEach(g => {
+                                  const found = g.options.find(o => o.value === val);
+                                  if (found) foundLabel = found.label;
+                                });
+                              }
+                              return foundLabel;
+                            })()
+                          : `All ${filter.label}`}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[360px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder={`Search ${filter.label}...`} />
+                      <CommandList>
+                        <CommandEmpty>No results found.</CommandEmpty>
+                        <CommandItem
+                          value={`All ${filter.label}`}
+                          onSelect={() => {
+                            updateValue(filter.paramName, "");
+                            setOpenCombobox(null);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              !localValues[filter.paramName] ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          All {filter.label}
+                        </CommandItem>
+                        {filter.options && filter.options.map((opt) => (
+                          <CommandItem
+                            key={opt.value}
+                            value={opt.label}
+                            onSelect={() => {
+                              updateValue(filter.paramName, opt.value);
+                              setOpenCombobox(null);
+                            }}
+                            disabled={opt.disabled}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                localValues[filter.paramName] === opt.value ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {opt.label}
+                          </CommandItem>
+                        ))}
+                        {filter.groups && filter.groups.map((group) => (
+                          <CommandGroup key={group.label} heading={group.label}>
+                            {group.options.map((opt) => (
+                              <CommandItem
+                                key={opt.value}
+                                value={`${opt.label} ${group.label}`}
+                                onSelect={() => {
+                                  updateValue(filter.paramName, opt.value);
+                                  setOpenCombobox(null);
+                                }}
+                                disabled={opt.disabled}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    localValues[filter.paramName] === opt.value ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {opt.label}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        ))}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               )}
 
               {filter.type === "number-range" && (

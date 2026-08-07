@@ -2,23 +2,22 @@ import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
-import { Rubik, Source_Serif_4, Fira_Code, Public_Sans } from "next/font/google";
+import { Rubik, Source_Serif_4, Fira_Code, Public_Sans, Geist_Mono, Inter, Geist } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-const publicSans = Public_Sans({subsets:['latin'],variable:'--font-sans'});
+const interHeading = Inter({subsets:['latin'],variable:'--font-heading'});
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const fontSerif = Source_Serif_4({
   subsets: ["latin"],
   variable: "--font-serif",
 });
 
-const fontMono = Fira_Code({
-  subsets: ["latin"],
-  variable: "--font-mono",
-});
+const geistMono = Geist_Mono({subsets:['latin'],variable:'--font-mono'});
 
 export const metadata: Metadata = {
   title: "Forge",
@@ -36,11 +35,9 @@ export default async function RootLayout({
     <html
       lang={locale}
       className={cn(
-        "h-full antialiased font-sans",
-        publicSans.variable,
-        fontMono.variable,
-        fontSerif.variable
-      )}
+                    "h-full antialiased font-sans",
+                    fontSerif.variable
+                  , geistMono.variable, "font-sans", geist.variable, interHeading.variable)}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-stone-50 text-stone-900">

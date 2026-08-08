@@ -6,8 +6,8 @@ import { getFleetOverviewData } from "./_data/fleet-overview"
 import { Overview } from "./_components/overview"
 import SalesOverviewChart from "@/components/charts/sales-overview"
 import EarningReportChart from "@/components/charts/earn-report"
-import { TopTransporters } from "./_components/top-transporters"
-import { TopClients } from "./_components/top-clients"
+import PaymentStatusChart from "@/components/charts/payment-status-chart"
+import { TopPerformers } from "./_components/top-performers"
 
 export default async function FleetOverviewPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key)
@@ -25,8 +25,12 @@ export default async function FleetOverviewPage() {
         </div>
       </div>
       <div className="col-span-full grid gap-4 md:grid-cols-2">
-        <TopTransporters data={data} />
-        <TopClients data={data} />
+        <div className="flex flex-col gap-4">
+          <TopPerformers data={data} />
+        </div>
+        <div>
+          <PaymentStatusChart data={data} />
+        </div>
       </div>
     </section>
   )

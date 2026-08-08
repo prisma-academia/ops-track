@@ -28,6 +28,7 @@ export type DriverRow = {
   transporterName: string;
   phone: string;
   licenseNumber: string;
+  licenseExpiryDate: string | null;
   status: string;
   isActive: boolean;
   transportCount: number;
@@ -111,7 +112,32 @@ const columns: ColumnDef<DriverRow>[] = [
   { 
     accessorKey: "licenseNumber", 
     header: "License No.",
-    cell: ({ row }) => row.original.licenseNumber
+    cell: ({ row }) => {
+      const num = row.original.licenseNumber;
+      if (num === "-") return <span className="text-muted-foreground">-</span>;
+
+      const expiry = row.original.licenseExpiryDate;
+      let isExpired = false;
+
+      if (expiry) {
+        const expiryDate = new Date(expiry);
+        const now = new Date();
+        isExpired = expiryDate < now;
+      }
+
+      return (
+        <div className="flex flex-col gap-1 items-start">
+          <span className="text-sm">{num}</span>
+          {expiry ? (
+            isExpired ? (
+              <Badge variant="destructive" className="text-[10px] h-4 px-1 py-0">Expired</Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] h-4 px-1 py-0 border-emerald-200 text-emerald-600 bg-emerald-50">Active</Badge>
+            )
+          ) : null}
+        </div>
+      );
+    }
   },
   { 
     accessorKey: "status", 

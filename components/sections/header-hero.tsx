@@ -1,9 +1,10 @@
 'use client'
 import Link from 'next/link'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import React from 'react'
 import { cn } from '@/lib/utils'
+import { useTheme } from "next-themes"
 
 const menuItems = [
     { name: 'Features', href: '#link' },
@@ -15,6 +16,8 @@ const menuItems = [
 export const HeroHeader = ({ slug = "App", logoUrl }: { slug?: string, logoUrl?: string | null }) => {
     const [menuState, setMenuState] = React.useState(false)
     const [isScrolled, setIsScrolled] = React.useState(false)
+    const { theme, resolvedTheme, setTheme } = useTheme()
+    const isDark = theme === "dark" || resolvedTheme === "dark"
 
     React.useEffect(() => {
         const handleScroll = () => {
@@ -82,20 +85,24 @@ export const HeroHeader = ({ slug = "App", logoUrl }: { slug?: string, logoUrl?:
                                     ))}
                                 </ul>
                             </div>
-                            <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
+                            <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:items-center sm:space-y-0 md:w-fit">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="rounded-full text-foreground hover:bg-muted"
+                                    onClick={() => setTheme(isDark ? "light" : "dark")}
+                                >
+                                    <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                                    <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                                    <span className="sr-only">Toggle theme</span>
+                                </Button>
+
                                 <Button
                                     variant="outline"
                                     size="default"
                                     asChild
                                     className={cn(isScrolled && 'lg:hidden')}>
                                     <Link href="/admin/auth/login">Login</Link>
-                                </Button>
-
-                                <Button
-                                    size="default"
-                                    asChild
-                                    className={cn(isScrolled && 'lg:hidden')}>
-                                    <Link href="/c/auth/register">Register Fleet</Link>
                                 </Button>
                             </div>
                         </div>

@@ -11,6 +11,19 @@ import { cn } from "@/lib/utils";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import type { FleetOverviewData } from "@/app/admin/fleet/types";
 
+const formatYAxisNumber = (value: number) => {
+  if (value >= 1_000_000_000) {
+    return `₦${(value / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+  }
+  if (value >= 1_000_000) {
+    return `₦${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (value >= 1_000) {
+    return `₦${(value / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  }
+  return `₦${value}`;
+};
+
 const chartConfig = {
   expense: {
     label: "Expense",
@@ -90,7 +103,7 @@ export default function SalesOverviewChart({ data }: { data: FleetOverviewData }
         </div>
       </CardHeader>
       <CardContent className="px-6">
-        <ChartContainer config={chartConfig} className="h-[300px] w-full">
+        <ChartContainer config={chartConfig} className="h-[280px] w-full">
           <BarChart accessibilityLayer data={chartData}>
             <CartesianGrid
               vertical={false}
@@ -109,7 +122,7 @@ export default function SalesOverviewChart({ data }: { data: FleetOverviewData }
               axisLine={false}
               tickMargin={10}
               fontSize={12}
-              tickFormatter={(value) => `₦${(value / 1000)}k`}
+              tickFormatter={formatYAxisNumber}
             />
             <ChartTooltip content={<ChartTooltipContent hideLabel />} />
             <Bar

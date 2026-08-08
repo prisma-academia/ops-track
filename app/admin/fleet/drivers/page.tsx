@@ -46,6 +46,7 @@ export default async function DriversPage({
     transporterName: d.transporter.name,
     phone: d.phone || "-",
     licenseNumber: d.licenseNumber || "-",
+    licenseExpiryDate: d.licenseExpiryDate ? d.licenseExpiryDate.toISOString() : null,
     status: d.status,
     isActive: d.isActive,
     transportCount: d._count.transports,

@@ -59,7 +59,7 @@ export default function EarningReportChart({ data }: { data: FleetOverviewData }
       <CardContent className="flex flex-col justify-between gap-2 flex-1 px-6">
         <ChartContainer
           config={chartConfig}
-          className="aspect-square max-h-[250px]"
+          className="aspect-square max-h-[200px]"
         >
           <PieChart>
             <ChartTooltip
@@ -71,7 +71,7 @@ export default function EarningReportChart({ data }: { data: FleetOverviewData }
               dataKey="visitors"
               nameKey="browser"
               innerRadius={65}
-              strokeWidth={50}
+              strokeWidth={60}
             >
               <Label
                 content={({ viewBox }) => {
@@ -93,7 +93,7 @@ export default function EarningReportChart({ data }: { data: FleetOverviewData }
                         <tspan
                           x={viewBox.cx}
                           y={(viewBox.cy || 0) + 15}
-                          className="fill-foreground text-xl font-medium"
+                          className="fill-foreground text-lg font-medium"
                         >
                           {totalVolume.toLocaleString()}
                         </tspan>

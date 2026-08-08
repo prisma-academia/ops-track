@@ -1,5 +1,6 @@
 import HeroSection from "@/components/sections/hero-section";
 import FooterSection from "@/components/sections/footer";
+import { OrgFeatures } from "@/components/sections/org-features";
 import { loadTenantPageContext } from "@/lib/db/page-context";
 import { parseTenantSettings } from "@/lib/tenant/settings";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
@@ -24,6 +25,7 @@ export default async function TenantLandingPage() {
   return (
     <div className="min-h-screen bg-stone-50">
       <HeroSection slug={tenant?.slug || "App"} name={tenant?.name || "App"} logoUrl={logoUrl} backgroundUrl={backgroundUrl} />
+      <OrgFeatures />
       <FooterSection slug={tenant?.slug || "App"} name={tenant?.name || "App"} logoUrl={logoUrl} />
     </div>
   );

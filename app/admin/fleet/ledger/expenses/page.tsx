@@ -95,10 +95,7 @@ export default async function ExpensesLedgerPage(props: {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold tracking-tight">Expenses Ledger</h1>
-        <p className="text-muted-foreground">Track fleet and personal administrative outflows.</p>
-      </div>
+
       <ExpensesTable 
         data={JSON.parse(JSON.stringify(rows))} 
         totalCount={totalCount} 

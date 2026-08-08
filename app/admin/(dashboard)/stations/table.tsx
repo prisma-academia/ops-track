@@ -13,11 +13,8 @@ export type StationRow = {
   id: string;
   code: string;
   name: string;
-  pmsLiters: number;
-  agoLiters: number;
-  lpgLiters: number;
   todaySales: { PMS: number; AGO: number; LPG: number };
-  lastClosingStock: number;
+  lastClosingStock: { PMS: number; AGO: number; LPG: number };
   lastSalesAmount: number;
   lastWaybillDate: string | null;
   derivedBalance: number;
@@ -49,21 +46,6 @@ const columns: ColumnDef<StationRow>[] = [
     }
   },
   { 
-    accessorKey: "pmsLiters", 
-    header: "PMS (L)",
-    cell: ({ row }) => row.original.pmsLiters.toLocaleString()
-  },
-  { 
-    accessorKey: "agoLiters", 
-    header: "AGO (L)",
-    cell: ({ row }) => row.original.agoLiters.toLocaleString()
-  },
-  { 
-    accessorKey: "lpgLiters", 
-    header: "LPG (L)",
-    cell: ({ row }) => row.original.lpgLiters.toLocaleString()
-  },
-  { 
     accessorKey: "todaySales", 
     header: "Today's Sales",
     cell: ({ row }) => {
@@ -81,8 +63,14 @@ const columns: ColumnDef<StationRow>[] = [
     accessorKey: "lastClosingStock",
     header: "Last Closing Stock",
     cell: ({ row }) => {
-      const val = row.original.lastClosingStock;
-      return val > 0 ? `${val.toLocaleString()} L` : "—";
+      const stock = row.original.lastClosingStock;
+      const parts = [];
+      if (stock.PMS) parts.push(`PMS: ${stock.PMS.toLocaleString()} L`);
+      if (stock.AGO) parts.push(`AGO: ${stock.AGO.toLocaleString()} L`);
+      if (stock.LPG) parts.push(`LPG: ${stock.LPG.toLocaleString()} L`);
+      return parts.length ? (
+        <span className="text-xs font-medium">{parts.join(" | ")}</span>
+      ) : "—";
     }
   },
 

@@ -77,7 +77,7 @@ export async function formatStationRows(rawRows: any[]) {
     let pmsLiters = 0;
     let agoLiters = 0;
     let lpgLiters = 0;
-    let lastClosingStock = 0;
+    const lastClosingStock = { PMS: 0, AGO: 0, LPG: 0 };
 
     s.tanks.forEach((t: any) => {
       if (t.productType === "PMS") pmsLiters += Number(t.currentLiters);
@@ -86,7 +86,10 @@ export async function formatStationRows(rawRows: any[]) {
       
       const lastSession = t.dippingSessions?.[0];
       if (lastSession && lastSession.closings?.[0]) {
-        lastClosingStock += Number(lastSession.closings[0].closingLiters);
+        const prod = t.productType as "PMS" | "AGO" | "LPG";
+        if (lastClosingStock[prod] !== undefined) {
+          lastClosingStock[prod] += Number(lastSession.closings[0].closingLiters);
+        }
       }
     });
 

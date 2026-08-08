@@ -28,6 +28,19 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -50,10 +63,28 @@ import {
   Receipt,
   Wallet,
   ArrowRight,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import Link from "next/link";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+interface FleetPnlTransportRow {
+  id: string;
+  truckNumber: string;
+  driverName: string;
+  transporterName: string;
+  ratePerLiter: number;
+  maintenanceCost: number;
+  totalDeduction: number;
+  litersCarried: number;
+  litersDelivered: number;
+  salesCount: number;
+  totalTransportCost: number;
+  amountSoldRev: number;
+  amountPaid: number;
+}
 
 interface FleetPnlRow {
   id: string; // The order ID
@@ -76,6 +107,7 @@ interface FleetPnlRow {
   amountPaid: number;
   debtRemaining: number;
   pnl: number;
+  transports?: FleetPnlTransportRow[];
 }
 
 interface Props {
@@ -101,6 +133,64 @@ function fmtMoney(n: number | null) {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
+function SearchSelect({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: string[]; placeholder: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal h-10"
+        >
+          {value ? <span className="truncate">{value}</span> : <span className="text-muted-foreground">{placeholder}</span>}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search..." />
+          <CommandList>
+            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="--clear--"
+                onSelect={() => {
+                  onChange("");
+                  setOpen(false);
+                }}
+                className="text-muted-foreground italic justify-center text-xs"
+              >
+                Clear selection
+              </CommandItem>
+              {options.map((opt) => (
+                <CommandItem
+                  key={opt}
+                  value={opt}
+                  onSelect={(currentValue) => {
+                    // CommandItem lowercases the value by default, use original option
+                    onChange(opt);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === opt ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {opt}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function FleetPnlReportManager({ initialRows }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -113,23 +203,55 @@ export function FleetPnlReportManager({ initialRows }: Props) {
   
   // Custom Filters
   const [draftOrderRef, setDraftOrderRef] = useState("");
+  const [draftDepot, setDraftDepot] = useState("");
+  const [draftProduct, setDraftProduct] = useState("");
+  const [draftTransport, setDraftTransport] = useState("");
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(draftDateRange);
   const [orderRefFilter, setOrderRefFilter] = useState("");
+  const [depotFilter, setDepotFilter] = useState("");
+  const [productFilter, setProductFilter] = useState("");
+  const [transportFilter, setTransportFilter] = useState("");
 
   const applyFilters = useCallback(() => {
     setDateRange(draftDateRange);
     setOrderRefFilter(draftOrderRef);
+    setDepotFilter(draftDepot);
+    setProductFilter(draftProduct);
+    setTransportFilter(draftTransport);
     setIsOpen(false);
-  }, [draftDateRange, draftOrderRef]);
+  }, [draftDateRange, draftOrderRef, draftDepot, draftProduct, draftTransport]);
 
   const clearFilters = useCallback(() => {
     setDraftDateRange(undefined);
     setDraftOrderRef("");
+    setDraftDepot("");
+    setDraftProduct("");
+    setDraftTransport("");
     setDateRange(undefined);
     setOrderRefFilter("");
+    setDepotFilter("");
+    setProductFilter("");
+    setTransportFilter("");
     setIsOpen(false);
   }, []);
+
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const toggleExpanded = (id: string) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  // Pre-calculate unique values for comboboxes
+  const uniqueOrderRefs = useMemo(() => Array.from(new Set(initialRows.map(r => r.orderReference).filter(Boolean))), [initialRows]);
+  const uniqueDepots = useMemo(() => Array.from(new Set(initialRows.map(r => r.depot).filter(Boolean))), [initialRows]);
+  const uniqueProducts = useMemo(() => Array.from(new Set(initialRows.map(r => r.productType).filter(Boolean))), [initialRows]);
+  const uniqueTransporters = useMemo(() => {
+    const transporters = new Set<string>();
+    initialRows.forEach(r => {
+      r.transports?.forEach(t => {
+        if (t.transporterName) transporters.add(t.transporterName);
+      });
+    });
+    return Array.from(transporters);
+  }, [initialRows]);
 
   // ── Fullscreen toggle ─────────────────────────────────────────────────────
   const toggleFullscreen = useCallback(() => {
@@ -154,7 +276,15 @@ export function FleetPnlReportManager({ initialRows }: Props) {
   const filteredRows = useMemo(() => {
     return initialRows
       .filter((row) => {
-        if (orderRefFilter && !row.orderReference.toLowerCase().includes(orderRefFilter.toLowerCase())) return false;
+        if (orderRefFilter && row.orderReference !== orderRefFilter) return false;
+        if (depotFilter && row.depot !== depotFilter) return false;
+        if (productFilter && row.productType !== productFilter) return false;
+        if (transportFilter) {
+          const match = row.transports?.some(t => 
+            t.transporterName === transportFilter
+          );
+          if (!match) return false;
+        }
         const d = new Date(row.orderDate);
         if (dateRange?.from) {
           const s = new Date(dateRange.from);
@@ -429,11 +559,21 @@ export function FleetPnlReportManager({ initialRows }: Props) {
         id: "actions",
         accessorKey: "actions",
         header: () => <div className="text-right">Actions</div>,
-        size: 100,
+        size: 140,
         cell: ({ row }) => {
           return (
-            <div className="flex justify-end">
-              <Button size="sm" variant="ghost" asChild className="h-8 print:hidden">
+            <div className="flex justify-end gap-2">
+              {row.original.transports && row.original.transports.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => toggleExpanded(row.id)}
+                  className="h-8 px-2"
+                >
+                  {expanded[row.id] ? <ChevronUpIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" asChild className="h-8 px-2 print:hidden">
                 <Link href={`/admin/fleet/fleet-pnl-report/${row.original.id}`}>
                   Details <ArrowRight className="size-3.5 ml-1" />
                 </Link>
@@ -607,10 +747,41 @@ export function FleetPnlReportManager({ initialRows }: Props) {
                     {/* Order Filter */}
                     <div className="space-y-3 w-full pt-2">
                       <Label className="text-sm font-semibold">Order Reference</Label>
-                      <Input 
-                        placeholder="e.g. ORD-1001" 
-                        value={draftOrderRef}
-                        onChange={(e) => setDraftOrderRef(e.target.value)}
+                      <SearchSelect 
+                        value={draftOrderRef} 
+                        onChange={setDraftOrderRef} 
+                        options={uniqueOrderRefs} 
+                        placeholder="Select order..." 
+                      />
+                    </div>
+
+                    <div className="space-y-3 w-full pt-2">
+                      <Label className="text-sm font-semibold">Depot</Label>
+                      <SearchSelect 
+                        value={draftDepot} 
+                        onChange={setDraftDepot} 
+                        options={uniqueDepots} 
+                        placeholder="Select depot..." 
+                      />
+                    </div>
+
+                    <div className="space-y-3 w-full pt-2">
+                      <Label className="text-sm font-semibold">Product Type</Label>
+                      <SearchSelect 
+                        value={draftProduct} 
+                        onChange={setDraftProduct} 
+                        options={uniqueProducts} 
+                        placeholder="Select product..." 
+                      />
+                    </div>
+
+                    <div className="space-y-3 w-full pt-2">
+                      <Label className="text-sm font-semibold">Transporter</Label>
+                      <SearchSelect 
+                        value={draftTransport} 
+                        onChange={setDraftTransport} 
+                        options={uniqueTransporters} 
+                        placeholder="Select transporter..." 
                       />
                     </div>
                   </div>
@@ -817,6 +988,45 @@ export function FleetPnlReportManager({ initialRows }: Props) {
                           );
                         })}
                       </tr>
+                      {expanded[row.id] && row.original.transports && row.original.transports.length > 0 && (
+                        <tr>
+                          <td colSpan={columns.length} className="p-0 border border-border/50 bg-muted/10 print:border-black/30">
+                            <div className="p-4 pl-12 overflow-x-auto w-full">
+                              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                <Truck className="size-4" /> Transports for {row.original.orderReference}
+                              </h4>
+                              <table className="w-full min-w-max text-[11px] border-collapse border border-border/50">
+                                <thead className="bg-muted/50 border-b border-border/50">
+                                  <tr>
+                                    <th className="px-2 py-1.5 text-left font-semibold">Truck</th>
+                                    <th className="px-2 py-1.5 text-left font-semibold">Driver</th>
+                                    <th className="px-2 py-1.5 text-left font-semibold">Transporter</th>
+                                    <th className="px-2 py-1.5 text-right font-semibold">Rate/L</th>
+                                    <th className="px-2 py-1.5 text-right font-semibold">Trans. Cost</th>
+                                    <th className="px-2 py-1.5 text-right font-semibold">Maintenance</th>
+                                    <th className="px-2 py-1.5 text-right font-semibold">Deduction</th>
+                                    <th className="px-2 py-1.5 text-right font-semibold">Rev. Amount</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {row.original.transports.map((t, idx) => (
+                                    <tr key={t.id || idx} className="border-b border-border/50 last:border-0 hover:bg-muted/30">
+                                      <td className="px-2 py-1.5">{t.truckNumber}</td>
+                                      <td className="px-2 py-1.5">{t.driverName}</td>
+                                      <td className="px-2 py-1.5">{t.transporterName}</td>
+                                      <td className="px-2 py-1.5 text-right tabular-nums">{fmtMoney(t.ratePerLiter)}</td>
+                                      <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{fmtMoney(t.totalTransportCost)}</td>
+                                      <td className="px-2 py-1.5 text-right tabular-nums">{fmtMoney(t.maintenanceCost)}</td>
+                                      <td className="px-2 py-1.5 text-right tabular-nums text-rose-500">{fmtMoney(t.totalDeduction)}</td>
+                                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{fmtMoney(t.amountSoldRev)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     </Fragment>
                   ))
                 ) : (

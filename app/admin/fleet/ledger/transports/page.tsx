@@ -96,10 +96,7 @@ export default async function TransportsLedgerPage(props: {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold tracking-tight">Transport Ledger</h1>
-        <p className="text-muted-foreground">Track trips, deductibles, and net pay to transporters.</p>
-      </div>
+
       <TransportsTable 
         data={JSON.parse(JSON.stringify(rows))} 
         totalCount={totalCount} 

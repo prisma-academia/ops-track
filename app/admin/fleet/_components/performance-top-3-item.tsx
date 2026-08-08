@@ -28,7 +28,7 @@ export function PerformanceTop3Item({
   return (
     <li key={item.name}>
       <Card className="py-2">
-        <CardContent className="flex items-center gap-x-4 py-2 px-6">
+        <CardContent className="flex items-center gap-x-4 py-2 px-4">
           <div className="relative">
             <Avatar className={cn("border-2 bg-transparent rounded-md size-12 after:hidden", avatarColor[index])}>
               <AvatarImage src={iconUrl} alt={item.name} className="object-contain p-2 rounded-md" />

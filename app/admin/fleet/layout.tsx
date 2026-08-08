@@ -41,12 +41,7 @@ const FLEET_NAV = [
     href: "/admin/fleet/ledger", 
     key: "transactions", 
     icon: "Wallet", 
-    permission: PERMISSIONS.TENANT_FLEET_READ.key,
-    children: [
-      { href: "/admin/fleet/ledger/sales", key: "ledger_sales", icon: "CreditCard" },
-      { href: "/admin/fleet/ledger/transports", key: "ledger_transports", icon: "Truck" },
-      { href: "/admin/fleet/ledger/expenses", key: "ledger_expenses", icon: "Receipt" },
-    ]
+    permission: PERMISSIONS.TENANT_FLEET_READ.key
   },
   { href: "/admin/fleet/role-templates", key: "roles", icon: "Shield", permission: PERMISSIONS.TENANT_ROLES_READ.key },
   { href: "/admin/fleet/activity", key: "activity", icon: "Activity", permission: PERMISSIONS.TENANT_ACTIVITY_READ.key },
@@ -93,8 +88,8 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
     if (n.key === 'assets') title = 'Fleet Assets';
     if (n.key === 'orders') title = 'Orders';
     if (n.key === 'transports') title = 'Logistic Transport';
-    if (n.key === 'finance') title = 'Finance';
-    if (n.key === 'transactions') title = 'Ledger';
+    if (n.key === 'finance') title = 'Account & Finance';
+    if (n.key === 'transactions') title = 'Payments Ledger';
     if (n.key === 'clients') title = 'Customers';
     if (n.key === 'users') title = 'Users';
     if (n.key === 'roles') title = 'Role Templates';
@@ -109,9 +104,6 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
             if (c.key === 'transporters') childTitle = 'Transporters';
             if (c.key === 'trucks') childTitle = 'Trucks';
             if (c.key === 'drivers') childTitle = 'Drivers';
-            if (c.key === 'ledger_sales') childTitle = 'Sales';
-            if (c.key === 'ledger_transports') childTitle = 'Transport';
-            if (c.key === 'ledger_expenses') childTitle = 'Expenses';
             if (c.key === 'sales') childTitle = 'Sales';
             if (c.key === 'payments') childTitle = 'Payments';
             if (c.key === 'bankAccounts') childTitle = 'Bank Accounts';

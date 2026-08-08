@@ -13,6 +13,9 @@ export default async function FleetPnlReportPage() {
       transports: {
         include: {
           sales: true,
+          truck: true,
+          driver: true,
+          transporter: true
         }
       }
     },
@@ -32,16 +35,45 @@ export default async function FleetPnlReportPage() {
     let amountSoldRev = 0;
     let amountPaid = 0;
 
+    const rowTransports = [];
+
     for (const transport of order.transports) {
-      totalFleetExpenses += Number(transport.maintenanceCost || 0);
-      totalLossDeduction += Number(transport.totalDeduction || 0);
-      
+      let trSalesRev = 0;
+      let trPaid = 0;
+      let trQtySold = 0;
+      let trCost = 0;
+
       for (const sale of transport.sales) {
-        totalTransportCost += Number(sale.transportCost) || (Number(sale.litersDespatched) * Number(transport.ratePerLiter));
+        const sCost = Number(sale.transportCost) || (Number(sale.litersDespatched) * Number(transport.ratePerLiter));
+        trCost += sCost;
+        trQtySold += Number(sale.litersDespatched || 0);
+        trSalesRev += Number(sale.totalExpectedAmount || 0);
+        trPaid += Number(sale.paymentReceived || 0);
+
+        totalTransportCost += sCost;
         totalAmountSoldQty += Number(sale.litersDespatched || 0);
         amountSoldRev += Number(sale.totalExpectedAmount || 0);
         amountPaid += Number(sale.paymentReceived || 0);
       }
+
+      totalFleetExpenses += Number(transport.maintenanceCost || 0);
+      totalLossDeduction += Number(transport.totalDeduction || 0);
+
+      rowTransports.push({
+        id: transport.id,
+        truckNumber: transport.truck?.plateNumber || transport.truck?.name || "Unknown",
+        driverName: transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : "Unknown",
+        transporterName: transport.transporter?.name || "Unknown",
+        ratePerLiter: Number(transport.ratePerLiter || 0),
+        maintenanceCost: Number(transport.maintenanceCost || 0),
+        totalDeduction: Number(transport.totalDeduction || 0),
+        litersCarried: Number(transport.litersCarried || 0),
+        litersDelivered: Number(transport.litersDelivered || 0),
+        salesCount: transport.sales.length,
+        totalTransportCost: trCost,
+        amountSoldRev: trSalesRev,
+        amountPaid: trPaid
+      });
     }
 
     const totalCost = orderCost + totalTransportCost + totalFleetExpenses - totalLossDeduction;
@@ -69,7 +101,8 @@ export default async function FleetPnlReportPage() {
       amountSoldRev,
       amountPaid,
       debtRemaining,
-      pnl
+      pnl,
+      transports: rowTransports
     });
   }
 

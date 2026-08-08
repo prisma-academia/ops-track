@@ -68,7 +68,7 @@ export default function HeroSection({ slug, name, logoUrl, backgroundUrl }: { sl
                                     alt="background"
                                     className="size-full object-cover opacity-40 dark:opacity-50"
                                     width="3276"
-                                    height="4095"
+                                    height="5095"
                                 />
                             </motion.div>
                         </motion.div>

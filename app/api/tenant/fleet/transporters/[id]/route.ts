@@ -23,6 +23,7 @@ const UpdateTransporterSchema = z.object({
   kycDocuments: z.any().optional(),
   status: z.enum(["ACTIVE", "MAINTENANCE", "OFFLINE", "ISSUE"]).optional(),
   isActive: z.boolean().optional(),
+  ownership: z.enum(["COMPANY_OWNED", "EXTERNAL"]).optional(),
 });
 
 export async function GET(
@@ -83,6 +84,7 @@ export async function PATCH(
         ...(body.kycDocuments !== undefined && { kycDocuments: body.kycDocuments }),
         ...(body.status !== undefined && { status: body.status }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
+        ...(body.ownership !== undefined && { ownership: body.ownership }),
       },
     });
 

@@ -7,6 +7,7 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 import { stationIncludeQuery, formatStationRows } from "@/lib/station-format";
+import { stationModuleFilter, assertOrgAccess } from "@/lib/auth/org-scope";
 
 const CreateStationSchema = z.object({
   code: z.string().min(2).max(50),
@@ -18,6 +19,7 @@ const CreateStationSchema = z.object({
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
   altitude: z.number().optional().nullable(),
+  organizationId: z.string().min(1),
   staffUserIds: z.array(z.string()).optional(),
 });
 
@@ -33,6 +35,12 @@ export async function GET(request: Request) {
     
     const hasPostFilters = salesMin !== undefined || salesMax !== undefined || stockMin !== undefined || stockMax !== undefined;
 
+    const internalOrg = await prisma.organization.findFirst({
+      where: { tenantId: actor.tenantId, type: "INTERNAL" }
+    });
+    const orgFilter = stationModuleFilter(actor, internalOrg?.id ?? "");
+    const whereClause = { tenantId: actor.tenantId, ...orgFilter };
+
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
       
@@ -41,7 +49,7 @@ export async function GET(request: Request) {
       if (hasPostFilters) {
         // Fetch all, format, post-filter, then paginate
         const rawRows = await prisma.station.findMany({
-          where: { tenantId: actor.tenantId },
+          where: whereClause,
           orderBy: { createdAt: "desc" },
           include,
         });
@@ -51,10 +59,11 @@ export async function GET(request: Request) {
         // Post-filtering
         rows = rows.filter((r) => {
           const totalSales = r.todaySales.PMS + r.todaySales.AGO + r.todaySales.LPG;
+          const totalStock = r.lastClosingStock.PMS + r.lastClosingStock.AGO + r.lastClosingStock.LPG;
           if (salesMin !== undefined && totalSales < salesMin) return false;
           if (salesMax !== undefined && totalSales > salesMax) return false;
-          if (stockMin !== undefined && r.lastClosingStock < stockMin) return false;
-          if (stockMax !== undefined && r.lastClosingStock > stockMax) return false;
+          if (stockMin !== undefined && totalStock < stockMin) return false;
+          if (stockMax !== undefined && totalStock > stockMax) return false;
           return true;
         });
 
@@ -65,10 +74,10 @@ export async function GET(request: Request) {
       } else {
         const [totalCount, rawRows] = await Promise.all([
           prisma.station.count({
-            where: { tenantId: actor.tenantId },
+            where: whereClause,
           }),
           prisma.station.findMany({
-            where: { tenantId: actor.tenantId },
+            where: whereClause,
             orderBy: { createdAt: "desc" },
             take,
             skip,
@@ -85,7 +94,7 @@ export async function GET(request: Request) {
       const include = stationIncludeQuery;
 
       const rawRows = await prisma.station.findMany({
-        where: { tenantId: actor.tenantId },
+        where: whereClause,
         orderBy: { createdAt: "desc" },
         take,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
@@ -107,6 +116,17 @@ export async function POST(request: Request) {
     const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_WRITE.key);
     const body = CreateStationSchema.parse(await request.json());
     const meta = requestMeta(request);
+
+    // Verify actor can add to this org
+    assertOrgAccess(actor, body.organizationId);
+
+    // Verify org belongs to tenant
+    const org = await prisma.organization.findUnique({
+      where: { id: body.organizationId, tenantId: actor.tenantId }
+    });
+    if (!org) {
+      throw new DomainError(404, "org_not_found", "Organization not found.");
+    }
 
     // Verify code uniqueness in this tenant
     const existing = await prisma.station.findUnique({
@@ -130,6 +150,7 @@ export async function POST(request: Request) {
     const station = await prisma.station.create({
       data: {
         tenantId: actor.tenantId,
+        organizationId: body.organizationId,
         code: body.code.toUpperCase(),
         name: body.name,
         location: body.location ?? null,

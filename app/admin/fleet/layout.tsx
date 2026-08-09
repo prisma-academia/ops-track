@@ -10,6 +10,7 @@ import { UnauthorizedToast } from "@/components/unauthorized-toast";
 
 const FLEET_NAV = [
   { href: "/admin/fleet", key: "overview", icon: "LayoutDashboard", permission: null },
+  { href: "/admin/fleet/organizations", key: "organizations", icon: "Network", permission: PERMISSIONS.TENANT_ORGS_READ.key },
   { href: "/admin/fleet/users", key: "users", icon: "Users", permission: PERMISSIONS.TENANT_USERS_READ.key },
   {
     href: "/admin/fleet/assets",
@@ -59,7 +60,7 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: actor.tenantId },
-    select: { name: true, status: true, settingsJson: true, activeModules: true },
+    select: { name: true, slug: true, status: true, settingsJson: true, activeModules: true },
   });
   if (!tenant || tenant.status !== "ACTIVE") redirect("/maintenance");
 
@@ -79,6 +80,56 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
       : settings.logoKey && s3Configured()
       ? publicUrlForKey(settings.logoKey)
       : null;
+
+  // Fetch stations for the command modal switcher
+  const userWithStations = await prisma.tenantUser.findUnique({
+    where: { id: actor.userId },
+    select: {
+      stations: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          organization: { select: { name: true, slug: true, logoKey: true, type: true } },
+        },
+        orderBy: { name: "asc" },
+      },
+    },
+  });
+
+  let allowedStations = userWithStations?.stations || [];
+  if (allowedStations.length === 0) {
+    allowedStations = await prisma.station.findMany({
+      where: { tenantId: actor.tenantId },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        organization: { select: { name: true, slug: true, logoKey: true, type: true } },
+      },
+      orderBy: { name: "asc" },
+    });
+  }
+
+  const mappedStations = allowedStations.map(s => {
+    let sLogoUrl = null;
+    if (s.organization?.logoKey) {
+      sLogoUrl = s.organization.logoKey.startsWith("http")
+        ? s.organization.logoKey
+        : (s3Configured() ? publicUrlForKey(s.organization.logoKey) : null);
+    }
+    return {
+      id: s.id,
+      name: s.name,
+      code: s.code,
+      organization: {
+        name: s.organization?.name || null,
+        slug: s.organization?.slug || null,
+        logoUrl: sLogoUrl,
+        type: s.organization?.type || null
+      },
+    };
+  });
   
   const nav = FLEET_NAV.filter(
     (n) => (!n.permission || hasPermission(actor, n.permission as any))
@@ -91,6 +142,7 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
     if (n.key === 'finance') title = 'Account & Finance';
     if (n.key === 'transactions') title = 'Payments Ledger';
     if (n.key === 'clients') title = 'Customers';
+    if (n.key === 'organizations') title = 'Organizations';
     if (n.key === 'users') title = 'Users';
     if (n.key === 'roles') title = 'Role Templates';
     if (n.key === 'activity') title = 'Activity Logs';
@@ -135,10 +187,16 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
       logoutEndpoint="/api/auth/logout"
       logoutRedirect="/admin/auth/login"
       logoutContext="tenant-admin"
+      stations={mappedStations}
       enabledModules={Array.from(new Set([
         ...settings.enabledModules,
         ...(tenant.activeModules?.map((m: string) => m.toLowerCase()) || [])
       ]))}
+      tenant={{
+        name: tenant.name,
+        slug: tenant.slug,
+        logoUrl: logoUrl,
+      }}
     >
       <UnauthorizedToast />
       {children}

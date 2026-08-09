@@ -11,6 +11,8 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 import { ALL_TENANT_PERMISSION_KEYS } from "@/lib/auth/permissions";
+import { genericOrgFilter, assertOrgAccess } from "@/lib/auth/org-scope";
+import { cookies } from "next/headers";
 
 const InviteBody = z.object({
   email: z.email(),
@@ -21,6 +23,8 @@ const InviteBody = z.object({
   roleTemplateId: z.string().min(1),
   activeModules: z.array(z.enum(["STATION", "FLEET"])).min(1),
   permissions: z.array(z.string()).optional(),
+  organizationId: z.string().optional().nullable(),
+  stationId: z.string().optional().nullable(),
 });
 
 export async function GET(request: Request) {
@@ -30,10 +34,18 @@ export async function GET(request: Request) {
     const useOffset = url.searchParams.has("page");
     const moduleFilter = url.searchParams.get("module") as "STATION" | "FLEET" | null;
 
-    const whereClause = { 
+    const jar = await cookies();
+    const activeStationId = jar.get("active-station-id")?.value || "all";
+
+    const whereClause: any = { 
       tenantId: actor.tenantId,
+      ...genericOrgFilter(actor),
       ...(moduleFilter ? { activeModules: { has: moduleFilter } } : {})
     };
+
+    if (moduleFilter === "STATION" && activeStationId !== "all") {
+      whereClause.stations = { some: { id: activeStationId } };
+    }
     
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
@@ -74,6 +86,18 @@ export async function POST(request: Request) {
       throw new DomainError(400, "invalid_role", "Role template not in this tenant.");
     }
     const allowed = new Set<string>(ALL_TENANT_PERMISSION_KEYS);
+    
+    // Org access control:
+    // 1. If actor is org-scoped, they can only invite to their own org.
+    // 2. If actor is fleet-wide, they can invite to any org or fleet-wide (null).
+    if (actor.organizationId) {
+      if (body.organizationId !== actor.organizationId) {
+        throw new DomainError(403, "forbidden", "You can only invite users to your own organization.");
+      }
+    } else if (body.organizationId) {
+      assertOrgAccess(actor, body.organizationId); // though this is no-op for fleet-wide, good for consistency
+    }
+
     const requestedPerms = body.permissions ?? role.permissions;
     const perms = requestedPerms.filter((p) => allowed.has(p));
 
@@ -98,6 +122,8 @@ export async function POST(request: Request) {
         passwordHash,
         mustChangePassword: true,
         activeModules: body.activeModules,
+        organizationId: body.organizationId || null,
+        ...(body.stationId ? { stations: { connect: { id: body.stationId } } } : {}),
         ...(role.module === "STATION" ? { stationPermissions: perms } : { fleetPermissions: perms }),
       },
     });

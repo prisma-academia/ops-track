@@ -12,10 +12,15 @@ export default async function NewTenantUserPage() {
     orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     select: { id: true, name: true, permissions: true, module: true },
   });
+
   return (
     <div className="space-y-6">
       <PageHeader title="Invite User" />
-      <InviteTenantUserForm roles={roles} allPermissions={ALL_TENANT_PERMISSION_KEYS} moduleContext="FLEET" />
+      <InviteTenantUserForm 
+        roles={roles} 
+        allPermissions={ALL_TENANT_PERMISSION_KEYS} 
+        moduleContext="FLEET" 
+      />
     </div>
   );
 }

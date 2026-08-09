@@ -74,6 +74,7 @@ export async function requireTenantPage(
     userId: user.id,
     tenantId: user.tenantId,
     isOwner: user.isOwner,
+    organizationId: user.organizationId,
     permissions: new Set([...user.stationPermissions, ...user.fleetPermissions]),
   };
   if (permission && !hasPermission(actor, permission)) {

@@ -22,6 +22,7 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const Schema = z.object({
@@ -77,7 +78,11 @@ export function InviteTenantUserForm({
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
-    const res = await apiPost<{ user: { id: string } }>("/api/tenant/users", values);
+    const payload = {
+      ...values,
+      activeModules: [moduleContext]
+    };
+    const res = await apiPost<{ user: { id: string } }>("/api/tenant/users", payload);
     if (res.error) {
       setError(res.error.message);
       return;

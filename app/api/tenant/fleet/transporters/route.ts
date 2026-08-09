@@ -21,6 +21,7 @@ const CreateTransporterSchema = z.object({
   ward: z.string().optional().nullable(),
   address: z.string().optional().nullable(),
   kycDocuments: z.any().optional(), // Can be JSON
+  ownership: z.enum(["COMPANY_OWNED", "EXTERNAL"]).optional(),
 });
 
 export async function GET(request: Request) {
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
         ward: body.ward ?? null,
         address: body.address ?? null,
         kycDocuments: body.kycDocuments ?? {},
+        ownership: body.ownership ?? "EXTERNAL",
       },
     });
 

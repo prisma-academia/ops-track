@@ -6,6 +6,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
+import { fleetModuleFilter } from "@/lib/auth/org-scope";
 
 const CreateSaleSchema = z.object({
   recipientType: z.enum(["CUSTOMER", "STATION"]),
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
     const rows = await prisma.sale.findMany({
       where: {
         tenantId: actor.tenantId,
+        ...fleetModuleFilter(actor),
         ...(status ? { status: status as any } : {}),
       },
       orderBy: { createdAt: "desc" },
@@ -83,9 +85,19 @@ export async function POST(request: Request) {
     }
 
     const sale = await prisma.$transaction(async (tx) => {
+      let organizationId: string | null = null;
+      if (body.stationId) {
+        const station = await tx.station.findUnique({
+          where: { id: body.stationId },
+          select: { organizationId: true }
+        });
+        organizationId = station?.organizationId ?? null;
+      }
+
       const s = await tx.sale.create({
         data: {
           tenantId: actor.tenantId,
+          organizationId: organizationId,
           customerId: body.customerId ?? null,
           stationId: body.stationId ?? null,
           transportId: body.transportId ?? null,
@@ -152,22 +164,20 @@ export async function POST(request: Request) {
           });
         }
       }
-
       return s;
-    }, { timeout: 15000 });
+    });
 
     await audit({
-      module: "FLEET",
       actorType: "TENANT_USER",
       actorId: actor.userId,
-      action: "sale.create",
+      action: "fleet_sale.create",
       tenantId: actor.tenantId,
       targetType: "Sale",
       targetId: sale.id,
-      after: { 
-        recipient: sale.customer ? sale.customer.name : (sale.station ? sale.station.name : 'Unknown'), 
-        totalExpected: totalExpectedAmount,
-        transportCostBorneBy
+      after: {
+        amount: sale.totalExpectedAmount,
+        liters: sale.litersDespatched,
+        target: sale.station?.name || sale.customer?.name || "Unknown",
       } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,

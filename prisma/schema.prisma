@@ -105,7 +105,7 @@ model Tenant {
   shiftLogs                  ShiftLog[]
   expenses                   Expense[]
 
-  activeModules     String[]           @default(["STATION"])
+  activeModules     String[]           @default(["FLEET", "STATION"])
   transporters      Transporter[]
   trucks            Truck[]
   drivers           Driver[]

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTheme } from "next-themes";
 import { Moon, Sun, Zap, Star, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
 /*  Currency selector                                                  */
@@ -161,11 +162,15 @@ export function LeftInfoSection({ logoUrl, tenantName }: { logoUrl?: string | nu
 export function AuthLayoutWrapper({ 
   children, 
   logoUrl, 
-  tenantName 
+  tenantName,
+  gridClassName,
+  cardContainerClassName,
 }: { 
   children: React.ReactNode;
   logoUrl?: string | null;
   tenantName?: string;
+  gridClassName?: string;
+  cardContainerClassName?: string;
 }) {
   return (
     <section className="bg-foreground dark:bg-background relative min-h-screen flex flex-col">
@@ -178,14 +183,14 @@ export function AuthLayoutWrapper({
 
       {/* Main content */}
       <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 items-center px-6 pt-14 pb-10 lg:px-8">
-        <div className="grid w-full gap-12 lg:grid-cols-2 lg:gap-16 xl:gap-24">
+        <div className={cn("grid w-full gap-12 lg:grid-cols-2 lg:gap-16 xl:gap-24", gridClassName)}>
           {/* Left — Info Section */}
           <div className="hidden lg:flex">
             <LeftInfoSection logoUrl={logoUrl} tenantName={tenantName} />
           </div>
 
           {/* Right — Form Card */}
-          <div className="flex items-center justify-center lg:justify-end">
+          <div className={cn("flex items-center justify-center lg:justify-end", cardContainerClassName)}>
             {children}
           </div>
         </div>

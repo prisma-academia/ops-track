@@ -983,6 +983,11 @@ enum PaymentType {
   DEBT_CLEARANCE
 }
 
+enum TransporterOwnership {
+  COMPANY_OWNED
+  EXTERNAL
+}
+
 model Transporter {
   id                 String      @id @default(uuid())
   tenantId           String
@@ -999,6 +1004,7 @@ model Transporter {
   lga                String?
   ward               String?
   address            String?
+  ownership          TransporterOwnership @default(EXTERNAL)
   kycDocuments       Json        @default("{}")
   status             AssetStatus @default(ACTIVE)
   isActive           Boolean     @default(true)

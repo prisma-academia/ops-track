@@ -21,6 +21,13 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import nigerianLocations from "@/constant/nigerian-locations.json";
 
 const Schema = z.object({
@@ -36,6 +43,7 @@ const Schema = z.object({
   lga: z.string().min(1, "LGA is required"),
   ward: z.string().optional().or(z.literal("")),
   address: z.string().optional().or(z.literal("")),
+  ownership: z.enum(["COMPANY_OWNED", "EXTERNAL"]),
 });
 
 type Values = z.infer<typeof Schema>;
@@ -61,6 +69,7 @@ export function CreateTransporterForm({ transporter }: { transporter?: any } = {
       lga: transporter?.lga || "",
       ward: transporter?.ward || "",
       address: transporter?.address || "",
+      ownership: transporter?.ownership || "EXTERNAL",
     },
   });
 
@@ -190,15 +199,35 @@ export function CreateTransporterForm({ transporter }: { transporter?: any } = {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="businessType" className={formState.errors.businessType ? "text-destructive" : ""}>Business Type*</Label>
-              <Input 
-                id="businessType" 
-                placeholder="e.g. LLC" 
-                {...register("businessType")} 
-                className={formState.errors.businessType ? "border-destructive" : ""}
-              />
-              {formState.errors.businessType && <p className="text-xs text-destructive">{formState.errors.businessType.message}</p>}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="businessType" className={formState.errors.businessType ? "text-destructive" : ""}>Business Type*</Label>
+                <Input 
+                  id="businessType" 
+                  placeholder="e.g. LLC" 
+                  {...register("businessType")} 
+                  className={formState.errors.businessType ? "border-destructive" : ""}
+                />
+                {formState.errors.businessType && <p className="text-xs text-destructive">{formState.errors.businessType.message}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label className={formState.errors.ownership ? "text-destructive" : ""}>Ownership Type*</Label>
+                <Select
+                  onValueChange={(value) => setValue("ownership", value as any, { shouldValidate: true })}
+                  defaultValue={watch("ownership")}
+                >
+                  <SelectTrigger className={formState.errors.ownership ? "border-destructive" : ""}>
+                    <SelectValue placeholder="Select ownership" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EXTERNAL">External</SelectItem>
+                    <SelectItem value="COMPANY_OWNED">Company Owned</SelectItem>
+                  </SelectContent>
+                </Select>
+                <input type="hidden" {...register("ownership")} />
+                {formState.errors.ownership && <p className="text-xs text-destructive">{formState.errors.ownership.message}</p>}
+              </div>
             </div>
           </CardContent>
         </Card>

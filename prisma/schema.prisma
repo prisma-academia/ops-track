@@ -162,6 +162,7 @@ model TenantUser {
   failedLoginAttempts Int        @default(0)
   lockedUntil         DateTime?
   expoPushTokens      String[]   @default([])
+  ownedOrganizations  Organization[] @relation("OrgOwner")
 
   stations                Station[]        @relation("StationStaff")
   recordedSalesLogs       SalesLog[]       @relation("SalesRecordedBy")
@@ -356,8 +357,8 @@ model Organization {
   logoKey     String?          // S3 key for org logo
 
   // Contact info
-  email       String?
-  phone       String?
+  companyEmail String?
+  companyPhone String?
   address     String?
   state       String?
   lga         String?
@@ -375,6 +376,8 @@ model Organization {
   updatedAt   DateTime         @updatedAt
 
   // Relations
+  ownerId        String?
+  owner          TenantUser?      @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   stations       Station[]
   users          TenantUser[]     @relation("OrgUsers")
   sales          Sale[]

@@ -87,7 +87,11 @@ export function InviteTenantUserForm({
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
-    const res = await apiPost<{ user: { id: string } }>("/api/tenant/users", values);
+    const payload = {
+      ...values,
+      activeModules: [moduleContext]
+    };
+    const res = await apiPost<{ user: { id: string } }>("/api/tenant/users", payload);
     if (res.error) {
       setError(res.error.message);
       return;

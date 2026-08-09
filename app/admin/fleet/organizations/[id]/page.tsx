@@ -26,6 +26,12 @@ export default async function OrganizationDetailPage({
   });
 
   if (!org) notFound();
+
+  const users = await prisma.tenantUser.findMany({
+    where: { tenantId: actor.tenantId },
+    select: { id: true, firstName: true, lastName: true, email: true },
+    orderBy: { email: "asc" }
+  });
   
   // Enforce org scope constraint for restricted users viewing details
   if (actor.organizationId && actor.organizationId !== org.id) {
@@ -55,11 +61,11 @@ export default async function OrganizationDetailPage({
                 </div>
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Email</dt>
-                  <dd className="mt-1">{org.email || "—"}</dd>
+                  <dd className="mt-1">{org.companyEmail || "—"}</dd>
                 </div>
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Phone</dt>
-                  <dd className="mt-1">{org.phone || "—"}</dd>
+                  <dd className="mt-1">{org.companyPhone || "—"}</dd>
                 </div>
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Contact Person</dt>
@@ -99,6 +105,7 @@ export default async function OrganizationDetailPage({
         <div className="space-y-6">
           {!actor.organizationId && (
             <EditOrgForm 
+              users={users}
               organization={{
                 ...org,
                 outstandingBalance: org.outstandingBalance.toNumber(),

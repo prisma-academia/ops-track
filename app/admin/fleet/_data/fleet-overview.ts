@@ -148,7 +148,7 @@ export async function getFleetOverviewData(
   })
 
   // ── Grouped queries ───────────────────────────────────────────────────
-  const [volumeRaw, statusRaw, transporterGroupRaw, saleGroupRaw] = await Promise.all([
+  const [volumeRaw, statusRaw, transporterGroupRaw, saleGroupRaw, salesPaymentGroupRaw] = await Promise.all([
     prisma.transport.groupBy({
       by: ["productType"],
       where: { tenantId, productType: { not: null } },
@@ -175,6 +175,11 @@ export async function getFleetOverviewData(
       orderBy: { _sum: { litersDespatched: "desc" } },
       take: 10,
     }),
+    prisma.sale.groupBy({
+      by: ["status"],
+      where: { tenantId },
+      _sum: { totalExpectedAmount: true, paymentReceived: true },
+    }),
   ])
 
   const volumeMap = volumeRaw.reduce((acc, v) => {
@@ -191,6 +196,30 @@ export async function getFleetOverviewData(
     status: s.status,
     count: s._count._all,
   }))
+
+  let fullPayment = 0
+  let balance = 0
+  let debt = 0
+
+  for (const group of salesPaymentGroupRaw) {
+    const expected = Number(group._sum.totalExpectedAmount) || 0
+    const received = Number(group._sum.paymentReceived) || 0
+
+    if (group.status === "CLEARED") {
+      fullPayment += received > 0 ? received : expected
+    } else if (group.status === "PART_PAID") {
+      fullPayment += received
+      balance += Math.max(0, expected - received)
+    } else if (group.status === "UNPAID") {
+      debt += expected
+    }
+  }
+
+  const paymentStatus = [
+    { name: "Full Payment", value: fullPayment },
+    { name: "Balance", value: balance },
+    { name: "Debt", value: debt },
+  ]
 
   // ── Top transporters with names ───────────────────────────────────────
   const topTransporterIds = transporterGroupRaw.map((t) => t.transporterId)
@@ -281,5 +310,7 @@ export async function getFleetOverviewData(
     clientPerformance,
     transportStatus,
     productVolume,
+    paymentStatus,
   }
+
 }

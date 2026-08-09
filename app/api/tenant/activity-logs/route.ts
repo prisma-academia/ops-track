@@ -1,29 +1,44 @@
 import { prisma } from "@/lib/db/client";
-import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
+import { requireTenantActor, AuthError } from "@/lib/auth/guards";
+import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
 import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
+import { resolveActivityLogRows } from "@/lib/activity/resolver";
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_ACTIVITY_READ.key);
+    const actor = await requireTenantActor();
+    if (
+      !hasPermission(actor, PERMISSIONS.TENANT_ACTIVITY_READ.key) &&
+      !hasPermission(actor, PERMISSIONS.TENANT_FLEET_ACTIVITY_READ.key)
+    ) {
+      throw new AuthError(403, "Forbidden.");
+    }
+
     const url = new URL(request.url);
     const action = url.searchParams.get("action");
     const date = url.searchParams.get("date");
+    const userId = url.searchParams.get("userId");
     const name = url.searchParams.get("name");
     const moduleFilter = url.searchParams.get("module") as "STATION" | "FLEET" | null;
     const useOffset = url.searchParams.has("page");
     
     let actorIdsToFilter: string[] | undefined;
-    if (name) {
+    if (userId) {
+      actorIdsToFilter = [userId];
+    } else if (name) {
+      const terms = name.trim().split(/\s+/);
       const matchingUsers = await prisma.tenantUser.findMany({
         where: {
           tenantId: actor.tenantId,
-          OR: [
-            { firstName: { contains: name, mode: "insensitive" } },
-            { lastName: { contains: name, mode: "insensitive" } },
-            { email: { contains: name, mode: "insensitive" } },
-          ],
+          AND: terms.map((term) => ({
+            OR: [
+              { firstName: { contains: term, mode: "insensitive" } },
+              { lastName: { contains: term, mode: "insensitive" } },
+              { email: { contains: term, mode: "insensitive" } },
+            ],
+          })),
         },
         select: { id: true },
       });
@@ -78,66 +93,11 @@ export async function GET(request: Request) {
       meta = buildPageMeta(rows, take);
     }
 
-    // Collect unique actor IDs and target IDs
-    const tenantUserIds = Array.from(new Set(rows.filter((r) => r.actorType === "TENANT_USER" && r.actorId).map((r) => r.actorId as string)));
-    const stationIds = Array.from(new Set(rows.filter((r) => r.targetType === "Station" && r.targetId).map((r) => r.targetId as string)));
-
-    // Fetch users and stations
-    const users = await prisma.tenantUser.findMany({
-      where: { id: { in: tenantUserIds } },
-      select: { id: true, firstName: true, lastName: true, email: true },
-    });
-    const userMap = new Map(users.map((u) => [u.id, u]));
-    const stations = await prisma.station.findMany({
-      where: { id: { in: stationIds } },
-      select: { id: true, name: true, code: true },
-    });
-    const stationMap = new Map(stations.map((s) => [s.id, s]));
-
-    const mappedRows = rows.map((r) => {
-      // Resolve Actor Display Name
-      let actorDisplay = null;
-      if (r.actorType === "TENANT_USER" && r.actorId) {
-        const u = userMap.get(r.actorId);
-        if (u) {
-          actorDisplay = `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email;
-        }
-      } else if (r.actorType === "SYSTEM") {
-        actorDisplay = "System Workflow";
-      }
-
-      // Resolve Target Display Name
-      let targetDisplay = null;
-      if (r.targetType === "Station" && r.targetId) {
-        const s = stationMap.get(r.targetId);
-        if (s) {
-          targetDisplay = `Station: ${s.name} (${s.code})`;
-        }
-      } else if (r.targetType === "TenantUser" && r.targetId) {
-        const u = userMap.get(r.targetId);
-        if (u) {
-          targetDisplay = `User: ${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email;
-        }
-      }
-
-      return {
-        id: r.id,
-        tenantId: r.tenantId,
-        actorType: r.actorType,
-        actorId: r.actorId,
-        action: r.action,
-        targetType: r.targetType,
-        targetId: r.targetId,
-        ip: r.ip,
-        createdAt: r.createdAt.toISOString(),
-        tenantDisplay: r.tenant?.name || r.tenantId,
-        actorDisplay,
-        targetDisplay,
-      };
-    });
+    const mappedRows = await resolveActivityLogRows(rows);
 
     return ok(mappedRows, meta);
   } catch (e) {
     return handleError(e);
   }
 }
+

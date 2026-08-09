@@ -22,6 +22,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { AssetTank } from "@/components/asset-tank";
 
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
@@ -54,6 +61,8 @@ interface OrderSummary {
   totalCost: number;
   totalAmountSoldQty: number;
   qtyBalance: number;
+  totalLitersLost?: number;
+  totalLossAmount?: number;
   amountSoldRev: number;
   amountPaid: number;
   debtRemaining: number;
@@ -64,6 +73,8 @@ interface SaleData {
   id: string;
   soldTo: string;
   litersSold: number;
+  litersReceived?: number | null;
+  lossLiters?: number;
   sellingPrice: number;
   transportCost: number;
   salesRevenue: number;
@@ -93,49 +104,93 @@ interface Props {
 }
 
 export function OrderPnlDetailsManager({ summary, transports }: Props) {
+  // Station selling price for lost fuel
+  const stationSellingPriceForLoss = useMemo(() => {
+    let lossRev = 0;
+    let lossQty = 0;
+
+    transports.forEach((t) => {
+      t.sales.forEach((s) => {
+        if (s.lossLiters && s.lossLiters > 0 && s.sellingPrice > 0) {
+          lossQty += s.lossLiters;
+          lossRev += s.lossLiters * s.sellingPrice;
+        }
+      });
+    });
+
+    if (lossQty > 0 && lossRev > 0) {
+      return lossRev / lossQty;
+    }
+
+    if (summary.totalAmountSoldQty > 0 && summary.amountSoldRev > 0) {
+      return summary.amountSoldRev / summary.totalAmountSoldQty;
+    }
+
+    return summary.priceBought || 0;
+  }, [transports, summary.amountSoldRev, summary.totalAmountSoldQty, summary.priceBought]);
+
+  const lossLitresToDisplay = useMemo(() => {
+    if (summary.totalLitersLost !== undefined && summary.totalLitersLost > 0) {
+      return summary.totalLitersLost;
+    }
+    return Math.max(0, summary.qtyBalance);
+  }, [summary.totalLitersLost, summary.qtyBalance]);
+
+  const calculatedTotalLoss = useMemo(() => {
+    if (summary.totalLossAmount && summary.totalLossAmount > 0) {
+      return summary.totalLossAmount;
+    }
+    return lossLitresToDisplay * stationSellingPriceForLoss;
+  }, [summary.totalLossAmount, lossLitresToDisplay, stationSellingPriceForLoss]);
+
   const statCards = [
     {
-      title: "Order Cost",
-      value: fmtMoney(summary.orderCost),
+      title: "Total Order Cost",
+      value: formatShortCurrency(summary.orderCost),
+      fullValue: fmtMoney(summary.orderCost),
       icon: Wallet,
-      color: "text-amber-600",
-      bg: "bg-amber-100 dark:bg-amber-900/20",
+      valueColor: "text-amber-600",
+      iconColor: "text-amber-600",
     },
     {
       title: "Transport Cost",
-      value: fmtMoney(summary.totalTransportCost),
+      value: formatShortCurrency(summary.totalTransportCost),
+      fullValue: fmtMoney(summary.totalTransportCost),
       icon: Truck,
-      color: "text-slate-600",
-      bg: "bg-slate-100 dark:bg-slate-900/20",
+      valueColor: "text-slate-600",
+      iconColor: "text-slate-600",
     },
     {
       title: "Fleet Expenses",
-      value: fmtMoney(summary.totalFleetExpenses),
+      value: formatShortCurrency(summary.totalFleetExpenses),
+      fullValue: fmtMoney(summary.totalFleetExpenses),
       icon: Wallet,
-      color: "text-slate-600",
-      bg: "bg-slate-100 dark:bg-slate-900/20",
+      valueColor: "text-slate-600",
+      iconColor: "text-slate-600",
     },
     {
       title: "Loss Deduction",
-      value: fmtMoney(summary.totalLossDeduction),
+      value: formatShortCurrency(summary.totalLossDeduction),
+      fullValue: fmtMoney(summary.totalLossDeduction),
       icon: TrendingDown,
-      color: "text-rose-600",
-      bg: "bg-rose-100 dark:bg-rose-900/20",
+      valueColor: "text-rose-600",
+      iconColor: "text-rose-600",
     },
     {
       title: "Sales Revenue",
-      value: fmtMoney(summary.amountSoldRev),
+      value: formatShortCurrency(summary.amountSoldRev),
+      fullValue: fmtMoney(summary.amountSoldRev),
       icon: Receipt,
-      color: "text-indigo-600",
-      bg: "bg-indigo-100 dark:bg-indigo-900/20",
+      valueColor: "text-indigo-600",
+      iconColor: "text-indigo-600",
     },
     {
-      title: "Profit/Loss",
-      value: fmtMoney(Math.abs(summary.pnl)),
+      title: "Profit & Loss",
+      value: formatShortCurrency(Math.abs(summary.pnl)),
+      fullValue: fmtMoney(Math.abs(summary.pnl)),
+      valueColor: summary.pnl >= 0 ? "text-emerald-600" : "text-rose-600",
       icon: summary.pnl >= 0 ? TrendingUp : TrendingDown,
-      color: summary.pnl >= 0 ? "text-emerald-600" : "text-rose-600",
-      bg: summary.pnl >= 0 ? "bg-emerald-100 dark:bg-emerald-900/20" : "bg-rose-100 dark:bg-rose-900/20",
-      prefix: summary.pnl >= 0 ? "+" : "-",
+      iconColor: summary.pnl >= 0 ? "text-emerald-600" : "text-rose-600",
     },
   ];
 
@@ -186,46 +241,157 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
         </div>
       </div>
 
-      {/* Summary Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {statCards.map((stat, idx) => (
-          <Card key={idx} className="shadow-xs border-border/40">
-            <CardContent className="p-4 flex flex-col gap-2">
-              <div className="flex justify-between items-start">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.title}</p>
-                <div className={cn("p-1.5 rounded-full shrink-0", stat.bg)}>
-                  <stat.icon className={cn("size-3.5", stat.color)} />
-                </div>
+      {/* Stat Cards */}
+      <TooltipProvider delayDuration={200}>
+        <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
+          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
+            {statCards.map((item, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "w-full lg:w-1/6 md:w-1/3 border-border print:border-none print:w-auto",
+                  index === statCards.length - 1 ? "border-b-0" : "border-b",
+                  (index + 1) % 3 === 0 ? "md:border-e-0" : "md:border-e",
+                  index >= 3 ? "md:border-b-0" : "md:border-b",
+                  "lg:border-b-0",
+                  index === statCards.length - 1 ? "lg:border-e-0" : "lg:border-e"
+                )}
+              >
+                {item.fullValue ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="p-4 flex items-start justify-between print:p-0 cursor-default hover:bg-muted/30 transition-colors h-full">
+                        <div className="flex flex-col gap-2 print:gap-0.5">
+                          <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                          <div>
+                            <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
+                              {item.value}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
+                          <item.icon
+                            size={14}
+                            className={cn("text-muted-foreground", item.iconColor)}
+                          />
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                      {item.fullValue}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div className="p-4 flex items-start justify-between print:p-0 cursor-default hover:bg-muted/30 transition-colors h-full">
+                    <div className="flex flex-col gap-2 print:gap-0.5">
+                      <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                      <div>
+                        <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
+                          {item.value}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
+                      <item.icon
+                        size={14}
+                        className={cn("text-muted-foreground", item.iconColor)}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-              <p className={cn("text-lg font-bold tabular-nums", stat.color)}>
-                {stat.prefix}{stat.value}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            ))}
+          </CardContent>
+        </Card>
+      </TooltipProvider>
       
-      {/* Debt summary */}
-      <Card className="shadow-xs border-border/40 bg-muted/20">
-        <CardContent className="p-4 flex items-center justify-around">
-          <div className="text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Paid</p>
-            <p className="text-xl font-bold font-mono text-emerald-600">{fmtMoney(summary.amountPaid)}</p>
+      {/* Financial & Sold Tank Overview */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Left Card (5 cols): Vertically arranged Debt Remaining, Total Paid, Total Cost */}
+        <Card className="lg:col-span-5 shadow-xs border-border/40 bg-card flex flex-col justify-between p-0 overflow-hidden">
+          <div className="p-4 border-b border-border/40 bg-muted/20">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Payment & Cost Overview
+            </h3>
           </div>
-          <div className="text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Debt Remaining</p>
-            <p className={cn("text-xl font-bold font-mono", summary.debtRemaining > 0 ? "text-amber-600" : "text-emerald-600")}>
-              {fmtMoney(summary.debtRemaining)}
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Cost</p>
-            <p className="text-xl font-bold font-mono text-foreground">{fmtMoney(summary.totalCost)}</p>
-          </div>
-        </CardContent>
-      </Card>
+          <CardContent className="p-4 flex-1 flex flex-col justify-between gap-3">
+            {/* Debt Remaining */}
+            <div className="p-3.5 rounded-lg bg-amber-500/5 border border-amber-500/10 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Debt Remaining</p>
+                <p className="text-[11px] text-muted-foreground/70 mt-0.5">Unpaid balance</p>
+              </div>
+              <p className={cn("text-lg font-bold font-mono", summary.debtRemaining > 0 ? "text-amber-600 dark:text-amber-500" : "text-emerald-600 dark:text-emerald-400")}>
+                {fmtMoney(summary.debtRemaining)}
+              </p>
+            </div>
 
-      {/* Transports */}
+            {/* Total Paid */}
+            <div className="p-3.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Paid</p>
+                <p className="text-[11px] text-muted-foreground/70 mt-0.5">Amount received</p>
+              </div>
+              <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                {fmtMoney(summary.amountPaid)}
+              </p>
+            </div>
+
+            {/* Total Cost */}
+            <div className="p-3.5 rounded-lg bg-slate-500/5 border border-slate-500/10 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Cost</p>
+                <p className="text-[11px] text-muted-foreground/70 mt-0.5">Order & logistics cost</p>
+              </div>
+              <p className="text-lg font-bold font-mono text-foreground">
+                {fmtMoney(summary.totalCost)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Right (7 cols): Asset Tank + Loss Breakdown Card */}
+        <div className="lg:col-span-7 flex flex-col justify-between gap-4">
+          <AssetTank
+            currentLitres={summary.totalAmountSoldQty}
+            maxCapacity={summary.litersOrdered}
+            label="Quantity Sold"
+            type={summary.productType === "LPG" ? "gas" : "fuel"}
+            // lossLitres={lossLitresToDisplay}
+          />
+
+          {/* Loss Calculation Card below AssetTank */}
+          <Card className="shadow-xs border-border/40 bg-card p-4">            
+            <div className="grid grid-cols-3 gap-3 text-center sm:text-left items-center">
+              {/* Litres Loss */}
+              <div className="space-y-1">
+                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Litres Loss</p>
+                <p className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">
+                  {fmtQty(lossLitresToDisplay)} <span className="text-xs font-normal text-muted-foreground">{summary.productType === "LPG" ? "KG" : "L"}</span>
+                </p>
+              </div>
+
+              {/* Price Sold / Per Litre */}
+              <div className="space-y-1 border-x border-border/40 px-2 sm:px-4">
+                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Selling Price / Litre</p>
+                <p className="text-base font-bold font-mono text-foreground">
+                  {fmtMoney(stationSellingPriceForLoss)}
+                </p>
+              </div>
+
+              {/* Total Loss */}
+              <div className="space-y-1 text-right">
+                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Total Loss</p>
+                <p className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">
+                  {fmtMoney(calculatedTotalLoss)}
+                </p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Transports & Sales Breakdown */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold tracking-tight">Transports & Sales Breakdown</h2>
         
@@ -234,106 +400,186 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
             No transports found for this order.
           </div>
         ) : (
-          <Accordion type="multiple" defaultValue={transports.map(t => t.id)} className="space-y-4">
-            {transports.map((transport) => (
-              <AccordionItem key={transport.id} value={transport.id} className="bg-card rounded-xl border border-border/40 shadow-xs overflow-hidden px-1">
-                <AccordionTrigger className="hover:no-underline px-4 py-4 group">
-                  <div className="flex flex-1 flex-col sm:flex-row sm:items-center justify-between gap-4 text-left">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-primary/10 text-primary rounded-lg">
-                        <Truck className="size-5" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-foreground">{transport.transporterName}</p>
-                        <p className="text-xs text-muted-foreground font-mono mt-0.5">Truck: {transport.truckNo}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-6 pr-6">
-                      <div className="text-right">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Sales Qty</p>
-                        <p className="text-sm font-medium font-mono">{fmtQty(transport.transportTotalQty)} L</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Sales Rev</p>
-                        <p className="text-sm font-semibold font-mono text-indigo-600">{fmtMoney(transport.transportTotalRev)}</p>
-                      </div>
-                    </div>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="px-4 pb-4">
-                  <div className="pt-2 border-t border-border/50">
-                    <div className="flex gap-6 py-3 mb-2 bg-muted/30 rounded-lg px-4">
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Rate/Liter</p>
-                        <p className="text-sm font-mono font-medium">{fmtMoney(transport.ratePerLiter)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Transport Cost</p>
-                        <p className="text-sm font-mono font-medium">{fmtMoney(transport.transportTotalCost)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Fleet Expenses</p>
-                        <p className="text-sm font-mono font-medium">{fmtMoney(transport.fleetExpenses)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Loss Deduction</p>
-                        <p className="text-sm font-mono font-medium text-rose-500">{fmtMoney(transport.lossDeduction)}</p>
-                      </div>
-                    </div>
-                    
-                    {transport.sales.length === 0 ? (
-                      <div className="text-center py-6 text-sm text-muted-foreground">
-                        No sales found for this transport.
-                      </div>
-                    ) : (
-                      <div className="rounded-lg border border-border/40 overflow-hidden">
-                        <Table>
-                          <TableHeader className="bg-muted/50">
-                            <TableRow>
-                              <TableHead className="text-xs h-9">Date</TableHead>
-                              <TableHead className="text-xs h-9">Sold To</TableHead>
-                              <TableHead className="text-xs h-9 text-right">Liters</TableHead>
-                              <TableHead className="text-xs h-9 text-right">Price</TableHead>
-                              <TableHead className="text-xs h-9 text-right">Revenue</TableHead>
-                              <TableHead className="text-xs h-9 text-right">Paid</TableHead>
-                              <TableHead className="text-xs h-9 text-right">Debt</TableHead>
-                              <TableHead className="text-xs h-9 text-center">Status</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {transport.sales.map((sale) => (
-                              <TableRow key={sale.id} className="hover:bg-muted/20">
-                                <TableCell className="text-xs whitespace-nowrap">{fmtDate(sale.createdAt)}</TableCell>
-                                <TableCell className="text-xs font-medium">{sale.soldTo}</TableCell>
-                                <TableCell className="text-xs font-mono text-right">{fmtQty(sale.litersSold)} L</TableCell>
-                                <TableCell className="text-xs font-mono text-right">{fmtMoney(sale.sellingPrice)}</TableCell>
-                                <TableCell className="text-xs font-mono font-medium text-right text-indigo-600">{fmtMoney(sale.salesRevenue)}</TableCell>
-                                <TableCell className="text-xs font-mono font-medium text-right text-emerald-600">{fmtMoney(sale.paymentReceived)}</TableCell>
-                                <TableCell className={cn("text-xs font-mono font-medium text-right", sale.debtRemaining > 0 ? "text-amber-600" : "text-slate-400")}>
-                                  {fmtMoney(sale.debtRemaining)}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <Badge variant="outline" className={cn(
-                                    "text-[10px] px-1.5 py-0",
-                                    sale.paymentStatus === "Paid" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : 
-                                    sale.paymentStatus === "Partial" ? "bg-amber-50 text-amber-700 border-amber-200" : 
-                                    "bg-rose-50 text-rose-700 border-rose-200"
+          <div className="rounded-xl border border-border/40 overflow-hidden bg-card shadow-xs">
+            <div className="overflow-x-auto">
+              <Table className="w-full text-xs min-w-[1000px]">
+                <TableHeader className="bg-muted/50 border-b border-border/50">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-muted-foreground">Transport / Station</TableHead>
+                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-right text-muted-foreground">Volume (Despatched / Recv)</TableHead>
+                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-right text-muted-foreground">Unit Price (Bought → Sold)</TableHead>
+                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-right text-muted-foreground">Cost Breakdown</TableHead>
+                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-right text-muted-foreground">Revenue</TableHead>
+                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-right text-muted-foreground">Profit / Loss</TableHead>
+                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-right text-muted-foreground">Paid / Debt</TableHead>
+                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-center text-muted-foreground">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="divide-y divide-border/50">
+                  {transports.map((transport) => {
+                    // Transport totals & PnL
+                    const transportFuelCost = transport.transportTotalQty * (summary.priceBought || 0);
+                    const transportTotalCostCalc = transportFuelCost + transport.transportTotalCost + transport.fleetExpenses - transport.lossDeduction;
+                    const transportProfit = transport.transportTotalRev - transportTotalCostCalc;
+                    const isTransportProfit = transportProfit >= 0;
+
+                    return (
+                      <React.Fragment key={transport.id}>
+                        {/* Transport Parent Row */}
+                        <TableRow className="bg-muted/30 hover:bg-muted/40 font-medium">
+                          <TableCell className="px-3 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="p-1.5 bg-primary/10 text-primary rounded-md">
+                                <Truck className="size-4" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-foreground text-xs">{transport.transporterName}</p>
+                                <p className="text-[11px] text-muted-foreground font-mono">Truck: {transport.truckNo}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-3 py-3 text-right font-mono font-semibold">
+                            {fmtQty(transport.transportTotalQty)} L
+                          </TableCell>
+                          <TableCell className="px-3 py-3 text-right font-mono text-muted-foreground">
+                            Rate: {fmtMoney(transport.ratePerLiter)}/L
+                          </TableCell>
+                          <TableCell className="px-3 py-3 text-right font-mono">
+                            <div className="flex flex-col items-end">
+                              <span className="font-semibold">{fmtMoney(transportTotalCostCalc)}</span>
+                              <span className="text-[10px] text-muted-foreground">(Fuel: {fmtMoney(transportFuelCost)} + Trans: {fmtMoney(transport.transportTotalCost)})</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-3 py-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            {fmtMoney(transport.transportTotalRev)}
+                          </TableCell>
+                          <TableCell className="px-3 py-3 text-right font-mono font-bold">
+                            <span className={cn(
+                              "px-1.5 py-0.5 rounded text-xs",
+                              isTransportProfit ? "text-emerald-600 bg-emerald-500/10" : "text-rose-600 bg-rose-500/10"
+                            )}>
+                              {isTransportProfit ? "+" : ""}{fmtMoney(transportProfit)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-3 py-3 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                            {fmtMoney(transport.transportTotalPaid)}
+                          </TableCell>
+                          <TableCell className="px-3 py-3 text-center">
+                            <Badge variant="secondary" className="text-[10px] font-bold">
+                              {transport.sales.length} Sale{transport.sales.length === 1 ? "" : "s"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+
+                        {/* Child Sale Sub-Rows */}
+                        {transport.sales.map((sale) => {
+                          const saleOrderCost = sale.litersSold * (summary.priceBought || 0);
+                          const saleTransportCost = sale.transportCost || 0;
+                          const saleTotalCost = saleOrderCost + saleTransportCost;
+                          const salePnl = sale.salesRevenue - saleTotalCost;
+                          const isSaleProfit = salePnl >= 0;
+
+                          return (
+                            <TableRow key={sale.id} className="bg-background hover:bg-muted/20 relative">
+                              {/* Station / Customer & Tree Connector */}
+                              <TableCell className="px-3 py-2.5 pl-8 relative">
+                                <div className="absolute left-4 top-0 bottom-1/2 border-l border-b border-border/80 w-3 rounded-bl"></div>
+                                <p className="font-semibold text-foreground">{sale.soldTo}</p>
+                                <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{fmtDate(sale.createdAt)}</p>
+                              </TableCell>
+
+                              {/* Volume (Despatched / Recv / Loss) */}
+                              <TableCell className="px-3 py-2.5 text-right font-mono">
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <span className="font-medium text-foreground">
+                                    {fmtQty(sale.litersSold)} L <span className="text-[9px] text-muted-foreground uppercase">despatched</span>
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {sale.litersReceived !== null && sale.litersReceived !== undefined
+                                      ? `${fmtQty(sale.litersReceived)} L received`
+                                      : "—"}
+                                  </span>
+                                  {sale.lossLiters && sale.lossLiters > 0 ? (
+                                    <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400">
+                                      Loss: {fmtQty(sale.lossLiters)} L ({fmtMoney(sale.lossLiters * sale.sellingPrice)})
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </TableCell>
+
+                              {/* Unit Price (Bought -> Sold) */}
+                              <TableCell className="px-3 py-2.5 text-right font-mono">
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <span className="text-[10px] text-muted-foreground">
+                                    Bought: {fmtMoney(summary.priceBought)}/L
+                                  </span>
+                                  <span className="font-semibold text-foreground">
+                                    Sold: {fmtMoney(sale.sellingPrice)}/L
+                                  </span>
+                                </div>
+                              </TableCell>
+
+                              {/* Cost Breakdown (Fuel + Transport = Total Cost) */}
+                              <TableCell className="px-3 py-2.5 text-right font-mono">
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <span className="font-medium text-foreground">Total: {fmtMoney(saleTotalCost)}</span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    (Fuel: {fmtMoney(saleOrderCost)} + Trans: {fmtMoney(saleTransportCost)})
+                                  </span>
+                                </div>
+                              </TableCell>
+
+                              {/* Revenue */}
+                              <TableCell className="px-3 py-2.5 text-right font-mono font-semibold text-indigo-600 dark:text-indigo-400">
+                                {fmtMoney(sale.salesRevenue)}
+                              </TableCell>
+
+                              {/* Profit / Loss */}
+                              <TableCell className="px-3 py-2.5 text-right font-mono font-bold">
+                                <span className={cn(
+                                  "px-1.5 py-0.5 rounded text-xs",
+                                  isSaleProfit ? "text-emerald-600 bg-emerald-500/10" : "text-rose-600 bg-rose-500/10"
+                                )}>
+                                  {isSaleProfit ? "+" : ""}{fmtMoney(salePnl)}
+                                </span>
+                              </TableCell>
+
+                              {/* Paid / Debt */}
+                              <TableCell className="px-3 py-2.5 text-right font-mono">
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                    {fmtMoney(sale.paymentReceived)}
+                                  </span>
+                                  <span className={cn(
+                                    "text-[10px] font-medium",
+                                    sale.debtRemaining > 0 ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground/60"
                                   )}>
-                                    {sale.paymentStatus}
-                                  </Badge>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+                                    Debt: {fmtMoney(sale.debtRemaining)}
+                                  </span>
+                                </div>
+                              </TableCell>
+
+                              {/* Status */}
+                              <TableCell className="px-3 py-2.5 text-center">
+                                <Badge variant="outline" className={cn(
+                                  "text-[10px] px-2 py-0.5 font-semibold",
+                                  sale.paymentStatus === "Paid" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : 
+                                  sale.paymentStatus === "Partial" ? "bg-amber-500/10 text-amber-600 border-amber-500/20" : 
+                                  "bg-rose-500/10 text-rose-600 border-rose-500/20"
+                                )}>
+                                  {sale.paymentStatus}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         )}
       </div>
     </div>

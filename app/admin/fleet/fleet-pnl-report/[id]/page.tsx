@@ -48,12 +48,12 @@ export default async function OrderPnlDetailsPage(props: {
   let amountSoldRev = 0;
   let amountPaid = 0;
 
+  let totalOrderLossLiters = 0;
+  let totalOrderLossAmount = 0;
+
   const transportsData = order.transports.map(transport => {
     const fleetExpenses = Number(transport.maintenanceCost || 0);
-    const lossDeduction = Number(transport.totalDeduction || 0);
-    
-    totalFleetExpenses += fleetExpenses;
-    totalLossDeduction += lossDeduction;
+    let transportStationLossAmount = 0;
 
     let transportTotalQty = 0;
     let transportTotalRev = 0;
@@ -62,8 +62,21 @@ export default async function OrderPnlDetailsPage(props: {
 
     const salesData = transport.sales.map(sale => {
       const saleTransportCost = Number(sale.transportCost) || (Number(sale.litersDespatched) * Number(transport.ratePerLiter));
+      const clientTransportFee = sale.transportCostBorneBy === "CLIENT" ? Number(sale.transportCost || 0) : 0;
       const saleQty = Number(sale.litersDespatched || 0);
-      const saleRev = Number(sale.totalExpectedAmount || 0);
+      const sellingPrice = Number(sale.amountPerLiter || 0);
+      const litersReceived = sale.litersReceived !== null && sale.litersReceived !== undefined
+        ? Number(sale.litersReceived)
+        : null;
+      
+      const saleLossLiters = litersReceived !== null ? Math.max(0, saleQty - litersReceived) : 0;
+      const saleLossAmount = saleLossLiters * sellingPrice;
+
+      totalOrderLossLiters += saleLossLiters;
+      totalOrderLossAmount += saleLossAmount;
+      transportStationLossAmount += saleLossAmount;
+
+      const saleRev = Number(sale.totalExpectedAmount || 0) + clientTransportFee;
       const salePaid = Number(sale.paymentReceived || 0);
 
       transportTotalQty += saleQty;
@@ -75,7 +88,9 @@ export default async function OrderPnlDetailsPage(props: {
         id: sale.id,
         soldTo: sale.customer?.name || sale.station?.name || "Unknown",
         litersSold: saleQty,
-        sellingPrice: Number(sale.amountPerLiter || 0),
+        litersReceived,
+        lossLiters: saleLossLiters,
+        sellingPrice,
         transportCost: saleTransportCost,
         salesRevenue: saleRev,
         paymentReceived: salePaid,
@@ -84,6 +99,17 @@ export default async function OrderPnlDetailsPage(props: {
         createdAt: sale.createdAt.toISOString()
       };
     });
+
+    const dbLossDeduction = Math.max(0, Number(transport.totalDeduction || 0) - fleetExpenses);
+    const lossDeduction = Math.max(dbLossDeduction, transportStationLossAmount);
+    
+    totalFleetExpenses += fleetExpenses;
+    totalLossDeduction += lossDeduction;
+
+    const transportLitersLost = Number(transport.litersLost || 0);
+    if (transportLitersLost > 0 && transport.sales.length === 0) {
+      totalOrderLossLiters += transportLitersLost;
+    }
 
     totalTransportCost += transportTotalCost;
     totalAmountSoldQty += transportTotalQty;
@@ -109,6 +135,7 @@ export default async function OrderPnlDetailsPage(props: {
   const pnl = amountSoldRev - totalCost;
   const debtRemaining = amountSoldRev - amountPaid;
   const qtyBalance = Number(order.litersOrdered) - totalAmountSoldQty;
+  const effectiveLossLiters = totalOrderLossLiters > 0 ? totalOrderLossLiters : Math.max(0, qtyBalance);
 
   const summary = {
     id: order.id,
@@ -126,6 +153,8 @@ export default async function OrderPnlDetailsPage(props: {
     totalCost,
     totalAmountSoldQty,
     qtyBalance,
+    totalLitersLost: effectiveLossLiters,
+    totalLossAmount: totalOrderLossAmount,
     amountSoldRev,
     amountPaid,
     debtRemaining,

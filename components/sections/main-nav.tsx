@@ -49,11 +49,30 @@ import {
   Ticket,
   Network,
 } from "lucide-react";
+import {
+  IconLayoutDashboard,
+  IconBuilding,
+  IconUsers,
+  IconUser,
+  IconShield,
+  IconTruck,
+  IconShoppingCart,
+  IconMapPin,
+  IconReceiptDollar,
+  IconCreditCard,
+  IconBuildingBank,
+  IconReportAnalytics,
+  IconFileText,
+  IconWallet,
+  IconActivity,
+  IconSettings,
+  IconUsersGroup,
+} from "@tabler/icons-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 
-const iconMap: Record<string, React.ComponentType<{ size?: number }>> = {
+const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   PieChart,
   Building2,
   Building,
@@ -84,13 +103,32 @@ const iconMap: Record<string, React.ComponentType<{ size?: number }>> = {
   Landmark,
   Ticket,
   Network,
+
+  // Tabler Outline icons
+  IconLayoutDashboard,
+  IconBuilding,
+  IconUsers,
+  IconUsersGroup,
+  IconUser,
+  IconShield,
+  IconTruck,
+  IconShoppingCart,
+  IconMapPin,
+  IconReceiptDollar,
+  IconCreditCard,
+  IconBuildingBank,
+  IconReportAnalytics,
+  IconFileText,
+  IconWallet,
+  IconActivity,
+  IconSettings,
 };
 
 export type NavItem = {
   label?: string;
   isSection?: boolean;
   title?: string;
-  icon?: React.ComponentType<{ size?: number }> | string;
+  icon?: React.ComponentType<{ size?: number; className?: string }> | string;
   href?: string;
   children?: NavItem[];
 };
@@ -192,11 +230,11 @@ function NavMainItem({
                     isParentActive ? "bg-primary! text-primary-foreground!" : ""
                   )}
                 >
-                  {Icon && <Icon size={22} />}
+                  {Icon && <Icon size={20} className="size-[20px] shrink-0 text-current" />}
                   <span>{item.title}</span>
                   <ChevronRight
                     className={cn(
-                      "ml-auto transition-transform duration-200",
+                      "ml-auto transition-transform duration-200 size-4",
                       isOpen && "rotate-90"
                     )}
                   />
@@ -245,7 +283,7 @@ function NavMainItem({
               )}
             >
               <Link href={item.href || "#"} className="flex items-center gap-3">
-                {Icon && <Icon size={18} />}
+                {Icon && <Icon size={20} className="size-[20px] shrink-0 text-current" />}
                 <span>{item.title}</span>
               </Link>
             </SidebarMenuButton>
@@ -287,11 +325,11 @@ function NavMainSubItem({
               id={`nav-sub-trigger-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
               className="rounded-md text-sm font-medium px-3 py-2 h-9"
             >
-              {Icon && <Icon />}
+              {Icon && <Icon size={18} className="size-[18px] shrink-0 text-current" />}
               <span>{item.title}</span>
               <ChevronRight
                 className={cn(
-                  "ml-auto transition-transform duration-200",
+                  "ml-auto transition-transform duration-200 size-4",
                   isOpen && "rotate-90"
                 )}
               />
@@ -333,8 +371,9 @@ function NavMainSubItem({
             setActiveChild(item.title!);
           }}
         >
-          <Link href={item.href || "#"} className="flex items-center w-full px-2">
-            {item.title}
+          <Link href={item.href || "#"} className="flex items-center w-full px-2 gap-2">
+            {Icon && <Icon size={18} className="size-[18px] shrink-0 text-current" />}
+            <span>{item.title}</span>
           </Link>
         </SidebarMenuSubButton>
       </SidebarMenuSubItem>

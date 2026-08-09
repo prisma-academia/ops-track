@@ -162,7 +162,7 @@ const columns: ColumnDef<TruckRow>[] = [
   }
 ];
 
-export function TrucksTable({ data, serverPagination, filterNode }: { data: TruckRow[]; serverPagination?: any; filterNode?: React.ReactNode }) {
+export function TrucksTable({ data, serverPagination, filterNode, headerAction }: { data: TruckRow[]; serverPagination?: any; filterNode?: React.ReactNode; headerAction?: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -187,6 +187,7 @@ export function TrucksTable({ data, serverPagination, filterNode }: { data: Truc
       filterColumnId="name"
       searchPlaceholder="Search by plate number or ID…"
       filterNode={filterNode}
+      headerAction={headerAction}
       {...(serverPagination ? {
         serverPagination: {
           ...serverPagination,

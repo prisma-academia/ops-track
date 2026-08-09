@@ -42,22 +42,39 @@ export default async function FleetPnlReportPage() {
       let trPaid = 0;
       let trQtySold = 0;
       let trCost = 0;
+      let trStationLossAmount = 0;
 
       for (const sale of transport.sales) {
         const sCost = Number(sale.transportCost) || (Number(sale.litersDespatched) * Number(transport.ratePerLiter));
+        const clientTransportFee = sale.transportCostBorneBy === "CLIENT" ? Number(sale.transportCost || 0) : 0;
+        const sRev = Number(sale.totalExpectedAmount || 0) + clientTransportFee;
+
+        const saleQty = Number(sale.litersDespatched || 0);
+        const litersReceived = sale.litersReceived !== null && sale.litersReceived !== undefined
+          ? Number(sale.litersReceived)
+          : null;
+        
+        const saleLossLiters = litersReceived !== null ? Math.max(0, saleQty - litersReceived) : 0;
+        const saleLossAmount = saleLossLiters * Number(sale.amountPerLiter || 0);
+        trStationLossAmount += saleLossAmount;
+
         trCost += sCost;
-        trQtySold += Number(sale.litersDespatched || 0);
-        trSalesRev += Number(sale.totalExpectedAmount || 0);
+        trQtySold += saleQty;
+        trSalesRev += sRev;
         trPaid += Number(sale.paymentReceived || 0);
 
         totalTransportCost += sCost;
-        totalAmountSoldQty += Number(sale.litersDespatched || 0);
-        amountSoldRev += Number(sale.totalExpectedAmount || 0);
+        totalAmountSoldQty += saleQty;
+        amountSoldRev += sRev;
         amountPaid += Number(sale.paymentReceived || 0);
       }
 
-      totalFleetExpenses += Number(transport.maintenanceCost || 0);
-      totalLossDeduction += Number(transport.totalDeduction || 0);
+      const maintenanceCost = Number(transport.maintenanceCost || 0);
+      const dbLossDeduction = Math.max(0, Number(transport.totalDeduction || 0) - maintenanceCost);
+      const lossDeduction = Math.max(dbLossDeduction, trStationLossAmount);
+
+      totalFleetExpenses += maintenanceCost;
+      totalLossDeduction += lossDeduction;
 
       rowTransports.push({
         id: transport.id,
@@ -65,8 +82,8 @@ export default async function FleetPnlReportPage() {
         driverName: transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : "Unknown",
         transporterName: transport.transporter?.name || "Unknown",
         ratePerLiter: Number(transport.ratePerLiter || 0),
-        maintenanceCost: Number(transport.maintenanceCost || 0),
-        totalDeduction: Number(transport.totalDeduction || 0),
+        maintenanceCost,
+        totalDeduction: lossDeduction,
         litersCarried: Number(transport.litersCarried || 0),
         litersDelivered: Number(transport.litersDelivered || 0),
         salesCount: transport.sales.length,

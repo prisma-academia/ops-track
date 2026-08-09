@@ -110,7 +110,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
     }
 
     if (selectedSaleDetails) {
-      const outstanding = Number(selectedSaleDetails.totalExpectedAmount) - Number(selectedSaleDetails.paymentReceived);
+      const outstanding = getSaleOutstanding(selectedSaleDetails);
       if (Number(formData.amount) > outstanding) {
         toast.error(`Amount cannot exceed the outstanding balance of ₦${outstanding.toLocaleString()}`);
         setSubmitting(false);
@@ -150,6 +150,21 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
   const selectedSaleDetails = formData.saleId && formData.saleId !== "none" 
     ? metadata?.sales?.find((s: any) => s.id === formData.saleId)
     : null;
+
+  const getSaleTransportFee = (s: any) => {
+    if (!s) return 0;
+    return s.transportCostBorneBy === "CLIENT" ? Number(s.transportCost || 0) : 0;
+  };
+
+  const getSaleTotalExpected = (s: any) => {
+    if (!s) return 0;
+    return Number(s.totalExpectedAmount || 0) + getSaleTransportFee(s);
+  };
+
+  const getSaleOutstanding = (s: any) => {
+    if (!s) return 0;
+    return getSaleTotalExpected(s) - Number(s.paymentReceived || 0);
+  };
 
   const selectedCustomer = metadata?.customers?.find((c: any) => c.id === formData.clientId);
   const depositBalance = selectedCustomer ? Number(selectedCustomer.depositBalance || 0) : 0;
@@ -251,7 +266,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
                     ? (() => {
                         const s = metadata?.sales?.find((s: any) => s.id === formData.saleId);
                         if (s) {
-                          const out = Number(s.totalExpectedAmount) - Number(s.paymentReceived);
+                          const out = getSaleOutstanding(s);
                           const t = metadata?.transports?.find((tr: any) => tr.id === s.transportId);
                           const ref = t?.order?.reference || "Direct Sale";
                           return `${ref} • ${Number(s.litersDespatched).toLocaleString()} L • Out: ₦${out.toLocaleString()}`;
@@ -284,7 +299,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
                       No specific sale (Account level)
                     </CommandItem>
                     {metadata?.sales?.filter((s: any) => s.customerId === formData.clientId || s.stationId === formData.clientId).map((s: any) => {
-                      const outstanding = Number(s.totalExpectedAmount) - Number(s.paymentReceived);
+                      const outstanding = getSaleOutstanding(s);
                       const t = metadata?.transports?.find((tr: any) => tr.id === s.transportId);
                       const ref = t?.order?.reference || "Direct Sale";
                       const searchValue = `${s.id} ${ref} ${s.litersDespatched} ${outstanding} ${new Date(s.createdAt).toLocaleDateString()}`.toLowerCase();
@@ -580,9 +595,29 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Expected Amount</span>
+            <span className="text-sm text-muted-foreground">Product Amount</span>
             <span className="font-medium text-sm">₦{Number(selectedSaleDetails.totalExpectedAmount).toLocaleString()}</span>
           </div>
+          {Number(selectedSaleDetails.transportCost || 0) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">
+                Transport Fee ({selectedSaleDetails.transportCostBorneBy === "CLIENT" ? "Client Billed" : "Company Borne"})
+              </span>
+              <span className="font-medium text-sm">₦{Number(selectedSaleDetails.transportCost).toLocaleString()}</span>
+            </div>
+          )}
+          {getSaleTransportFee(selectedSaleDetails) > 0 && (
+            <div className="flex justify-between font-medium">
+              <span className="text-sm text-muted-foreground">Total Expected</span>
+              <span className="font-medium text-sm">₦{getSaleTotalExpected(selectedSaleDetails).toLocaleString()}</span>
+            </div>
+          )}
+          {getSaleTransportFee(selectedSaleDetails) === 0 && (
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">Total Expected</span>
+              <span className="font-medium text-sm">₦{getSaleTotalExpected(selectedSaleDetails).toLocaleString()}</span>
+            </div>
+          )}
           <div className="flex justify-between text-green-600 dark:text-green-500">
             <span className="text-sm">Amount Paid</span>
             <span className="font-medium text-sm">₦{Number(selectedSaleDetails.paymentReceived).toLocaleString()}</span>
@@ -591,7 +626,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Outstanding</span>
             <span className="font-bold text-destructive">
-              ₦{(Number(selectedSaleDetails.totalExpectedAmount) - Number(selectedSaleDetails.paymentReceived)).toLocaleString()}
+              ₦{getSaleOutstanding(selectedSaleDetails).toLocaleString()}
             </span>
           </div>
         </div>

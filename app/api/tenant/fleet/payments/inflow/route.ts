@@ -73,8 +73,10 @@ export async function POST(request: Request) {
         const sale = await tx.sale.findFirst({ where: { id: body.saleId, tenantId: actor.tenantId } });
         if (sale) {
           const newPaymentReceived = Number(sale.paymentReceived) + body.amount;
+          const transportFee = sale.transportCostBorneBy === "CLIENT" ? Number(sale.transportCost || 0) : 0;
+          const totalSaleAmount = Number(sale.totalExpectedAmount) + transportFee;
           let status = sale.status;
-          if (newPaymentReceived >= Number(sale.totalExpectedAmount)) {
+          if (newPaymentReceived >= totalSaleAmount) {
             status = "CLEARED";
           } else if (newPaymentReceived > 0) {
             status = "PART_PAID";

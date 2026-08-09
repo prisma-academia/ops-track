@@ -4,11 +4,17 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { PaymentsTable } from "./table";
 import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Activity } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { formatShortCurrency } from "@/lib/utils";
+import { cn, formatShortCurrency } from "@/lib/utils";
 
 export default async function PaymentsPage({
   searchParams,
@@ -98,112 +104,169 @@ export default async function PaymentsPage({
 
   const totalPages = Math.ceil(totalCount / take);
 
+  const statCards = [
+    {
+      title: "Net Balance",
+      value: `${netBalance >= 0 ? "+" : "-"}${formatShortCurrency(Math.abs(netBalance))}`,
+      fullValue: `${netBalance >= 0 ? "+" : "-"}₦${Math.abs(netBalance).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      icon: Activity,
+      valueColor: netBalance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+      iconColor: netBalance >= 0 ? "text-emerald-600" : "text-rose-600",
+    },
+    {
+      title: "Total Inflow",
+      value: formatShortCurrency(totalInflow),
+      fullValue: `₦${totalInflow.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      icon: ArrowDownLeft,
+      valueColor: "text-emerald-600 dark:text-emerald-400",
+      iconColor: "text-emerald-600",
+    },
+    {
+      title: "Total Outflow",
+      value: formatShortCurrency(totalOutflow),
+      fullValue: `₦${totalOutflow.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      icon: ArrowUpRight,
+      valueColor: "text-rose-600 dark:text-rose-400",
+      iconColor: "text-rose-600",
+    },
+    {
+      title: "Transactions",
+      value: totalTransactionsCount.toLocaleString(),
+      fullValue: null,
+      icon: TrendingUp,
+      valueColor: "",
+      iconColor: "text-teal-600",
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Balance</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${netBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
-              {netBalance >= 0 ? "+" : "-"}{formatShortCurrency(Math.abs(netBalance))}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Inflow</CardTitle>
-            <ArrowDownLeft className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatShortCurrency(totalInflow)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Outflow</CardTitle>
-            <ArrowUpRight className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{formatShortCurrency(totalOutflow)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Transactions</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalTransactionsCount}</div>
-          </CardContent>
-        </Card>
+      {/* Top Page Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card text-card-foreground p-4 rounded-xl border border-border/40 shadow-xs">
+        <div className="space-y-1">
+          <h1 className="text-xl font-bold tracking-tight text-foreground">Payments Module</h1>
+          <p className="text-xs text-muted-foreground">View and manage all incoming and outgoing fleet payments.</p>
+        </div>
       </div>
 
-      <div>
-        <DataTableToolbar
-          title="Payments Module"
-          description="View and manage all incoming and outgoing fleet payments."
-          action={
-            <div className="flex items-center gap-2">
-              <Link href="/admin/fleet/payments/new">
-                <Button>Log Payment</Button>
-              </Link>
-            </div>
-          }
-        />
-        <PaymentsTable
-          data={rows}
-          serverPagination={{
-            page,
-            pageSize: take,
-            totalCount,
-            totalPages,
-            hasNextPage: page < totalPages,
-            hasPreviousPage: page > 1,
-          }}
-          filterNode={
-            <DataTableFilterDrawer
-              filters={[
-                {
-                  type: "combobox",
-                  paramName: "bankAccountId",
-                  label: "Bank Account",
-                  options: bankOptions,
-                },
-                {
-                  type: "select",
-                  paramName: "type",
-                  label: "Type",
-                  options: [
-                    { value: "INFLOW", label: "Inflow" },
-                    { value: "OUTFLOW", label: "Outflow" },
-                  ],
-                },
-                {
-                  type: "select",
-                  paramName: "category",
-                  label: "Category",
-                  options: categoryOptions,
-                },
-                {
-                  type: "number-range",
-                  label: "Amount Range",
-                  fromParam: "minAmt",
-                  toParam: "maxAmt",
-                },
-                {
-                  type: "date-range",
-                  label: "Date Range",
-                  fromParam: "from",
-                  toParam: "to",
-                },
-              ]}
-            />
-          }
-        />
-      </div>
+      {/* Stats Cards */}
+      <TooltipProvider delayDuration={200}>
+        <Card className="p-0 shadow-xs border-border/40">
+          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0">
+            {statCards.map((item, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "w-full md:flex-1 min-w-[150px] border-border",
+                  index === statCards.length - 1 ? "border-b-0" : "border-b",
+                  "md:border-b-0",
+                  index === statCards.length - 1 ? "md:border-e-0" : "md:border-e"
+                )}
+              >
+                {item.fullValue ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="p-4 flex items-start justify-between cursor-default hover:bg-muted/30 transition-colors h-full">
+                        <div className="flex flex-col gap-2">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.title}</p>
+                          <div>
+                            <p className={cn("text-md font-semibold text-card-foreground", item.valueColor)}>
+                              {item.value}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
+                          <item.icon
+                            size={14}
+                            className={cn("text-muted-foreground", item.iconColor)}
+                          />
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                      {item.fullValue}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div className="p-4 flex items-start justify-between h-full">
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.title}</p>
+                      <div>
+                        <p className={cn("text-md font-semibold text-card-foreground", item.valueColor)}>
+                          {item.value}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
+                      <item.icon
+                        size={14}
+                        className={cn("text-muted-foreground", item.iconColor)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </TooltipProvider>
+
+      {/* Table Section */}
+      <PaymentsTable
+        data={rows}
+        headerAction={
+          <Link href="/admin/fleet/payments/new">
+            <Button>Log Payment</Button>
+          </Link>
+        }
+        serverPagination={{
+          page,
+          pageSize: take,
+          totalCount,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        }}
+        filterNode={
+          <DataTableFilterDrawer
+            filters={[
+              {
+                type: "combobox",
+                paramName: "bankAccountId",
+                label: "Bank Account",
+                options: bankOptions,
+              },
+              {
+                type: "select",
+                paramName: "type",
+                label: "Type",
+                options: [
+                  { value: "INFLOW", label: "Inflow" },
+                  { value: "OUTFLOW", label: "Outflow" },
+                ],
+              },
+              {
+                type: "select",
+                paramName: "category",
+                label: "Category",
+                options: categoryOptions,
+              },
+              {
+                type: "number-range",
+                label: "Amount Range",
+                fromParam: "minAmt",
+                toParam: "maxAmt",
+              },
+              {
+                type: "date-range",
+                label: "Date Range",
+                fromParam: "from",
+                toParam: "to",
+              },
+            ]}
+          />
+        }
+      />
     </div>
   );
 }

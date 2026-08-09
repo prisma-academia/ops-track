@@ -7,6 +7,8 @@ interface AssetTankProps {
   maxCapacity: number;
   label?: string;
   type?: "fuel" | "gas";
+  lossDeduction?: number;
+  lossLitres?: number;
 }
 
 export const AssetTank: React.FC<AssetTankProps> = ({
@@ -14,6 +16,8 @@ export const AssetTank: React.FC<AssetTankProps> = ({
   maxCapacity,
   label = "Asset Storage Tank",
   type = "fuel",
+  lossDeduction,
+  lossLitres,
 }) => {
   const percentage = maxCapacity > 0 ? Math.min(Math.max((currentLitres / maxCapacity) * 100, 0), 100) : 0;
 
@@ -158,6 +162,29 @@ export const AssetTank: React.FC<AssetTankProps> = ({
               {maxCapacity.toLocaleString()} {type === "gas" ? "KG" : "L"}
             </span>
           </div>
+
+          {/* Loss indicator in red */}
+          {lossLitres !== undefined && lossLitres > 0 ? (
+            <div className="flex justify-between items-center text-xs text-rose-600 dark:text-rose-400 font-semibold pt-2 mt-2 border-t border-rose-500/20 bg-rose-500/5 px-2 py-1 rounded">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block size-1.5 rounded-full bg-rose-500 animate-pulse" />
+                Loss Volume
+              </span>
+              <span className="font-mono">
+                {lossLitres.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {type === "gas" ? "KG" : "L"}
+              </span>
+            </div>
+          ) : lossDeduction !== undefined && lossDeduction > 0 ? (
+            <div className="flex justify-between items-center text-xs text-rose-600 dark:text-rose-400 font-semibold pt-2 mt-2 border-t border-rose-500/20 bg-rose-500/5 px-2 py-1 rounded">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block size-1.5 rounded-full bg-rose-500 animate-pulse" />
+                Loss Deduction
+              </span>
+              <span className="font-mono">
+                ₦{lossDeduction.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          ) : null}
         </div>
 
       </div>

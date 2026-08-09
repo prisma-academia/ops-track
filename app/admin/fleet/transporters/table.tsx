@@ -168,7 +168,7 @@ const columns: ColumnDef<TransporterRow>[] = [
   }
 ];
 
-export function TransportersTable({ data, serverPagination, filterNode }: { data: TransporterRow[]; serverPagination?: any; filterNode?: React.ReactNode }) {
+export function TransportersTable({ data, serverPagination, filterNode, headerAction }: { data: TransporterRow[]; serverPagination?: any; filterNode?: React.ReactNode; headerAction?: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -193,6 +193,7 @@ export function TransportersTable({ data, serverPagination, filterNode }: { data
       filterColumnId="name"
       searchPlaceholder="Search by name…"
       filterNode={filterNode}
+      headerAction={headerAction}
       {...(serverPagination ? {
         serverPagination: {
           ...serverPagination,

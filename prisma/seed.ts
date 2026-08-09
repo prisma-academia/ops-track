@@ -9,8 +9,6 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-// Platform admin removed based on user request
-
   for (const p of ALL_PERMISSIONS) {
     await prisma.permission.upsert({
       where: { key: p.key },
@@ -21,9 +19,7 @@ async function main() {
 
   await ensurePlatformRole("Platform Super Admin", ALL_PLATFORM_PERMISSION_KEYS);
 
-
-
-  // --- SHAHAF SEEDING ---
+  // --- SAHAF SEEDING ---
   console.log("Seeding SAHAF tenant...");
   const tenantName = "SAHAF NIG LTD";
   const tenantSlug = "sahaf";
@@ -75,6 +71,41 @@ async function main() {
     parallelism: 1,
   });
 
+  // Create Organizations
+  const internalOrg = await prisma.organization.upsert({
+    where: { tenantId_slug: { tenantId: tenant.id, slug: "sahaf-internal" } },
+    update: { type: "INTERNAL", name: "SAHAF Internal" },
+    create: {
+      tenantId: tenant.id,
+      name: "SAHAF Internal",
+      slug: "sahaf-internal",
+      type: "INTERNAL",
+    }
+  });
+
+  const dangoteOrg = await prisma.organization.upsert({
+    where: { tenantId_slug: { tenantId: tenant.id, slug: "dangote" } },
+    update: { type: "EXTERNAL", name: "Dangote Fuel" },
+    create: {
+      tenantId: tenant.id,
+      name: "Dangote Fuel",
+      slug: "dangote",
+      type: "EXTERNAL",
+    }
+  });
+
+  const buaOrg = await prisma.organization.upsert({
+    where: { tenantId_slug: { tenantId: tenant.id, slug: "bua" } },
+    update: { type: "EXTERNAL", name: "BUA Group" },
+    create: {
+      tenantId: tenant.id,
+      name: "BUA Group",
+      slug: "bua",
+      type: "EXTERNAL",
+    }
+  });
+
+  // Fleet Owner (Fleet-wide access)
   await prisma.tenantUser.upsert({
     where: {
       tenantId_email: {
@@ -91,6 +122,7 @@ async function main() {
       activeModules: ["STATION", "FLEET"],
       stationPermissions: ALL_TENANT_PERMISSION_KEYS,
       fleetPermissions: ALL_TENANT_PERMISSION_KEYS,
+      organizationId: null, // Fleet-wide
     },
     create: {
       tenantId: tenant.id,
@@ -105,10 +137,11 @@ async function main() {
       activeModules: ["STATION", "FLEET"],
       stationPermissions: ALL_TENANT_PERMISSION_KEYS,
       fleetPermissions: ALL_TENANT_PERMISSION_KEYS,
+      organizationId: null, // Fleet-wide
     },
   });
 
-  // Owner 2
+  // Fleet Admin (Fleet-wide access)
   await prisma.tenantUser.upsert({
     where: {
       tenantId_email: {
@@ -125,6 +158,7 @@ async function main() {
       activeModules: ["STATION", "FLEET"],
       stationPermissions: ALL_TENANT_PERMISSION_KEYS,
       fleetPermissions: ALL_TENANT_PERMISSION_KEYS,
+      organizationId: null, // Fleet-wide
     },
     create: {
       tenantId: tenant.id,
@@ -139,47 +173,103 @@ async function main() {
       activeModules: ["STATION", "FLEET"],
       stationPermissions: ALL_TENANT_PERMISSION_KEYS,
       fleetPermissions: ALL_TENANT_PERMISSION_KEYS,
+      organizationId: null, // Fleet-wide
     },
   });
 
-  // Admin
+  // Org-scoped Owner (Dangote)
   await prisma.tenantUser.upsert({
     where: {
       tenantId_email: {
         tenantId: tenant.id,
-        email: "amuhammadmusaa@gmail.com",
+        email: "dangote@gmail.com",
       },
     },
     update: {
       passwordHash: tenantPasswordHash,
-      firstName: "Auwal",
-      lastName: "Sahaf",
-      phone: "0000000000",
-      isOwner: false,
-      activeModules: ["STATION", "FLEET"],
+      firstName: "Dangote",
+      lastName: "Owner",
+      isOwner: false, // Not tenant owner, just org scoped
+      activeModules: ["STATION"],
       stationPermissions: ALL_TENANT_PERMISSION_KEYS,
-      fleetPermissions: ALL_TENANT_PERMISSION_KEYS,
+      fleetPermissions: [],
+      organizationId: dangoteOrg.id,
     },
     create: {
       tenantId: tenant.id,
-      email: "amuhammadmusaa@gmail.com",
+      email: "dangote@gmail.com",
       passwordHash: tenantPasswordHash,
-      firstName: "Auwal",
-      lastName: "Sahaf",
-      phone: "0000000000",
+      firstName: "Dangote",
+      lastName: "Owner",
       mustChangePassword: false,
       isOwner: false,
       status: "ACTIVE",
-      activeModules: ["STATION", "FLEET"],
+      activeModules: ["STATION"],
       stationPermissions: ALL_TENANT_PERMISSION_KEYS,
-      fleetPermissions: ALL_TENANT_PERMISSION_KEYS,
+      fleetPermissions: [],
+      organizationId: dangoteOrg.id,
     },
   });
 
+  // Org-scoped Owner (BUA)
+  await prisma.tenantUser.upsert({
+    where: {
+      tenantId_email: {
+        tenantId: tenant.id,
+        email: "bua@gmail.com",
+      },
+    },
+    update: {
+      passwordHash: tenantPasswordHash,
+      firstName: "BUA",
+      lastName: "Owner",
+      isOwner: false,
+      activeModules: ["STATION"],
+      stationPermissions: ALL_TENANT_PERMISSION_KEYS,
+      fleetPermissions: [],
+      organizationId: buaOrg.id,
+    },
+    create: {
+      tenantId: tenant.id,
+      email: "bua@gmail.com",
+      passwordHash: tenantPasswordHash,
+      firstName: "BUA",
+      lastName: "Owner",
+      mustChangePassword: false,
+      isOwner: false,
+      status: "ACTIVE",
+      activeModules: ["STATION"],
+      stationPermissions: ALL_TENANT_PERMISSION_KEYS,
+      fleetPermissions: [],
+      organizationId: buaOrg.id,
+    },
+  });
+
+  // Seed some stations
+  const stations = [
+    { code: "SAHAF-01", name: "SAHAF Station Kano", orgId: internalOrg.id },
+    { code: "DAN-01", name: "Dangote Station 1", orgId: dangoteOrg.id },
+    { code: "BUA-01", name: "BUA Station 1", orgId: buaOrg.id }
+  ];
+
+  for (const s of stations) {
+    await prisma.station.upsert({
+      where: { tenantId_code: { tenantId: tenant.id, code: s.code } },
+      update: { name: s.name, organizationId: s.orgId },
+      create: {
+        tenantId: tenant.id,
+        organizationId: s.orgId,
+        code: s.code,
+        name: s.name,
+      }
+    });
+  }
+
   console.log(`Seed complete.`);
-  console.log(`Tenant User 1: ${tenantUserEmail} (Password: password123)`);
-  console.log(`Tenant User 2: assunusi@gmail.com (Password: password123)`);
-  console.log(`Tenant User 3: amuhammadmusaa@gmail.com (Password: password123)`);
+  console.log(`Tenant User 1 (Fleet): ${tenantUserEmail} (Password: password123)`);
+  console.log(`Tenant User 2 (Fleet): assunusi@gmail.com (Password: password123)`);
+  console.log(`Tenant User 3 (Dangote Org): dangote@gmail.com (Password: password123)`);
+  console.log(`Tenant User 4 (BUA Org): bua@gmail.com (Password: password123)`);
 }
 
 async function ensurePlatformRole(name: string, permissions: string[]) {

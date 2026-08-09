@@ -20,6 +20,8 @@ export const PERMISSIONS = {
   TENANT_TEMPLATES_WRITE: { key: "tenant.templates:write", module: "tenant.templates", description: "Modify templates" },
   TENANT_SETTINGS_READ: { key: "tenant.settings:read", module: "tenant.settings", description: "View tenant settings" },
   TENANT_SETTINGS_WRITE: { key: "tenant.settings:write", module: "tenant.settings", description: "Modify tenant settings" },
+  TENANT_ORGS_READ: { key: "tenant.orgs:read", module: "tenant.orgs", description: "View organizations" },
+  TENANT_ORGS_WRITE: { key: "tenant.orgs:write", module: "tenant.orgs", description: "Manage organizations" },
   TENANT_STATIONS_READ: { key: "tenant.stations:read", module: "tenant.stations", description: "View stations, tanks & pricing" },
   TENANT_STATIONS_WRITE: { key: "tenant.stations:write", module: "tenant.stations", description: "Manage stations, tanks & pricing" },
   TENANT_WAYBILLS_READ: { key: "tenant.waybills:read", module: "tenant.waybills", description: "View waybills" },
@@ -150,6 +152,7 @@ export type TenantActor = {
   userId: string;
   tenantId: string;
   isOwner: boolean;
+  organizationId: string | null;
   permissions: ReadonlySet<string>;
 };
 

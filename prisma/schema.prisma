@@ -58,6 +58,11 @@ enum OtpPurpose {
   TENANT_OWNER_CHANGE_EMAIL
 }
 
+enum OrganizationType {
+  INTERNAL // Fleet manager's own operations
+  EXTERNAL // Client company managed by fleet manager
+}
+
 model Tenant {
   id           String       @id @default(cuid())
   slug         String       @unique
@@ -83,6 +88,7 @@ model Tenant {
   roleTemplates              RoleTemplate[]
   templates                  Template[]
   activityLogs               ActivityLog[]
+  organizations              Organization[]
   stations                   Station[]
   tanks                      Tank[]
   priceControls              PriceControl[]
@@ -146,6 +152,8 @@ model TenantUser {
   otherName           String?
   phone               String?
   isOwner             Boolean      @default(false)
+  organizationId      String?
+  organization        Organization? @relation("OrgUsers", fields: [organizationId], references: [id], onDelete: SetNull)
   activeModules       AppModule[]  @default([STATION, FLEET])
   stationPermissions  String[]     @default([])
   fleetPermissions    String[]     @default([])
@@ -338,6 +346,45 @@ model ReservedSlug {
   createdAt DateTime @default(now())
 }
 
+model Organization {
+  id          String           @id @default(cuid())
+  tenantId    String
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String           // URL-friendly identifier within tenant
+  type        OrganizationType @default(EXTERNAL)
+  logoKey     String?          // S3 key for org logo
+
+  // Contact info
+  email       String?
+  phone       String?
+  address     String?
+  state       String?
+  lga         String?
+
+  // Financial tracking
+  outstandingBalance Decimal   @default(0.00) @db.Decimal(12, 2)
+  depositBalance     Decimal   @default(0.00) @db.Decimal(12, 2)
+
+  contactPerson   String?
+  contactPhone    String?
+  contactPosition String?
+
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  stations       Station[]
+  users          TenantUser[]     @relation("OrgUsers")
+  sales          Sale[]
+  priceControls  PriceControl[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("organizations")
+}
+
 enum ProductType {
   PMS
   AGO
@@ -420,20 +467,22 @@ enum AssetStatus {
 }
 
 model Station {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  code      String // e.g., AP-LAG-01
-  name      String
-  location  String? // Address
-  state     String?
-  lga       String?
-  ward      String?
-  latitude  Decimal? @db.Decimal(9, 6)
-  longitude Decimal? @db.Decimal(9, 6)
-  altitude  Decimal? @db.Decimal(9, 6)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String       @id @default(uuid())
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  code           String // e.g., AP-LAG-01
+  name           String
+  location       String? // Address
+  state          String?
+  lga            String?
+  ward           String?
+  latitude       Decimal? @db.Decimal(9, 6)
+  longitude      Decimal? @db.Decimal(9, 6)
+  altitude       Decimal? @db.Decimal(9, 6)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Relations
   staff              TenantUser[]        @relation("StationStaff")
@@ -451,6 +500,7 @@ model Station {
 
   @@unique([tenantId, code])
   @@index([tenantId])
+  @@index([organizationId])
   @@map("stations")
 }
 
@@ -477,18 +527,21 @@ model Tank {
   @@map("tanks")
 }
 
-// Track historical and current pricing setup per station
+// Track historical and current pricing setup per station (org sets its own prices)
 model PriceControl {
-  id            String      @id @default(uuid())
-  tenantId      String
-  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  stationId     String
-  station       Station     @relation(fields: [stationId], references: [id], onDelete: Cascade)
-  productType   ProductType
-  pricePerLiter Decimal     @db.Decimal(10, 2)
-  effectiveFrom DateTime    @default(now())
+  id             String        @id @default(uuid())
+  tenantId       String
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stationId      String
+  station        Station       @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  productType    ProductType
+  pricePerLiter  Decimal       @db.Decimal(10, 2)
+  effectiveFrom  DateTime      @default(now())
 
   @@index([tenantId])
+  @@index([organizationId])
   @@index([stationId])
   @@map("price_controls")
 }
@@ -1116,15 +1169,17 @@ model TransportLossLog {
 }
 
 model Sale {
-  id          String     @id @default(uuid())
-  tenantId    String
-  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customerId  String?
-  customer    Customer?  @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  stationId   String?
-  station     Station?   @relation("StationSales", fields: [stationId], references: [id], onDelete: Restrict)
-  transportId String?
-  transport   Transport? @relation(fields: [transportId], references: [id], onDelete: SetNull)
+  id             String        @id @default(uuid())
+  tenantId       String
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  customerId     String?
+  customer       Customer?     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  stationId      String?
+  station        Station?      @relation("StationSales", fields: [stationId], references: [id], onDelete: Restrict)
+  transportId    String?
+  transport      Transport?    @relation(fields: [transportId], references: [id], onDelete: SetNull)
 
   litersDespatched    Decimal  @db.Decimal(12, 2)
   litersReceived      Decimal? @db.Decimal(12, 2)
@@ -1144,6 +1199,7 @@ model Sale {
   waybillAllocations WaybillAllocation[]
 
   @@index([tenantId])
+  @@index([organizationId])
   @@index([customerId])
   @@index([stationId])
   @@index([transportId])

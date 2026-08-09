@@ -68,6 +68,7 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
           id: true,
           name: true,
           code: true,
+          organization: { select: { name: true, slug: true, logoKey: true, type: true } }
         },
         orderBy: { name: "asc" },
       },
@@ -81,7 +82,12 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
   if (!hasAssignedStations) {
     allowedStations = await prisma.station.findMany({
       where: { tenantId: actor.tenantId },
-      select: { id: true, name: true, code: true },
+      select: { 
+        id: true, 
+        name: true, 
+        code: true, 
+        organization: { select: { name: true, slug: true, logoKey: true, type: true } }
+      },
       orderBy: { name: "asc" },
     });
   }
@@ -93,9 +99,27 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
     activeStationId = hasAssignedStations ? (allowedStations[0]?.id || "all") : "all";
   }
 
+  let orgInfo = null;
+  if (activeStationId !== "all") {
+    const activeStation = await prisma.station.findUnique({
+      where: { id: activeStationId },
+      select: { organization: { select: { name: true, slug: true, logoKey: true } } }
+    });
+    if (activeStation?.organization) {
+      orgInfo = activeStation.organization;
+    }
+  }
+  
+  if (!orgInfo && actor.organizationId) {
+    orgInfo = await prisma.organization.findUnique({
+      where: { id: actor.organizationId },
+      select: { name: true, slug: true, logoKey: true }
+    });
+  }
+
   const tenant = await prisma.tenant.findUnique({
     where: { id: actor.tenantId },
-    select: { name: true, status: true, settingsJson: true, activeModules: true },
+    select: { name: true, slug: true, status: true, settingsJson: true, activeModules: true },
   });
   if (!tenant || tenant.status !== "ACTIVE") redirect("/maintenance");
 
@@ -115,12 +139,41 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
     ...(tenant?.activeModules?.map(m => m.toLowerCase() as ModuleKey) || [])
   ]));
   
-  const logoUrl =
-    settings.logoKey?.startsWith("http")
-      ? settings.logoKey
-      : settings.logoKey && s3Configured()
-      ? publicUrlForKey(settings.logoKey)
+  let finalTitle = tenant?.name ?? "Tenant";
+  let finalLogoUrl = settings.logoKey?.startsWith("http")
+    ? settings.logoKey
+    : settings.logoKey && s3Configured()
+    ? publicUrlForKey(settings.logoKey)
+    : null;
+
+  if (orgInfo) {
+    finalTitle = orgInfo.name;
+    finalLogoUrl = orgInfo.logoKey?.startsWith("http")
+      ? orgInfo.logoKey
+      : orgInfo.logoKey && s3Configured()
+      ? publicUrlForKey(orgInfo.logoKey)
       : null;
+  }
+  
+  const mappedStations = allowedStations.map(s => {
+    let sLogoUrl = null;
+    if (s.organization?.logoKey) {
+      sLogoUrl = s.organization.logoKey.startsWith("http") 
+        ? s.organization.logoKey 
+        : (s3Configured() ? publicUrlForKey(s.organization.logoKey) : null);
+    }
+    return {
+      id: s.id,
+      name: s.name,
+      code: s.code,
+      organization: {
+        name: s.organization?.name || null,
+        slug: s.organization?.slug || null,
+        logoUrl: sLogoUrl,
+        type: s.organization?.type || null
+      }
+    };
+  });
   
   const mapNavItem = (n: NavItemConfig): any => {
     return {
@@ -145,17 +198,22 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
   const label = `${userWithStations.firstName ?? ""} ${userWithStations.lastName ?? ""}`.trim() || userWithStations.email;
   return (
     <DashboardLayoutShell
-      title={tenant?.name ?? "Tenant"}
-      logoUrl={logoUrl}
+      title={finalTitle}
+      logoUrl={finalLogoUrl}
       navItems={nav}
       user={{ name: label, email: userWithStations.email }}
       roleLabel="Tenant Admin"
       logoutEndpoint="/api/auth/logout"
       logoutRedirect="/"
       logoutContext="tenant-admin"
-      stations={allowedStations}
+      stations={mappedStations}
       activeStationId={activeStationId}
       enabledModules={enabled}
+      tenant={{
+        name: tenant.name,
+        slug: tenant.slug,
+        logoUrl: finalLogoUrl,
+      }}
     >
       <UnauthorizedToast />
       {children}

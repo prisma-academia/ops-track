@@ -87,7 +87,7 @@ export default function PaymentStatusChart({ data }: { data?: FleetOverviewData 
                 offset={8}
                 className="fill-foreground"
                 fontSize={12}
-                formatter={(val: string | number | undefined) => formatXAxisNumber(Number(val || 0))}
+                formatter={(val: any) => formatXAxisNumber(Number(val || 0))}
               />
             </Bar>
           </BarChart>

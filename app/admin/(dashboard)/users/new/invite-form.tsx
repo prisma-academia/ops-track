@@ -32,6 +32,8 @@ const Schema = z.object({
   email: z.email("Invalid email address"),
   roleTemplateId: z.string().min(1, "Role is required"),
   permissions: z.array(z.string()).optional(),
+  organizationId: z.string().optional().nullable(),
+  stationId: z.string().optional().nullable(),
 });
 type Values = z.infer<typeof Schema>;
 
@@ -41,15 +43,23 @@ export function InviteTenantUserForm({
   roles,
   allPermissions,
   moduleContext,
+  defaultOrganizationId,
+  defaultStationId,
 }: {
   roles: { id: string; name: string; permissions: string[] }[];
   allPermissions: readonly string[];
   moduleContext: "STATION" | "FLEET";
+  defaultOrganizationId?: string | null;
+  defaultStationId?: string | null;
 }) {
   const router = useRouter();
   const { register, handleSubmit, formState: { errors, isSubmitting }, control, setValue } = useForm<Values>({
     resolver: zodResolver(Schema),
-    defaultValues: { permissions: [] },
+    defaultValues: { 
+      permissions: [],
+      organizationId: defaultOrganizationId,
+      stationId: defaultStationId,
+    },
   });
   const [error, setError] = useState<string | null>(null);
   const [openRoleSelect, setOpenRoleSelect] = useState(false);

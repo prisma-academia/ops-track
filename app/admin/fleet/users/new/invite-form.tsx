@@ -22,6 +22,7 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const Schema = z.object({
@@ -32,6 +33,7 @@ const Schema = z.object({
   email: z.email("Invalid email address"),
   roleTemplateId: z.string().min(1, "Role is required"),
   permissions: z.array(z.string()).optional(),
+  organizationId: z.string().optional().nullable(),
 });
 type Values = z.infer<typeof Schema>;
 
@@ -41,15 +43,19 @@ export function InviteTenantUserForm({
   roles,
   allPermissions,
   moduleContext,
+  organizations = [],
+  defaultOrgId,
 }: {
   roles: { id: string; name: string; permissions: string[] }[];
   allPermissions: readonly string[];
   moduleContext: "STATION" | "FLEET";
+  organizations?: { id: string; name: string; type: string }[];
+  defaultOrgId?: string;
 }) {
   const router = useRouter();
   const { register, handleSubmit, formState: { errors, isSubmitting }, control, setValue } = useForm<Values>({
     resolver: zodResolver(Schema),
-    defaultValues: { permissions: [] },
+    defaultValues: { permissions: [], organizationId: defaultOrgId || "" },
   });
   const [error, setError] = useState<string | null>(null);
   const [openRoleSelect, setOpenRoleSelect] = useState(false);
@@ -207,6 +213,22 @@ export function InviteTenantUserForm({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="organizationId">Organization (Optional)</Label>
+              <Select onValueChange={(val) => setValue("organizationId", val, { shouldValidate: true })} defaultValue={defaultOrgId || ""}>
+                <SelectTrigger id="organizationId">
+                  <SelectValue placeholder="No organization (Fleet-wide)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No organization (Fleet-wide)</SelectItem>
+                  {organizations.map(org => (
+                    <SelectItem key={org.id} value={org.id}>
+                      {org.name} {org.type === 'INTERNAL' ? '(Internal)' : '(External)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="firstName" className={errors.firstName ? "text-destructive" : ""}>First name *</Label>
               <Input id="firstName" {...register("firstName")} className={errors.firstName ? "border-destructive" : ""} placeholder="e.g. John" />

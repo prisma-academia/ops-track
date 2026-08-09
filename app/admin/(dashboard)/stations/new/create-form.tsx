@@ -33,6 +33,7 @@ import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import nigerianLocations from "@/constant/nigerian-locations.json";
 
 const Schema = z.object({
+  organizationId: z.string().min(1, "Please select an organization"),
   code: z.string().min(2).max(50),
   name: z.string().min(2).max(100),
   state: z.string().min(2, "Please select a state"),
@@ -50,9 +51,13 @@ type Values = z.infer<typeof Schema>;
 export function CreateStationForm({
   users,
   existingStations = [],
+  organizations = [],
+  defaultOrgId,
 }: {
   users: { id: string; email: string; firstName: string | null; lastName: string | null; phone?: string | null; permissions?: string[] }[];
   existingStations?: { code: string; state: string | null }[];
+  organizations?: { id: string; name: string; type: string }[];
+  defaultOrgId?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -61,9 +66,10 @@ export function CreateStationForm({
   const [openLgaSelect, setOpenLgaSelect] = useState(false);
   const [openWardSelect, setOpenWardSelect] = useState(false);
   
-  const { register, handleSubmit, formState, setValue, watch } = useForm({
+  const { register, handleSubmit, formState, setValue, watch, control } = useForm({
     resolver: zodResolver(Schema),
     defaultValues: {
+      organizationId: defaultOrgId || "",
       name: "",
       code: "",
       state: "",
@@ -198,6 +204,24 @@ export function CreateStationForm({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
+            {/* Organization Select */}
+            <div className="space-y-2">
+              <Label htmlFor="organizationId" className={formState.errors.organizationId ? "text-destructive" : ""}>Organization*</Label>
+              <Select onValueChange={(val) => setValue("organizationId", val, { shouldValidate: true })} defaultValue={defaultOrgId || ""}>
+                <SelectTrigger id="organizationId" className={formState.errors.organizationId ? "border-destructive" : ""}>
+                  <SelectValue placeholder="Select organization" />
+                </SelectTrigger>
+                <SelectContent>
+                  {organizations.map(org => (
+                    <SelectItem key={org.id} value={org.id}>
+                      {org.name} {org.type === 'INTERNAL' ? '(Internal)' : '(External)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {formState.errors.organizationId && <p className="text-xs text-destructive">{formState.errors.organizationId.message as string}</p>}
+            </div>
+
             {/* Station Name - Full Width */}
             <div className="space-y-2">
               <Label htmlFor="name" className={formState.errors.name ? "text-destructive" : ""}>Station Name*</Label>
@@ -207,7 +231,7 @@ export function CreateStationForm({
                 {...register("name")}
                 className={formState.errors.name ? "border-destructive" : ""}
               />
-              {formState.errors.name && <p className="text-xs text-destructive">{formState.errors.name.message}</p>}
+              {formState.errors.name && <p className="text-xs text-destructive">{formState.errors.name.message as string}</p>}
             </div>
 
             {/* State and Station Code - Same Row */}

@@ -31,6 +31,7 @@ export const STRICT_SCOPED: ReadonlySet<string> = new Set([
   "Nozzle",
   "ShiftLog",
   "Expense",
+  "Organization",
 ]);
 
 export const NULLABLE_SCOPED: ReadonlySet<string> = new Set([

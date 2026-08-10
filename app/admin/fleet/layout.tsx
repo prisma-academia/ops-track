@@ -74,7 +74,7 @@ const FLEET_NAV = [
   },
   {
     key: "salesManagement",
-    title: "Sales Management",
+    title: "Point of Sale",
     icon: "IconReceiptDollar",
     permission: PERMISSIONS.TENANT_FLEET_READ.key,
     children: [
@@ -107,12 +107,19 @@ const FLEET_NAV = [
         icon: "IconFileText",
         permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key,
       },
+      {
+        href: "/admin/fleet/station-performance",
+        key: "stationPerformance",
+        title: "Station Performance",
+        icon: "IconBuildingStore",
+        permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key,
+      },
     ],
   },
     {
     href: "/admin/fleet/ledger",
     key: "transactions",
-    title: "Payments Ledger",
+    title: "Ledgers",
     icon: "IconWallet",
     permission: PERMISSIONS.TENANT_FLEET_READ.key,
   },

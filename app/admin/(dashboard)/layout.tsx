@@ -117,6 +117,25 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
     });
   }
 
+  if (!orgInfo) {
+    const internalOrg = await prisma.organization.findFirst({
+      where: { tenantId: actor.tenantId, type: "INTERNAL" },
+      select: { name: true, slug: true, logoKey: true }
+    });
+    if (internalOrg) {
+      orgInfo = internalOrg;
+    } else {
+      const firstOrg = allowedStations.find((s) => s.organization?.name)?.organization;
+      if (firstOrg && firstOrg.name) {
+        orgInfo = {
+          name: firstOrg.name,
+          slug: firstOrg.slug || null,
+          logoKey: firstOrg.logoKey || null,
+        };
+      }
+    }
+  }
+
   const tenant = await prisma.tenant.findUnique({
     where: { id: actor.tenantId },
     select: { name: true, slug: true, status: true, settingsJson: true, activeModules: true },

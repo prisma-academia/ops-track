@@ -22,7 +22,35 @@ export default async function TenantUsersPage() {
   };
 
   if (activeStationId !== "all") {
-    whereClause.stations = { some: { id: activeStationId } };
+    const activeStation = await prisma.station.findUnique({
+      where: { id: activeStationId },
+      select: { organizationId: true }
+    });
+    const targetOrgId = activeStation?.organizationId || actor.organizationId;
+
+    if (targetOrgId) {
+      whereClause.OR = [
+        { isOwner: true },
+        { organizationId: targetOrgId },
+        { ownedOrganizations: { some: { id: targetOrgId } } },
+        { stations: { some: { id: activeStationId } } },
+        { stations: { some: { organizationId: targetOrgId } } },
+      ];
+      delete whereClause.organizationId;
+    } else {
+      whereClause.OR = [
+        { isOwner: true },
+        { stations: { some: { id: activeStationId } } }
+      ];
+    }
+  } else if (actor.organizationId) {
+    whereClause.OR = [
+      { isOwner: true },
+      { organizationId: actor.organizationId },
+      { ownedOrganizations: { some: { id: actor.organizationId } } },
+      { stations: { some: { organizationId: actor.organizationId } } },
+    ];
+    delete whereClause.organizationId;
   }
 
   const [totalCount, users] = await Promise.all([
@@ -40,6 +68,16 @@ export default async function TenantUsersPage() {
         isOwner: true,
         status: true,
         lastLoginAt: true,
+        organization: {
+          select: {
+            name: true,
+          },
+        },
+        ownedOrganizations: {
+          select: {
+            name: true,
+          },
+        },
       },
     }),
   ]);

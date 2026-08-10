@@ -44,8 +44,61 @@ export async function GET(request: Request) {
     };
 
     if (moduleFilter === "STATION" && activeStationId !== "all") {
-      whereClause.stations = { some: { id: activeStationId } };
+      const activeStation = await prisma.station.findUnique({
+        where: { id: activeStationId },
+        select: { organizationId: true }
+      });
+      const targetOrgId = activeStation?.organizationId || actor.organizationId;
+
+      if (targetOrgId) {
+        whereClause.OR = [
+          { isOwner: true },
+          { organizationId: targetOrgId },
+          { ownedOrganizations: { some: { id: targetOrgId } } },
+          { stations: { some: { id: activeStationId } } },
+          { stations: { some: { organizationId: targetOrgId } } },
+        ];
+        delete whereClause.organizationId;
+      } else {
+        whereClause.OR = [
+          { isOwner: true },
+          { stations: { some: { id: activeStationId } } }
+        ];
+      }
+    } else if (actor.organizationId) {
+      whereClause.OR = [
+        { isOwner: true },
+        { organizationId: actor.organizationId },
+        { ownedOrganizations: { some: { id: actor.organizationId } } },
+        { stations: { some: { organizationId: actor.organizationId } } },
+      ];
+      delete whereClause.organizationId;
     }
+
+    const userSelect = {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      otherName: true,
+      phone: true,
+      isOwner: true,
+      status: true,
+      lastLoginAt: true,
+      createdAt: true,
+      activeModules: true,
+      organizationId: true,
+      organization: {
+        select: {
+          name: true,
+        },
+      },
+      ownedOrganizations: {
+        select: {
+          name: true,
+        },
+      },
+    };
     
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
@@ -56,6 +109,7 @@ export async function GET(request: Request) {
           orderBy: { createdAt: "desc" },
           take,
           skip,
+          select: userSelect,
         }),
       ]);
       return ok(rows, buildOffsetPageMeta(totalCount, page, take));
@@ -66,6 +120,7 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "desc" },
         take,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        select: userSelect,
       });
       return ok(rows, buildPageMeta(rows, take));
     }

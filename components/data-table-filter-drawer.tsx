@@ -179,8 +179,10 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
         </SheetHeader>
         
         <div className="flex-1 overflow-y-auto py-6 space-y-3 px-4">
-          {filters.map((filter, idx) => (
-            <div key={idx} className="space-y-3">
+          {filters.map((filter, idx) => {
+            const filterKey = filter.type === "select" || filter.type === "combobox" ? filter.paramName : `${filter.fromParam}_${filter.toParam}_${idx}`;
+            return (
+              <div key={filterKey} className="space-y-3">
               <Label className="text-sm font-semibold">{filter.label}</Label>
               
               {filter.type === "select" && (
@@ -265,6 +267,7 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
                       <CommandList>
                         <CommandEmpty>No results found.</CommandEmpty>
                         <CommandItem
+                          key="all-item"
                           value={`All ${filter.label}`}
                           onSelect={() => {
                             updateValue(filter.paramName, "");
@@ -279,9 +282,9 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
                           />
                           All {filter.label}
                         </CommandItem>
-                        {filter.options && filter.options.map((opt) => (
+                        {filter.options && filter.options.map((opt, optIdx) => (
                           <CommandItem
-                            key={opt.value}
+                            key={opt.value || `opt-${optIdx}`}
                             value={opt.label}
                             onSelect={() => {
                               updateValue(filter.paramName, opt.value);
@@ -298,11 +301,11 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
                             {opt.label}
                           </CommandItem>
                         ))}
-                        {filter.groups && filter.groups.map((group) => (
-                          <CommandGroup key={group.label} heading={group.label}>
-                            {group.options.map((opt) => (
+                        {filter.groups && filter.groups.map((group, groupIdx) => (
+                          <CommandGroup key={group.label || `group-${groupIdx}`} heading={group.label}>
+                            {group.options.map((opt, optIdx) => (
                               <CommandItem
-                                key={opt.value}
+                                key={opt.value || `group-opt-${groupIdx}-${optIdx}`}
                                 value={`${opt.label} ${group.label}`}
                                 onSelect={() => {
                                   updateValue(filter.paramName, opt.value);
@@ -350,7 +353,8 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <SheetFooter className="border-t pt-4">

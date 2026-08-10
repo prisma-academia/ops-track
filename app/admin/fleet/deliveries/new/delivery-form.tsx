@@ -53,7 +53,7 @@ export function CreateSaleForm({
       sourceDepot: string | null; 
       status: string;
     } | null;
-    sales?: { litersDespatched: any }[];
+    deliveries?: { litersDespatched: any }[];
     truck: { name: string; plateNumber: string | null; capacityLiters: any }; 
     transporter: { name: string };
   }[];
@@ -78,7 +78,7 @@ export function CreateSaleForm({
       const transport = transports.find((t) => t.id === data.transportId);
       if (transport) {
         const carried = Number(transport.litersCarried || 0);
-        const distributed = (transport.sales || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0);
+        const distributed = (transport.deliveries || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0);
         const available = Math.max(0, carried - distributed);
         if (data.litersDespatched > available) {
           ctx.addIssue({ 
@@ -127,17 +127,17 @@ export function CreateSaleForm({
       stationId: values.recipientType === "STATION" ? values.stationId : undefined,
     };
     
-    const res = await apiPost<{ sale: { id: string } }>("/api/tenant/fleet/sales", payload);
+    const res = await apiPost<{ delivery: { id: string } }>("/api/tenant/fleet/deliveries", payload);
     if (res.error) {
       setError(res.error.message);
       return;
     }
-    if (res.data?.sale.id) {
+    if (res.data?.delivery.id) {
       if (preselectedTransportId) {
         // Go back to transport details
         router.push(`/admin/fleet/transports/${preselectedTransportId}`);
       } else {
-        router.push(`/admin/fleet/sales`);
+        router.push(`/admin/fleet/deliveries`);
       }
       router.refresh();
     }
@@ -158,7 +158,7 @@ export function CreateSaleForm({
           </Button>
           <div>
             <h2 className="text-xl font-bold tracking-tight text-foreground uppercase tracking-widest">
-              Log Distribution / Sale
+              Log Distribution / delivery
             </h2>
             <p className="text-xs text-muted-foreground">Record fuel distribution to stations or external clients.</p>
           </div>
@@ -214,7 +214,7 @@ export function CreateSaleForm({
                             <UserCircle className="h-5 w-5 text-muted-foreground" />
                             <span className="font-semibold text-base">External Client</span>
                           </div>
-                          <span className="text-sm text-muted-foreground font-normal">Sale to a third-party customer</span>
+                          <span className="text-sm text-muted-foreground font-normal">delivery to a third-party customer</span>
                         </div>
                         <RadioGroupItem value="CUSTOMER" id="r-customer" className="mt-1" />
                       </Label>
@@ -342,7 +342,7 @@ export function CreateSaleForm({
                           <CommandGroup>
                             {transports.map((t) => {
                               const carried = Number(t.litersCarried || 0);
-                              const distributed = (t.sales || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0);
+                              const distributed = (t.deliveries || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0);
                               const available = Math.max(0, carried - distributed);
                               return (
                                 <CommandItem
@@ -510,7 +510,7 @@ export function CreateSaleForm({
                 ) : (
                   <>
                     <Save className="h-4 w-4" />
-                    <span>Log Sale</span>
+                    <span>Log delivery</span>
                   </>
                 )}
               </Button>
@@ -575,11 +575,11 @@ export function CreateSaleForm({
                     <span className="font-medium text-foreground">{Number(selectedTransport.litersCarried || 0).toLocaleString()} L</span>
                     <span>Total Distributed:</span>
                     <span className="font-medium text-foreground">
-                      {(selectedTransport.sales || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0).toLocaleString()} L
+                      {(selectedTransport.deliveries || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0).toLocaleString()} L
                     </span>
                     <span>Available Vol:</span>
                     <span className="font-medium text-emerald-600 dark:text-emerald-500">
-                      {Math.max(0, Number(selectedTransport.litersCarried || 0) - (selectedTransport.sales || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0)).toLocaleString()} L
+                      {Math.max(0, Number(selectedTransport.litersCarried || 0) - (selectedTransport.deliveries || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0)).toLocaleString()} L
                     </span>
                   </div>
                 </div>

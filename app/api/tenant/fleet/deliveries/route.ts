@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     const { cursor, take } = parsePagination(url.searchParams);
     const status = url.searchParams.get("status");
 
-    const rows = await prisma.sale.findMany({
+    const rows = await prisma.delivery.findMany({
       where: {
         tenantId: actor.tenantId,
         ...fleetModuleFilter(actor),
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
 
     // XOR validation
     if (body.customerId && body.stationId) {
-      throw new DomainError(400, "invalid_input", "A sale cannot belong to both a customer and a station.");
+      throw new DomainError(400, "invalid_input", "A Delivery cannot belong to both a customer and a station.");
     }
 
     // null = not yet received (will be set after dipping). 0 is a valid received value.
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
       transportCostBorneBy = body.stationId ? "COMPANY" : "CLIENT";
     }
 
-    const sale = await prisma.$transaction(async (tx) => {
+    const Delivery = await prisma.$transaction(async (tx) => {
       let organizationId: string | null = null;
       if (body.stationId) {
         const station = await tx.station.findUnique({
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
         organizationId = station?.organizationId ?? null;
       }
 
-      const s = await tx.sale.create({
+      const s = await tx.delivery.create({
         data: {
           tenantId: actor.tenantId,
           organizationId: organizationId,
@@ -154,7 +154,7 @@ export async function POST(request: Request) {
                 create: [{
                   tenantId: actor.tenantId,
                   stationId: s.stationId,
-                  saleId: s.id,
+                  deliveryId: s.id,
                   litersToDispense: s.litersDespatched,
                   costPerLiter: s.amountPerLiter,
                   transportationCost: (body.transportCostPerLiter ?? 0) * body.litersDespatched,
@@ -170,20 +170,20 @@ export async function POST(request: Request) {
     await audit({
       actorType: "TENANT_USER",
       actorId: actor.userId,
-      action: "fleet_sale.create",
+      action: "fleet_delivery.create",
       tenantId: actor.tenantId,
-      targetType: "Sale",
-      targetId: sale.id,
+      targetType: "Delivery",
+      targetId: Delivery.id,
       after: {
-        amount: sale.totalExpectedAmount,
-        liters: sale.litersDespatched,
-        target: sale.station?.name || sale.customer?.name || "Unknown",
+        amount: Delivery.totalExpectedAmount,
+        liters: Delivery.litersDespatched,
+        target: Delivery.station?.name || Delivery.customer?.name || "Unknown",
       } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
 
-    return ok({ sale });
+    return ok({ Delivery });
   } catch (e) {
     return handleError(e);
   }

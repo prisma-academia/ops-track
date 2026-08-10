@@ -8,7 +8,7 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 
 const InflowSchema = z.object({
   customerId: z.string(),
-  saleId: z.string().optional().nullable(),
+  deliveryId: z.string().optional().nullable(),
   amount: z.number().positive(),
   paymentType: z.enum(["ADVANCE_DEPOSIT", "PART_PAYMENT", "FULL_SETTLEMENT", "DEBT_CLEARANCE"]),
   paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"]),
@@ -55,35 +55,35 @@ export async function POST(request: Request) {
           paymentMethod: body.paymentMethod,
           reference: body.reference,
           receiptUrl: body.receiptUrl,
-          saleId: body.saleId,
+          deliveryId: body.deliveryId,
           customerId: customer ? body.customerId : undefined,
           bankAccountId: body.bankAccountId,
         },
       });
 
-      // If advance deposit without a sale, increment the customer's deposit balance
-      if (customer && body.paymentType === "ADVANCE_DEPOSIT" && !body.saleId && body.paymentMethod !== "DEPOSIT") {
+      // If advance deposit without a delivery, increment the customer's deposit balance
+      if (customer && body.paymentType === "ADVANCE_DEPOSIT" && !body.deliveryId && body.paymentMethod !== "DEPOSIT") {
         await tx.customer.update({
           where: { id: body.customerId },
           data: { depositBalance: { increment: body.amount } }
         });
       }
 
-      if (body.saleId) {
-        const sale = await tx.sale.findFirst({ where: { id: body.saleId, tenantId: actor.tenantId } });
-        if (sale) {
-          const newPaymentReceived = Number(sale.paymentReceived) + body.amount;
-          const transportFee = sale.transportCostBorneBy === "CLIENT" ? Number(sale.transportCost || 0) : 0;
-          const totalSaleAmount = Number(sale.totalExpectedAmount) + transportFee;
-          let status = sale.status;
+      if (body.deliveryId) {
+        const delivery = await tx.delivery.findFirst({ where: { id: body.deliveryId, tenantId: actor.tenantId } });
+        if (delivery) {
+          const newPaymentReceived = Number(delivery.paymentReceived) + body.amount;
+          const transportFee = delivery.transportCostBorneBy === "CLIENT" ? Number(delivery.transportCost || 0) : 0;
+          const totalSaleAmount = Number(delivery.totalExpectedAmount) + transportFee;
+          let status = delivery.status;
           if (newPaymentReceived >= totalSaleAmount) {
             status = "CLEARED";
           } else if (newPaymentReceived > 0) {
             status = "PART_PAID";
           }
 
-          await tx.sale.update({
-            where: { id: body.saleId },
+          await tx.delivery.update({
+            where: { id: body.deliveryId },
             data: {
               paymentReceived: newPaymentReceived,
               status,

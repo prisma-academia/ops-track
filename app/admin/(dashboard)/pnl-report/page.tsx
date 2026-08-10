@@ -17,7 +17,7 @@ export default async function PnlReportPage() {
           code: true,
         },
       },
-      sale: true,
+      delivery: true,
       waybill: {
         select: {
           id: true,
@@ -42,7 +42,7 @@ export default async function PnlReportPage() {
     orderBy: { name: "asc" },
   });
 
-  // Pre-fetch all approved sales logs for the tenant
+  // Pre-fetch all approved deliveries logs for the tenant
   const allSalesLogs = await prisma.salesLog.findMany({
     where: {
       tenantId: actor.tenantId,
@@ -51,13 +51,13 @@ export default async function PnlReportPage() {
     orderBy: { logDate: "asc" }
   });
 
-  // Track remaining liters for each sales log
+  // Track remaining liters for each deliveries log
   const availableSalesLogs = allSalesLogs.map(log => ({
     ...log,
     availableLiters: Number(log.litersSold)
   }));
 
-  // Sort allocations chronologically so oldest deliveries consume sales first
+  // Sort allocations chronologically so oldest deliveries consume deliveries first
   const sortedAllocations = [...allocations].sort((a, b) => {
     const dateA = a.deliveredAt || a.waybill.dispatchedAt;
     const dateB = b.deliveredAt || b.waybill.dispatchedAt;
@@ -84,7 +84,7 @@ export default async function PnlReportPage() {
     let pnl: number | null = null;
 
     const buyingPrice = productPrice;
-    const approvedSalesLiters = a.sale ? Number(a.sale.litersDespatched) : null;
+    const approvedSalesLiters = a.delivery ? Number(a.delivery.litersDespatched) : null;
     let sellingPrice: number | null = null;
     let salesRevenue: number | null = null;
 

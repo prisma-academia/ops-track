@@ -52,7 +52,7 @@ export default async function SalesPage({
   ];
 
   // Aggregates: always computed on ALL data regardless of filters/pagination
-  const allSales = await prisma.sale.findMany({
+  const allSales = await prisma.delivery.findMany({
     where: { tenantId: actor.tenantId },
     select: {
       litersDespatched: true,
@@ -61,15 +61,15 @@ export default async function SalesPage({
     },
   });
 
-  const totalVolume = allSales.reduce((sum, s) => sum + Number(s.litersDespatched), 0);
-  const totalExpected = allSales.reduce((sum, s) => sum + Number(s.totalExpectedAmount), 0);
-  const totalCollected = allSales.reduce((sum, s) => sum + Number(s.paymentReceived), 0);
+  const totalVolume = allSales.reduce((sum, d) => sum + Number(d.litersDespatched), 0);
+  const totalExpected = allSales.reduce((sum, d) => sum + Number(d.totalExpectedAmount), 0);
+  const totalCollected = allSales.reduce((sum, d) => sum + Number(d.paymentReceived), 0);
   const outstanding = Math.max(0, totalExpected - totalCollected);
 
   // Filtered + paginated data
-  const [totalCount, sales] = await Promise.all([
-    prisma.sale.count({ where }),
-    prisma.sale.findMany({
+  const [totalCount, Deliveries] = await Promise.all([
+    prisma.delivery.count({ where }),
+    prisma.delivery.findMany({
       where,
       orderBy: { createdAt: "desc" },
       skip,
@@ -93,24 +93,24 @@ export default async function SalesPage({
     }),
   ]);
 
-  const rows = sales.map((s) => {
-    const litersDespatched = Number(s.litersDespatched);
-    const litersReceived = s.litersReceived ? Number(s.litersReceived) : null;
+  const rows = Deliveries.map((delivery) => {
+    const litersDespatched = Number(delivery.litersDespatched);
+    const litersReceived = delivery.litersReceived ? Number(delivery.litersReceived) : null;
     const variance = litersReceived !== null ? litersDespatched - litersReceived : null;
 
     return {
-      id: s.id,
-      customerName: s.customer ? s.customer.name : (s.station ? s.station.name : "Unknown"),
-      transportDetails: s.transport ? `${s.transport.truck?.name || "Unknown"} to ${s.transport.destination}` : "None",
+      id: delivery.id,
+      customerName: delivery.customer ? delivery.customer.name : (delivery.station ? delivery.station.name : "Unknown"),
+      transportDetails: delivery.transport ? `${delivery.transport.truck?.name || "Unknown"} to ${delivery.transport.destination}` : "None",
       litersDespatched,
       litersReceived,
       variance,
-      amountPerLiter: Number(s.amountPerLiter),
-      totalExpectedAmount: Number(s.totalExpectedAmount),
-      paymentReceived: Number(s.paymentReceived),
-      status: s.status,
-      transactionCount: s._count.transactions,
-      createdAt: s.createdAt.toISOString(),
+      amountPerLiter: Number(delivery.amountPerLiter),
+      totalExpectedAmount: Number(delivery.totalExpectedAmount),
+      paymentReceived: Number(delivery.paymentReceived),
+      status: delivery.status,
+      transactionCount: delivery._count.transactions,
+      createdAt: delivery.createdAt.toISOString(),
     };
   });
 
@@ -150,10 +150,10 @@ export default async function SalesPage({
   return (
     <div className="space-y-6">
       <DataTableToolbar
-        title="Sales"
-        createHref="/admin/fleet/sales/new"
-        createLabel="Log Sale"
-        description="Manage B2B sales and bulk deliveries to clients."
+        title="Deliveries"
+        createHref="/admin/fleet/Deliveries/new"
+        createLabel="Log Delivery"
+        description="Manage B2B Deliveries and bulk deliveries to clients."
       />
       
       <Card className="p-0 shadow-xs border-border/40">
@@ -233,3 +233,4 @@ export default async function SalesPage({
     </div>
   );
 }
+

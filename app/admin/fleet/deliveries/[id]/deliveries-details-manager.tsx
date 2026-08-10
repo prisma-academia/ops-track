@@ -19,7 +19,7 @@ import { WaybillPrintView } from "./waybill-print-view";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Droplet } from "lucide-react";
 
-export function SalesDetailsManager({ sale }: { sale: any }) {
+export function SalesDetailsManager({ delivery }: { delivery: any }) {
   const router = useRouter();
 
   const [openEditDialog, setOpenEditDialog] = useState(false);
@@ -29,24 +29,24 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
   const [error, setError] = useState<string | null>(null);
 
   // Edit form
-  const [editLitersReceived, setEditLitersReceived] = useState(sale.litersReceived?.toString() || "");
-  const [editAmountPerLiter, setEditAmountPerLiter] = useState(sale.amountPerLiter?.toString() || "");
+  const [editLitersReceived, setEditLitersReceived] = useState(delivery.litersReceived?.toString() || "");
+  const [editAmountPerLiter, setEditAmountPerLiter] = useState(delivery.amountPerLiter?.toString() || "");
 
-  const totalExpected = Number(sale.totalExpectedAmount);
-  const paymentReceived = Number(sale.paymentReceived);
+  const totalExpected = Number(delivery.totalExpectedAmount);
+  const paymentReceived = Number(delivery.paymentReceived);
   const outstanding = Math.max(0, totalExpected - paymentReceived);
   
-  const litersDespatched = Number(sale.litersDespatched || 0);
-  const litersReceived = sale.litersReceived !== null ? Number(sale.litersReceived) : null;
+  const litersDespatched = Number(delivery.litersDespatched || 0);
+  const litersReceived = delivery.litersReceived !== null ? Number(delivery.litersReceived) : null;
   const variance = litersReceived !== null ? litersDespatched - litersReceived : null;
-  const amountPerLiter = Number(sale.amountPerLiter || 0);
+  const amountPerLiter = Number(delivery.amountPerLiter || 0);
   const totalDeductionAmount = variance !== null && variance > 0 ? variance * amountPerLiter : 0;
   
-  const hasDeduction = sale.transport?.lossLogs?.some((l: any) => l.comment?.includes(sale.id)) || false;
+  const hasDeduction = delivery.transport?.lossLogs?.some((l: any) => l.comment?.includes(delivery.id)) || false;
 
   const handleDeduct = async () => {
     setIsDeducting(true);
-    const res = await apiPost(`/api/tenant/fleet/sales/${sale.id}/deduct-shortage`, {
+    const res = await apiPost(`/api/tenant/fleet/deliveries/${delivery.id}/deduct-shortage`, {
       variance,
       pricePerLiter: amountPerLiter,
       totalDeduction: totalDeductionAmount,
@@ -70,7 +70,7 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
     if (editLitersReceived) payload.litersReceived = Number(editLitersReceived);
     if (editAmountPerLiter) payload.amountPerLiter = Number(editAmountPerLiter);
 
-    const res = await apiPatch(`/api/tenant/fleet/sales/${sale.id}`, payload);
+    const res = await apiPatch(`/api/tenant/fleet/deliveries/${delivery.id}`, payload);
     setIsSubmitting(false);
 
     if (res.error) {
@@ -93,24 +93,24 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
     }
   };
 
-  const recipientName = sale.customer ? sale.customer.name : sale.station ? sale.station.name : "Unknown Recipient";
+  const recipientName = delivery.customer ? delivery.customer.name : delivery.station ? delivery.station.name : "Unknown Recipient";
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" className="rounded-full" asChild>
-            <Link href="/admin/fleet/sales">
+            <Link href="/admin/fleet/deliveries">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
           <div>
             <h2 className="text-xl font-bold uppercase tracking-widest flex items-center gap-2 text-foreground">
-              Sale to {recipientName}
-              {getStatusBadge(sale.status)}
+              delivery to {recipientName}
+              {getStatusBadge(delivery.status)}
             </h2>
             <p className="text-xs text-muted-foreground mt-1">
-              Despatched: {new Date(sale.createdAt).toLocaleDateString()}
+              Despatched: {new Date(delivery.createdAt).toLocaleDateString()}
             </p>
           </div>
         </div>
@@ -121,13 +121,13 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
           <Tabs defaultValue="overview" className="w-full">
           <TabsList className="w-full justify-start h-16 bg-muted/50 backdrop-blur-xs border border-border">
             <TabsTrigger value="overview" className="text-[15px] font-semibold">Overview</TabsTrigger>
-            <TabsTrigger value="payments" className="text-[15px] font-semibold">Payments ({sale.transactions?.length || 0})</TabsTrigger>
+            <TabsTrigger value="payments" className="text-[15px] font-semibold">Payments ({delivery.transactions?.length || 0})</TabsTrigger>
           </TabsList>
           
           <TabsContent value="overview" className="mt-6 space-y-6">
             <div className="flex justify-between items-end mb-2">
               <div>
-                <h3 className="font-semibold text-lg">Sales & Distribution Summary</h3>
+                <h3 className="font-semibold text-lg">deliveries & Distribution Summary</h3>
                 <p className="text-sm text-muted-foreground">Volume delivered and financial tracking.</p>
               </div>
             </div>
@@ -135,17 +135,17 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="p-4 rounded-2xl border bg-card">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Despatched</p>
-                <p className="text-xl font-bold text-foreground">{Number(sale.litersDespatched).toLocaleString()} L</p>
+                <p className="text-xl font-bold text-foreground">{Number(delivery.litersDespatched).toLocaleString()} L</p>
               </div>
               <div className="p-4 rounded-2xl border bg-card">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Received</p>
-                <p className={cn("text-xl font-bold", sale.litersReceived === null ? "text-amber-500" : "text-foreground")}>
-                  {sale.litersReceived !== null ? `${Number(sale.litersReceived).toLocaleString()} L` : 'Pending'}
+                <p className={cn("text-xl font-bold", delivery.litersReceived === null ? "text-amber-500" : "text-foreground")}>
+                  {delivery.litersReceived !== null ? `${Number(delivery.litersReceived).toLocaleString()} L` : 'Pending'}
                 </p>
               </div>
               <div className="p-4 rounded-2xl border bg-card">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Price per Liter</p>
-                <p className="text-xl font-bold text-foreground">₦{Number(sale.amountPerLiter).toLocaleString()}</p>
+                <p className="text-xl font-bold text-foreground">₦{Number(delivery.amountPerLiter).toLocaleString()}</p>
               </div>
               <div className="p-4 rounded-2xl border bg-card">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total Expected</p>
@@ -166,24 +166,24 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
 
             {/* Net Profit & Loss Card */}
             {(() => {
-              const x = Number(sale.litersReceived ?? sale.litersDespatched);
+              const x = Number(delivery.litersReceived ?? delivery.litersDespatched);
               
               // Waybill/subsequent delivery transport fee
-              const w = Number(sale.transportCost || 0);
+              const w = Number(delivery.transportCost || 0);
               const wRate = x > 0 ? w / x : 0;
               
-              // Primary transport fee for this sale
-              const tRate = Number(sale.transport?.ratePerLiter || 0);
+              // Primary transport fee for this delivery
+              const tRate = Number(delivery.transport?.ratePerLiter || 0);
               const t = tRate * x;
               
               // Loading fee
-              const orderLoadingCost = Number(sale.transport?.order?.loadingCost || 0);
-              const orderLiters = Number(sale.transport?.order?.litersOrdered || 1);
+              const orderLoadingCost = Number(delivery.transport?.order?.loadingCost || 0);
+              const orderLiters = Number(delivery.transport?.order?.litersOrdered || 1);
               const loadingFeePerLitre = orderLoadingCost / orderLiters;
               const l = loadingFeePerLitre * x;
               
               // Purchase cost
-              const orderPricePerLitre = Number(sale.transport?.order?.pricePerLitre || 0);
+              const orderPricePerLitre = Number(delivery.transport?.order?.pricePerLitre || 0);
               const e = orderPricePerLitre * x;
               
               const A = totalExpected;
@@ -202,7 +202,7 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
                   {/* Top-Level Summary */}
                   <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x border-b border-border/50">
                     <div className="p-6 flex flex-col justify-center">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold mb-2">Total Sales Revenue (A)</p>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold mb-2">Total deliveries Revenue (A)</p>
                       <p className="text-3xl font-bold text-foreground">₦{A.toLocaleString()}</p>
                     </div>
                     <div className="p-6 bg-gradient-to-br from-background to-muted/10 flex flex-col justify-center">
@@ -250,7 +250,7 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
             <div className="flex justify-between items-end mb-2">
               <div>
                 <h3 className="font-semibold text-lg">Payment History</h3>
-                <p className="text-sm text-muted-foreground">View recorded incoming funds for this sale. Payments are now centralized.</p>
+                <p className="text-sm text-muted-foreground">View recorded incoming funds for this delivery. Payments are now centralized.</p>
               </div>
             </div>
 
@@ -266,14 +266,14 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {(!sale.transactions || sale.transactions.length === 0) ? (
+                  {(!delivery.transactions || delivery.transactions.length === 0) ? (
                     <tr>
                       <td colSpan={5} className="py-8 text-center text-muted-foreground">
                         No payments recorded yet.
                       </td>
                     </tr>
                   ) : (
-                    sale.transactions.map((tx: any) => (
+                    delivery.transactions.map((tx: any) => (
                       <tr key={tx.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
                         <td className="py-3 px-4 text-foreground/90 whitespace-nowrap">
                           {new Date(tx.createdAt).toLocaleString()}
@@ -310,7 +310,7 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
               Edit Volumes & Pricing
             </Button>
             
-            <Button size="lg" className="w-full justify-start" variant="outline" onClick={() => window.open(`/admin/fleet/sales/${sale.id}/print`, '_blank')}>
+            <Button size="lg" className="w-full justify-start" variant="outline" onClick={() => window.open(`/admin/fleet/deliveries/${delivery.id}/print`, '_blank')}>
               <Printer className="w-5 h-5 mr-3" />
               Print Waybill
             </Button>
@@ -333,7 +333,7 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
             )}
           </div>
 
-          {sale.transport && (
+          {delivery.transport && (
             <div className="p-5 border rounded-2xl bg-card space-y-4">
               <h3 className="font-semibold text-sm uppercase tracking-widest text-muted-foreground border-b pb-3 mb-2 flex items-center gap-2">
                 <Truck className="h-4 w-4" /> Transport Info
@@ -341,20 +341,20 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
               <div className="space-y-4 pt-1">
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Transporter</p>
-                  <p className="text-sm font-medium text-foreground">{sale.transport.transporter?.name || "N/A"}</p>
+                  <p className="text-sm font-medium text-foreground">{delivery.transport.transporter?.name || "N/A"}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Truck</p>
-                  <p className="text-sm font-medium text-foreground">{sale.transport.truck?.name || "N/A"}</p>
+                  <p className="text-sm font-medium text-foreground">{delivery.transport.truck?.name || "N/A"}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Driver</p>
-                  <p className="text-sm font-medium text-foreground">{sale.transport.driver ? `${sale.transport.driver.firstName} ${sale.transport.driver.lastName}` : "N/A"}</p>
+                  <p className="text-sm font-medium text-foreground">{delivery.transport.driver ? `${delivery.transport.driver.firstName} ${delivery.transport.driver.lastName}` : "N/A"}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Cost Borne By</p>
-                  <Badge variant={sale.transportCostBorneBy === 'COMPANY' ? 'secondary' : 'default'} className="mt-1 text-[10px]">
-                    {sale.transportCostBorneBy}
+                  <Badge variant={delivery.transportCostBorneBy === 'COMPANY' ? 'secondary' : 'default'} className="mt-1 text-[10px]">
+                    {delivery.transportCostBorneBy}
                   </Badge>
                 </div>
               </div>
@@ -367,10 +367,10 @@ export function SalesDetailsManager({ sale }: { sale: any }) {
       <Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Update Sales Volumes & Pricing</DialogTitle>
+            <DialogTitle>Update deliveries Volumes & Pricing</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {sale.station ? (
+            {delivery.station ? (
               <div className="space-y-2">
                 <Label>Liters Received</Label>
                 <div className="text-xs text-muted-foreground p-3 border border-dashed rounded-lg bg-muted/20">

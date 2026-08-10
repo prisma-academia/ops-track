@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const sales = await prisma.sale.findMany({
+    const Deliveries = await prisma.delivery.findMany({
       where: {
         litersReceived: null,
         stationId: { not: null },
@@ -12,26 +12,26 @@ export async function GET() {
 
     let updatedCount = 0;
 
-    for (const sale of sales) {
+    for (const Delivery of Deliveries) {
       const allocation = await prisma.waybillAllocation.findFirst({
         where: {
-          stationId: sale.stationId as string,
-          litersToDispense: sale.litersDespatched,
+          stationId: Delivery.stationId as string,
+          litersToDispense: Delivery.litersDespatched,
           status: "DELIVERED",
         },
         orderBy: { createdAt: 'desc' }
       });
 
       if (allocation && allocation.litersReceived !== null) {
-        await prisma.sale.update({
-          where: { id: sale.id },
+        await prisma.delivery.update({
+          where: { id: Delivery.id },
           data: { litersReceived: allocation.litersReceived }
         });
         updatedCount++;
       }
     }
 
-    return NextResponse.json({ success: true, count: updatedCount, totalFound: sales.length });
+    return NextResponse.json({ success: true, count: updatedCount, totalFound: Deliveries.length });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

@@ -2,16 +2,16 @@
 
 import { formatHumanReadableDate } from "@/lib/utils";
 
-export function WaybillPrintView({ sale }: { sale: any }) {
-  const recipientName = sale.customer ? sale.customer.name : sale.station ? sale.station.name : "Unknown";
-  const date = new Date(sale.createdAt);
+export function WaybillPrintView({ delivery }: { delivery: any }) {
+  const recipientName = delivery.customer ? delivery.customer.name : delivery.station ? delivery.station.name : "Unknown";
+  const date = new Date(delivery.createdAt);
 
   return (
     <div className="p-8 bg-white text-black text-sm w-full max-w-4xl mx-auto min-h-screen">
       <div className="flex justify-between items-start mb-8 border-b-2 border-black pb-4">
         <div>
           <h1 className="text-3xl font-black uppercase tracking-widest">WAYBILL / DELIVERY NOTE</h1>
-          <p className="text-gray-600 font-medium mt-1">Ref: {sale.transport?.order?.reference || "N/A"}</p>
+          <p className="text-gray-600 font-medium mt-1">Ref: {delivery.transport?.order?.reference || "N/A"}</p>
         </div>
         <div className="text-right">
           <p className="font-bold">Date: {formatHumanReadableDate(date)}</p>
@@ -23,16 +23,16 @@ export function WaybillPrintView({ sale }: { sale: any }) {
         <div>
           <h3 className="font-bold uppercase border-b border-black mb-2 pb-1">Delivery Details</h3>
           <p><strong>To:</strong> {recipientName}</p>
-          <p><strong>Address:</strong> {sale.customer?.address || sale.station?.location || "N/A"}</p>
-          <p><strong>Product:</strong> {sale.transport?.order?.productType || "PMS"}</p>
-          <p><strong>Volume Despatched:</strong> {Number(sale.litersDespatched).toLocaleString()} Liters</p>
+          <p><strong>Address:</strong> {delivery.customer?.address || delivery.station?.location || "N/A"}</p>
+          <p><strong>Product:</strong> {delivery.transport?.order?.productType || "PMS"}</p>
+          <p><strong>Volume Despatched:</strong> {Number(delivery.litersDespatched).toLocaleString()} Liters</p>
         </div>
         <div>
           <h3 className="font-bold uppercase border-b border-black mb-2 pb-1">Transport Details</h3>
-          <p><strong>Transporter:</strong> {sale.transport?.transporter?.name || "N/A"}</p>
-          <p><strong>Truck Plate No:</strong> {sale.transport?.truck?.plateNumber || "N/A"}</p>
-          <p><strong>Driver Name:</strong> {sale.transport?.driver?.firstName ? `${sale.transport.driver.firstName} ${sale.transport.driver.lastName}` : "N/A"}</p>
-          <p><strong>Source Depot:</strong> {sale.transport?.order?.sourceDepot || "N/A"}</p>
+          <p><strong>Transporter:</strong> {delivery.transport?.transporter?.name || "N/A"}</p>
+          <p><strong>Truck Plate No:</strong> {delivery.transport?.truck?.plateNumber || "N/A"}</p>
+          <p><strong>Driver Name:</strong> {delivery.transport?.driver?.firstName ? `${delivery.transport.driver.firstName} ${delivery.transport.driver.lastName}` : "N/A"}</p>
+          <p><strong>Source Depot:</strong> {delivery.transport?.order?.sourceDepot || "N/A"}</p>
         </div>
       </div>
 

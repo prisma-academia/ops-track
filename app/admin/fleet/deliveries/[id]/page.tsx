@@ -2,13 +2,13 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { notFound } from "next/navigation";
-import { WaybillPrintView } from "../waybill-print-view";
+import { SalesDetailsManager } from "./deliveries-details-manager";
 
-export default async function PrintSaleWaybillPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SaleDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
   const { id } = await params;
 
-  const sale = await prisma.sale.findFirst({
+  const delivery = await prisma.delivery.findFirst({
     where: { id, tenantId: actor.tenantId },
     include: {
       customer: true,
@@ -19,17 +19,23 @@ export default async function PrintSaleWaybillPage({ params }: { params: Promise
           truck: true,
           driver: true,
           order: true,
+          lossLogs: true,
         }
       },
+      transactions: {
+        orderBy: { createdAt: "desc" }
+      }
     },
   });
 
-  if (!sale) notFound();
+  if (!delivery) {
+    notFound();
+  }
 
   return (
-    <>
-      <WaybillPrintView sale={JSON.parse(JSON.stringify(sale))} />
-      <script dangerouslySetInnerHTML={{ __html: 'window.onload = function() { window.print(); }' }} />
-    </>
+    <div className="space-y-6">
+      <SalesDetailsManager delivery={JSON.parse(JSON.stringify(delivery))} />
+    </div>
   );
 }
+

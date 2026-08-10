@@ -11,7 +11,7 @@ export type SalesLedgerRow = {
   paymentType: string;
   paymentMethod: string;
   saleId: string;
-  sale: {
+  delivery: {
     id: string;
     customer?: { name: string };
     station?: { name: string };
@@ -23,7 +23,7 @@ export const salesColumns: ColumnDef<SalesLedgerRow>[] = [
     accessorKey: "clientName",
     header: "Client / Station Name",
     cell: ({ row }) => {
-      const name = row.original.sale?.customer?.name || row.original.sale?.station?.name || "-";
+      const name = row.original.delivery?.customer?.name || row.original.delivery?.station?.name || "-";
       return <span className="font-medium">{name}</span>;
     },
   },
@@ -55,9 +55,9 @@ export const salesColumns: ColumnDef<SalesLedgerRow>[] = [
   },
   {
     accessorKey: "saleRef",
-    header: "Sales Ref",
+    header: "deliveries Ref",
     cell: ({ row }) => {
-      const ref = row.original.sale?.id?.substring(0, 8) || "-";
+      const ref = row.original.delivery?.id?.substring(0, 8) || "-";
       return <span className="text-muted-foreground text-xs">{ref}</span>;
     },
   },
@@ -75,7 +75,7 @@ interface SalesTableProps {
 export function SalesTable(props: SalesTableProps) {
   return (
     <LedgerTableShell
-      title="Client Sales & Inflows"
+      title="Client deliveries & Inflows"
       columns={salesColumns}
       {...props}
     />

@@ -17,7 +17,7 @@ export default async function StockReportPage() {
           code: true,
         },
       },
-      sale: true,
+      delivery: true,
       waybill: {
         select: {
           id: true,
@@ -64,17 +64,17 @@ export default async function StockReportPage() {
       let totalExpense: number = 0;
       let pnl: number | null = null;
 
-      // Sales and Stock logic
-      const approvedSalesLiters = a.sale ? Number(a.sale.litersDespatched) : null;
-      const sellingPrice = a.sale ? Number(a.sale.amountPerLiter) : null;
-      const salesRevenue = a.sale ? Number(a.sale.totalExpectedAmount) : null;
+      // deliveries and Stock logic
+      const approvedSalesLiters = a.delivery ? Number(a.delivery.litersDespatched) : null;
+      const sellingPrice = a.delivery ? Number(a.delivery.amountPerLiter) : null;
+      const salesRevenue = a.delivery ? Number(a.delivery.totalExpectedAmount) : null;
 
       const remainingLiters = (reconciledQty ?? deliveryQty) - (approvedSalesLiters ?? 0);
       const remainingStockValue = sellingPrice !== null ? remainingLiters * sellingPrice : null;
 
       // New logic for calculating Reconciled Date, Deposit, Total Expense, and PNL
       if (a.deliveredAt && reconciledQty !== null && reconciledQty > 0) {
-        // Fetch approved sales logs from the delivery date onwards for this station & product
+        // Fetch approved deliveries logs from the delivery date onwards for this station & product
         const salesLogs = await prisma.salesLog.findMany({
           where: {
             stationId: a.stationId,
@@ -182,3 +182,4 @@ export default async function StockReportPage() {
     />
   );
 }
+

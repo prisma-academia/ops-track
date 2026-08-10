@@ -121,15 +121,15 @@ export async function POST(
         });
       }
 
-      // Sync with corresponding Sale unconditionally
-      const matchingSale = allocation.saleId ? await tx.sale.findUnique({
-        where: { id: allocation.saleId }
+      // Sync with corresponding Delivery unconditionally
+      const matchingSale = allocation.deliveryId ? await tx.delivery.findUnique({
+        where: { id: allocation.deliveryId }
       }) : null;
 
       if (matchingSale) {
         const totalExpectedAmount = currentReceived * Number(matchingSale.amountPerLiter);
 
-        await tx.sale.update({
+        await tx.delivery.update({
           where: { id: matchingSale.id },
           data: {
             litersReceived: currentReceived,
@@ -137,23 +137,23 @@ export async function POST(
           }
         });
 
-        // Recalculate transport loss if sale belongs to a transport
+        // Recalculate transport loss if Delivery belongs to a transport
         if (matchingSale.transportId) {
           const transport = await tx.transport.findUnique({ where: { id: matchingSale.transportId } });
           if (transport) {
-            const allSales = await tx.sale.findMany({ 
+            const allSales = await tx.delivery.findMany({ 
               where: { transportId: transport.id },
               include: { station: true }
             });
-            let totalReceived = allSales.reduce((sum, s) => {
-              if (s.id === matchingSale.id) return sum + Number(currentReceived || 0);
-              return sum + Number(s.litersReceived ?? 0);
+            let totalReceived = allSales.reduce((sum, d) => {
+              if (d.id === matchingSale.id) return sum + Number(currentReceived || 0);
+              return sum + Number(d.litersReceived ?? 0);
             }, 0);
             
             // Deprecated: Add volume from custom distributions in transportTripLegs
             // const transportTripLegs = Array.isArray(transport.transportTripLegs) ? transport.transportTripLegs : [];
-            // const salesStationNames = allSales.map((s) => s.station?.name).filter(Boolean);
-            // const customDistributions = transportTripLegs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || (!loc.saleId && !salesStationNames.includes(loc.location)));
+            // const salesStationNames = allSales.map((d) => d.station?.name).filter(Boolean);
+            // const customDistributions = transportTripLegs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || (!loc.deliveryId && !salesStationNames.includes(loc.location)));
             // const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
             // totalReceived += locsVol;
 

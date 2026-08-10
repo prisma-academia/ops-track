@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { CreateSaleForm } from "./sale-form"; 
+import { CreateSaleForm } from "./delivery-form"; 
 
 export default async function NewSalePage(
   props: {
@@ -32,7 +32,7 @@ export default async function NewSalePage(
       ratePerLiter: true,
       status: true,
       order: { select: { reference: true, productType: true, litersOrdered: true, supplier: true, sourceDepot: true, status: true } },
-      sales: { select: { litersDespatched: true } },
+      deliveries: { select: { litersDespatched: true } },
       truck: { select: { name: true, plateNumber: true, capacityLiters: true } },
       transporter: { select: { name: true } }
     },

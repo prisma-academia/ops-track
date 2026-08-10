@@ -19,7 +19,7 @@ export default async function TransportDetailsPage({ params }: { params: Promise
       lossLogs: {
         orderBy: { createdAt: "desc" }
       },
-      sales: {
+      deliveries: {
         include: { customer: true, station: true }
       },
       transactions: {
@@ -78,3 +78,4 @@ export default async function TransportDetailsPage({ params }: { params: Promise
     </div>
   );
 }
+

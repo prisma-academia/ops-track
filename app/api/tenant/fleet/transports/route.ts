@@ -40,7 +40,7 @@ export async function GET(request: Request) {
         transporter: { select: { id: true, name: true } },
         truck: { select: { id: true, name: true } },
         driver: { select: { id: true, firstName: true, lastName: true } },
-        _count: { select: { sales: true } },
+        _count: { select: { deliveries: true } },
       },
     });
 

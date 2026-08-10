@@ -27,14 +27,9 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
   const router = useRouter();
   
   const [openStatusDialog, setOpenStatusDialog] = useState(false);
-  const [openAssignDestinationDialog, setOpenAssignDestinationDialog] = useState(false);
   const [openIncidentDialog, setOpenIncidentDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Assign Sale state
-  const [assignSaleId, setAssignSaleId] = useState("");
-  const [assignTransportRate, setAssignTransportRate] = useState("");
 
   // Status form state
   const [newStatus, setNewStatus] = useState(transport.status);
@@ -63,51 +58,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
     }
   };
 
-  const handleAssignDestination = async () => {
-    setIsSubmitting(true);
-    setError(null);
 
-    try {
-      if (!assignSaleId) throw new Error("Please select a sale");
-      if (Number(assignTransportRate) < 0) throw new Error("Transport rate cannot be negative");
-
-      const sale = transport.sales.find((s: any) => s.id === assignSaleId);
-      if (!sale) throw new Error("Sale not found");
-
-      // 1. Update Sale with transport rate and cost
-      const transportCost = Number(assignTransportRate || 0) * Number(sale.litersDespatched);
-      const resSale = await apiPatch(`/api/tenant/fleet/sales/${sale.id}`, {
-        transportRate: Number(assignTransportRate || 0),
-        transportCost: transportCost
-      });
-      if (resSale.error) throw new Error(resSale.error.message || "Failed to update sale transport rate");
-
-      // 2. Append to Transport's subsequentLocs
-      const currentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
-      const newLocs = [...currentLocs, {
-        saleId: sale.id,
-        location: sale.station ? sale.station.name : (sale.customer ? sale.customer.name : "Unknown"),
-        rate: Number(assignTransportRate || 0),
-        litersDelivered: Number(sale.litersDespatched),
-        date: new Date().toISOString()
-      }];
-      
-      const resTransport = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, {
-        subsequentLocs: newLocs
-      });
-      if (resTransport.error) throw new Error(resTransport.error.message || "Failed to add destination");
-      
-      setAssignSaleId("");
-      setAssignTransportRate("");
-      
-      router.refresh();
-      setOpenAssignDestinationDialog(false);
-    } catch (e: any) {
-      setError(e.message || "An error occurred");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleLogIncident = async () => {
     setIsSubmitting(true);
@@ -164,11 +115,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
 
 
 
-  const subsequentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
   const lossLogs = transport.lossLogs || [];
-
-  const salesRecipientNames = (transport.sales || []).map((s: any) => s.station?.name || s.customer?.name).filter(Boolean);
-  const customDistributions = subsequentLocs.filter((loc: any) => !salesRecipientNames.includes(loc.location));
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -233,7 +180,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
             <TabsList className="w-full justify-start h-14 bg-muted/50 backdrop-blur-xs rounded-3xl border border-border">
               <TabsTrigger value="overview" className="text-[15px] font-semibold">Overview</TabsTrigger>
               <TabsTrigger value="destinations" className="text-[15px] font-semibold">Route & Trip Legs</TabsTrigger>
-              <TabsTrigger value="distribution" className="text-[15px] font-semibold">Distribution ({(transport.sales?.length || 0) + customDistributions.length})</TabsTrigger>
+              <TabsTrigger value="distribution" className="text-[15px] font-semibold">Distribution ({transport.sales?.length || 0})</TabsTrigger>
               <TabsTrigger value="losses" className="text-[15px] font-semibold text-red-600 dark:text-red-400">Loss Logs ({lossLogs.length})</TabsTrigger>
               <TabsTrigger value="payments" className="text-[15px] font-semibold">Payments & Expenses ({(transport.transactions || []).length})</TabsTrigger>
 
@@ -257,13 +204,11 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
                 {(() => {
                   const carriedVolume = Number(transport.litersCarried) || 0;
                   const salesVol = (transport.sales || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
-                  const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
-                  const distributedVolume = salesVol + locsVol;
+                  const distributedVolume = salesVol;
                   const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
 
-                  const variance = [...(transport.sales || []), ...customDistributions].reduce((sum: number, item: any) => {
-                    const isSale = 'litersDespatched' in item || 'litersSold' in item;
-                    const despatched = Number(isSale ? (item.litersDespatched || item.litersSold || 0) : (item.litersDelivered || 0));
+                  const variance = (transport.sales || []).reduce((sum: number, item: any) => {
+                    const despatched = Number(item.litersDespatched || item.litersSold || 0);
                     const received = item.litersReceived;
                     if (received !== null && received !== undefined) {
                       return sum + (despatched - Number(received));
@@ -351,9 +296,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
                 </div>
 
                 {(() => {
-                  const primaryFee = Number(transport.ratePerLiter || 0) * Number(transport.litersCarried || 0);
-                  const subsequentFee = subsequentLocs.reduce((acc: number, loc: any) => acc + (Number(loc.rate || 0) * Number(loc.litersDelivered || 0)), 0);
-                  const expectedFee = primaryFee + subsequentFee;
+                  const expectedFee = Number(transport.ratePerLiter || 0) * Number(transport.litersCarried || 0);
                   const totalLossDeductions = lossLogs.reduce((sum: number, log: any) => sum + Number(log.expensesIncurred || 0), 0);
                   const totalExpenses = (transport.transactions || []).reduce((sum: number, txn: any) => sum + Number(txn.amount || 0), 0);
                   const netFee = expectedFee - totalLossDeductions - totalExpenses;
@@ -361,18 +304,6 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
                   return (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                       <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="p-4 rounded-xl border bg-card/50 flex flex-col justify-center">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Primary Transport Fee</p>
-                          <p className="text-xl font-bold text-foreground">₦{primaryFee.toLocaleString()}</p>
-                          <p className="text-[10px] text-muted-foreground mt-2">Base fee for main destination</p>
-                        </div>
-                        
-                        <div className="p-4 rounded-xl border bg-card/50 flex flex-col justify-center">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Subsequent Fee</p>
-                          <p className="text-xl font-bold text-foreground">₦{subsequentFee.toLocaleString()}</p>
-                          <p className="text-[10px] text-muted-foreground mt-2">Earnings from additional drops</p>
-                        </div>
-
                         <div className="sm:col-span-2 p-4 rounded-xl border bg-blue-50/30 dark:bg-blue-950/10 flex items-center justify-between">
                           <div>
                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Expected Transport Fee</p>
@@ -448,7 +379,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
                     </tr>
                   </thead>
                   <tbody>
-                    {(!transport.sales || transport.sales.length === 0) && customDistributions.length === 0 ? (
+                    {(!transport.sales || transport.sales.length === 0) ? (
                       <tr>
                         <td colSpan={6} className="py-8 text-center text-muted-foreground">
                           No sales/distribution recorded for this trip.
@@ -493,68 +424,38 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
                             </td>
                           </tr>
                         ))}
-                        {customDistributions.map((loc: any, idx: number) => (
-                          <tr key={`cdist-${idx}`} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
-                            <td className="py-3 px-4 text-foreground/90 whitespace-nowrap">
-                              {new Date(loc.date || transport.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="py-3 px-4">
-                              <div className="font-medium text-foreground">
-                                {loc.location}
-                              </div>
-                              <div className="text-[10px] text-muted-foreground uppercase">
-                                CUSTOM LOCATION
-                              </div>
-                            </td>
-                            <td className="text-right py-3 px-4 text-foreground/90 font-medium">{Number(loc.litersDelivered).toLocaleString()} L</td>
-                            <td className="text-right py-3 px-4 text-foreground/90 font-medium text-amber-600 dark:text-amber-500">
-                              {loc.litersReceived !== undefined ? `${Number(loc.litersReceived).toLocaleString()} L` : '—'}
-                            </td>
-                            <td className="text-right py-3 px-4 text-foreground/90 font-mono text-xs">₦{Number(loc.productPrice || 0).toLocaleString()}</td>
-                            <td className="text-right py-3 px-4 text-foreground/90 font-medium">{(Number(loc.litersDelivered) * Number(loc.productPrice || 0)).toLocaleString()}</td>
-                            <td className="text-right py-3 px-4 text-foreground/90">
-                              <Badge variant="default" className="text-[10px]">
-                                CLIENT
-                              </Badge>
-                            </td>
-                          </tr>
-                        ))}
                       </>
                     )}
                   </tbody>
                   <tfoot>
-                    {((transport.sales && transport.sales.length > 0) || customDistributions.length > 0) ? (
+                    {((transport.sales && transport.sales.length > 0)) ? (
                       <>
                         <tr className="bg-muted/30 border-t border-border/50 font-bold">
                           <td colSpan={2} className="text-right py-3 px-4 text-foreground">Total:</td>
                         <td className="text-right py-3 px-4 text-foreground">
                           {(() => {
                              const salesDespatched = (transport.sales || []).reduce((sum: number, sale: any) => sum + Number(sale.litersDespatched || sale.litersSold || 0), 0);
-                             const customDespatched = customDistributions.reduce((sum: number, loc: any) => sum + Number(loc.litersDelivered || 0), 0);
-                             return `${(salesDespatched + customDespatched).toLocaleString()} L`;
+                             return `${(salesDespatched).toLocaleString()} L`;
                           })()}
                         </td>
                         <td className="text-right py-3 px-4 text-emerald-600 dark:text-emerald-500">
                           {(() => {
                              const salesReceived = (transport.sales || []).reduce((sum: number, sale: any) => sum + (sale.litersReceived !== null && sale.litersReceived !== undefined ? Number(sale.litersReceived) : 0), 0);
-                             const customReceived = customDistributions.reduce((sum: number, loc: any) => sum + (loc.litersReceived !== undefined ? Number(loc.litersReceived) : 0), 0);
-                             return `${(salesReceived + customReceived).toLocaleString()} L`;
+                             return `${(salesReceived).toLocaleString()} L`;
                           })()}
                         </td>
                         <td></td>
                         <td className="text-right py-3 px-4 text-foreground font-mono text-xs">
                           {(() => {
                              const salesAmount = (transport.sales || []).reduce((sum: number, sale: any) => sum + Number(sale.totalExpectedAmount || sale.totalAmount || (Number(sale.litersDespatched || sale.litersSold || 0) * Number(sale.amountPerLiter || 0))), 0);
-                             const customAmount = customDistributions.reduce((sum: number, loc: any) => sum + (Number(loc.litersDelivered) * Number(loc.productPrice || 0)), 0);
-                             return `₦${(salesAmount + customAmount).toLocaleString()}`;
+                             return `₦${(salesAmount).toLocaleString()}`;
                           })()}
                         </td>
                         <td></td>
                       </tr>
                       {(() => {
-                         const variance = [...(transport.sales || []), ...customDistributions].reduce((sum: number, item: any) => {
-                           const isSale = 'litersDespatched' in item || 'litersSold' in item;
-                           const despatched = Number(isSale ? (item.litersDespatched || item.litersSold || 0) : (item.litersDelivered || 0));
+                         const variance = (transport.sales || []).reduce((sum: number, item: any) => {
+                           const despatched = Number(item.litersDespatched || item.litersSold || 0);
                            const received = item.litersReceived;
                            if (received !== null && received !== undefined) {
                              return sum + (despatched - Number(received));
@@ -699,128 +600,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
         </div>
       </div>
 
-      {/* Unified Assign Destination Dialog */}
-      <Dialog open={openAssignDestinationDialog} onOpenChange={(open) => {
-        setOpenAssignDestinationDialog(open);
-        if (!open) setError(null);
-      }}>
-        <DialogContent className={cn(
-          "w-[calc(100%-2rem)] p-0 gap-0 flex flex-col",
-          "max-h-[min(85vh,720px)]",
-          "sm:max-w-2xl"
-        )}>
-          {/* Fixed Header */}
-          <div className="px-6 pt-6 pb-0 shrink-0">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-primary" />
-                Assign Destination
-              </DialogTitle>
-              <DialogDescription>
-                Route fuel to a station or record a custom drop location.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
 
-          {/* Scrollable Body */}
-          {(() => {
-            const carriedVolume = Number(transport.litersCarried) || 0;
-            const salesVol = (transport.sales || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
-            const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
-            const distributedVolume = salesVol + locsVol;
-            const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
-            
-            // Available sales that haven't been assigned a transport destination yet
-            const availableSales = (transport.sales || []).filter((s: any) => {
-              const isAssigned = subsequentLocs.some((loc: any) => loc.saleId === s.id);
-              return !isAssigned;
-            });
-
-            return (
-          <>
-          <ScrollArea className="flex-1 min-h-0">
-            <div className="px-6 py-5 space-y-5">
-              {/* Allocation Summary */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="p-3 rounded-xl border bg-muted/30 text-center">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">Carried</p>
-                  <p className="text-base font-bold mt-0.5">{carriedVolume.toLocaleString()} L</p>
-                </div>
-                <div className="p-3 rounded-xl border bg-muted/30 text-center">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">Allocated</p>
-                  <p className="text-base font-bold mt-0.5">{distributedVolume.toLocaleString()} L</p>
-                </div>
-                <div className={cn(
-                  "p-3 rounded-xl border text-center",
-                  "bg-primary/5 border-primary/20"
-                )}>
-                  <p className={cn("text-[10px] uppercase tracking-widest font-medium", "text-primary/70")}>Available</p>
-                  <p className={cn("text-base font-bold mt-0.5", "text-primary")}>{remainingVolume.toLocaleString()} L</p>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Select Linked Sale</Label>
-                  <Select value={assignSaleId} onValueChange={setAssignSaleId}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a sale..." />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      {availableSales.length === 0 ? (
-                        <SelectItem value="none" disabled>No available sales</SelectItem>
-                      ) : (
-                        availableSales.map((sale: any) => (
-                          <SelectItem key={sale.id} value={sale.id}>
-                            {sale.station ? sale.station.name : (sale.customer ? sale.customer.name : "Unknown")} - {Number(sale.litersDespatched).toLocaleString()} L
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground mt-1">Only sales linked to this transport are shown.</p>
-                </div>
-                
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Transport Rate / L (₦)</Label>
-                  <FormattedNumberInput min="0" value={assignTransportRate} onChange={(e) => setAssignTransportRate(e.target.value)} placeholder="0.00" prefixText="₦" />
-                  
-                  {assignSaleId && assignTransportRate && Number(assignTransportRate) > 0 && (
-                    <div className="pt-2 text-xs font-medium text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 p-2 rounded border border-emerald-100 dark:border-emerald-500/20 mt-2 flex justify-between items-center">
-                      <span>Total expected cost:</span>
-                      <span className="font-bold">
-                        ₦{(Number(transport.sales?.find((s: any) => s.id === assignSaleId)?.litersDespatched || 0) * Number(assignTransportRate)).toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {error && (
-                <p className="text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2">
-                  {error}
-                </p>
-              )}
-            </div>
-          </ScrollArea>
-
-          {/* Fixed Footer */}
-          <Separator />
-          <div className="px-6 py-4 shrink-0">
-            <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setOpenAssignDestinationDialog(false)}>Cancel</Button>
-              <Button size="sm" onClick={handleAssignDestination} disabled={isSubmitting || !assignSaleId}>
-                {isSubmitting ? <SpinnerEllipsis /> : "Confirm Assignment"}
-              </Button>
-            </DialogFooter>
-          </div>
-          </>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
 
       {/* Update Status Dialog */}
       <Dialog open={openStatusDialog} onOpenChange={setOpenStatusDialog}>

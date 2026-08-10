@@ -23,15 +23,15 @@ export async function POST(
     const body = DeductShortageSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    const sale = await prisma.sale.findFirst({
+    const Delivery = await prisma.delivery.findFirst({
       where: { id, tenantId: actor.tenantId },
       include: { transport: true }
     });
 
-    if (!sale) throw new DomainError(404, "not_found", "Sale not found.");
-    if (!sale.transport) throw new DomainError(400, "invalid_state", "This sale is not linked to a transport.");
+    if (!Delivery) throw new DomainError(404, "not_found", "Delivery not found.");
+    if (!Delivery.transport) throw new DomainError(400, "invalid_state", "This Delivery is not linked to a transport.");
 
-    const transport = sale.transport;
+    const transport = Delivery.transport;
 
     // Add this new deduction to the existing maintenance/deduction fields or recalculate totalDeduction directly.
     // For manual shortage deduction, we increase the totalDeduction and decrease netTransportFeePaid.
@@ -50,7 +50,7 @@ export async function POST(
             lossType: "OTHERS",
             lostQuantity: body.variance,
             expensesIncurred: body.totalDeduction,
-            comment: `Manual shortage deduction from sale ${sale.id}`
+            comment: `Manual shortage deduction from Delivery ${Delivery.id}`
           }
         }
       }
@@ -60,10 +60,10 @@ export async function POST(
       module: "FLEET",
       actorType: "TENANT_USER",
       actorId: actor.userId,
-      action: "sale.deduct_shortage",
+      action: "Delivery.deduct_shortage",
       tenantId: actor.tenantId,
-      targetType: "Sale",
-      targetId: sale.id,
+      targetType: "Delivery",
+      targetId: Delivery.id,
       before: {} as object,
       after: { deductionAmount: body.totalDeduction } as object,
       ip: meta.ip,

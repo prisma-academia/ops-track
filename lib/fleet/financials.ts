@@ -41,7 +41,7 @@ export async function calculateTripPnL(transportId: string): Promise<TripPnLSumm
     where: { id: transportId },
     include: {
       order: true,
-      sales: true,
+      deliveries: true,
       lossLogs: true,
       transactions: {
         where: { category: "EXPENSE" },
@@ -52,7 +52,7 @@ export async function calculateTripPnL(transportId: string): Promise<TripPnLSumm
   if (!transport) throw new Error("Transport not found");
 
   const order = transport.order;
-  const sales = transport.sales;
+  const Deliveries = transport.deliveries;
   const expenses = transport.transactions;
 
   const costPerLiter = Number(order.pricePerLitre || 0);
@@ -73,15 +73,15 @@ export async function calculateTripPnL(transportId: string): Promise<TripPnLSumm
   //   console.error("Error parsing transportTripLegs", e);
   // }
 
-  // Calculate Average Sale Price per Liter for the Trip
-  // Since Sales might not perfectly map 1-to-1 with Legs by ID, we use average sale price to estimate Leg Revenue
+  // Calculate Average Delivery Price per Liter for the Trip
+  // Since Deliveries might not perfectly map 1-to-1 with Legs by ID, we use average Delivery price to estimate Leg Revenue
   let totalSalesRevenue = 0;
   let totalSalesLiters = 0;
-  for (const sale of sales) {
-    const saleRevenue = Number(sale.litersReceived || sale.litersDespatched || 0) * Number(sale.amountPerLiter || 0);
-    const transportCostBilled = sale.transportCostBorneBy === "CLIENT" ? Number(sale.transportCost || 0) : 0;
+  for (const Delivery of Deliveries) {
+    const saleRevenue = Number(Delivery.litersReceived || Delivery.litersDespatched || 0) * Number(Delivery.amountPerLiter || 0);
+    const transportCostBilled = Delivery.transportCostBorneBy === "CLIENT" ? Number(Delivery.transportCost || 0) : 0;
     totalSalesRevenue += saleRevenue + transportCostBilled;
-    totalSalesLiters += Number(sale.litersReceived || sale.litersDespatched || 0);
+    totalSalesLiters += Number(Delivery.litersReceived || Delivery.litersDespatched || 0);
   }
   const avgSalePricePerLiter = totalSalesLiters > 0 ? totalSalesRevenue / totalSalesLiters : 0;
 

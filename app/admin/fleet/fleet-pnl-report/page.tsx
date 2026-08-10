@@ -6,13 +6,13 @@ import { FleetPnlReportManager } from "./fleet-pnl-report-manager";
 export default async function FleetPnlReportPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_ORDERS_READ.key);
 
-  // Fetch orders with their transports and sales to aggregate PnL
+  // Fetch orders with their transports and deliveries to aggregate PnL
   const orders = await prisma.order.findMany({
     where: { tenantId: actor.tenantId },
     include: {
       transports: {
         include: {
-          sales: true,
+          deliveries: true,
           truck: true,
           driver: true,
           transporter: true
@@ -44,29 +44,29 @@ export default async function FleetPnlReportPage() {
       let trCost = 0;
       let trStationLossAmount = 0;
 
-      for (const sale of transport.sales) {
-        const sCost = Number(sale.transportCost) || (Number(sale.litersDespatched) * Number(transport.ratePerLiter));
-        const clientTransportFee = sale.transportCostBorneBy === "CLIENT" ? Number(sale.transportCost || 0) : 0;
-        const sRev = Number(sale.totalExpectedAmount || 0) + clientTransportFee;
+      for (const delivery of transport.deliveries) {
+        const sCost = Number(delivery.transportCost) || (Number(delivery.litersDespatched) * Number(transport.ratePerLiter));
+        const clientTransportFee = delivery.transportCostBorneBy === "CLIENT" ? Number(delivery.transportCost || 0) : 0;
+        const sRev = Number(delivery.totalExpectedAmount || 0) + clientTransportFee;
 
-        const saleQty = Number(sale.litersDespatched || 0);
-        const litersReceived = sale.litersReceived !== null && sale.litersReceived !== undefined
-          ? Number(sale.litersReceived)
+        const saleQty = Number(delivery.litersDespatched || 0);
+        const litersReceived = delivery.litersReceived !== null && delivery.litersReceived !== undefined
+          ? Number(delivery.litersReceived)
           : null;
         
         const saleLossLiters = litersReceived !== null ? Math.max(0, saleQty - litersReceived) : 0;
-        const saleLossAmount = saleLossLiters * Number(sale.amountPerLiter || 0);
+        const saleLossAmount = saleLossLiters * Number(delivery.amountPerLiter || 0);
         trStationLossAmount += saleLossAmount;
 
         trCost += sCost;
         trQtySold += saleQty;
         trSalesRev += sRev;
-        trPaid += Number(sale.paymentReceived || 0);
+        trPaid += Number(delivery.paymentReceived || 0);
 
         totalTransportCost += sCost;
         totalAmountSoldQty += saleQty;
         amountSoldRev += sRev;
-        amountPaid += Number(sale.paymentReceived || 0);
+        amountPaid += Number(delivery.paymentReceived || 0);
       }
 
       const maintenanceCost = Number(transport.maintenanceCost || 0);
@@ -86,7 +86,7 @@ export default async function FleetPnlReportPage() {
         totalDeduction: lossDeduction,
         litersCarried: Number(transport.litersCarried || 0),
         litersDelivered: Number(transport.litersDelivered || 0),
-        salesCount: transport.sales.length,
+        salesCount: transport.deliveries.length,
         totalTransportCost: trCost,
         amountSoldRev: trSalesRev,
         amountPaid: trPaid
@@ -134,3 +134,4 @@ export default async function FleetPnlReportPage() {
     />
   );
 }
+

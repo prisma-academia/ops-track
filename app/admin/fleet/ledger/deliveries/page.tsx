@@ -1,7 +1,7 @@
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { prisma } from "@/lib/db/client";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { SalesTable } from "./sales-table";
+import { SalesTable } from "./deliveries-table";
 import { DataTableFilterDrawer, FilterConfig } from "@/components/data-table-filter-drawer";
 const PAYMENT_METHODS = ["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"];
 
@@ -38,7 +38,7 @@ export default async function SalesLedgerPage(props: {
     if (entityId.startsWith("client_")) {
       where.customerId = entityId.replace("client_", "");
     } else if (entityId.startsWith("station_")) {
-      where.sale = { stationId: entityId.replace("station_", "") };
+      where.delivery = { stationId: entityId.replace("station_", "") };
     }
   }
 
@@ -70,7 +70,7 @@ export default async function SalesLedgerPage(props: {
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {
-        sale: {
+        delivery: {
           include: { customer: true, station: true },
         },
       },
@@ -112,3 +112,4 @@ export default async function SalesLedgerPage(props: {
     </div>
   );
 }
+

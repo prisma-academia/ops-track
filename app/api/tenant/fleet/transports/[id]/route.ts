@@ -7,20 +7,8 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 
-const SubsequentLocSchema = z.object({
-  location: z.string(),
-  rate: z.number(),
-  litersDelivered: z.number(),
-  date: z.string().optional(),
-  isCustom: z.boolean().optional(),
-  productPrice: z.number().optional(),
-  // saleId links this destination to a B2B Sale for received-litres sync
-  saleId: z.string().optional().nullable(),
-});
-
 const UpdateTransportSchema = z.object({
   litersDelivered: z.number().min(0).optional(),
-  transportTripLegs: z.array(SubsequentLocSchema).optional(),
   addMaintenanceCost: z.number().min(0).optional(),
   addLitersLost: z.number().min(0).optional(),
   addDeposit: z.number().min(0).optional(),
@@ -48,7 +36,7 @@ export async function GET(
         transporter: true,
         truck: true,
         driver: true,
-        sales: {
+        deliveries: {
           include: {
             customer: { select: { id: true, name: true } },
           },
@@ -85,12 +73,6 @@ export async function PATCH(
 
     // Base earnings
     let baseRate = ratePerLiter * litersCarried;
-
-    // Extra earnings from subsequent locations (Deprecated)
-    // const transportTripLegs = body.transportTripLegs ?? [];
-    // for (const loc of transportTripLegs) {
-    //   baseRate += (loc.rate ?? 0) * (loc.litersDelivered ?? 0);
-    // }
 
     // Deductions
     const currentMaintenance = Number(existing.maintenanceCost) + (body.addMaintenanceCost ?? 0);

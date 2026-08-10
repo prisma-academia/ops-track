@@ -23,7 +23,7 @@ export async function GET(
     const { id } = await params;
     const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key);
 
-    const sale = await prisma.sale.findFirst({
+    const Delivery = await prisma.delivery.findFirst({
       where: { id, tenantId: actor.tenantId },
       include: {
         customer: true,
@@ -37,8 +37,8 @@ export async function GET(
       },
     });
 
-    if (!sale) throw new DomainError(404, "not_found", "Sale not found.");
-    return ok({ sale });
+    if (!Delivery) throw new DomainError(404, "not_found", "Delivery not found.");
+    return ok({ Delivery });
   } catch (e) {
     return handleError(e);
   }
@@ -55,10 +55,10 @@ export async function PATCH(
     const body = UpdateSaleSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    const existing = await prisma.sale.findFirst({
+    const existing = await prisma.delivery.findFirst({
       where: { id, tenantId: actor.tenantId },
     });
-    if (!existing) throw new DomainError(404, "not_found", "Sale not found.");
+    if (!existing) throw new DomainError(404, "not_found", "Delivery not found.");
 
     const newLitersReceived = body.litersReceived !== undefined && body.litersReceived !== null 
       ? body.litersReceived 
@@ -66,7 +66,7 @@ export async function PATCH(
     const newAmountPerLiter = body.amountPerLiter ?? Number(existing.amountPerLiter);
     const totalExpectedAmount = newLitersReceived * newAmountPerLiter;
 
-    const sale = await prisma.sale.update({
+    const Delivery = await prisma.delivery.update({
       where: { id },
       data: {
         ...(body.litersReceived !== undefined && { litersReceived: body.litersReceived }),
@@ -80,22 +80,22 @@ export async function PATCH(
     });
 
     // Cross-model reconciliation: if linked to a transport, recalculate loss
-    if (sale.transportId) {
-      const transport = await prisma.transport.findUnique({ where: { id: sale.transportId } });
+    if (Delivery.transportId) {
+      const transport = await prisma.transport.findUnique({ where: { id: Delivery.transportId } });
       if (transport) {
-        const allSales = await prisma.sale.findMany({
+        const allSales = await prisma.delivery.findMany({
           where: { transportId: transport.id },
           include: { station: true }
         });
         
         let totalReceived = allSales.reduce(
-          (sum, s) => sum + Number(s.litersReceived ?? 0), 0
+          (sum, d) => sum + Number(d.litersReceived ?? 0), 0
         );
 
         // Deprecated: Add volume from custom distributions in transportTripLegs
         // const transportTripLegs = Array.isArray(transport.transportTripLegs) ? transport.transportTripLegs : [];
-        // const salesStationNames = allSales.map((s) => s.station?.name).filter(Boolean);
-        // const customDistributions = transportTripLegs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || (!loc.saleId && !salesStationNames.includes(loc.location)));
+        // const salesStationNames = allSales.map((d) => d.station?.name).filter(Boolean);
+        // const customDistributions = transportTripLegs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || (!loc.deliveryId && !salesStationNames.includes(loc.location)));
         // const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
         // totalReceived += locsVol;
 
@@ -115,11 +115,11 @@ export async function PATCH(
     }
 
     // Sync with WaybillAllocation if it's a station
-    if (sale.stationId && body.transportCost !== undefined) {
+    if (Delivery.stationId && body.transportCost !== undefined) {
       const activeAllocation = await prisma.waybillAllocation.findFirst({
         where: {
           tenantId: actor.tenantId,
-          saleId: sale.id,
+          deliveryId: Delivery.id,
         },
         orderBy: { createdAt: "desc" },
       });
@@ -136,17 +136,17 @@ export async function PATCH(
       module: "FLEET",
       actorType: "TENANT_USER",
       actorId: actor.userId,
-      action: "sale.update",
+      action: "Delivery.update",
       tenantId: actor.tenantId,
-      targetType: "Sale",
-      targetId: sale.id,
+      targetType: "Delivery",
+      targetId: Delivery.id,
       before: { litersReceived: existing.litersReceived?.toString() } as object,
-      after: { litersReceived: sale.litersReceived?.toString(), totalExpected: sale.totalExpectedAmount.toString() } as object,
+      after: { litersReceived: Delivery.litersReceived?.toString(), totalExpected: Delivery.totalExpectedAmount.toString() } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
 
-    return ok({ sale });
+    return ok({ Delivery });
   } catch (e) {
     return handleError(e);
   }

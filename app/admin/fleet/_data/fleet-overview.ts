@@ -167,7 +167,7 @@ export async function getFleetOverviewData(
       orderBy: { _sum: { litersCarried: "desc" } },
       take: 5,
     }),
-    prisma.sale.groupBy({
+    prisma.delivery.groupBy({
       by: ["stationId", "customerId"],
       where: { tenantId },
       _sum: { litersDespatched: true, totalExpectedAmount: true },
@@ -175,7 +175,7 @@ export async function getFleetOverviewData(
       orderBy: { _sum: { litersDespatched: "desc" } },
       take: 10,
     }),
-    prisma.sale.groupBy({
+    prisma.delivery.groupBy({
       by: ["status"],
       where: { tenantId },
       _sum: { totalExpectedAmount: true, paymentReceived: true },

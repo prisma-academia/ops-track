@@ -47,7 +47,7 @@ export default async function TransportsPage({
         order: { select: { id: true, reference: true, sourceDepot: true } },
         _count: {
           select: {
-            sales: true,
+            deliveries: true,
           },
         },
       },
@@ -72,7 +72,7 @@ export default async function TransportsPage({
     orderReference: t.order?.reference || "-",
     status: t.status,
     productType: t.productType || "-",
-    salesCount: t._count.sales,
+    salesCount: t._count.deliveries,
     litersCarried: Number(t.litersCarried),
     createdAt: t.createdAt.toISOString(),
   }));

@@ -30,13 +30,13 @@ export async function POST(
       throw new DomainError(400, "invalid_input", "Bank account is required for this payment method.");
     }
 
-    const sale = await prisma.$transaction(async (tx) => {
-      const existingSale = await tx.sale.findFirst({
+    const Delivery = await prisma.$transaction(async (tx) => {
+      const existingSale = await tx.delivery.findFirst({
         where: { id, tenantId: actor.tenantId },
       });
 
       if (!existingSale) {
-        throw new DomainError(404, "not_found", "Sale not found.");
+        throw new DomainError(404, "not_found", "Delivery not found.");
       }
 
       // Create the transaction
@@ -51,14 +51,14 @@ export async function POST(
           description: body.description,
           reference: body.reference,
           receiptUrl: body.receiptUrl,
-          saleId: existingSale.id,
+          deliveryId: existingSale.id,
           customerId: existingSale.customerId,
           bankAccountId: body.bankAccountId,
-          paymentPurpose: `Payment for Fleet Sale`,
+          paymentPurpose: `Payment for Fleet Delivery`,
         },
       });
 
-      // Update the sale
+      // Update the Delivery
       const newPaymentReceived = Number(existingSale.paymentReceived) + body.amount;
       const totalExpected = Number(existingSale.totalExpectedAmount);
 
@@ -69,7 +69,7 @@ export async function POST(
         newStatus = "PART_PAID";
       }
 
-      const updatedSale = await tx.sale.update({
+      const updatedSale = await tx.delivery.update({
         where: { id },
         data: {
           paymentReceived: newPaymentReceived,
@@ -84,16 +84,16 @@ export async function POST(
       module: "FLEET",
       actorType: "TENANT_USER",
       actorId: actor.userId,
-      action: "sale.payment",
+      action: "Delivery.payment",
       tenantId: actor.tenantId,
-      targetType: "Sale",
-      targetId: sale.id,
-      after: { paymentAdded: body.amount, totalReceived: sale.paymentReceived.toString(), newStatus: sale.status } as object,
+      targetType: "Delivery",
+      targetId: Delivery.id,
+      after: { paymentAdded: body.amount, totalReceived: Delivery.paymentReceived.toString(), newStatus: Delivery.status } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
 
-    return ok({ sale });
+    return ok({ Delivery });
   } catch (e) {
     return handleError(e);
   }

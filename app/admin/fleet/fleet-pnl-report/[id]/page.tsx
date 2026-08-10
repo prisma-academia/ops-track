@@ -20,7 +20,7 @@ export default async function OrderPnlDetailsPage(props: {
         include: {
           transporter: { select: { name: true } },
           truck: { select: { name: true, plateNumber: true } },
-          sales: {
+          deliveries: {
             include: {
               customer: { select: { name: true } },
               station: { select: { name: true } }
@@ -60,13 +60,13 @@ export default async function OrderPnlDetailsPage(props: {
     let transportTotalPaid = 0;
     let transportTotalCost = 0;
 
-    const salesData = transport.sales.map(sale => {
-      const saleTransportCost = Number(sale.transportCost) || (Number(sale.litersDespatched) * Number(transport.ratePerLiter));
-      const clientTransportFee = sale.transportCostBorneBy === "CLIENT" ? Number(sale.transportCost || 0) : 0;
-      const saleQty = Number(sale.litersDespatched || 0);
-      const sellingPrice = Number(sale.amountPerLiter || 0);
-      const litersReceived = sale.litersReceived !== null && sale.litersReceived !== undefined
-        ? Number(sale.litersReceived)
+    const salesData = transport.deliveries.map(delivery => {
+      const saleTransportCost = Number(delivery.transportCost) || (Number(delivery.litersDespatched) * Number(transport.ratePerLiter));
+      const clientTransportFee = delivery.transportCostBorneBy === "CLIENT" ? Number(delivery.transportCost || 0) : 0;
+      const saleQty = Number(delivery.litersDespatched || 0);
+      const sellingPrice = Number(delivery.amountPerLiter || 0);
+      const litersReceived = delivery.litersReceived !== null && delivery.litersReceived !== undefined
+        ? Number(delivery.litersReceived)
         : null;
       
       const saleLossLiters = litersReceived !== null ? Math.max(0, saleQty - litersReceived) : 0;
@@ -76,8 +76,8 @@ export default async function OrderPnlDetailsPage(props: {
       totalOrderLossAmount += saleLossAmount;
       transportStationLossAmount += saleLossAmount;
 
-      const saleRev = Number(sale.totalExpectedAmount || 0) + clientTransportFee;
-      const salePaid = Number(sale.paymentReceived || 0);
+      const saleRev = Number(delivery.totalExpectedAmount || 0) + clientTransportFee;
+      const salePaid = Number(delivery.paymentReceived || 0);
 
       transportTotalQty += saleQty;
       transportTotalRev += saleRev;
@@ -85,8 +85,8 @@ export default async function OrderPnlDetailsPage(props: {
       transportTotalCost += saleTransportCost;
 
       return {
-        id: sale.id,
-        soldTo: sale.customer?.name || sale.station?.name || "Unknown",
+        id: delivery.id,
+        soldTo: delivery.customer?.name || delivery.station?.name || "Unknown",
         litersSold: saleQty,
         litersReceived,
         lossLiters: saleLossLiters,
@@ -95,8 +95,8 @@ export default async function OrderPnlDetailsPage(props: {
         salesRevenue: saleRev,
         paymentReceived: salePaid,
         debtRemaining: saleRev - salePaid,
-        paymentStatus: sale.status,
-        createdAt: sale.createdAt.toISOString()
+        paymentStatus: delivery.status,
+        createdAt: delivery.createdAt.toISOString()
       };
     });
 
@@ -107,7 +107,7 @@ export default async function OrderPnlDetailsPage(props: {
     totalLossDeduction += lossDeduction;
 
     const transportLitersLost = Number(transport.litersLost || 0);
-    if (transportLitersLost > 0 && transport.sales.length === 0) {
+    if (transportLitersLost > 0 && transport.deliveries.length === 0) {
       totalOrderLossLiters += transportLitersLost;
     }
 
@@ -127,7 +127,7 @@ export default async function OrderPnlDetailsPage(props: {
       transportTotalRev,
       transportTotalPaid,
       transportTotalCost,
-      sales: salesData
+      deliveries: salesData
     };
   });
 
@@ -168,3 +168,4 @@ export default async function OrderPnlDetailsPage(props: {
     />
   );
 }
+

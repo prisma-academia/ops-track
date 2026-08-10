@@ -21,7 +21,7 @@ export default async function PaymentDetailsPage({
   const transaction = await prisma.transaction.findUnique({
     where: { id },
     include: {
-      sale: {
+      delivery: {
         include: { customer: true, station: true }
       },
       transporter: true,
@@ -58,9 +58,9 @@ export default async function PaymentDetailsPage({
     createdAt: transaction.createdAt,
     description: transaction.description,
     paymentMethod: transaction.paymentMethod,
-    sale: transaction.sale ? {
-      customer: transaction.sale.customer ? { name: transaction.sale.customer.name } : null,
-      station: transaction.sale.station ? { name: transaction.sale.station.name } : null,
+    delivery: transaction.delivery ? {
+      customer: transaction.delivery.customer ? { name: transaction.delivery.customer.name } : null,
+      station: transaction.delivery.station ? { name: transaction.delivery.station.name } : null,
     } : null,
     transporter: transaction.transporter ? { name: transaction.transporter.name } : null,
     tenant: transaction.tenant ? { name: transaction.tenant.name, logoUrl } : null,
@@ -102,11 +102,11 @@ export default async function PaymentDetailsPage({
               </CardHeader>
               <CardContent>
                 <div className="space-y-3 text-sm">
-                  {transaction.sale && (
+                  {transaction.delivery && (
                     <div className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-                      <span className="text-muted-foreground">Sale</span>
-                      <Link href={`/admin/fleet/sales/${transaction.sale.id}`} className="font-medium text-primary hover:underline">
-                        View Sale {transaction.sale.id.substring(0, 8)}
+                      <span className="text-muted-foreground">delivery</span>
+                      <Link href={`/admin/fleet/sales/${transaction.delivery.id}`} className="font-medium text-primary hover:underline">
+                        View delivery {transaction.delivery.id.substring(0, 8)}
                       </Link>
                     </div>
                   )}
@@ -140,7 +140,7 @@ export default async function PaymentDetailsPage({
                       <span className="font-medium">{transaction.truck.name}</span>
                     </div>
                   )}
-                  {!transaction.sale && !transaction.order && !transaction.transport && !transaction.transporter && !transaction.truck && (
+                  {!transaction.delivery && !transaction.order && !transaction.transport && !transaction.transporter && !transaction.truck && (
                     <div className="text-muted-foreground italic text-center py-4">No related entities found.</div>
                   )}
                 </div>

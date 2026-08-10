@@ -15,13 +15,13 @@ export async function GET(request: Request) {
       where: {
         tenantId: actor.tenantId,
         category: "CLIENT_PAYMENT",
-        ...(customerId ? { sale: { customerId } } : {}),
+        ...(customerId ? { delivery: { customerId } } : {}),
       },
       orderBy: { createdAt: "desc" },
       take,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       include: {
-        sale: {
+        delivery: {
           include: { customer: true, station: true },
         },
       },

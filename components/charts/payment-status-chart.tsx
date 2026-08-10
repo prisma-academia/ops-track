@@ -31,11 +31,10 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-// We use mocked data here as the backend does not provide explicit Full Payment, Balance, Debt yet.
-const chartData = [
-  { name: "Full Payment", value: 12500000, fill: "var(--color-teal-500)" },
-  { name: "Balance", value: 4500000, fill: "var(--color-sky-400)" },
-  { name: "Debt", value: 1200000, fill: "var(--color-red-400)" },
+const defaultChartData = [
+  { name: "Full Payment", value: 0, fill: "var(--color-teal-500)" },
+  { name: "Balance", value: 0, fill: "var(--color-sky-400)" },
+  { name: "Debt", value: 0, fill: "var(--color-red-400)" },
 ];
 
 export default function PaymentStatusChart({ data }: { data?: FleetOverviewData }) {
@@ -43,8 +42,25 @@ export default function PaymentStatusChart({ data }: { data?: FleetOverviewData 
     if (value >= 1_000_000_000) return `₦${(value / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
     if (value >= 1_000_000) return `₦${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
     if (value >= 1_000) return `₦${(value / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
-    return `₦${value}`;
+    return `₦${value.toLocaleString()}`;
   };
+
+  const chartData = data?.paymentStatus && data.paymentStatus.length > 0
+    ? data.paymentStatus.map((item) => {
+        let fill = "var(--color-teal-500)";
+        if (item.name === "Balance") fill = "var(--color-sky-400)";
+        if (item.name === "Debt") fill = "var(--color-red-400)";
+        return {
+          name: item.name,
+          value: item.value,
+          fill,
+        };
+      })
+    : defaultChartData;
+
+  const fullPaymentVal = chartData.find((d) => d.name === "Full Payment")?.value || 0;
+  const balanceVal = chartData.find((d) => d.name === "Balance")?.value || 0;
+  const debtVal = chartData.find((d) => d.name === "Debt")?.value || 0;
 
   return (
     <Card className="w-full h-full py-6 gap-6">
@@ -93,18 +109,24 @@ export default function PaymentStatusChart({ data }: { data?: FleetOverviewData 
           </BarChart>
         </ChartContainer>
       </CardContent>
-      <CardFooter className="flex-wrap justify-center gap-4 px-6 pb-6 pt-2">
-        <div className="flex items-center gap-4">
+      <CardFooter className="flex-wrap justify-between gap-3 px-6 pb-6 pt-2">
+        <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-sm bg-teal-500" />
-          <span className="text-sm text-muted-foreground">Full Payment</span>
+          <span className="text-xs text-muted-foreground">
+            Full Payment: <span className="font-semibold text-foreground">{formatXAxisNumber(fullPaymentVal)}</span>
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-sm bg-sky-400" />
-          <span className="text-sm text-muted-foreground">Balance</span>
+          <span className="text-xs text-muted-foreground">
+            Balance: <span className="font-semibold text-foreground">{formatXAxisNumber(balanceVal)}</span>
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-sm bg-red-400" />
-          <span className="text-sm text-muted-foreground">Debt</span>
+          <span className="text-xs text-muted-foreground">
+            Debt: <span className="font-semibold text-foreground">{formatXAxisNumber(debtVal)}</span>
+          </span>
         </div>
       </CardFooter>
     </Card>

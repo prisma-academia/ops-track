@@ -6,12 +6,15 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/data-table";
 import { usePaginatedQuery } from "@/hooks/use-paginated-query";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Building2 } from "lucide-react";
 
 type OrganizationRow = {
   id: string;
   name: string;
   slug: string;
   type: string;
+  logoKey?: string | null;
   isActive: boolean;
   createdAt: string;
   stationsCount: number;
@@ -45,12 +48,39 @@ export function OrganizationsTable({
       {
         accessorKey: "name",
         header: "Organization Name",
-        cell: ({ row }) => (
-          <div className="flex flex-col">
-            <span className="font-medium">{row.original.name}</span>
-            <span className="text-xs text-muted-foreground font-mono">@{row.original.slug}</span>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const logo = row.original.logoKey;
+          const name = row.original.name;
+          const initials = name
+            ? name
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .substring(0, 2)
+                .toUpperCase()
+            : "OR";
+
+          const logoSrc = logo
+            ? logo.startsWith("http")
+              ? logo
+              : `https://${process.env.NEXT_PUBLIC_S3_DOMAIN}/${logo}`
+            : undefined;
+
+          return (
+            <div className="flex items-center gap-3">
+              <Avatar className="h-9 w-9 border border-border/50 shrink-0">
+                {logoSrc && <AvatarImage src={logoSrc} alt={name} className="object-cover" />}
+                <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
+                  {initials || <Building2 className="h-4 w-4 text-muted-foreground" />}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col">
+                <span className="font-medium text-foreground">{name}</span>
+                <span className="text-xs text-muted-foreground font-mono">@{row.original.slug}</span>
+              </div>
+            </div>
+          );
+        },
       },
       {
         accessorKey: "type",

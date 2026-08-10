@@ -13,6 +13,8 @@ export type TenantUserRow = {
   isOwner: boolean;
   status: string;
   lastLoginAt: string | null;
+  organization?: { name: string | null } | null;
+  ownedOrganizations?: { name: string | null }[] | null;
 };
 
 const columns: ColumnDef<TenantUserRow>[] = [
@@ -22,8 +24,48 @@ const columns: ColumnDef<TenantUserRow>[] = [
     header: "Name",
     accessorFn: (r) => `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || "—",
   },
-  { accessorKey: "isOwner", header: "Owner", cell: (info) => (info.getValue() ? "yes" : "no") },
-  { accessorKey: "status", header: "Status" },
+  {
+    id: "organization",
+    header: "Organization",
+    cell: ({ row }) => {
+      const u = row.original;
+      const orgName = u.organization?.name || u.ownedOrganizations?.[0]?.name || "Internal / Fleet";
+      return <span className="text-xs font-medium">{orgName}</span>;
+    },
+  },
+  {
+    accessorKey: "isOwner",
+    header: "Owner",
+    cell: ({ row }) => {
+      const u = row.original;
+      const isOrgOwner = u.isOwner || (u.ownedOrganizations && u.ownedOrganizations.length > 0);
+      return isOrgOwner ? (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/30 uppercase">
+          Owner
+        </span>
+      ) : (
+        <span className="text-xs text-muted-foreground">Staff</span>
+      );
+    },
+  },
+  {
+    accessorKey: "status",
+    header: "Status",
+    cell: ({ row }) => {
+      const status = row.original.status;
+      return (
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+            status === "ACTIVE"
+              ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/30"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {status}
+        </span>
+      );
+    },
+  },
   {
     accessorKey: "lastLoginAt",
     header: "Last login",

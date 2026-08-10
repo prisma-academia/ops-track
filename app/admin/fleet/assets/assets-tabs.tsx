@@ -1,34 +1,53 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import Link from "next/link";
-import { Receipt, Truck, Wallet } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Building2, Truck, Users } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-export function LedgerTabs() {
+interface FleetAssetsTabsProps {
+  activeTab: string;
+  counts: {
+    transporters: number;
+    trucks: number;
+    drivers: number;
+  };
+}
+
+export function FleetAssetsTabs({ activeTab, counts }: FleetAssetsTabsProps) {
+  const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const handleTabChange = (tabValue: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tabValue);
+    // Reset page parameter on tab switch
+    params.delete("page");
+    router.push(`${pathname}?${params.toString()}`);
+  };
 
   const tabs = [
     {
-      id: "sales",
-      title: "Sales Ledger",
-      description: "Customer sales transactions, payments & balances",
-      icon: Receipt,
-      href: "/admin/fleet/ledger/sales",
+      id: "transporters",
+      title: "Transporters",
+      description: "Logistics companies & transport partners",
+      icon: Building2,
+      count: counts.transporters,
     },
     {
-      id: "transports",
-      title: "Transport Ledger",
-      description: "Transporter trip records, freight fees & deductions",
+      id: "trucks",
+      title: "Trucks",
+      description: "Registered fleet vehicles & haulage capacity",
       icon: Truck,
-      href: "/admin/fleet/ledger/transports",
+      count: counts.trucks,
     },
     {
-      id: "expenses",
-      title: "Expenses Ledger",
-      description: "Fleet maintenance, operational costs & deductions",
-      icon: Wallet,
-      href: "/admin/fleet/ledger/expenses",
+      id: "drivers",
+      title: "Drivers",
+      description: "Licensed drivers & logistics operators",
+      icon: Users,
+      count: counts.drivers,
     },
   ];
 
@@ -36,12 +55,13 @@ export function LedgerTabs() {
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
       {tabs.map((tab) => {
         const Icon = tab.icon;
-        const isActive = pathname.startsWith(tab.href) || pathname === tab.href;
+        const isActive = activeTab === tab.id;
 
         return (
-          <Link
+          <button
             key={tab.id}
-            href={tab.href}
+            type="button"
+            onClick={() => handleTabChange(tab.id)}
             className={cn(
               "flex items-start gap-3.5 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer group outline-none focus-visible:ring-2 focus-visible:ring-ring",
               isActive
@@ -69,12 +89,21 @@ export function LedgerTabs() {
                 >
                   {tab.title}
                 </span>
+                <Badge
+                  variant={isActive ? "default" : "secondary"}
+                  className={cn(
+                    "font-mono text-xs px-2 py-0.5 shrink-0",
+                    isActive ? "bg-primary/90 text-primary-foreground" : "text-muted-foreground"
+                  )}
+                >
+                  {tab.count}
+                </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-1 line-clamp-2 font-normal leading-relaxed">
                 {tab.description}
               </p>
             </div>
-          </Link>
+          </button>
         );
       })}
     </div>

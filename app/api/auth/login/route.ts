@@ -168,12 +168,10 @@ async function loginTenant(slug: string, email: string, password: string, meta: 
     ip: meta.ip,
     userAgent: meta.userAgent,
   });
-  let defaultRedirect = "/admin/dashboard";
+  let defaultRedirect = "/admin/fleet";
   const availableModules = user.activeModules.filter((m) => tenant.activeModules.includes(m));
   
-  if (availableModules.includes("STATION") && availableModules.includes("FLEET")) {
-    defaultRedirect = "/admin/modules";
-  } else if (availableModules.includes("FLEET")) {
+  if (availableModules.includes("FLEET")) {
     defaultRedirect = "/admin/fleet";
   } else if (availableModules.includes("STATION")) {
     defaultRedirect = "/admin/dashboard";

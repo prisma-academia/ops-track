@@ -194,7 +194,7 @@ const columns: ColumnDef<DriverRow>[] = [
   }
 ];
 
-export function DriversTable({ data, serverPagination, filterNode }: { data: DriverRow[]; serverPagination?: any; filterNode?: React.ReactNode }) {
+export function DriversTable({ data, serverPagination, filterNode, headerAction }: { data: DriverRow[]; serverPagination?: any; filterNode?: React.ReactNode; headerAction?: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -219,6 +219,7 @@ export function DriversTable({ data, serverPagination, filterNode }: { data: Dri
       filterColumnId="name"
       searchPlaceholder="Search by name…"
       filterNode={filterNode}
+      headerAction={headerAction}
       {...(serverPagination ? {
         serverPagination: {
           ...serverPagination,

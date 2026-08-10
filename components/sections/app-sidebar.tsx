@@ -2,7 +2,7 @@
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Command,
   CommandDialog,
@@ -43,7 +43,25 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
   const showFleetSwitch = context !== "platform" && (!enabledModules || enabledModules.includes("fleet"));
   const showDropdown = context !== "platform" && (showStationSwitch && showFleetSwitch);
   
-  const internalStations = stations.filter(s => s.organization?.type === "INTERNAL");
+  const internalOrganizations = useMemo(() => {
+    const orgMap = new Map<string, { stationId: string; name: string; slug: string | null; logoUrl: string | null }>();
+    
+    for (const s of stations) {
+      if (s.organization && s.organization.type === "INTERNAL" && s.organization.name) {
+        const key = s.organization.name;
+        if (!orgMap.has(key)) {
+          orgMap.set(key, {
+            stationId: s.id,
+            name: s.organization.name,
+            slug: s.organization.slug || null,
+            logoUrl: s.organization.logoUrl || null,
+          });
+        }
+      }
+    }
+    
+    return Array.from(orgMap.values());
+  }, [stations]);
 
   return (
     <Sidebar className="px-0 h-full [&_[data-slot=sidebar-inner]]:h-full">
@@ -59,13 +77,17 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                     onClick={() => setOpenCommand(true)}
                     className="bg-muted/40 hover:bg-muted/60 dark:bg-muted/20 dark:hover:bg-muted/30 border border-border/50 transition-colors"
                   >
-                    {logoUrl && (
-                      <div className="flex aspect-square size-8 items-center justify-center overflow-hidden">
+                    {logoUrl ? (
+                      <div className="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-md border border-border/40 bg-background">
                         <img
                           src={logoUrl}
                           alt={`${title} Logo`}
                           className="size-8 object-contain"
                         />
+                      </div>
+                    ) : (
+                      <div className="flex aspect-square size-8 items-center justify-center rounded-md border border-border/40 bg-primary/10 text-primary">
+                        <Building2 className="size-4" />
                       </div>
                     )}
                     <div className="grid flex-1 text-left text-sm leading-tight">
@@ -75,16 +97,16 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                     <ChevronsUpDown className="ml-auto size-4" />
                   </SidebarMenuButton>
 
-                  <CommandDialog open={openCommand} onOpenChange={setOpenCommand} title="Switch Module" description="Select a module or station">
+                  <CommandDialog open={openCommand} onOpenChange={setOpenCommand} title="Switch Module" description="Select a module or organization">
                     <Command>
-                      <CommandInput placeholder="Search station or module..." />
+                      <CommandInput placeholder="Search organization or module..." />
                       <CommandList>
                         <CommandEmpty>No results found.</CommandEmpty>
                         {showFleetSwitch && (
                           <CommandGroup heading="Modules">
                             <CommandItem 
                               onSelect={() => { setOpenCommand(false); window.location.href = "/admin/fleet"; }}
-                              className="flex items-center gap-2.5 py-2"
+                              className="flex items-center gap-2.5 py-2 cursor-pointer"
                             >
                               {tenant?.logoUrl ? (
                                 <img src={tenant.logoUrl} alt="" className="h-5 w-5 object-contain" />
@@ -100,26 +122,27 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                             </CommandItem>
                           </CommandGroup>
                         )}
-                        {showStationSwitch && internalStations.length > 0 && (
-                          <CommandGroup heading="Internal Stations">
-                            {internalStations.map((station) => (
+                        {showStationSwitch && internalOrganizations.length > 0 && (
+                          <CommandGroup heading="Managed Organisation">
+                            {internalOrganizations.map((org) => (
                               <CommandItem 
-                                key={station.id} 
+                                key={org.slug || org.name} 
                                 onSelect={() => {
                                   setOpenCommand(false);
+                                  document.cookie = `active-station-id=${org.stationId}; path=/;`;
                                   window.location.href = "/admin/dashboard";
                                 }}
-                                className="flex items-center gap-2.5 py-2"
+                                className="flex items-center gap-2.5 py-2 cursor-pointer"
                               >
-                                {station.organization?.logoUrl ? (
-                                  <img src={station.organization.logoUrl} alt="" className="h-5 w-5 object-contain" />
+                                {org.logoUrl ? (
+                                  <img src={org.logoUrl} alt="" className="h-5 w-5 object-contain" />
                                 ) : (
                                   <Building2 className="h-4 w-4 text-muted-foreground" />
                                 )}
                                 <div className="flex flex-col">
-                                  <span className="font-extrabold">{station.organization?.name || station.name}</span>
-                                  {station.organization?.slug && (
-                                    <span className="text-sm text-muted-foreground">{station.organization.slug}</span>
+                                  <span className="font-extrabold">{org.name}</span>
+                                  {org.slug && (
+                                    <span className="text-sm text-muted-foreground">{org.slug}</span>
                                   )}
                                 </div>
                               </CommandItem>

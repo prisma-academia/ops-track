@@ -685,7 +685,7 @@ export function FleetPnlReportManager({ initialRows }: Props) {
       <div className="flex flex-col md:flex-row justify-between items-center md:items-center gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
         <div className="space-y-1">
           <h1 className="text-xl font-bold tracking-tight text-foreground print:text-black">
-            Fleet Profit & Loss (By Order)
+            Sales Report
           </h1>
           <p className="hidden print:block text-[11px] text-black/80 font-medium mt-1">
             Date: {dateRange?.from ? format(dateRange.from, "d MMMM yyyy") : "All Time"} {dateRange?.to ? ` to ${format(dateRange.to, "d MMMM yyyy")}` : ""}

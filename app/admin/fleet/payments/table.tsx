@@ -92,7 +92,17 @@ const columns: ColumnDef<PaymentRow>[] = [
   },
 ];
 
-export function PaymentsTable({ data, filterNode, serverPagination }: { data: PaymentRow[], filterNode?: React.ReactNode, serverPagination?: any }) {
+export function PaymentsTable({
+  data,
+  filterNode,
+  headerAction,
+  serverPagination
+}: {
+  data: PaymentRow[];
+  filterNode?: React.ReactNode;
+  headerAction?: React.ReactNode;
+  serverPagination?: any;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -117,6 +127,7 @@ export function PaymentsTable({ data, filterNode, serverPagination }: { data: Pa
       filterColumnId="reference"
       searchPlaceholder="Search by reference…"
       filterNode={filterNode}
+      headerAction={headerAction}
       {...(serverPagination ? {
         serverPagination: {
           ...serverPagination,

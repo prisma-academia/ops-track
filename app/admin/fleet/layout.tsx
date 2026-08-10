@@ -9,44 +9,148 @@ import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 import { UnauthorizedToast } from "@/components/unauthorized-toast";
 
 const FLEET_NAV = [
-  { href: "/admin/fleet", key: "overview", icon: "LayoutDashboard", permission: null },
-  { href: "/admin/fleet/organizations", key: "organizations", icon: "Network", permission: PERMISSIONS.TENANT_ORGS_READ.key },
-  { href: "/admin/fleet/users", key: "users", icon: "Users", permission: PERMISSIONS.TENANT_USERS_READ.key },
+  {
+    href: "/admin/fleet",
+    key: "overview",
+    title: "Overview",
+    icon: "IconLayoutDashboard",
+    permission: null,
+  },
+    {
+    key: "userManagement",
+    title: "User Management",
+    icon: "IconUsersGroup",
+    children: [
+      {
+        href: "/admin/fleet/users",
+        key: "users",
+        title: "Users",
+        icon: "IconUsers",
+        permission: PERMISSIONS.TENANT_USERS_READ.key,
+      },
+      {
+        href: "/admin/fleet/role-templates",
+        key: "roles",
+        title: "Role & Permissions",
+        icon: "IconShield",
+        permission: PERMISSIONS.TENANT_ROLES_READ.key,
+      },
+    ],
+  },
+  {
+    key: "clientsAndStations",
+    title: "Clients & Stations",
+    icon: "IconBuilding",
+    children: [
+      {
+        href: "/admin/fleet/organizations",
+        key: "organizations",
+        title: "Managed Stations",
+        icon: "IconBuilding",
+        permission: PERMISSIONS.TENANT_ORGS_READ.key,
+      },
+      {
+        href: "/admin/fleet/customers",
+        key: "clients",
+        title: "B2B Clients",
+        icon: "IconUsers",
+        permission: PERMISSIONS.TENANT_CUSTOMERS_READ.key,
+      },
+    ],
+  },
+  {
+    href: "/admin/fleet/orders",
+    key: "orders",
+    title: "Orders",
+    icon: "IconShoppingCart",
+    permission: PERMISSIONS.TENANT_FLEET_READ.key,
+  },
+  {
+    href: "/admin/fleet/transports",
+    key: "transports",
+    title: "Logistic Transport",
+    icon: "IconMapPin",
+    permission: PERMISSIONS.TENANT_FLEET_READ.key,
+  },
+  {
+    key: "salesManagement",
+    title: "Point of Sale",
+    icon: "IconReceiptDollar",
+    permission: PERMISSIONS.TENANT_FLEET_READ.key,
+    children: [
+      {
+        href: "/admin/fleet/sales",
+        key: "sales",
+        title: "Sales",
+        icon: "IconReceiptDollar",
+        permission: PERMISSIONS.TENANT_FLEET_READ.key,
+      },
+      {
+        href: "/admin/fleet/payments",
+        key: "payments",
+        title: "Payments",
+        icon: "IconCreditCard",
+        permission: PERMISSIONS.TENANT_FLEET_READ.key,
+      },
+    ],
+  },
+    {
+    key: "reportsAndAnalytics",
+    title: "Reports & Analytics",
+    icon: "IconReportAnalytics",
+    permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key,
+    children: [
+      {
+        href: "/admin/fleet/fleet-pnl-report",
+        key: "fleetPnlReport",
+        title: "Sales Report",
+        icon: "IconFileText",
+        permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key,
+      },
+      {
+        href: "/admin/fleet/station-performance",
+        key: "stationPerformance",
+        title: "Station Performance",
+        icon: "IconBuildingStore",
+        permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key,
+      },
+    ],
+  },
+    {
+    href: "/admin/fleet/ledger",
+    key: "transactions",
+    title: "Ledgers",
+    icon: "IconWallet",
+    permission: PERMISSIONS.TENANT_FLEET_READ.key,
+  },
   {
     href: "/admin/fleet/assets",
     key: "assets",
-    icon: "Building",
+    title: "Fleet Management",
+    icon: "IconTruck",
     permission: PERMISSIONS.TENANT_FLEET_READ.key,
-    children: [
-      { href: "/admin/fleet/transporters", key: "transporters", icon: "Building2", permission: PERMISSIONS.TENANT_FLEET_READ.key },
-      { href: "/admin/fleet/trucks", key: "trucks", icon: "Truck", permission: PERMISSIONS.TENANT_FLEET_READ.key },
-      { href: "/admin/fleet/drivers", key: "drivers", icon: "Users", permission: PERMISSIONS.TENANT_FLEET_READ.key },
-    ]
   },
-  { href: "/admin/fleet/orders", key: "orders", icon: "ShoppingCart", permission: PERMISSIONS.TENANT_FLEET_READ.key },
-  { href: "/admin/fleet/transports", key: "transports", icon: "Route", permission: PERMISSIONS.TENANT_FLEET_READ.key },
   {
-    href: "/admin/fleet/finance",
-    key: "finance",
-    icon: "Banknote",
-    permission: PERMISSIONS.TENANT_FLEET_READ.key,
-    children: [
-      { href: "/admin/fleet/sales", key: "sales", icon: "BadgeDollarSign", permission: PERMISSIONS.TENANT_FLEET_READ.key },
-      { href: "/admin/fleet/payments", key: "payments", icon: "CreditCard", permission: PERMISSIONS.TENANT_FLEET_READ.key },
-      { href: "/admin/fleet/bank-accounts", key: "bankAccounts", icon: "Landmark", permission: PERMISSIONS.TENANT_SETTINGS_READ.key },
-      { href: "/admin/fleet/fleet-pnl-report", key: "fleetPnlReport", icon: "FileText", permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key },
-    ]
+    href: "/admin/fleet/bank-accounts",
+    key: "bankAccounts",
+    title: "Bank Accounts",
+    icon: "IconBuildingBank",
+    permission: PERMISSIONS.TENANT_SETTINGS_READ.key,
   },
-  { href: "/admin/fleet/customers", key: "clients", icon: "Users", permission: PERMISSIONS.TENANT_CUSTOMERS_READ.key },
-  { 
-    href: "/admin/fleet/ledger", 
-    key: "transactions", 
-    icon: "Wallet", 
-    permission: PERMISSIONS.TENANT_FLEET_READ.key
+  {
+    href: "/admin/fleet/activity",
+    key: "activity",
+    title: "Activity Logs",
+    icon: "IconActivity",
+    permission: PERMISSIONS.TENANT_ACTIVITY_READ.key,
   },
-  { href: "/admin/fleet/role-templates", key: "roles", icon: "Shield", permission: PERMISSIONS.TENANT_ROLES_READ.key },
-  { href: "/admin/fleet/activity", key: "activity", icon: "Activity", permission: PERMISSIONS.TENANT_ACTIVITY_READ.key },
-  { href: "/admin/fleet/settings", key: "settings", icon: "Settings", permission: PERMISSIONS.TENANT_SETTINGS_READ.key },
+  {
+    href: "/admin/fleet/settings",
+    key: "settings",
+    title: "Settings",
+    icon: "IconSettings",
+    permission: PERMISSIONS.TENANT_SETTINGS_READ.key,
+  },
 ];
 
 export default async function FleetDashboardLayout({ children }: { children: React.ReactNode }) {
@@ -131,50 +235,32 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
     };
   });
   
-  const nav = FLEET_NAV.filter(
-    (n) => (!n.permission || hasPermission(actor, n.permission as any))
-  ).map(n => {
-    let title = n.key;
-    if (n.key === 'overview') title = 'Overview';
-    if (n.key === 'assets') title = 'Fleet Assets';
-    if (n.key === 'orders') title = 'Orders';
-    if (n.key === 'transports') title = 'Logistic Transport';
-    if (n.key === 'finance') title = 'Account & Finance';
-    if (n.key === 'transactions') title = 'Payments Ledger';
-    if (n.key === 'clients') title = 'Customers';
-    if (n.key === 'organizations') title = 'Organizations';
-    if (n.key === 'users') title = 'Users';
-    if (n.key === 'roles') title = 'Role Templates';
-    if (n.key === 'activity') title = 'Activity Logs';
-    if (n.key === 'settings') title = 'Settings';
-
+  const nav = FLEET_NAV.map((n: any) => {
     const children = n.children
       ? n.children
-          .filter((c: any) => !c.permission || hasPermission(actor, c.permission))
-          .map((c: any) => {
-            let childTitle = c.key;
-            if (c.key === 'transporters') childTitle = 'Transporters';
-            if (c.key === 'trucks') childTitle = 'Trucks';
-            if (c.key === 'drivers') childTitle = 'Drivers';
-            if (c.key === 'sales') childTitle = 'Sales';
-            if (c.key === 'payments') childTitle = 'Payments';
-            if (c.key === 'bankAccounts') childTitle = 'Bank Accounts';
-            if (c.key === 'fleetPnlReport') childTitle = 'Profit & Loss';
-            return {
-              href: c.href,
-              title: childTitle,
-              icon: c.icon,
-            };
-          })
+          .filter((c: any) => !c.permission || hasPermission(actor, c.permission as any))
+          .map((c: any) => ({
+            href: c.href,
+            title: c.title,
+            icon: c.icon,
+          }))
       : undefined;
+
+    if (n.children && (!children || children.length === 0)) {
+      return null;
+    }
+
+    if (!n.children && n.permission && !hasPermission(actor, n.permission as any)) {
+      return null;
+    }
 
     return {
       href: n.href,
-      title,
+      title: n.title,
       icon: n.icon,
       children: children?.length ? children : undefined,
     };
-  });
+  }).filter(Boolean) as any[];
 
   const label = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email;
   return (

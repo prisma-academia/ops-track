@@ -46,6 +46,11 @@ export interface FleetCounts {
   activeTransports: number
 }
 
+export interface PaymentStatusPoint {
+  name: string
+  value: number
+}
+
 export interface FleetOverviewData {
   kpi: {
     transportFees: KpiMetric
@@ -59,5 +64,7 @@ export interface FleetOverviewData {
   clientPerformance: ClientPerformanceData[]
   transportStatus: TransportStatusData[]
   productVolume: ProductVolumeData[]
+  paymentStatus: PaymentStatusPoint[]
 }
+
 

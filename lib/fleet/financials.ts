@@ -61,16 +61,17 @@ export async function calculateTripPnL(transportId: string): Promise<TripPnLSumm
   const litersLost = Number(transport.litersLost || 0);
   const maintenanceCost = Number(transport.maintenanceCost || 0);
 
-  let subsequentLocs: { location: string; rate: number; litersDelivered: number }[] = [];
-  try {
-    if (transport.subsequentLocs) {
-      subsequentLocs = typeof transport.subsequentLocs === "string" 
-        ? JSON.parse(transport.subsequentLocs) 
-        : transport.subsequentLocs;
-    }
-  } catch (e) {
-    console.error("Error parsing subsequentLocs", e);
-  }
+  // Deprecated: transportTripLegs was replaced by a relation.
+  // let transportTripLegs: { location: string; rate: number; litersDelivered: number }[] = [];
+  // try {
+  //   if (transport.transportTripLegs) {
+  //     transportTripLegs = typeof transport.transportTripLegs === "string" 
+  //       ? JSON.parse(transport.transportTripLegs) 
+  //       : transport.transportTripLegs;
+  //   }
+  // } catch (e) {
+  //   console.error("Error parsing transportTripLegs", e);
+  // }
 
   // Calculate Average Sale Price per Liter for the Trip
   // Since Sales might not perfectly map 1-to-1 with Legs by ID, we use average sale price to estimate Leg Revenue
@@ -84,7 +85,7 @@ export async function calculateTripPnL(transportId: string): Promise<TripPnLSumm
   }
   const avgSalePricePerLiter = totalSalesLiters > 0 ? totalSalesRevenue / totalSalesLiters : 0;
 
-  const sumSecondaryDelivered = subsequentLocs.reduce((sum, loc) => sum + Number(loc.litersDelivered || 0), 0);
+  const sumSecondaryDelivered = 0; // transportTripLegs.reduce((sum, loc) => sum + Number(loc.litersDelivered || 0), 0);
   const litersCarried = Number(transport.litersCarried || 0);
   
   // Calculate primary volume delivered by subtracting losses and secondary deliveries from total carried
@@ -111,27 +112,7 @@ export async function calculateTripPnL(transportId: string): Promise<TripPnLSumm
     profit: leg1Revenue - leg1Cogs - leg1TransportFee - leg1ShortageDeduction - leg1Expenses,
   });
 
-  // LEG 2+: Secondary Destinations
-  for (let i = 0; i < subsequentLocs.length; i++) {
-    const loc = subsequentLocs[i];
-    const delivered = Number(loc.litersDelivered || 0);
-    const additionalRate = Number(loc.rate || 0);
 
-    const legRevenue = delivered * avgSalePricePerLiter;
-    const legCogs = delivered * costPerLiter;
-    // Transport fee for secondary leg includes the rate to get to primary + additional rate to secondary
-    const legTransportFee = delivered * (primaryRate + additionalRate);
-
-    legs.push({
-      legName: `To ${loc.location}`,
-      revenue: legRevenue,
-      cogs: legCogs,
-      transportFee: legTransportFee,
-      shortageDeduction: 0,
-      expenses: 0, // Assigned to leg 1
-      profit: legRevenue - legCogs - legTransportFee,
-    });
-  }
 
   // Aggregate totals
   const totalRevenue = legs.reduce((sum, leg) => sum + leg.revenue, 0);

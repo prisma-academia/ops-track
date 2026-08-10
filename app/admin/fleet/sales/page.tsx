@@ -101,7 +101,7 @@ export default async function SalesPage({
     return {
       id: s.id,
       customerName: s.customer ? s.customer.name : (s.station ? s.station.name : "Unknown"),
-      transportDetails: s.transport ? `${s.transport.truck.name} to ${s.transport.destination}` : "None",
+      transportDetails: s.transport ? `${s.transport.truck?.name || "Unknown"} to ${s.transport.destination}` : "None",
       litersDespatched,
       litersReceived,
       variance,

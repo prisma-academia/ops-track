@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { requireTenantActor } from "@/lib/auth/guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
 
 export async function GET(req: Request) {
   try {
-    await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_READ.key);
+    const actor = await requireTenantActor();
+    if (!hasPermission(actor, PERMISSIONS.TENANT_WAYBILLS_READ.key) && !hasPermission(actor, PERMISSIONS.TENANT_FLEET_READ.key)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const suppliers = await prisma.supplier.findMany({ orderBy: { name: "asc" } });
     const depots = await prisma.depot.findMany({ orderBy: { name: "asc" } });
-    const transportCompanies = await prisma.transportCompany.findMany({ orderBy: { name: "asc" } });
+    const transportCompanies = await prisma.transporter.findMany({ orderBy: { name: "asc" } });
 
     return NextResponse.json({ suppliers, depots, transportCompanies });
   } catch (err: any) {
@@ -19,7 +22,10 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
+    const actor = await requireTenantActor();
+    if (!hasPermission(actor, PERMISSIONS.TENANT_WAYBILLS_WRITE.key) && !hasPermission(actor, PERMISSIONS.TENANT_FLEET_WRITE.key)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const body = await req.json();
     const { type, name } = body;
@@ -36,18 +42,24 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({ data: created });
     } else if (type === "depot") {
-      const created = await prisma.depot.upsert({
-        where: { name: name.trim() },
-        update: {},
-        create: { name: name.trim() }
+      let created = await prisma.depot.findFirst({
+        where: { name: name.trim() }
       });
+      if (!created) {
+        created = await prisma.depot.create({
+          data: { name: name.trim(), tenantId: actor.tenantId }
+        });
+      }
       return NextResponse.json({ data: created });
     } else if (type === "transportCompany") {
-      const created = await prisma.transportCompany.upsert({
-        where: { name: name.trim() },
-        update: {},
-        create: { name: name.trim() }
+      let created = await prisma.transporter.findFirst({
+        where: { name: name.trim() }
       });
+      if (!created) {
+        created = await prisma.transporter.create({
+          data: { name: name.trim(), tenantId: actor.tenantId }
+        });
+      }
       return NextResponse.json({ data: created });
     } else {
       return NextResponse.json({ error: "Invalid type" }, { status: 400 });

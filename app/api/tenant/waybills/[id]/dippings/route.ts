@@ -150,12 +150,12 @@ export async function POST(
               return sum + Number(s.litersReceived ?? 0);
             }, 0);
             
-            const subsequentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
-            const salesStationNames = allSales.map((s) => s.station?.name).filter(Boolean);
-            const customDistributions = subsequentLocs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || (!loc.saleId && !salesStationNames.includes(loc.location)));
-            const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
-            
-            totalReceived += locsVol;
+            // Deprecated: Add volume from custom distributions in transportTripLegs
+            // const transportTripLegs = Array.isArray(transport.transportTripLegs) ? transport.transportTripLegs : [];
+            // const salesStationNames = allSales.map((s) => s.station?.name).filter(Boolean);
+            // const customDistributions = transportTripLegs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || (!loc.saleId && !salesStationNames.includes(loc.location)));
+            // const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
+            // totalReceived += locsVol;
 
             const litersLost = Math.max(0, Number(transport.litersCarried) - totalReceived);
             const ratePerLiter = Number(transport.ratePerLiter);

@@ -15,6 +15,10 @@ const CreateOrderSchema = z.object({
   sourceDepot: z.string().optional().nullable(),
   pricePerLitre: z.number().min(0).default(0),
   loadingCost: z.number().min(0).default(0),
+  sendInvitation: z.boolean().default(false),
+  transporterId: z.string().optional().nullable(),
+  destination: z.string().optional().nullable(),
+  litersRequested: z.number().min(0).default(0),
 });
 
 export async function GET(request: Request) {
@@ -50,17 +54,34 @@ export async function POST(request: Request) {
     const body = CreateOrderSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    const order = await prisma.order.create({
-      data: {
-        tenantId: actor.tenantId,
-        reference: body.reference ?? null,
-        productType: body.productType,
-        litersOrdered: body.litersOrdered,
-        supplier: body.supplier ?? null,
-        sourceDepot: body.sourceDepot ?? null,
-        pricePerLitre: body.pricePerLitre,
-        loadingCost: body.loadingCost,
-      },
+    // Using a transaction to create both Order and potentially TransportInvitation
+    const result = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.create({
+        data: {
+          tenantId: actor.tenantId,
+          reference: body.reference ?? null,
+          productType: body.productType,
+          litersOrdered: body.litersOrdered,
+          supplier: body.supplier ?? null,
+          sourceDepot: body.sourceDepot ?? null,
+          pricePerLitre: body.pricePerLitre,
+          loadingCost: body.loadingCost,
+        },
+      });
+
+      if (body.sendInvitation && body.transporterId && body.destination && body.litersRequested > 0) {
+        await tx.transportInvitation.create({
+          data: {
+            tenantId: actor.tenantId,
+            orderId: order.id,
+            transporterId: body.transporterId as string,
+            destination: body.destination as string,
+            litersRequested: body.litersRequested,
+          }
+        });
+      }
+
+      return order;
     });
 
     await audit({
@@ -70,13 +91,13 @@ export async function POST(request: Request) {
       action: "order.create",
       tenantId: actor.tenantId,
       targetType: "Order",
-      targetId: order.id,
-      after: { reference: order.reference, productType: order.productType, liters: order.litersOrdered.toString() } as object,
+      targetId: result.id,
+      after: { reference: result.reference, productType: result.productType, liters: result.litersOrdered.toString() } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
 
-    return ok({ order });
+    return ok({ order: result });
   } catch (e) {
     return handleError(e);
   }

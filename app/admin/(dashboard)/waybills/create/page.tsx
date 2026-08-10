@@ -29,7 +29,7 @@ export default async function CreateWaybillPage() {
   const [suppliers, depots, transportCompanies, tenant] = await Promise.all([
     prisma.supplier.findMany({ orderBy: { name: "asc" } }),
     prisma.depot.findMany({ orderBy: { name: "asc" } }),
-    prisma.transportCompany.findMany({ orderBy: { name: "asc" } }),
+    prisma.transporter.findMany({ orderBy: { name: "asc" } }),
     prisma.tenant.findUnique({
       where: { id: actor.tenantId },
       select: { slug: true },

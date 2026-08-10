@@ -21,8 +21,9 @@ import Link from "next/link";
 import { AssetTank } from "@/components/asset-tank";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Droplet } from "lucide-react";
+import { TripLegsManager } from "./trip-legs-manager";
 
-export function TransportDetailsManager({ transport, stations = [] }: { transport: any, stations?: any[] }) {
+export function TransportDetailsManager({ transport, stations = [], drivers = [] }: { transport: any, stations?: any[], drivers?: any[] }) {
   const router = useRouter();
   
   const [openStatusDialog, setOpenStatusDialog] = useState(false);
@@ -231,7 +232,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
           <Tabs defaultValue="overview" className="w-full">
             <TabsList className="w-full justify-start h-14 bg-muted/50 backdrop-blur-xs rounded-3xl border border-border">
               <TabsTrigger value="overview" className="text-[15px] font-semibold">Overview</TabsTrigger>
-              <TabsTrigger value="destinations" className="text-[15px] font-semibold">Destinations ({subsequentLocs.length})</TabsTrigger>
+              <TabsTrigger value="destinations" className="text-[15px] font-semibold">Route & Trip Legs</TabsTrigger>
               <TabsTrigger value="distribution" className="text-[15px] font-semibold">Distribution ({(transport.sales?.length || 0) + customDistributions.length})</TabsTrigger>
               <TabsTrigger value="losses" className="text-[15px] font-semibold text-red-600 dark:text-red-400">Loss Logs ({lossLogs.length})</TabsTrigger>
               <TabsTrigger value="payments" className="text-[15px] font-semibold">Payments & Expenses ({(transport.transactions || []).length})</TabsTrigger>
@@ -425,131 +426,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
             </TabsContent>
 
             <TabsContent value="destinations" className="mt-6 space-y-4">
-              <div className="flex justify-between items-end mb-2">
-                <div>
-                  <h3 className="font-semibold text-lg">Route Destinations</h3>
-                  <p className="text-sm text-muted-foreground">Manage and track custom route stops for this trip.</p>
-                </div>
-                <Button onClick={() => setOpenAssignDestinationDialog(true)}>
-                  <PackageOpen className="h-4 w-4 mr-2" />
-                  Assign Subsequent Destination
-                </Button>
-              </div>
-              <div className="space-y-6">
-                {/* Primary Destination Table */}
-                <div>
-                  <h4 className="font-medium text-sm text-muted-foreground mb-3 uppercase tracking-wider">Primary Destination</h4>
-                  <div className="border rounded-2xl overflow-hidden bg-card">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border/50 bg-muted/50">
-                          <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Location</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Product Price/L (₦)</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Liters Carried</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Product Total (₦)</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Transport Rate/L (₦)</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Transport Total (₦)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="bg-muted/5">
-                          <td className="py-3 px-4">
-                            <div className="font-medium text-foreground">{transport.destination}</div>
-                            <div className="text-[10px] text-muted-foreground uppercase mt-0.5">Primary / Loaded Amount</div>
-                          </td>
-                          <td className="text-right py-3 px-4 text-foreground/90">{transport.order?.pricePerLitre ? Number(transport.order.pricePerLitre).toLocaleString() : '—'}</td>
-                          <td className="text-right py-3 px-4 text-foreground/90">{Number(transport.litersCarried).toLocaleString()} L</td>
-                          <td className="text-right py-3 px-4 text-foreground/90 font-medium">
-                            {transport.order?.pricePerLitre ? (Number(transport.order.pricePerLitre) * Number(transport.litersCarried)).toLocaleString() : '—'}
-                          </td>
-                          <td className="text-right py-3 px-4 text-foreground/90">{Number(transport.ratePerLiter).toLocaleString()}</td>
-                          <td className="text-right py-3 px-4 text-foreground/90 font-medium">{(Number(transport.ratePerLiter) * Number(transport.litersCarried)).toLocaleString()}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Subsequent Destinations Table */}
-                <div>
-                  <h4 className="font-medium text-sm text-muted-foreground mb-3 uppercase tracking-wider">Subsequent Destinations</h4>
-                  <div className="border rounded-2xl overflow-hidden bg-card">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border/50 bg-muted/50">
-                          <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Location</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Product Price/L (₦)</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Liters to Deliver</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Product Total (₦)</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Transport Rate/L (₦)</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Transport Total (₦)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {subsequentLocs.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="py-6 text-center text-muted-foreground">No subsequent destinations recorded.</td>
-                          </tr>
-                        ) : (
-                          subsequentLocs.map((loc: any, idx: number) => {
-                            const saleMatch = transport.sales?.find((s: any) => s.station?.name === loc.location || s.customer?.name === loc.location);
-                            const priceToUse = loc.productPrice || saleMatch?.amountPerLiter;
-                            
-                            return (
-                              <tr key={`loc-${idx}`} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
-                                <td className="py-3 px-4 text-foreground/90">
-                                  <div className="font-medium">{loc.location}</div>
-                                  <div className="text-[10px] text-muted-foreground uppercase mt-0.5">{loc.isCustom ? 'Custom Destination' : 'Station Destination'}</div>
-                                </td>
-                                <td className="text-right py-3 px-4 text-foreground/90">
-                                  {priceToUse ? Number(priceToUse).toLocaleString() : '—'}
-                                </td>
-                                <td className="text-right py-3 px-4 text-foreground/90">{Number(loc.litersDelivered).toLocaleString()} L</td>
-                                <td className="text-right py-3 px-4 text-foreground/90 font-medium">
-                                  {priceToUse ? (Number(priceToUse) * Number(loc.litersDelivered)).toLocaleString() : '—'}
-                                </td>
-                                <td className="text-right py-3 px-4 text-foreground/90">{Number(loc.rate).toLocaleString()}</td>
-                                <td className="text-right py-3 px-4 text-foreground/90 font-medium">{(Number(loc.rate) * Number(loc.litersDelivered)).toLocaleString()}</td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                      {subsequentLocs.length > 0 && (
-                        <tfoot>
-                          <tr className="bg-muted/30 border-t border-border/50 font-bold">
-                            <td className="text-right py-3 px-4 text-foreground">Totals:</td>
-                            <td className="text-right py-3 px-4"></td>
-                            <td className="text-right py-3 px-4 text-foreground">
-                              {(() => {
-                                 const totalLiters = subsequentLocs.reduce((sum: number, loc: any) => sum + Number(loc.litersDelivered || 0), 0);
-                                 return `${totalLiters.toLocaleString()} L`;
-                              })()}
-                            </td>
-                            <td className="text-right py-3 px-4 text-foreground">
-                              {(() => {
-                                 const totalProd = subsequentLocs.reduce((sum: number, loc: any) => {
-                                   const saleMatch = transport.sales?.find((s: any) => s.station?.name === loc.location || s.customer?.name === loc.location);
-                                   const priceToUse = loc.productPrice || saleMatch?.amountPerLiter;
-                                   return sum + (Number(priceToUse || 0) * Number(loc.litersDelivered || 0));
-                                 }, 0);
-                                 return `₦${totalProd.toLocaleString()}`;
-                              })()}
-                            </td>
-                            <td className="text-right py-3 px-4"></td>
-                            <td className="text-right py-3 px-4 text-foreground">
-                              {(() => {
-                                 const totalCost = subsequentLocs.reduce((sum: number, loc: any) => sum + (Number(loc.rate || 0) * Number(loc.litersDelivered || 0)), 0);
-                                 return `₦${totalCost.toLocaleString()}`;
-                              })()}
-                            </td>
-                          </tr>
-                        </tfoot>
-                      )}
-                    </table>
-                  </div>
-                </div>
-              </div>
+              <TripLegsManager transport={transport} drivers={drivers} stations={stations} />
             </TabsContent>
 
             <TabsContent value="distribution" className="mt-6 space-y-4">

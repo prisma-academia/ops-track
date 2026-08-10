@@ -20,7 +20,7 @@ const SubsequentLocSchema = z.object({
 
 const UpdateTransportSchema = z.object({
   litersDelivered: z.number().min(0).optional(),
-  subsequentLocs: z.array(SubsequentLocSchema).optional(),
+  transportTripLegs: z.array(SubsequentLocSchema).optional(),
   addMaintenanceCost: z.number().min(0).optional(),
   addLitersLost: z.number().min(0).optional(),
   addDeposit: z.number().min(0).optional(),
@@ -86,11 +86,11 @@ export async function PATCH(
     // Base earnings
     let baseRate = ratePerLiter * litersCarried;
 
-    // Extra earnings from subsequent locations
-    const subsequentLocs = body.subsequentLocs ?? (existing.subsequentLocs as any[] ?? []);
-    for (const loc of subsequentLocs) {
-      baseRate += (loc.rate ?? 0) * (loc.litersDelivered ?? 0);
-    }
+    // Extra earnings from subsequent locations (Deprecated)
+    // const transportTripLegs = body.transportTripLegs ?? [];
+    // for (const loc of transportTripLegs) {
+    //   baseRate += (loc.rate ?? 0) * (loc.litersDelivered ?? 0);
+    // }
 
     // Deductions
     const currentMaintenance = Number(existing.maintenanceCost) + (body.addMaintenanceCost ?? 0);
@@ -105,7 +105,6 @@ export async function PATCH(
       where: { id },
       data: {
         ...(body.litersDelivered !== undefined && { litersDelivered: body.litersDelivered }),
-        ...(body.subsequentLocs !== undefined && { subsequentLocs: body.subsequentLocs as any }),
         maintenanceCost: currentMaintenance,
         litersLost: currentLitersLost,
         totalDeduction,

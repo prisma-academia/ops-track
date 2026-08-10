@@ -22,6 +22,7 @@ import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 const Schema = z.object({
   orderId: z.string().min(1, "Order is required"),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional().nullable(),
+  invitationId: z.string().optional().nullable(),
   assignments: z.array(z.object({
     transporterId: z.string().min(1, "Please select a transporter"),
     truckId: z.string().min(1, "Please select a truck"),
@@ -46,11 +47,13 @@ export function CreateTransportForm({
   trucks,
   drivers,
   orders,
+  preselectedInvitation,
 }: {
   transporters: { id: string; name: string }[];
   trucks: { id: string; name: string; transporterId: string; capacityLiters?: any }[];
   drivers: { id: string; firstName: string; lastName: string; transporterId: string }[];
   orders: { id: string; reference: string | null; productType: any; litersOrdered: number | string; transports: { litersCarried: number | string }[] }[];
+  preselectedInvitation?: any;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -66,15 +69,16 @@ export function CreateTransportForm({
   const { register, handleSubmit, formState, setValue, watch, control } = useForm<Values>({
     resolver: zodResolver(Schema) as any,
     defaultValues: {
-      orderId: "",
-      productType: "PMS" as any,
+      orderId: preselectedInvitation?.orderId || "",
+      productType: (preselectedInvitation?.order?.productType as any) || "PMS",
+      invitationId: preselectedInvitation?.id || null,
       assignments: [{
-        transporterId: "",
+        transporterId: preselectedInvitation?.transporterId || "",
         truckId: "",
         driverId: "",
-        destination: "",
+        destination: preselectedInvitation?.destination || "",
         ratePerLiter: "" as any,
-        litersCarried: "" as any,
+        litersCarried: preselectedInvitation?.litersRequested || ("" as any),
       }],
     },
   });
@@ -153,7 +157,7 @@ export function CreateTransportForm({
                 <Label htmlFor="orderId" className={formState.errors.orderId ? "text-destructive" : ""}>Link to Order*</Label>
                 <Popover open={openOrderSelect} onOpenChange={setOpenOrderSelect}>
                   <PopoverTrigger asChild>
-                    <Button type="button" variant="outline" id="orderId" className={`w-full justify-between font-normal ${formState.errors.orderId ? "border-destructive" : ""}`}>
+                    <Button disabled={!!preselectedInvitation} type="button" variant="outline" id="orderId" className={`w-full justify-between font-normal ${formState.errors.orderId ? "border-destructive" : ""}`}>
                       <span className="truncate">{selectedOrder ? (selectedOrder.reference || "Unnamed Order") : "Select order..."}</span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -247,7 +251,7 @@ export function CreateTransportForm({
                     <Label className={fieldErrors?.transporterId ? "text-destructive" : ""}>Transporter*</Label>
                     <Popover open={openStates[`transporter-${index}`]} onOpenChange={(val) => togglePopover(`transporter-${index}`, val)}>
                       <PopoverTrigger asChild>
-                        <Button type="button" variant="outline" className={`w-full justify-between font-normal ${fieldErrors?.transporterId ? "border-destructive" : ""}`}>
+                        <Button disabled={!!preselectedInvitation} type="button" variant="outline" className={`w-full justify-between font-normal ${fieldErrors?.transporterId ? "border-destructive" : ""}`}>
                           <span className="truncate">{transporters.find(t => t.id === transporterId)?.name || "Select..."}</span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -338,7 +342,7 @@ export function CreateTransportForm({
                     <Label className={fieldErrors?.destination ? "text-destructive" : ""}>Primary Destination State*</Label>
                     <Popover open={openStates[`dest-${index}`]} onOpenChange={(val) => togglePopover(`dest-${index}`, val)}>
                       <PopoverTrigger asChild>
-                        <Button type="button" variant="outline" className={`w-full justify-between font-normal ${fieldErrors?.destination ? "border-destructive" : ""}`}>
+                        <Button disabled={!!preselectedInvitation} type="button" variant="outline" className={`w-full justify-between font-normal ${fieldErrors?.destination ? "border-destructive" : ""}`}>
                           <span className="truncate">{destination || "Select state..."}</span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -368,12 +372,13 @@ export function CreateTransportForm({
                       control={control}
                       name={`assignments.${index}.litersCarried`}
                       render={({ field }) => (
-                        <FormattedNumberInput 
-                          placeholder="45000" 
-                          {...field}
-                          className={fieldErrors?.litersCarried ? "border-destructive" : ""} 
-                          prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
-                        />
+                          <FormattedNumberInput 
+                            placeholder="45000" 
+                            {...field}
+                            disabled={!!preselectedInvitation}
+                            className={fieldErrors?.litersCarried ? "border-destructive" : ""} 
+                            prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
+                          />
                       )}
                     />
                     {fieldErrors?.litersCarried && <p className="text-xs text-destructive">{String(fieldErrors.litersCarried.message)}</p>}
@@ -421,28 +426,30 @@ export function CreateTransportForm({
           );
         })}
 
-        <Button 
-          type="button" 
-          variant="secondary" 
-          className="w-full py-6 font-semibold shadow-sm"
-          onClick={() => {
-            if (selectedOrderId && remainingVolume <= 0) {
-              toast.error("Cannot add another truck: Order volume has been fully allocated.");
-              return;
-            }
-            append({
-              transporterId: "",
-              truckId: "",
-              driverId: "",
-              destination: "",
-              ratePerLiter: "" as any,
-              litersCarried: "" as any
-            });
-          }}
-        >
-          <Plus className="h-5 w-5 mr-2" />
-          Add Another Truck Assignment
-        </Button>
+        {!preselectedInvitation && (
+          <Button 
+            type="button" 
+            variant="secondary" 
+            className="w-full py-6 font-semibold shadow-sm"
+            onClick={() => {
+              if (selectedOrderId && remainingVolume <= 0) {
+                toast.error("Cannot add another truck: Order volume has been fully allocated.");
+                return;
+              }
+              append({
+                transporterId: "",
+                truckId: "",
+                driverId: "",
+                destination: "",
+                ratePerLiter: "" as any,
+                litersCarried: "" as any
+              });
+            }}
+          >
+            <Plus className="h-5 w-5 mr-2" />
+            Add Another Truck Assignment
+          </Button>
+        )}
       </div>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}

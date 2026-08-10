@@ -164,13 +164,25 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: actor.tenantId },
-    select: { name: true, slug: true, status: true, settingsJson: true, activeModules: true },
+    select: { 
+      name: true, 
+      slug: true, 
+      status: true, 
+      settingsJson: true, 
+      activeModules: true,
+      modules: {
+        where: { status: "ACTIVE" }
+      }
+    },
   });
   if (!tenant || tenant.status !== "ACTIVE") redirect("/maintenance");
 
-  // Check if Fleet is enabled
-  if (!tenant.activeModules.includes("FLEET")) {
-    if (tenant.activeModules.includes("STATION")) {
+  // Check if Fleet is enabled either in relational modules or legacy activeModules
+  const hasFleetModule = tenant.modules.some(m => m.module === "FLEET") || tenant.activeModules.includes("FLEET");
+  const hasStationModule = tenant.modules.some(m => m.module === "STATION") || tenant.activeModules.includes("STATION");
+  
+  if (!hasFleetModule) {
+    if (hasStationModule) {
       redirect("/admin/dashboard");
     } else {
       redirect("/admin/modules");
@@ -276,7 +288,8 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
       stations={mappedStations}
       enabledModules={Array.from(new Set([
         ...settings.enabledModules,
-        ...(tenant.activeModules?.map((m: string) => m.toLowerCase()) || [])
+        ...(tenant.activeModules?.map((m: string) => m.toLowerCase()) || []),
+        ...(tenant.modules?.map((m: any) => m.module.toLowerCase()) || [])
       ]))}
       tenant={{
         name: tenant.name,

@@ -109,7 +109,7 @@ export async function POST(request: Request) {
           after: {
             destination: t.destination,
             transporter: t.transporter.name,
-            truck: t.truck.name,
+            truck: t.truck?.name || "Any Truck",
             litersCarried: t.litersCarried
           } as object,
           ip: meta.ip,

@@ -24,6 +24,15 @@ export default async function TransportDetailsPage({ params }: { params: Promise
       },
       transactions: {
         orderBy: { createdAt: "desc" }
+      },
+      transportTripLegs: {
+        orderBy: { sequence: "asc" },
+        include: {
+          driverAssignments: {
+            include: { driver: true },
+            orderBy: { assignedAt: "desc" }
+          }
+        }
       }
     },
   });
@@ -51,17 +60,20 @@ export default async function TransportDetailsPage({ params }: { params: Promise
 
   const stations = await prisma.station.findMany({
     where: { tenantId: actor.tenantId },
-
     orderBy: { name: "asc" }
   });
 
-
+  const drivers = await prisma.driver.findMany({
+    where: { tenantId: actor.tenantId, status: "ACTIVE" },
+    orderBy: { firstName: "asc" }
+  });
 
   return (
     <div className="space-y-6">
       <TransportDetailsManager 
         transport={JSON.parse(JSON.stringify(transport))} 
         stations={JSON.parse(JSON.stringify(stations))}
+        drivers={JSON.parse(JSON.stringify(drivers))}
       />
     </div>
   );

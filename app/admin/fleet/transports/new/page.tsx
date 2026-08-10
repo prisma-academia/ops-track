@@ -56,6 +56,17 @@ export default async function NewTransportPage(
     }
   }
 
+  let invitation = null;
+  if (searchParams?.invitationId && typeof searchParams.invitationId === "string") {
+    invitation = await prisma.transportInvitation.findFirst({
+      where: {
+        id: searchParams.invitationId,
+        tenantId: actor.tenantId,
+        status: "PENDING"
+      }
+    });
+  }
+
   return (
     <div className="space-y-6">
       <CreateTransportForm 
@@ -63,6 +74,7 @@ export default async function NewTransportPage(
         trucks={JSON.parse(JSON.stringify(trucks))} 
         drivers={drivers} 
         orders={JSON.parse(JSON.stringify(orders))} 
+        preselectedInvitation={invitation ? JSON.parse(JSON.stringify(invitation)) : null}
       />
     </div>
   );

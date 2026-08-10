@@ -3,11 +3,13 @@
 import React, { useState, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+import Image from "next/image";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { formatHumanReadableDate } from "@/lib/utils";
-import { apiPatch } from "@/lib/client/api";
+import { apiPatch, apiPost } from "@/lib/client/api";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
@@ -16,8 +18,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils"
-
+import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TransportInvitationModal } from "./invitation-modal";
 import {
   ArrowLeft,
   FileText,
@@ -61,6 +64,15 @@ const EditOrderSchema = z.object({
 
 type LookupItem = { id: string; name: string };
 
+const LeafletMap = dynamic(() => import("./leaflet-map"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full flex items-center justify-center bg-stone-100">
+      <SpinnerEllipsis />
+    </div>
+  ),
+});
+
 export function OrderDetailsManager({
   order,
   lookups,
@@ -71,10 +83,11 @@ export function OrderDetailsManager({
   pnl?: any;
 }) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("overview");
   
-  // Modals
+  // Modals & Tabs
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isInvitationModalOpen, setIsInvitationModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   
   // Popovers inside Edit Modal
@@ -136,6 +149,19 @@ export function OrderDetailsManager({
       router.refresh();
     }
   });
+
+  const onAcceptInvitation = async (invId: string) => {
+    try {
+      const res = await apiPost(`/api/tenant/fleet/orders/${order.id}/invitations/${invId}/accept`, {});
+      if (res.error) toast.error(res.error.message);
+      else {
+        toast.success("Invitation accepted. Transport created.");
+        router.refresh();
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to accept invitation");
+    }
+  };
 
   const getStatusBadgeVariant = (status: string) => {
     switch(status) {
@@ -247,6 +273,12 @@ export function OrderDetailsManager({
                 <Archive className="h-4 w-4" /> Mark Completed
               </Button>
             ) : null}
+            
+            <Button variant="outline" asChild className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 ml-2">
+              <Link href={`/admin/fleet/fleet-pnl-report/${order.id}`}>
+                <Calculator className="h-4 w-4" /> View P&L
+              </Link>
+            </Button>
           </CardAction>
         </CardHeader>
       </Card>
@@ -372,7 +404,6 @@ export function OrderDetailsManager({
                     <span className="text-muted-foreground">Logistics:</span>
                     <span className="font-mono font-medium text-right">
                       ₦{totalTransportCost.toLocaleString()}
-                      {/* {totalTransportedLiters > 0 && <><br /><span className="text-[10px] opacity-70">(@ ₦{averageTransportCostPerLiter.toFixed(2)}/L avg)</span></>} */}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -384,293 +415,143 @@ export function OrderDetailsManager({
         </Card>
       </div>
 
-      {/* ---------------- TABS NAVIGATION ---------------- */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex items-center justify-between mb-4">
-          <TabsList className="h-4 px-1.5 py-2 justify-start md:w-auto gap-1">
-            <TabsTrigger value="overview" className="px-6 py-4 text-[15px] font-semibold">Overview</TabsTrigger>
-            <TabsTrigger value="transports" className="px-6 py-4 text-[15px] font-semibold">Associated Transports ({transports.length})</TabsTrigger>
-            <TabsTrigger value="pnl" className="px-6 py-4 text-[15px] font-semibold text-emerald-600 dark:text-emerald-400">Profit & Loss</TabsTrigger>
-          </TabsList>
-        </div>
+      {/* ---------------- NEW LAYOUT (DISPATCH CARDS & MAP) ---------------- */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mt-6">
+        {/* LEFT COLUMN: Dispatch Cards & Invitations */}
+        <div className="lg:col-span-3 space-y-6">
+          
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" />
+              Dispatched Transports
+            </h3>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsInvitationModalOpen(true)}>
+              <CheckCircle2 className="h-4 w-4" /> 
+              Send Invitation
+              {order.transportInvitations && order.transportInvitations.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 rounded-full text-[10px]">
+                  {order.transportInvitations.length}
+                </Badge>
+              )}
+            </Button>
+          </div>
 
-        <TabsContent value="overview" className="mt-0 space-y-6 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm p-8 text-center text-muted-foreground flex flex-col items-center justify-center">
-            <Truck size={40} className="mb-4 text-stone-300 dark:text-stone-700" />
-            <p className="text-sm">Select 'Associated Transports' to view the physical trips fulfilling this order.</p>
-          </Card>
-        </TabsContent>
 
-        {/* ---------------- TRANSPORTS TAB ---------------- */}
-        <TabsContent value="transports" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm py-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-muted/30 border-b border-border/50">
-                  <tr>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Destination</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Truck / Driver</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Volume</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Cost</th>
-                    <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {transports.length === 0 ? (
-                    <tr><td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">No transports logged for this order.</td></tr>
-                  ) : (
-                    transports.map((t: any) => (
-                      <tr key={t.id} className="hover:bg-muted/10">
-                        <td className="px-6 py-4 text-foreground/90">{formatHumanReadableDate(t.createdAt)}</td>
-                        <td className="px-6 py-4 font-medium text-foreground">{t.destination}</td>
-                        <td className="px-6 py-4 text-muted-foreground text-xs">
-                          {t.truck?.name || "—"} <br/>
-                          {t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "—"}
-                        </td>
-                        <td className="px-6 py-4 text-right font-mono font-medium">{Number(t.litersCarried).toLocaleString()} L</td>
-                        <td className="px-6 py-4 text-right font-mono font-medium">
-                          ₦{(Number(t.ratePerLiter || 0) * Number(t.litersCarried || 0)).toLocaleString()}
-                          <div className="text-[10px] text-muted-foreground mt-1">@ ₦{Number(t.ratePerLiter || 0).toLocaleString()}/L</div>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <Badge variant="outline" className={
-                            t.status === "COMPLETED" ? "text-emerald-600 bg-emerald-50 border-emerald-200" :
-                            t.status === "IN_TRANSIT" ? "text-blue-600 bg-blue-50 border-blue-200" : ""
-                          }>
-                            {t.status}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-                {transports.length > 0 && (
-                  <tfoot className="bg-muted/10 border-t border-border/50">
-                    <tr>
-                      <td colSpan={3} className="px-6 py-4 font-bold text-right text-sm">Totals:</td>
-                      <td className="px-6 py-4 text-right font-mono font-bold text-foreground">{totalTransportedLiters.toLocaleString()} L</td>
-                      <td className="px-6 py-4 text-right font-mono font-bold text-foreground">
-                        ₦{totalTransportCost.toLocaleString()}
-                      </td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* ---------------- P&L TAB ---------------- */}
-        <TabsContent value="pnl" className="mt-0 animate-in fade-in duration-500">
-          <Card className="border-border/40 shadow-sm p-6">
-            <h3 className="text-lg font-semibold mb-1">Order Profit & Loss Summary</h3>
-            <p className="text-sm text-muted-foreground mb-6">Aggregated financial breakdown for the entire order and its associated trips.</p>
-            
-            {pnl ? (
-              <div className="space-y-6">
-                {/* Executive Summary */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-4 rounded-2xl border bg-card shadow-sm">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total Revenue</p>
-                    <p className="text-xl font-bold text-foreground">₦{pnl.totalRevenue.toLocaleString()}</p>
-                  </div>
-                  <div className="p-4 rounded-2xl border bg-card shadow-sm">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1" title="Cost of Goods Sold">Total COGS (Cost of Goods Sold)</p>
-                    <p className="text-xl font-bold text-foreground">₦{pnl.totalCogs.toLocaleString()}</p>
-                  </div>
-                  <div className="p-4 rounded-2xl border bg-card shadow-sm">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Total Costs (Logistics + Exp)</p>
-                    <p className="text-xl font-bold text-foreground">₦{(pnl.totalTransportFeesPaid + pnl.totalTripExpenses + pnl.totalOrderExpenses + pnl.totalLoadingCost).toLocaleString()}</p>
-                  </div>
-                  <div className={cn("p-4 rounded-2xl border shadow-sm", pnl.netProfit >= 0 ? "bg-emerald-500/10 border-emerald-500/30" : "bg-destructive/10 border-destructive/30")}>
-                    <p className={cn("text-[10px] uppercase tracking-widest font-semibold mb-1", pnl.netProfit >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive")}>Net Profit</p>
-                    <p className={cn("text-xl font-bold", pnl.netProfit >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive")}>
-                      {pnl.netProfit >= 0 ? "+" : "-"}₦{Math.abs(pnl.netProfit).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Order-Level Expenses */}
-                <div className="border rounded-2xl overflow-hidden bg-card shadow-sm mt-6">
-                  <div className="bg-muted/30 px-4 py-3 border-b flex items-center justify-between">
-                    <h5 className="font-semibold text-sm">Order-Level Financials</h5>
-                  </div>
-                  <div className="p-4 space-y-4">
-                    <div className="flex justify-between items-center pb-2 border-b border-border/50">
-                      <span className="text-sm font-medium text-muted-foreground">Loading Cost</span>
-                      <span className="font-semibold">₦{pnl.totalLoadingCost.toLocaleString()}</span>
-                    </div>
-                    {pnl.orderExpenseDetails && pnl.orderExpenseDetails.length > 0 ? (
-                      <div>
-                        <span className="text-sm font-medium text-muted-foreground mb-2 block">Order Expenses</span>
-                        <div className="space-y-2">
-                          {pnl.orderExpenseDetails.map((exp: any) => (
-                            <div key={exp.id} className="flex justify-between items-center text-sm pl-4 border-l-2 border-muted">
-                              <span className="text-muted-foreground">{exp.description}</span>
-                              <span>₦{exp.amount.toLocaleString()}</span>
-                            </div>
-                          ))}
-                        </div>
+          {transports.length === 0 ? (
+            <Card className="border-dashed border-2 bg-muted/20">
+              <CardContent className="p-8 text-center text-muted-foreground flex flex-col items-center justify-center">
+                <Truck size={40} className="mb-4 text-stone-300 dark:text-stone-700" />
+                <p className="text-sm font-medium mb-1">No transports assigned yet</p>
+                <p className="text-xs opacity-80">Send an invitation or manually assign a company truck to begin.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {transports.map((t: any) => (
+                <Card key={t.id} className="border-stone-200 overflow-hidden shadow-md bg-white hover:shadow-lg transition-all duration-200 group">
+                  <div className="bg-gradient-to-r from-muted/40 to-muted/10 px-5 py-4 border-b border-border flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="size-12 shrink-0 bg-white shadow-sm border rounded-lg flex items-center justify-center p-2">
+                        <Image
+                          src="/assets/icons/gas-truck.png"
+                          alt="Truck"
+                          width={40}
+                          height={40}
+                          className="object-contain drop-shadow-sm group-hover:scale-110 transition-transform duration-300"
+                        />
                       </div>
-                    ) : (
-                       <div className="flex justify-between items-center text-sm">
-                         <span className="font-medium text-muted-foreground">Order Expenses</span>
-                         <span className="text-muted-foreground">None</span>
-                       </div>
-                    )}
+                      <div>
+                        <p className="font-bold text-base text-stone-800 dark:text-stone-100">{t.truck?.plateNumber || "Unknown Truck"}</p>
+                        <p className="text-xs font-medium text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <Building2 size={12} className="opacity-70" />
+                          {t.transporter?.name}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className={cn("px-3 py-1 shadow-sm text-xs font-semibold tracking-wide uppercase",
+                      t.status === "COMPLETED" ? "text-emerald-700 bg-emerald-100/50 border-emerald-300" :
+                      t.status === "IN_TRANSIT" ? "text-blue-700 bg-blue-100/50 border-blue-300" : "text-stone-700 bg-stone-100/50"
+                    )}>
+                      {t.status}
+                    </Badge>
                   </div>
-                </div>
+                  <CardContent className="p-5">
+                    <div className="grid grid-cols-2 gap-4 mb-2">
+                      <div className="bg-muted/20 p-3 rounded-lg border border-border/50">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-1">Driver</p>
+                        <p className="font-semibold text-sm text-foreground truncate" title={t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "Unassigned"}>
+                          {t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "Unassigned"}
+                        </p>
+                      </div>
+                      <div className="bg-muted/20 p-3 rounded-lg border border-border/50">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-1">Volume</p>
+                        <p className="font-semibold text-sm text-emerald-600 dark:text-emerald-400">
+                          {Number(t.litersCarried).toLocaleString()} L
+                        </p>
+                      </div>
+                      <div className="bg-muted/20 p-3 rounded-lg border border-border/50">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-1">Destination</p>
+                        <p className="font-semibold text-sm text-foreground truncate" title={t.destination}>{t.destination}</p>
+                      </div>
+                      <div className="bg-muted/20 p-3 rounded-lg border border-border/50">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-1">Freight Cost</p>
+                        <p className="font-semibold text-sm text-blue-600 dark:text-blue-400">
+                          ₦{(Number(t.ratePerLiter || 0) * Number(t.litersCarried || 0)).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
 
-                {/* Trip-by-Trip Breakdown */}
-                {/* Trip-by-Trip Breakdown */}
-                <div className="space-y-4 mt-6">
-                  <h4 className="text-base font-semibold">Subsequent Deliveries (Trips)</h4>
-                  {pnl.trips?.length > 0 ? (
-                    <div className="border rounded-2xl bg-card shadow-sm overflow-x-auto">
-                      <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-muted/30 border-b border-border/50">
-                          <tr>
-                            <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Trip & Transporter</th>
-                            <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Revenue</th>
-                            <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">COGS Breakdown</th>
-                            <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Expenses</th>
-                            <th className="px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider text-right">Net Profit</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/30">
-                          {pnl.trips.map((trip: any, index: number) => {
-                            const transport = validTransports.find((t: any) => t.id === trip.transportId);
-                            if (!transport) return null;
-                            
-                            // Approximate breakdown for COGS
-                            const freightCost = trip.totalTransportFee || 0;
-                            const otherCogs = (trip.totalCogs || 0) - freightCost;
-                            const totalExp = (trip.totalExpenses || 0) + (trip.totalShortageDeduction || 0);
-
+                    {/* Trip Legs Section */}
+                    {t.transportTripLegs && t.transportTripLegs.length > 0 && (
+                      <div className="mt-5 border-t pt-5">
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
+                          <MapPin size={14} /> Trip Legs Tracker
+                        </p>
+                        <div className="space-y-3">
+                          {t.transportTripLegs.map((leg: any, idx: number) => {
+                            const activeAssignment = leg.driverAssignments?.find((a: any) => a.status === 'ACTIVE') || leg.driverAssignments?.[0];
                             return (
-                              <Fragment key={trip.transportId}>
-                                {/* Trip Header Row */}
-                                <tr className="bg-muted/10 border-b border-border/20">
-                                  <td className="px-6 py-4" colSpan={5}>
-                                    <div className="flex justify-between items-center">
-                                      <div>
-                                        <div className="font-bold text-foreground">Trip {index + 1}: {transport.transporter?.name || "Unknown"}</div>
-                                        <div className="text-xs text-muted-foreground mt-0.5">{transport.truck?.plateNumber || "Unknown Truck"} • {transport.destination}</div>
-                                      </div>
-                                      
-                                      <div className="flex gap-6 text-right items-center">
-                                        <div>
-                                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Trip Revenue</p>
-                                          <p className="font-medium text-foreground">₦{trip.totalRevenue.toLocaleString()}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Trip COGS</p>
-                                          <p className="font-medium text-foreground">₦{trip.totalCogs.toLocaleString()}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Trip Expenses</p>
-                                          <div className="font-medium text-destructive flex flex-col items-end">
-                                            <span>- ₦{totalExp.toLocaleString()}</span>
-                                          </div>
-                                        </div>
-                                        <div>
-                                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Net Trip Profit</p>
-                                          <p className={cn("font-bold", trip.netProfit >= 0 ? "text-emerald-600" : "text-destructive")}>
-                                            {trip.netProfit >= 0 ? "+" : "-"}₦{Math.abs(trip.netProfit).toLocaleString()}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </td>
-                                </tr>
-                                
-                                {/* Legs Rows */}
-                                {trip.legs && trip.legs.length > 0 ? (
-                                  trip.legs.map((leg: any, lIdx: number) => {
-                                    const legFreight = leg.transportFee || 0;
-                                    const legOtherCogs = (leg.cogs || 0) - legFreight;
-                                    const legProfit = (leg.revenue || 0) - (leg.cogs || 0);
-
-                                    return (
-                                      <tr key={`${trip.transportId}-leg-${lIdx}`} className="hover:bg-muted/5 border-b border-border/10 last:border-b-0">
-                                        <td className="px-6 py-4 pl-12">
-                                          <div className="font-medium text-sm flex items-center gap-2">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-primary/50"></div>
-                                            {leg.legName}
-                                          </div>
-                                          <div className="text-[10px] text-muted-foreground mt-1 ml-3.5 uppercase tracking-wider font-semibold">Leg Delivery</div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right align-top">
-                                          <div className="font-medium">₦{(leg.revenue || 0).toLocaleString()}</div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right align-top">
-                                          <div className="font-medium mb-1">₦{(leg.cogs || 0).toLocaleString()}</div>
-                                          <div className="text-[10px] text-muted-foreground flex flex-col items-end space-y-0.5">
-                                            <span>Product & Loading: ₦{legOtherCogs.toLocaleString()}</span>
-                                            <span>Freight: ₦{legFreight.toLocaleString()}</span>
-                                          </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right align-top">
-                                          {/* Leg specific expenses aren't typically tracked at the leg level in this schema, so we point them to the trip total or show 0 */}
-                                          <span className="text-muted-foreground italic text-xs">Included in Trip Exp.</span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right align-top">
-                                          <div className={cn("font-medium", legProfit >= 0 ? "text-emerald-600" : "text-destructive")}>
-                                            {legProfit >= 0 ? "+" : "-"}₦{Math.abs(legProfit).toLocaleString()}
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })
-                                ) : (
-                                  <tr className="hover:bg-muted/5">
-                                    <td className="px-6 py-3 pl-12 text-muted-foreground italic text-xs" colSpan={5}>
-                                      No detailed delivery legs logged.
-                                    </td>
-                                  </tr>
-                                )}
-                              </Fragment>
+                              <div key={leg.id} className="flex items-center justify-between px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 text-sm shadow-sm">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-xs font-bold text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 shrink-0">
+                                    {idx + 1}
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold text-foreground text-[13px]">{leg.type.replace(/_/g, ' ')}</p>
+                                    <p className="text-xs text-muted-foreground font-medium mt-0.5">{leg.origin || "Unknown"} &rarr; {leg.destination || "Unknown"}</p>
+                                  </div>
+                                </div>
+                                <div className="text-right flex items-center gap-4">
+                                  <div className="hidden sm:block text-xs bg-muted/40 px-2.5 py-1 rounded-md border border-border/50">
+                                    <span className="text-muted-foreground mr-1">Driver:</span>
+                                    <span className="font-semibold">{activeAssignment?.driver ? `${activeAssignment.driver.firstName} ${activeAssignment.driver.lastName}` : 'Pending'}</span>
+                                  </div>
+                                  <Badge variant={leg.status === 'COMPLETED' ? 'default' : 'secondary'} className={cn("text-[10px] font-bold tracking-wider", leg.status === 'COMPLETED' ? "bg-stone-800 text-white" : "")}>
+                                    {leg.status}
+                                  </Badge>
+                                </div>
+                              </div>
                             );
                           })}
-                        </tbody>
-                        <tfoot className="bg-muted/10 border-t border-border/50">
-                          <tr>
-                            <td className="px-6 py-4 font-bold text-right text-sm">Totals:</td>
-                            <td className="px-6 py-4 text-right font-mono font-bold text-foreground">
-                              ₦{pnl.trips.reduce((acc: number, t: any) => acc + (t.totalRevenue || 0), 0).toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 text-right font-mono font-bold text-foreground">
-                              ₦{pnl.trips.reduce((acc: number, t: any) => acc + (t.totalCogs || 0), 0).toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 text-right font-mono font-bold text-destructive">
-                              - ₦{pnl.trips.reduce((acc: number, t: any) => acc + (t.totalExpenses || 0) + (t.totalShortageDeduction || 0), 0).toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 text-right font-mono font-bold">
-                              {pnl.trips.reduce((acc: number, t: any) => acc + (t.netProfit || 0), 0) >= 0 ? (
-                                <span className="text-emerald-600">+ ₦{pnl.trips.reduce((acc: number, t: any) => acc + (t.netProfit || 0), 0).toLocaleString()}</span>
-                              ) : (
-                                <span className="text-destructive">- ₦{Math.abs(pnl.trips.reduce((acc: number, t: any) => acc + (t.netProfit || 0), 0)).toLocaleString()}</span>
-                              )}
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic border rounded-xl p-4 text-center">No trips have been added to this order yet.</p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-12 border rounded-2xl bg-card">
-                <p className="text-muted-foreground">P&L data could not be generated.</p>
-              </div>
-            )}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT COLUMN: Map */}
+        <div className="lg:col-span-2">
+          <Card className="sticky top-6 overflow-hidden border-stone-200 shadow-sm h-[500px] flex flex-col py-0">
+            <div className="flex-1 relative bg-stone-100 z-0">
+              <LeafletMap transports={transports} />
+            </div>
           </Card>
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
 
       {/* ---------------- EDIT MODAL ---------------- */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
@@ -847,6 +728,19 @@ export function OrderDetailsManager({
           </form>
         </DialogContent>
       </Dialog>
+      
+      {/* ---------------- INVITATION MODAL ---------------- */}
+      <TransportInvitationModal 
+        orderId={order.id}
+        isOpen={isInvitationModalOpen}
+        onOpenChange={setIsInvitationModalOpen}
+        maxLiters={order.litersOrdered - totalTransportedLiters}
+        sourceDepotName={
+          lookups.depots.find((d: any) => d.id === order.sourceDepot || d.name === order.sourceDepot)?.name 
+          || order.sourceDepot
+        }
+        invitations={order.transportInvitations || []}
+      />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 const CreateTransportFulfillSchema = z.object({
   orderId: z.string().min(1),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional().nullable(),
+  invitationId: z.string().optional().nullable(),
   assignments: z.array(z.object({
     transporterId: z.string().min(1),
     truckId: z.string().min(1),
@@ -48,7 +49,12 @@ export async function POST(request: Request) {
         throw new DomainError(400, "capacity_exceeded", "Total dispatched liters cannot exceed the ordered quantity.");
       }
 
-
+      if (body.invitationId) {
+        await tx.transportInvitation.update({
+          where: { id: body.invitationId },
+          data: { status: "ACCEPTED", respondedAt: new Date() }
+        });
+      }
 
       // 4. Create transports and link requests
       const results = [];

@@ -64,7 +64,13 @@ export async function requireTenantPage(
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: user.tenantId },
-    select: { status: true },
+    select: { 
+      status: true,
+      activeModules: true,
+      modules: {
+        where: { status: "ACTIVE" }
+      }
+    },
   });
   if (!tenant) redirect("/admin/auth/login");
   if (tenant.status !== "ACTIVE") redirect("/maintenance");

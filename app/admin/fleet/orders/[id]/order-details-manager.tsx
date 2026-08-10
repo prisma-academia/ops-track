@@ -167,9 +167,12 @@ export function OrderDetailsManager({
     switch(status) {
       case "COMPLETED": return "text-emerald-600 bg-emerald-50 border-emerald-200";
       case "CONFIRMED": return "text-blue-600 bg-blue-50 border-blue-200";
-      case "LOADED": return "text-indigo-600 bg-indigo-50 border-indigo-200";
-      case "CANCELLED": return "text-red-600 bg-red-50 border-red-200";
-      case "CHANGED": return "text-amber-600 bg-amber-50 border-amber-200";
+      case "DELIVERED": return "text-indigo-600 bg-indigo-50 border-indigo-200";
+      case "ASSIGNED":
+      case "IN_TRANSIT": return "text-purple-600 bg-purple-50 border-purple-200";
+      case "CANCELLED":
+      case "REJECTED": return "text-red-600 bg-red-50 border-red-200";
+      case "DRAFT": return "text-amber-600 bg-amber-50 border-amber-200";
       default: return "text-stone-600 bg-stone-50 border-stone-200";
     }
   };
@@ -197,7 +200,7 @@ export function OrderDetailsManager({
             </div>
           </div>
           <CardAction className="flex flex-wrap items-center gap-2">
-            {order.status === "PENDING" || order.status === "CHANGED" ? (
+            {order.status === "PENDING" || order.status === "DRAFT" ? (
               <>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -245,8 +248,8 @@ export function OrderDetailsManager({
               </>
             ) : order.status === "CONFIRMED" ? (
               <>
-                <Button variant="outline" onClick={() => onUpdateStatus("LOADED")} disabled={isUpdatingStatus} className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
-                  <PlayCircle className="h-4 w-4" /> Mark Loaded
+                <Button variant="outline" onClick={() => onUpdateStatus("ASSIGNED")} disabled={isUpdatingStatus} className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                  <PlayCircle className="h-4 w-4" /> Mark Assigned
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -268,7 +271,7 @@ export function OrderDetailsManager({
                   </AlertDialogContent>
                 </AlertDialog>
               </>
-            ) : order.status === "LOADED" ? (
+            ) : order.status === "ASSIGNED" ? (
               <Button onClick={() => onUpdateStatus("COMPLETED")} disabled={isUpdatingStatus} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
                 <Archive className="h-4 w-4" /> Mark Completed
               </Button>
@@ -559,7 +562,7 @@ export function OrderDetailsManager({
           <form onSubmit={onSaveEdit} className="flex flex-col max-h-[85vh]">
             <DialogHeader className="p-6 pb-4 border-b">
               <DialogTitle>Edit Order Details</DialogTitle>
-              <DialogDescription>Make changes to the procurement specs. The status will automatically be set to CHANGED.</DialogDescription>
+              <DialogDescription>Make changes to the procurement specs. The status will automatically be set to DRAFT.</DialogDescription>
             </DialogHeader>
             
             <div className="p-6 overflow-y-auto space-y-6">

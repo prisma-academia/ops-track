@@ -7,7 +7,7 @@ import { handleError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 
 const UpdateOrderSchema = z.object({
-  status: z.enum(["PENDING", "CONFIRMED", "LOADED", "CHANGED", "CANCELLED", "COMPLETED"]).optional(),
+  status: z.enum(["DRAFT", "PENDING", "CONFIRMED", "ASSIGNED", "IN_TRANSIT", "DELIVERED", "COMPLETED", "CANCELLED", "REJECTED"]).optional(),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional(),
   litersOrdered: z.number().positive().optional(),
   supplier: z.string().optional().nullable(),

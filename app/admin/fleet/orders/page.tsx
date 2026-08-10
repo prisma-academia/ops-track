@@ -71,7 +71,7 @@ export default async function OrdersPage({
   ]);
 
   const totalVolume = statsRaw.reduce((acc, curr) => acc + Number(curr._sum.litersOrdered || 0), 0);
-  const activeOrders = statsRaw.filter(s => ["PENDING", "CONFIRMED", "LOADED", "CHANGED"].includes(s.status)).reduce((acc, curr) => acc + curr._count._all, 0);
+  const activeOrders = statsRaw.filter(s => ["DRAFT", "PENDING", "CONFIRMED", "ASSIGNED", "IN_TRANSIT", "DELIVERED"].includes(s.status)).reduce((acc, curr) => acc + curr._count._all, 0);
   const completedOrders = statsRaw.filter(s => s.status === "COMPLETED").reduce((acc, curr) => acc + curr._count._all, 0);
 
   const rows = orders.map((o) => ({

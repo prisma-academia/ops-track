@@ -964,12 +964,15 @@ model Depot {
 // ==========================================
 
 enum OrderStatus {
+  DRAFT
   PENDING
   CONFIRMED
-  LOADED
-  CHANGED
-  CANCELLED
+  ASSIGNED
+  IN_TRANSIT
+  DELIVERED
   COMPLETED
+  CANCELLED
+  REJECTED
 }
 
 enum TransportStatus {

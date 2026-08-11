@@ -45,7 +45,8 @@ export async function requirePlatformPage(
 }
 
 export async function requireTenantPage(
-  permission?: PermissionKey
+  permission?: PermissionKey,
+  module?: "FLEET" | "STATION"
 ): Promise<TenantActor> {
   const session = await getSession(await readSessionToken("TENANT"));
   if (!session || session.userType !== "TENANT" || !session.tenantId) {
@@ -74,6 +75,10 @@ export async function requireTenantPage(
   });
   if (!tenant) redirect("/admin/auth/login");
   if (tenant.status !== "ACTIVE") redirect("/maintenance");
+
+  if (module && !tenant.activeModules.includes(module)) {
+    redirect("/admin/modules");
+  }
 
   const actor: TenantActor = {
     kind: "tenant",

@@ -26,7 +26,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_READ.key, "STATION");
 
     const allocation = await prisma.waybillAllocation.findUnique({
       where: { id },
@@ -113,7 +113,7 @@ export async function PATCH(
     await requireCsrf(request);
     const { id } = await params;
     console.log("PATCH /api/tenant/waybills/[id] HIT! ID:", id);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key, "STATION");
     console.log("ACTOR:", actor);
     const body = DeliverWaybillSchema.parse(await request.json());
     console.log("BODY PARSED:", body);

@@ -9,7 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
     const meta = requestMeta(request);
     
     // We are awaiting params in Next.js 15

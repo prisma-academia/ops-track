@@ -22,7 +22,7 @@ export async function PATCH(
 ) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
     const { id } = await params;
     const body = UpdateOrderSchema.parse(await request.json());
     const meta = requestMeta(request);

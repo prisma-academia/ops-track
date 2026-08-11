@@ -47,7 +47,10 @@ export async function requirePlatformActor(permission?: PermissionKey): Promise<
   return actor;
 }
 
-export async function requireTenantActor(permission?: PermissionKey): Promise<TenantActor> {
+export async function requireTenantActor(
+  permission?: PermissionKey,
+  module?: "FLEET" | "STATION"
+): Promise<TenantActor> {
   const token = await readSessionToken("TENANT");
   const session = await getSession(token);
   if (!session || session.userType !== "TENANT" || !session.tenantId) {
@@ -63,6 +66,14 @@ export async function requireTenantActor(permission?: PermissionKey): Promise<Te
   });
   if (!user || user.status !== "ACTIVE" || user.tenantId !== session.tenantId) {
     throw new AuthError(401, "User not found or inactive.");
+  }
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: user.tenantId },
+    select: { activeModules: true }
+  });
+
+  if (module && tenant && !tenant.activeModules.includes(module)) {
+    throw new AuthError(403, `Module ${module} is not enabled for this tenant.`);
   }
 
   const actor: TenantActor = {

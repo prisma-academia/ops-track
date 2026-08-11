@@ -5,7 +5,7 @@ import { handleError } from "@/lib/api/errors";
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET");
     
     // Fetch Customers, Transporters, Trucks, Orders, Transports, Pending Deliveries, Stations, and Bank Accounts
     const [customers, transporters, trucks, orders, transports, Deliveries, stations, bankAccounts] = await Promise.all([

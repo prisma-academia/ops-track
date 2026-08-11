@@ -31,6 +31,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const allowed = new Set<string>(ALL_TENANT_PERMISSION_KEYS);
     const perms = role.permissions.filter((p) => allowed.has(p));
     
+    const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { activeModules: true } });
+    if (!tenant || !tenant.activeModules.includes(role.module as any)) {
+      throw new DomainError(403, "module_disabled", `Tenant does not have access to the ${role.module} module.`);
+    }
+
     const isStation = role.module === "STATION";
     const before = isStation ? target.stationPermissions : target.fleetPermissions;
     

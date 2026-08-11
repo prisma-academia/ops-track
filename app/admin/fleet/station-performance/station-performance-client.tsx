@@ -61,6 +61,16 @@ import {
   ChevronsUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
 
 export type StationPerformanceItem = {
   id: string;
@@ -658,6 +668,45 @@ export function StationPerformanceClient({
           </CardContent>
         </Card>
       </TooltipProvider>
+
+      {/* CHART VIEW */}
+      {filteredStations.length > 0 && (
+        <Card className="border-border/40 shadow-xs">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-muted-foreground" />
+              Station Stock vs Capacity
+            </h3>
+            <div className="h-[350px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={filteredStations.map(s => ({ name: s.name, currentStock: s.currentStock, totalCapacity: s.totalCapacity }))} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value) => `${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  />
+                  <RechartsTooltip 
+                    cursor={{ fill: 'hsl(var(--muted)/0.4)' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                  <Bar dataKey="currentStock" name="Current Stock (L)" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="totalCapacity" name="Total Capacity (L)" fill="#94a3b8" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Reusable Data Table Component */}
       <DataTable

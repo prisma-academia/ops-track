@@ -20,7 +20,7 @@ export async function PATCH(
   try {
     await requireCsrf(request);
     const { id: stationId, salesLogId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_SHIFTS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_SHIFTS_WRITE.key, "STATION");
     const body = ReviewSalesLogSchema.parse(await request.json());
     const meta = requestMeta(request);
 

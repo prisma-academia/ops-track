@@ -11,7 +11,7 @@ export async function PATCH(
   try {
     await requireCsrf(request);
     const { id: stationId, sessionId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_WRITE.key, "STATION");
 
     const session = await prisma.dippingSession.findUnique({
       where: { id: sessionId },

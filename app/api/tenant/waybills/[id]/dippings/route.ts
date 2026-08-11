@@ -5,7 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-
+import { StockMovementService } from "@/lib/inventory/stock-movement-service";
 const CreateWaybillDippingSchema = z.object({
   dippings: z.array(z.object({
     tankId: z.string().min(1),
@@ -22,7 +22,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id: waybillAllocationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key, "STATION");
     const body = CreateWaybillDippingSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -93,9 +93,15 @@ export async function POST(
           if (netAdded !== 0) {
             const tank = await tx.tank.findUnique({ where: { id: dip.tankId } });
             if (tank) {
-              await tx.tank.update({
-                where: { id: dip.tankId },
-                data: { currentLiters: Number(tank.currentLiters || 0) + netAdded },
+              await StockMovementService.recordDeliveryDrop(tx as any, {
+                tenantId: actor.tenantId,
+                stationId: allocation.stationId!,
+                tankId: dip.tankId,
+                productType: tank.productType,
+                quantity: netAdded,
+                referenceId: allocation.deliveryId || allocation.id,
+                recordedById: actor.userId,
+                notes: `Delivery drop from Waybill Allocation ${allocation.id}`,
               });
             }
           }

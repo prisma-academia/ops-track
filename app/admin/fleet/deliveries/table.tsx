@@ -214,7 +214,7 @@ export function SalesTable({ data, filterNode, serverPagination }: { data: SaleR
     <DataTable
       columns={columns}
       data={data}
-      rowHref={(s) => `/admin/fleet/sales/${s.id}`}
+      rowHref={(s) => `/admin/fleet/deliveries/${s.id}`}
       filterColumnId="customerName"
       searchPlaceholder="Search by customer/station…"
       filterNode={filterNode}

@@ -6,7 +6,7 @@ import { parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_READ.key, "STATION");
     const url = new URL(request.url);
     const { page, take, skip } = parseOffsetPagination(url.searchParams);
     

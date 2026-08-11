@@ -10,11 +10,11 @@ export function LedgerTabs() {
 
   const tabs = [
     {
-      id: "sales",
-      title: "Sales Ledger",
-      description: "Customer sales transactions, payments & balances",
+      id: "deliveries",
+      title: "Deliveries Ledger",
+      description: "Customer deliveries transactions, payments & balances",
       icon: Receipt,
-      href: "/admin/fleet/ledger/sales",
+      href: "/admin/fleet/ledger/deliveries",
     },
     {
       id: "transports",

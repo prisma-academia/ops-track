@@ -24,7 +24,7 @@ const CreateTransportFulfillSchema = z.object({
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
     const body = CreateTransportFulfillSchema.parse(await request.json());
     const meta = requestMeta(request);
 

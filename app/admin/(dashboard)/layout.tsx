@@ -21,18 +21,8 @@ interface NavItemConfig {
 // `module: null` = always shown (Overview, Settings).
 const NAV: NavItemConfig[] = [
   { href: "/admin/dashboard", key: "overview", module: null, icon: "PieChart", permission: null },
-  // {
-  //   key: "analytics",
-  //   module: null,
-  //   icon: "TrendingUp",
-  //   permission: null,
-  //   children: [
-  //     { href: "/admin/dashboard/commercial", key: "commercial", module: null, permission: null },
-  //     { href: "/admin/dashboard/inventory", key: "inventory", module: null, permission: null },
-  //     { href: "/admin/dashboard/operations", key: "operations", module: null, permission: null },
-  //   ],
-  // },
   { href: "/admin/users", key: "users", module: "users" as ModuleKey, icon: "CircleUserRound", permission: PERMISSIONS.TENANT_USERS_READ.key },
+  { href: "/admin/clients", key: "clients", module: "users" as ModuleKey, icon: "Users", permission: PERMISSIONS.TENANT_CUSTOMERS_READ.key },
   { href: "/admin/stations", key: "stations", module: "stations" as ModuleKey, icon: "MapPin", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/waybills", key: "waybills", module: "operations" as ModuleKey, icon: "Truck", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   { href: "/admin/expenses", key: "expenses", module: "operations" as ModuleKey, icon: "Coins", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },
@@ -47,6 +37,7 @@ const NAV: NavItemConfig[] = [
       { href: "/admin/sales-reports", key: "salesReports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_SHIFTS_READ.key },
       { href: "/admin/stock-report", key: "stockReport", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
       { href: "/admin/pnl-report", key: "pnlReport", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+      { href: "/admin/delivery-pnl", key: "deliveryPnl", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
     ],
   },
   { href: "/admin/bank-accounts", key: "bankAccounts", module: null, icon: "CreditCard", permission: PERMISSIONS.TENANT_SETTINGS_READ.key },
@@ -55,7 +46,7 @@ const NAV: NavItemConfig[] = [
 ];
 
 export default async function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
-  const actor = await requireTenantPage();
+  const actor = await requireTenantPage(undefined, "STATION");
 
   const userWithStations = await prisma.tenantUser.findUnique({
     where: { id: actor.userId },

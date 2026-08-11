@@ -12,7 +12,7 @@ export default async function StationPerformancePage() {
     include: {
       organization: { select: { id: true, name: true, logoKey: true } },
       tanks: { select: { id: true, name: true, productType: true, capacity: true, currentLiters: true } },
-      stationDeliveries: {
+      deliveries: {
         select: {
           id: true,
           litersDespatched: true,
@@ -48,13 +48,13 @@ export default async function StationPerformancePage() {
     const currentStock = d.tanks?.reduce((acc, t) => acc + Number(t.currentLiters || 0), 0);
     const fillPercentage = totalCapacity > 0 ? Math.min(100, Math.round((currentStock / totalCapacity) * 100)) : 0;
 
-    const litersSold = d.stationDeliveries?.reduce((acc, Delivery) => acc + Number(Delivery.litersDespatched || 0), 0);
-    const totalRevenue = d.stationDeliveries?.reduce((acc, Delivery) => acc + Number(Delivery.totalExpectedAmount || 0), 0);
-    const totalPaymentsReceived = d.stationDeliveries?.reduce((acc, Delivery) => acc + Number(Delivery.paymentReceived || 0), 0);
+    const litersSold = d.deliveries?.reduce((acc: number, delivery: any) => acc + Number(delivery.litersDespatched || 0), 0) || 0;
+    const totalRevenue = d.deliveries?.reduce((acc: number, delivery: any) => acc + Number(delivery.totalExpectedAmount || 0), 0) || 0;
+    const totalPaymentsReceived = d.deliveries?.reduce((acc: number, delivery: any) => acc + Number(delivery.paymentReceived || 0), 0) || 0;
 
-    const litersOrdered = d.waybillAllocations?.reduce((acc, w) => acc + Number(w.litersToDispense || 0), 0);
+    const litersOrdered = d.waybillAllocations?.reduce((acc: number, w: any) => acc + Number(w.litersToDispense || 0), 0) || 0;
 
-    const oldestSale = d.stationDeliveries[d.stationDeliveries.length - 1];
+    const oldestSale = d.deliveries && d.deliveries.length > 0 ? d.deliveries[d.deliveries.length - 1] : null;
     const daysActive = oldestSale
       ? Math.max(1, Math.ceil((Date.now() - new Date(oldestSale.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
       : 1;

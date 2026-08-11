@@ -17,7 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -29,18 +28,10 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { cn, formatShortCurrency } from "@/lib/utils";
-import { addDays, format } from "date-fns";
+import { addDays, format, parseISO } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import {
-  Truck,
-  Layers,
   TrendingUp,
   TrendingDown,
   ChevronDownIcon,
@@ -49,43 +40,35 @@ import {
   Minimize2,
   Printer,
   Filter,
-  History,
   Wallet,
   Receipt,
+  PieChart as PieChartIcon
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface StockReportRow {
+interface TransactionRow {
   id: string;
-  sn: number;
-  deliveryDate: string;
-  truckNo: string;
-  waybillNumber: string;
-  productType: string;
-  stationId: string;
-  stationName: string;
-  stationCode: string;
-  deliveryQty: number;
-  totalDelivery: number;
-  deliveryCost: number;
-  stockValue: number;
-  reconciledDate: string | null;
-  reconciledDeposit: number | null;
-  totalExpense: number;
-  pnl: number | null;
-  reconciledStation: string;
-  reconciledQty: number | null;
-  status: string;
-  buyingPrice: number;
-  approvedSalesLiters: number | null;
-  sellingPrice: number | null;
-  salesRevenue: number | null;
-  expectedRevenue: number | null;
-  amountSold: number;
-  remainToComplete: number;
-  remainingStockValue: number | null;
-  salesBreakdown?: Array<{ id: string, date: string, liters: number, price: number, revenue: number }>;
+  createdAt: string;
+  type: "INFLOW" | "OUTFLOW";
+  category: string;
+  amount: number;
+  paymentPurpose: string | null;
+  description: string | null;
+  stationId: string | null;
+  station?: {
+    id: string;
+    name: string;
+    code: string;
+  };
 }
 
 interface Station {
@@ -95,20 +78,13 @@ interface Station {
 }
 
 interface Props {
-  initialRows: StockReportRow[];
+  initialTransactions: TransactionRow[];
   stations: Station[];
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
-  return format(new Date(iso), "dd/MM/yyyy");
-}
-
-function fmtQty(n: number | null) {
-  if (n === null || isNaN(n)) return "—";
-  return n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return format(new Date(iso), "dd/MM/yyyy HH:mm");
 }
 
 function fmtMoney(n: number | null) {
@@ -116,9 +92,7 @@ function fmtMoney(n: number | null) {
   return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
-
-export function PnlReportManager({ initialRows, stations }: Props) {
+export function PnlReportManager({ initialTransactions, stations }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -146,7 +120,6 @@ export function PnlReportManager({ initialRows, stations }: Props) {
     setIsOpen(false);
   }, []);
 
-  // ── Fullscreen toggle ─────────────────────────────────────────────────────
   const toggleFullscreen = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -158,19 +131,16 @@ export function PnlReportManager({ initialRows, stations }: Props) {
   }, []);
 
   useEffect(() => {
-    const handleChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
+    const handleChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", handleChange);
     return () => document.removeEventListener("fullscreenchange", handleChange);
   }, []);
 
-  // ── Filtering ─────────────────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
-    return initialRows
+    return initialTransactions
       .filter((row) => {
-        if (selectedStationIds.length > 0 && !selectedStationIds.includes(row.stationId)) return false;
-        const d = new Date(row.deliveryDate);
+        if (selectedStationIds.length > 0 && (!row.stationId || !selectedStationIds.includes(row.stationId))) return false;
+        const d = new Date(row.createdAt);
         if (dateRange?.from) {
           const s = new Date(dateRange.from);
           s.setHours(0, 0, 0, 0);
@@ -183,37 +153,46 @@ export function PnlReportManager({ initialRows, stations }: Props) {
         }
         return true;
       })
-      .map((row, i) => ({ ...row, sn: i + 1 })); // Re-number after filter
-  }, [initialRows, selectedStationIds, dateRange]);
+      .map((row, i) => ({ ...row, sn: i + 1 }));
+  }, [initialTransactions, selectedStationIds, dateRange]);
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    let totalPnl = 0;
-    let totalSalesRevenue = 0;
-    let totalReconciledQty = 0;
-    let totalReconciledDeposit = 0;
-    let totalExpenseSum = 0;
-    let totalVolume = 0;
-    let totalExpectedRevenue = 0;
-    let totalAmountSold = 0;
-    let totalRemainToComplete = 0;
+    let totalRevenue = 0;
+    let totalExpense = 0;
 
     filteredRows.forEach((r) => {
-      if (r.pnl !== null) totalPnl += r.pnl;
-      if (r.reconciledQty !== null) totalReconciledQty += r.reconciledQty;
-      if (r.salesRevenue !== null) totalSalesRevenue += r.salesRevenue;
-      if (r.expectedRevenue !== null) totalExpectedRevenue += r.expectedRevenue;
-      if (r.amountSold !== null) totalAmountSold += r.amountSold;
-      if (r.remainToComplete !== null) totalRemainToComplete += r.remainToComplete;
-      if (r.reconciledDeposit !== null) totalReconciledDeposit += r.reconciledDeposit;
-      if (r.totalExpense) totalExpenseSum += r.totalExpense;
-      if (r.deliveryQty) totalVolume += r.deliveryQty;
+      const amt = Number(r.amount);
+      if (r.type === "INFLOW" && r.category === "STATION_SALE") totalRevenue += amt;
+      if (r.type === "OUTFLOW" && r.category === "STATION_EXPENSE") totalExpense += amt;
     });
-    return { count: filteredRows.length, totalPnl, totalReconciledQty, totalSalesRevenue, totalExpectedRevenue, totalAmountSold, totalRemainToComplete, totalReconciledDeposit, totalExpenseSum, totalVolume };
+
+    const netProfit = totalRevenue - totalExpense;
+
+    return { totalRevenue, totalExpense, netProfit };
   }, [filteredRows]);
 
-  // ── Column defs ───────────────────────────────────────────────────────────
-  const columns = useMemo<ColumnDef<StockReportRow>[]>(
+  const chartData = useMemo(() => {
+    const grouped = filteredRows.reduce((acc, curr) => {
+      const date = format(parseISO(curr.createdAt), "MMM dd");
+      if (!acc[date]) {
+        acc[date] = { date, Revenue: 0, Expenses: 0, Profit: 0 };
+      }
+      const amt = Number(curr.amount);
+      if (curr.type === "INFLOW" && curr.category === "STATION_SALE") {
+        acc[date].Revenue += amt;
+      }
+      if (curr.type === "OUTFLOW" && curr.category === "STATION_EXPENSE") {
+        acc[date].Expenses += amt;
+      }
+      acc[date].Profit = acc[date].Revenue - acc[date].Expenses;
+      return acc;
+    }, {} as Record<string, { date: string, Revenue: number, Expenses: number, Profit: number }>);
+    
+    // Sort chronologically
+    return Object.values(grouped).reverse();
+  }, [filteredRows]);
+
+  const columns = useMemo<ColumnDef<TransactionRow & { sn: number }>[]>(
     () => [
       {
         id: "sn",
@@ -227,152 +206,59 @@ export function PnlReportManager({ initialRows, stations }: Props) {
         ),
       },
       {
-        id: "deliveryDate",
-        accessorKey: "deliveryDate",
-        header: "Delivery Date",
-        size: 120,
+        id: "createdAt",
+        accessorKey: "createdAt",
+        header: "Date",
+        size: 140,
         cell: ({ row }) => (
           <span className="text-xs font-medium whitespace-nowrap">
-            {fmtDate(row.original.deliveryDate)}
-          </span>
-        ),
-      },
-      {
-        id: "truckNo",
-        accessorKey: "truckNo",
-        header: "Truck No",
-        size: 110,
-        cell: ({ row }) => (
-          <span className="font-mono text-xs font-semibold text-foreground uppercase whitespace-nowrap">
-            {row.original.truckNo}
+            {fmtDate(row.original.createdAt)}
           </span>
         ),
       },
       {
         id: "stationName",
-        accessorKey: "stationName",
-        header: "Stations",
+        accessorKey: "station.name",
+        header: "Station",
+        size: 160,
+        cell: ({ row }) => (
+          <span className="text-xs font-semibold text-foreground whitespace-nowrap">
+            {row.original.station?.name || "—"}
+          </span>
+        ),
+      },
+      {
+        id: "category",
+        accessorKey: "category",
+        header: "Category",
         size: 140,
         cell: ({ row }) => (
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-semibold text-foreground whitespace-nowrap">
-              {row.original.stationName}
-            </span>
-          </div>
+          <Badge variant="outline" className={cn(
+            "text-[10px]",
+            row.original.category === "STATION_SALE" ? "text-emerald-600 border-emerald-600" : "text-rose-600 border-rose-600"
+          )}>
+            {row.original.category.replace(/_/g, " ")}
+          </Badge>
         ),
       },
-
       {
-        id: "buyingPrice",
-        accessorKey: "buyingPrice",
-        header: () => <div className="text-right whitespace-nowrap">Purchase Price</div>,
-        size: 130,
+        id: "description",
+        accessorKey: "description",
+        header: "Description",
+        size: 250,
         cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums">
-            {fmtMoney(row.original.buyingPrice)}
-          </div>
+          <span className="text-xs text-muted-foreground line-clamp-1">
+            {row.original.description || "—"}
+          </span>
         ),
       },
       {
-        id: "reconciledQty",
-        accessorKey: "reconciledQty",
-        header: () => <div className="text-right whitespace-nowrap">Receive Qty</div>,
-        size: 130,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums">
-            {fmtQty(row.original.reconciledQty)}
-          </div>
-        ),
-      },
-      {
-        id: "sellingPrice",
-        accessorKey: "sellingPrice",
-        header: () => <div className="text-right whitespace-nowrap">Sold Price</div>,
-        size: 130,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums">
-            {row.original.sellingPrice !== null ? fmtMoney(row.original.sellingPrice) : "—"}
-          </div>
-        ),
-      },
-      {
-        id: "expectedRevenue",
-        accessorKey: "expectedRevenue",
-        header: () => <div className="text-right whitespace-nowrap">Total Expected Revenue</div>,
-        size: 140,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono font-semibold tabular-nums text-slate-600">
-            {fmtMoney(row.original.expectedRevenue)}
-          </div>
-        ),
-      },
-      {
-        id: "salesRevenue",
-        accessorKey: "salesRevenue",
-        header: () => <div className="text-right whitespace-nowrap">Sales Revenue</div>,
-        size: 140,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono font-semibold tabular-nums">
-            {fmtMoney(row.original.salesRevenue)}
-          </div>
-        ),
-      },
-      {
-        id: "amountSold",
-        accessorKey: "amountSold",
-        header: () => <div className="text-right whitespace-nowrap">Amount Sold</div>,
-        size: 130,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums">
-            {fmtQty(row.original.amountSold)} L
-          </div>
-        ),
-      },
-      {
-        id: "remainToComplete",
-        accessorKey: "remainToComplete",
-        header: () => <div className="text-right whitespace-nowrap">Remaining</div>,
+        id: "amount",
+        accessorKey: "amount",
+        header: () => <div className="text-right whitespace-nowrap">Amount</div>,
         size: 130,
         cell: ({ row }) => {
-          const v = row.original.remainToComplete;
-          return (
-            <div className={cn("text-right text-xs font-mono font-semibold tabular-nums", v > 0 ? "text-amber-600" : "text-emerald-600")}>
-              {fmtQty(v)} L
-            </div>
-          );
-        },
-      },
-      {
-        id: "reconciledDeposit",
-        accessorKey: "reconciledDeposit",
-        header: () => <div className="text-right whitespace-nowrap">Reconciled Deposit</div>,
-        size: 150,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums">
-            {fmtMoney(row.original.reconciledDeposit)}
-          </div>
-        ),
-      },
-      {
-        id: "totalExpense",
-        accessorKey: "totalExpense",
-        header: () => <div className="text-right whitespace-nowrap">Expenses</div>,
-        size: 130,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums text-red-500">
-            {fmtMoney(row.original.totalExpense)}
-          </div>
-        ),
-      },
-      {
-        id: "pnl",
-        accessorKey: "pnl",
-        header: () => <div className="text-right">Profit/Loss</div>,
-        size: 130,
-        cell: ({ row }) => {
-          const v = row.original.pnl;
-          if (v === null) return <div className="text-right text-xs text-muted-foreground">—</div>;
-          const isPos = v >= 0;
+          const isPos = row.original.type === "INFLOW";
           return (
             <div
               className={cn(
@@ -380,44 +266,23 @@ export function PnlReportManager({ initialRows, stations }: Props) {
                 isPos ? "text-emerald-600" : "text-rose-600"
               )}
             >
-              {isPos ? "+" : ""}
-              {fmtMoney(v)}
+              {isPos ? "+" : "-"}
+              {fmtMoney(row.original.amount)}
             </div>
           );
         },
-      },
-      {
-        id: "actions",
-        header: () => <div className="text-center hide-on-print">Action</div>,
-        size: 100,
-        cell: ({ row }) => (
-          <div className="text-center hide-on-print">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-[10px] px-2"
-              onClick={() => window.location.href = `/admin/pnl-report/${row.original.id}`}
-            >
-              Details
-            </Button>
-          </div>
-        ),
       },
     ],
     []
   );
 
-  // ── Table setup ───────────────────────────────────────────────────────────
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnPinning] = useState<ColumnPinningState>({
-    left: [],
-  });
 
   const table = useReactTable({
     data: filteredRows,
     columns,
-    state: { sorting, columnFilters, columnPinning },
+    state: { sorting, columnFilters },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
@@ -425,71 +290,6 @@ export function PnlReportManager({ initialRows, stations }: Props) {
     getSortedRowModel: getSortedRowModel(),
   });
 
-  // ── Stat cards config ─────────────────────────────────────────────────────
-  const statCards = [
-    {
-      title: "Deliveries",
-      value: stats.count.toLocaleString(),
-      fullValue: null,
-      icon: Truck,
-      badge: "Filtered",
-      badgeColor: "bg-teal-400/10 text-teal-700 dark:text-teal-400",
-    },
-    {
-      title: "Total Volume",
-      value: `${Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(stats.totalVolume)} L`,
-      fullValue: `${fmtQty(stats.totalVolume)} L`,
-      icon: Layers,
-      badge: "Filtered",
-      badgeColor: "bg-blue-400/10 text-blue-700 dark:text-blue-400",
-    },
-
-    {
-      title: "Sales Revenue",
-      value: formatShortCurrency(stats.totalSalesRevenue),
-      fullValue: fmtMoney(stats.totalSalesRevenue),
-      icon: TrendingUp,
-      valueColor: "text-emerald-600",
-      iconColor: "text-emerald-600",
-      badge: "Filtered",
-      badgeColor: "bg-emerald-400/10 text-emerald-700 dark:text-emerald-400",
-    },
-    {
-      title: "Reconciled Deposit",
-      value: formatShortCurrency(stats.totalReconciledDeposit),
-      fullValue: fmtMoney(stats.totalReconciledDeposit),
-      icon: Wallet,
-      valueColor: "text-indigo-600",
-      iconColor: "text-indigo-600",
-      badge: "Filtered",
-      badgeColor: "bg-indigo-400/10 text-indigo-700 dark:text-indigo-400",
-    },
-    {
-      title: "Expenses",
-      value: formatShortCurrency(stats.totalExpenseSum),
-      fullValue: fmtMoney(stats.totalExpenseSum),
-      icon: Receipt,
-      valueColor: "text-rose-500",
-      iconColor: "text-rose-500",
-      badge: "Filtered",
-      badgeColor: "bg-rose-400/10 text-rose-700 dark:text-rose-400",
-    },
-    {
-      title: "Profit & Loss",
-      value: formatShortCurrency(Math.abs(stats.totalPnl)),
-      fullValue: fmtMoney(Math.abs(stats.totalPnl)),
-      valueColor: stats.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600",
-      icon: stats.totalPnl >= 0 ? TrendingUp : TrendingDown,
-      iconColor: stats.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600",
-      badge: stats.totalPnl >= 0 ? "Gain" : "Loss",
-      badgeColor:
-        stats.totalPnl >= 0
-          ? "bg-emerald-400/10 text-emerald-700 dark:text-emerald-400"
-          : "bg-rose-400/10 text-rose-700 dark:text-rose-400",
-    },
-  ];
-
-  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div
       ref={containerRef}
@@ -504,11 +304,10 @@ export function PnlReportManager({ initialRows, stations }: Props) {
           .hide-on-print { display: none; }
         }
       `}</style>
-      {/* ── Header + Filters ─────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row justify-between items-center md:items-center gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
         <div className="space-y-1">
           <h1 className="text-xl font-bold tracking-tight text-foreground print:text-black">
-            Profit & Loss Report
+            Station Profit & Loss
           </h1>
           <p className="hidden print:block text-[11px] text-black/80 font-medium mt-1">
             Date: {dateRange?.from ? format(dateRange.from, "d MMMM yyyy") : "All Time"} {dateRange?.to ? ` to ${format(dateRange.to, "d MMMM yyyy")}` : ""}
@@ -519,7 +318,6 @@ export function PnlReportManager({ initialRows, stations }: Props) {
 
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto print:hidden">
           <div className="shrink-0 flex gap-2">
-            {/* Filter Sheet */}
             <div>
               <Sheet open={isOpen} onOpenChange={setIsOpen}>
                 <SheetTrigger asChild>
@@ -539,26 +337,15 @@ export function PnlReportManager({ initialRows, stations }: Props) {
                 <SheetContent side="right" className="w-[400px] sm:w-[540px] flex flex-col">
                   <SheetHeader>
                     <SheetTitle>Filter Records</SheetTitle>
-                    <SheetDescription>
-                      Apply filters to narrow down the table results.
-                    </SheetDescription>
+                    <SheetDescription>Apply filters to narrow down results.</SheetDescription>
                   </SheetHeader>
                   <div className="flex-1 overflow-y-auto py-6 space-y-3 px-4">
-                    {/* Station filter */}
                     <div className="space-y-1 w-full">
                       <Label className="text-xs text-muted-foreground">Station(s)</Label>
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              draftSelectedStationIds.length === 0 && "text-muted-foreground"
-                            )}
-                          >
-                            {draftSelectedStationIds.length === 0
-                              ? "All Stations"
-                              : `${draftSelectedStationIds.length} station(s) selected`}
+                          <Button variant="outline" className={cn("w-full justify-start text-left font-normal", draftSelectedStationIds.length === 0 && "text-muted-foreground")}>
+                            {draftSelectedStationIds.length === 0 ? "All Stations" : `${draftSelectedStationIds.length} station(s) selected`}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-56 p-2" align="start">
@@ -567,16 +354,9 @@ export function PnlReportManager({ initialRows, stations }: Props) {
                               <Checkbox
                                 id="station-all"
                                 checked={draftSelectedStationIds.length === 0}
-                                onCheckedChange={(checked) => {
-                                  if (checked) setDraftSelectedStationIds([]);
-                                }}
+                                onCheckedChange={(checked) => { if (checked) setDraftSelectedStationIds([]); }}
                               />
-                              <label
-                                htmlFor="station-all"
-                                className="text-sm font-medium leading-none cursor-pointer"
-                              >
-                                All Stations
-                              </label>
+                              <label htmlFor="station-all" className="text-sm font-medium leading-none cursor-pointer">All Stations</label>
                             </div>
                             {stations.map((s) => (
                               <div key={s.id} className="flex items-center space-x-2 p-1">
@@ -587,18 +367,11 @@ export function PnlReportManager({ initialRows, stations }: Props) {
                                     if (checked) {
                                       setDraftSelectedStationIds([...draftSelectedStationIds, s.id]);
                                     } else {
-                                      setDraftSelectedStationIds(
-                                        draftSelectedStationIds.filter((id) => id !== s.id)
-                                      );
+                                      setDraftSelectedStationIds(draftSelectedStationIds.filter((id) => id !== s.id));
                                     }
                                   }}
                                 />
-                                <label
-                                  htmlFor={`station-${s.id}`}
-                                  className="text-sm font-medium leading-none cursor-pointer"
-                                >
-                                  {s.name}
-                                </label>
+                                <label htmlFor={`station-${s.id}`} className="text-sm font-medium leading-none cursor-pointer">{s.name}</label>
                               </div>
                             ))}
                           </div>
@@ -606,7 +379,6 @@ export function PnlReportManager({ initialRows, stations }: Props) {
                       </Popover>
                     </div>
 
-                    {/* Date Range */}
                     <div className="space-y-3 w-full">
                       <Label className="text-sm font-semibold">Date Range</Label>
                       <div className="grid grid-cols-2 gap-4">
@@ -630,140 +402,119 @@ export function PnlReportManager({ initialRows, stations }: Props) {
                     </div>
                   </div>
                   <SheetFooter className="border-t pt-4">
-                    <Button variant="outline" onClick={clearFilters} className="w-full">
-                      Reset Filters
-                    </Button>
-                    <Button onClick={applyFilters} className="w-full">
-                      Apply Filters
-                    </Button>
+                    <Button variant="outline" onClick={clearFilters} className="w-full">Reset Filters</Button>
+                    <Button onClick={applyFilters} className="w-full">Apply Filters</Button>
                   </SheetFooter>
                 </SheetContent>
               </Sheet>
             </div>
-
-            {/* Print button */}
-            <div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => window.print()}
-                title="Print report"
-                className="h-10 w-10"
-              >
-                <Printer className="size-4" />
-              </Button>
-            </div>
-
-            {/* Fullscreen toggle */}
-            <div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={toggleFullscreen}
-                title={isFullscreen ? "Exit fullscreen" : "Fullscreen view"}
-                className="h-10 w-10"
-              >
-                {isFullscreen ? (
-                  <Minimize2 className="size-4" />
-                ) : (
-                  <Maximize2 className="size-4" />
-                )}
-              </Button>
-            </div>
+            <Button variant="outline" size="icon" onClick={() => window.print()} title="Print report" className="h-10 w-10">
+              <Printer className="size-4" />
+            </Button>
+            <Button variant="outline" size="icon" onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen view"} className="h-10 w-10">
+              {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* ── Stat Cards ──────────────────────────────────────────────────── */}
-      <TooltipProvider delayDuration={200}>
-        <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
-          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
-            {statCards.map((item, index) => (
-              <div
-                key={index}
-                className={cn(
-                  "w-full lg:w-1/6 md:w-1/3 border-border print:border-none print:w-auto",
-                  index === statCards.length - 1 ? "border-b-0" : "border-b",
-                  (index + 1) % 3 === 0 ? "md:border-e-0" : "md:border-e",
-                  index >= 3 ? "md:border-b-0" : "md:border-b",
-                  "lg:border-b-0",
-                  index === statCards.length - 1 ? "lg:border-e-0" : "lg:border-e"
-                )}
-              >
-                {item.fullValue ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="p-4 flex items-start justify-between print:p-0 cursor-default hover:bg-muted/30 transition-colors h-full">
-                        <div className="flex flex-col gap-2 print:gap-0.5">
-                          <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
-                          <div>
-                            <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
-                              {item.value}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
-                          <item.icon
-                            size={14}
-                            className={cn("text-muted-foreground", item.iconColor)}
-                          />
-                        </div>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
-                      {item.fullValue}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <div className="p-4 flex items-start justify-between print:p-0 h-full">
-                    <div className="flex flex-col gap-2 print:gap-0.5">
-                      <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
-                      <div>
-                        <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
-                          {item.value}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
-                      <item.icon
-                        size={14}
-                        className={cn("text-muted-foreground", item.iconColor)}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="border-border/40 shadow-xs">
+          <CardContent className="p-6 flex flex-col justify-center items-start h-full">
+             <div className="flex items-center gap-2 mb-4">
+               <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-full">
+                 <Wallet className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+               </div>
+               <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Total Revenue</p>
+             </div>
+             <p className="text-3xl font-bold text-emerald-600">{formatShortCurrency(stats.totalRevenue)}</p>
+             <p className="text-xs text-muted-foreground mt-2">{fmtMoney(stats.totalRevenue)}</p>
           </CardContent>
         </Card>
-      </TooltipProvider>
 
-      {/* ── Table ───────────────────────────────────────────────────────── */}
+        <Card className="border-border/40 shadow-xs">
+          <CardContent className="p-6 flex flex-col justify-center items-start h-full">
+             <div className="flex items-center gap-2 mb-4">
+               <div className="p-2 bg-rose-100 dark:bg-rose-900 rounded-full">
+                 <Receipt className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+               </div>
+               <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Total Expenses</p>
+             </div>
+             <p className="text-3xl font-bold text-rose-600">{formatShortCurrency(stats.totalExpense)}</p>
+             <p className="text-xs text-muted-foreground mt-2">{fmtMoney(stats.totalExpense)}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/40 shadow-xs">
+          <CardContent className="p-6 flex flex-col justify-center items-start h-full">
+             <div className="flex items-center gap-2 mb-4">
+               <div className={cn("p-2 rounded-full", stats.netProfit >= 0 ? "bg-indigo-100 dark:bg-indigo-900" : "bg-red-100 dark:bg-red-900")}>
+                 {stats.netProfit >= 0 ? <TrendingUp className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> : <TrendingDown className="h-5 w-5 text-red-600 dark:text-red-400" />}
+               </div>
+               <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Net Profit</p>
+             </div>
+             <p className={cn("text-3xl font-bold", stats.netProfit >= 0 ? "text-indigo-600" : "text-red-600")}>{formatShortCurrency(stats.netProfit)}</p>
+             <p className="text-xs text-muted-foreground mt-2">{fmtMoney(stats.netProfit)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {chartData.length > 0 && (
+        <Card className="border-border/40 shadow-xs hide-on-print">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+              <PieChartIcon className="w-5 h-5 text-muted-foreground" />
+              Revenue vs Expenses (Daily Trend)
+            </h3>
+            <div className="h-[400px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="date" 
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value) => `₦${(value / 1000000).toFixed(1)}M`}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  />
+                  <RechartsTooltip 
+                    cursor={{ fill: 'hsl(var(--muted)/0.4)' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    formatter={(value: any) => [fmtMoney(Number(value)), undefined]}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                  <Bar dataKey="Revenue" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="Expenses" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="w-full py-0 overflow-hidden print:shadow-none print:border-none print:bg-transparent">
         <CardContent className="px-0">
-          {/* Scrollable table container */}
           <div className="overflow-x-auto border-t border-border/40 relative print:overflow-visible print:border-none print:w-full print:max-w-none">
             <table className="min-w-max w-full text-sm border-collapse border border-border/50 print:border-black/30 print:text-[10px] print:w-full">
               <thead className="bg-muted/50 border-b border-border/50 print:border-black/30 print:bg-transparent">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} className="border-none">
                     {headerGroup.headers.map((header) => {
-                      const isPinned = header.column.getIsPinned();
-                      const pinOffset = isPinned === "left"
-                        ? header.column.getStart("left")
-                        : undefined;
-
                       return (
                         <th
                           key={header.id}
                           style={{
                             width: header.column.getSize(),
                             minWidth: header.column.getSize(),
-                            left: isPinned === "left" ? pinOffset : undefined,
                           }}
                           className={cn(
-                            "h-9 px-2 py-1.5 text-[11px] font-bold text-foreground bg-muted/50 border border-border/50 print:border-black/30 uppercase tracking-wider whitespace-nowrap text-left print:text-[9px] print:text-black print:bg-transparent",
-                            isPinned === "left" && "sticky z-20"
+                            "h-9 px-2 py-1.5 text-[11px] font-bold text-foreground bg-muted/50 border border-border/50 print:border-black/30 uppercase tracking-wider whitespace-nowrap text-left print:text-[9px] print:text-black print:bg-transparent"
                           )}
                         >
                           {header.isPlaceholder ? null : (
@@ -796,105 +547,41 @@ export function PnlReportManager({ initialRows, stations }: Props) {
               <tbody>
                 {table.getRowModel().rows.length ? (
                   table.getRowModel().rows.map((row, index) => (
-                    <Fragment key={row.id}>
-                      <tr
-                        className={cn(
-                          "hover:bg-muted/20 transition-colors group",
-                          index % 2 === 0 ? "bg-background" : "bg-muted/5 print:bg-transparent"
-                        )}
-                      >
-                        {row.getVisibleCells().map((cell) => {
-                          const isPinned = cell.column.getIsPinned();
-                          const pinOffset =
-                            isPinned === "left"
-                              ? cell.column.getStart("left")
-                              : undefined;
-
-                          return (
-                            <td
-                              key={cell.id}
-                              style={{
-                                width: cell.column.getSize(),
-                                minWidth: cell.column.getSize(),
-                                left: isPinned === "left" ? pinOffset : undefined,
-                              }}
-                              className={cn(
-                                "h-11 px-2 py-1.5 border border-border/50 print:border-black/30",
-                                isPinned === "left" &&
-                                  "sticky z-10 bg-inherit group-hover:bg-muted/20"
-                              )}
-                            >
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext()
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    </Fragment>
+                    <tr
+                      key={row.id}
+                      className={cn(
+                        "group border-b border-border/50 hover:bg-muted/30 transition-colors print:border-black/30",
+                        index % 2 === 0 ? "bg-transparent" : "bg-muted/10 print:bg-transparent"
+                      )}
+                    >
+                      {row.getVisibleCells().map((cell) => {
+                        return (
+                          <td
+                            key={cell.id}
+                            className={cn(
+                              "px-2 py-1.5 align-middle border-x border-border/50 print:border-black/30"
+                            )}
+                          >
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext()
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
                   ))
                 ) : (
                   <tr>
                     <td
                       colSpan={columns.length}
-                      className="h-32 text-center text-sm text-muted-foreground"
+                      className="h-24 text-center text-muted-foreground border-x border-b border-border/50"
                     >
-                      No stock report records found for the selected filters.
+                      No transactions found.
                     </td>
                   </tr>
                 )}
               </tbody>
-              <tfoot className="bg-muted/50 font-bold border border-border/50 print:border-black/30 print:bg-transparent">
-                <tr>
-                  {/* Col 0, 1, 2, 3 */}
-                  <td colSpan={4} className="px-2 py-2 text-right text-sm border border-border/50 print:border-black/30 print:text-black">
-                    Total:
-                  </td>
-                  {/* Col 4: Purchase Price */}
-                  <td className="px-2 py-2 border border-border/50 print:border-black/30"></td>
-                  {/* Col 5: Receive Qty */}
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtQty(stats.totalReconciledQty)} L
-                  </td>
-                  {/* Col 6: Sold Price */}
-                  <td className="px-2 py-2 border border-border/50 print:border-black/30"></td>
-                  {/* Col 7: Total Expected Revenue */}
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-slate-600">
-                    {fmtMoney(stats.totalExpectedRevenue)}
-                  </td>
-                  {/* Col 8: Sales Revenue */}
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtMoney(stats.totalSalesRevenue)}
-                  </td>
-                  {/* Col 9: Amount Sold */}
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtQty(stats.totalAmountSold)} L
-                  </td>
-                  {/* Col 10: Remaining */}
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-amber-600">
-                    {fmtQty(stats.totalRemainToComplete)} L
-                  </td>
-                  {/* Col 11: Reconciled Deposit */}
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtMoney(stats.totalReconciledDeposit)}
-                  </td>
-                  {/* Col 12: Expense */}
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-red-500">
-                    {fmtMoney(stats.totalExpenseSum)}
-                  </td>
-                  {/* Col 13: Profit/Loss */}
-                  <td className={cn(
-                    "px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black",
-                    stats.totalPnl >= 0 ? "text-emerald-600 print:text-black" : "text-rose-600 print:text-black"
-                  )}>
-                    {stats.totalPnl >= 0 ? "+" : ""}
-                    {fmtMoney(stats.totalPnl)}
-                  </td>
-                  {/* Col 14: Action */}
-                  <td className="px-2 py-2 border border-border/50 print:border-black/30 hide-on-print"></td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </CardContent>

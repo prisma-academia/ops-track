@@ -30,6 +30,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     const allowed = new Set<string>(ALL_TENANT_PERMISSION_KEYS);
     const cleaned = body.permissions.filter((p) => allowed.has(p));
     
+    const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { activeModules: true } });
+    if (!tenant || !tenant.activeModules.includes(body.module)) {
+      throw new DomainError(403, "module_disabled", `Tenant does not have access to the ${body.module} module.`);
+    }
+
     const isStation = body.module === "STATION";
     const before = isStation ? target.stationPermissions : target.fleetPermissions;
     

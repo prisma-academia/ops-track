@@ -18,7 +18,7 @@ export async function GET(
 ) {
   try {
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_READ.key, "STATION");
 
     const station = await prisma.station.findUnique({ where: { id: stationId } });
     if (!station || station.tenantId !== actor.tenantId) {
@@ -43,7 +43,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_WRITE.key, "STATION");
     const body = SetPriceSchema.parse(await request.json());
     const meta = requestMeta(request);
 

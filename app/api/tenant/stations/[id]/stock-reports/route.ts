@@ -31,7 +31,7 @@ export async function GET(
 ) {
   try {
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_READ.key, "STATION");
     const url = new URL(request.url);
     const { cursor, take } = parsePagination(url.searchParams);
 
@@ -73,7 +73,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_WRITE.key, "STATION");
     const body = CreateStockReportSchema.parse(await request.json());
     const meta = requestMeta(request);
 

@@ -151,7 +151,7 @@ export default async function SalesPage({
     <div className="space-y-6">
       <DataTableToolbar
         title="Deliveries"
-        createHref="/admin/fleet/Deliveries/new"
+        createHref="/admin/fleet/deliveries/new"
         createLabel="Log Delivery"
         description="Manage B2B Deliveries and bulk deliveries to clients."
       />

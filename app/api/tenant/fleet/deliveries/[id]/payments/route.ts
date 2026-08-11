@@ -5,6 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { FinanceService } from "@/lib/finance/finance-service";
 
 const CreatePaymentSchema = z.object({
   amount: z.number().positive(),
@@ -22,7 +23,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
     const body = CreatePaymentSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -40,22 +41,14 @@ export async function POST(
       }
 
       // Create the transaction
-      await tx.transaction.create({
-        data: {
-          tenantId: actor.tenantId,
-          type: "INFLOW",
-          category: "CLIENT_PAYMENT",
-          paymentType: "PART_PAYMENT", // We can default to PART_PAYMENT and let status dictate clearing
-          amount: body.amount,
-          paymentMethod: body.paymentMethod,
-          description: body.description,
-          reference: body.reference,
-          receiptUrl: body.receiptUrl,
-          deliveryId: existingSale.id,
-          customerId: existingSale.customerId,
-          bankAccountId: body.bankAccountId,
-          paymentPurpose: `Payment for Fleet Delivery`,
-        },
+      await FinanceService.recordWholesalePayment(tx as any, {
+        tenantId: actor.tenantId,
+        deliveryId: existingSale.id,
+        organizationId: existingSale.organizationId,
+        customerId: existingSale.customerId,
+        amount: body.amount,
+        bankAccountId: body.bankAccountId,
+        description: body.description || `Payment for Fleet Delivery`,
       });
 
       // Update the Delivery

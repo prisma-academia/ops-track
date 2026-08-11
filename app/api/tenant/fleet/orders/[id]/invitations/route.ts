@@ -7,7 +7,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
 
     return await withTenantContext(actor, async () => {
       const body = await req.json();

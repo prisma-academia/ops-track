@@ -9,7 +9,7 @@ export async function GET(
 ) {
   try {
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_READ.key, "STATION");
 
     // Verify station ownership
     const station = await prisma.station.findUnique({ where: { id: stationId } });

@@ -5,7 +5,7 @@ import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
 
 export async function GET(req: Request) {
   try {
-    const actor = await requireTenantActor();
+    const actor = await requireTenantActor(undefined, "STATION");
     if (!hasPermission(actor, PERMISSIONS.TENANT_WAYBILLS_READ.key) && !hasPermission(actor, PERMISSIONS.TENANT_FLEET_READ.key)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const actor = await requireTenantActor();
+    const actor = await requireTenantActor(undefined, "STATION");
     if (!hasPermission(actor, PERMISSIONS.TENANT_WAYBILLS_WRITE.key) && !hasPermission(actor, PERMISSIONS.TENANT_FLEET_WRITE.key)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

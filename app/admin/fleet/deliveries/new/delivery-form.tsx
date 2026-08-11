@@ -132,7 +132,7 @@ export function CreateSaleForm({
       setError(res.error.message);
       return;
     }
-    if (res.data?.delivery.id) {
+    if (res.data?.delivery?.id) {
       if (preselectedTransportId) {
         // Go back to transport details
         router.push(`/admin/fleet/transports/${preselectedTransportId}`);

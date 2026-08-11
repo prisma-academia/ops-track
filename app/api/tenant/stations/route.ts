@@ -25,7 +25,7 @@ const CreateStationSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_READ.key, "STATION");
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
     const salesMin = url.searchParams.get("salesMin") ? Number(url.searchParams.get("salesMin")) : undefined;
@@ -113,7 +113,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_WRITE.key, "STATION");
     const body = CreateStationSchema.parse(await request.json());
     const meta = requestMeta(request);
 

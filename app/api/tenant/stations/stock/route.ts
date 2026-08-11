@@ -5,7 +5,7 @@ import { getStationStockData } from "@/lib/queries/station-stock";
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor();
+    const actor = await requireTenantActor(undefined, "STATION");
     if (!actor.permissions.has(PERMISSIONS.TENANT_STATIONS_READ.key) && 
         !actor.permissions.has(PERMISSIONS.TENANT_FLEET_READ.key) && 
         !actor.isOwner) {

@@ -79,9 +79,9 @@ const FLEET_NAV = [
     permission: PERMISSIONS.TENANT_FLEET_READ.key,
     children: [
       {
-        href: "/admin/fleet/sales",
-        key: "sales",
-        title: "Sales",
+        href: "/admin/fleet/deliveries",
+        key: "deliveries",
+        title: "Deliveries",
         icon: "IconReceiptDollar",
         permission: PERMISSIONS.TENANT_FLEET_READ.key,
       },
@@ -112,6 +112,20 @@ const FLEET_NAV = [
         key: "stationPerformance",
         title: "Station Performance",
         icon: "IconBuildingStore",
+        permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key,
+      },
+      {
+        href: "/admin/fleet/reports/transport",
+        key: "transportReport",
+        title: "Transport Report",
+        icon: "IconTruck",
+        permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key,
+      },
+      {
+        href: "/admin/fleet/reports/assets",
+        key: "assetsReport",
+        title: "Assets Report",
+        icon: "IconBuilding",
         permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key,
       },
     ],
@@ -154,7 +168,7 @@ const FLEET_NAV = [
 ];
 
 export default async function FleetDashboardLayout({ children }: { children: React.ReactNode }) {
-  const actor = await requireTenantPage();
+  const actor = await requireTenantPage(undefined, "FLEET");
 
   const user = await prisma.tenantUser.findUnique({
     where: { id: actor.userId },

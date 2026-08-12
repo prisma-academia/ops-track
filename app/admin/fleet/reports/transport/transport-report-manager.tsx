@@ -18,6 +18,12 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -42,14 +48,17 @@ import {
   ListOrdered
 } from "lucide-react";
 import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import {
   BarChart,
   Bar,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  ResponsiveContainer
 } from 'recharts';
 
 interface TransportRow {
@@ -414,93 +423,145 @@ export function TransportReportManager({ initialTransports }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="border-border/40 shadow-xs">
-          <CardContent className="p-6 flex flex-col justify-center items-start h-full">
-             <div className="flex items-center gap-2 mb-4">
-               <div className="p-2 bg-slate-100 dark:bg-slate-900 rounded-full">
-                 <Truck className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-               </div>
-               <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Total Trips</p>
-             </div>
-             <p className="text-3xl font-bold text-slate-600">{stats.totalTrips}</p>
+      {/* ── Stat Cards ──────────────────────────────────────────────────── */}
+      <TooltipProvider delayDuration={200}>
+        <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
+          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
+            {[
+              {
+                title: "Total Trips",
+                value: stats.totalTrips.toString(),
+                fullValue: null,
+                icon: Truck,
+                iconColor: "text-slate-600",
+              },
+              {
+                title: "Total Allocated",
+                value: `${stats.totalCarried.toLocaleString()} L`,
+                fullValue: `${stats.totalCarried.toLocaleString()} Liters`,
+                icon: ListOrdered,
+                iconColor: "text-blue-600",
+                valueColor: "text-blue-600",
+              },
+              {
+                title: "Total Delivered",
+                value: `${stats.totalDelivered.toLocaleString()} L`,
+                fullValue: `${stats.totalDelivered.toLocaleString()} Liters`,
+                icon: Droplets,
+                iconColor: "text-emerald-600",
+                valueColor: "text-emerald-600",
+              },
+              {
+                title: "Total Shortage",
+                value: `${stats.totalShortage.toLocaleString()} L`,
+                fullValue: `${stats.totalShortage.toLocaleString()} Liters`,
+                icon: Droplets,
+                iconColor: "text-rose-600",
+                valueColor: "text-rose-600",
+              },
+            ].map((item, index, arr) => (
+              <div
+                key={index}
+                className={cn(
+                  "w-full md:flex-1 min-w-[150px] border-border print:border-none print:w-auto",
+                  index === arr.length - 1 ? "border-b-0" : "border-b",
+                  "md:border-b-0",
+                  index === arr.length - 1 ? "md:border-e-0" : "md:border-e"
+                )}
+              >
+                {item.fullValue ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="p-4 flex items-start justify-between cursor-default hover:bg-muted/30 transition-colors h-full print:p-0">
+                        <div className="flex flex-col gap-2 print:gap-0.5">
+                          <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                          <div>
+                            <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
+                              {item.value}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
+                          <item.icon
+                            size={14}
+                            className={cn("text-muted-foreground", item.iconColor)}
+                          />
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                      {item.fullValue}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div className="p-4 flex items-start justify-between h-full print:p-0">
+                    <div className="flex flex-col gap-2 print:gap-0.5">
+                      <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                      <div>
+                        <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
+                          {item.value}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
+                      <item.icon
+                        size={14}
+                        className={cn("text-muted-foreground", item.iconColor)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </CardContent>
         </Card>
+      </TooltipProvider>
 
-        <Card className="border-border/40 shadow-xs">
-          <CardContent className="p-6 flex flex-col justify-center items-start h-full">
-             <div className="flex items-center gap-2 mb-4">
-               <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-full">
-                 <ListOrdered className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-               </div>
-               <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Total Allocated</p>
-             </div>
-             <p className="text-3xl font-bold text-blue-600">{stats.totalCarried.toLocaleString()} L</p>
-          </CardContent>
-        </Card>
+      {chartData.length > 0 && (() => {
+        const transportChartConfig = {
+          Carried: {
+            label: "Carried",
+            color: "#3b82f6",
+          },
+          Delivered: {
+            label: "Delivered",
+            color: "#10b981",
+          },
+        } satisfies ChartConfig;
 
-        <Card className="border-border/40 shadow-xs">
-          <CardContent className="p-6 flex flex-col justify-center items-start h-full">
-             <div className="flex items-center gap-2 mb-4">
-               <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-full">
-                 <Droplets className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-               </div>
-               <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Total Delivered</p>
-             </div>
-             <p className="text-3xl font-bold text-emerald-600">{stats.totalDelivered.toLocaleString()} L</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/40 shadow-xs">
-          <CardContent className="p-6 flex flex-col justify-center items-start h-full">
-             <div className="flex items-center gap-2 mb-4">
-               <div className="p-2 bg-rose-100 dark:bg-rose-900 rounded-full">
-                 <Droplets className="h-5 w-5 text-rose-600 dark:text-rose-400" />
-               </div>
-               <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Total Shortage</p>
-             </div>
-             <p className="text-3xl font-bold text-rose-600">{stats.totalShortage.toLocaleString()} L</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {chartData.length > 0 && (
-        <Card className="border-border/40 shadow-xs hide-on-print">
-          <CardContent className="p-6">
-            <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-muted-foreground" />
-              Volume Allocated vs Delivered (Daily Trend)
-            </h3>
-            <div className="h-[400px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+        return (
+          <Card className="border-border/40 shadow-xs hide-on-print">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-muted-foreground" />
+                Volume Allocated vs Delivered (Daily Trend)
+              </h3>
+              <ChartContainer config={transportChartConfig} className="h-[400px] w-full">
+                <BarChart accessibilityLayer data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144, 164, 174, 0.3)" />
                   <XAxis 
                     dataKey="date" 
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                    dy={10}
+                    tickMargin={10}
+                    fontSize={12}
                   />
                   <YAxis 
                     axisLine={false}
                     tickLine={false}
+                    tickMargin={10}
+                    fontSize={12}
                     tickFormatter={(value) => `${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`}
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                   />
-                  <RechartsTooltip 
-                    cursor={{ fill: 'hsl(var(--muted)/0.4)' }}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                  />
-                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                  <Bar dataKey="Carried" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="Delivered" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="Carried" fill="var(--color-Carried)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="Delivered" fill="var(--color-Delivered)" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <Card className="w-full py-0 overflow-hidden print:shadow-none print:border-none print:bg-transparent">
         <CardContent className="px-0">

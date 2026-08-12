@@ -1,11 +1,12 @@
 'use client'
 import React from 'react'
 import Link from 'next/link'
-import { ArrowRight, ChevronRight } from 'lucide-react'
+import { ArrowRight, Bolt, ChevronRight, Cloud, Home, Pickaxe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Image from 'next/image'
 import { motion, Variants } from 'motion/react'
 import { HeroHeader } from "@/components/sections/header-hero"
+import { Facebook, FacebookIcon } from '@hugeicons/core-free-icons'
 // import { Spotify } from '@/components/ui/svgs/spotify'
 // import { SupabaseFull } from '@/components/ui/svgs/supabase'
 // import { Hulu } from '@/components/ui/svgs/hulu'
@@ -185,33 +186,20 @@ export default function HeroSection({ slug, name, logoUrl, backgroundUrl }: { sl
                                 <ChevronRight className="ml-1 inline-block size-3" />
                             </Link>
                         </div>
-                        {/* <div className="group-hover:blur-xs **:fill-foreground mx-auto mt-12 grid max-w-2xl grid-cols-3 gap-x-12 gap-y-8 transition-all duration-500 group-hover:opacity-50 sm:gap-x-16 sm:gap-y-14 md:grid-cols-4">
+                        <div className="group-hover:blur-xs **:fill-foreground mx-auto mt-12 grid max-w-2xl grid-cols-3 gap-x-12 gap-y-8 transition-all duration-500 group-hover:opacity-50 sm:gap-x-16 sm:gap-y-14 md:grid-cols-4">
                             <div className="flex items-center">
                                 <Bolt className="mx-auto h-5 w-full" />
                             </div>
                             <div className="flex items-center">
-                                <VercelFull className="mx-auto h-4 w-full" />
+                                <Pickaxe className="mx-auto h-4 w-full" />
                             </div>
                             <div className="flex items-center">
-                                <SupabaseFull className="mx-auto h-6" />
+                                <Home className="mx-auto h-6" />
                             </div>
                             <div className="flex items-center">
-                                <Hulu className="mx-auto h-4 w-full" />
+                                <Cloud className="mx-auto h-5 w-full" />
                             </div>
-                            <div className="flex items-center">
-                                <Spotify className="mx-auto h-6 w-full" />
-                            </div>
-                            <div className="flex items-center">
-                                <FirebaseFull className="mx-auto h-6 w-full" />
-                            </div>
-                            <div className="flex items-center">
-                                <Beacon className="mx-auto h-4 w-full" />
-                            </div>
-
-                            <div className="flex items-center">
-                                <Claude className="mx-auto h-5 w-full" />
-                            </div>
-                        </div> */}
+                        </div>
                     </div>
                 </section>
             </main>

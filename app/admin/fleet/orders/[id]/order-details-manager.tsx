@@ -12,7 +12,7 @@ import { formatHumanReadableDate } from "@/lib/utils";
 import { apiPatch, apiPost } from "@/lib/client/api";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardAction, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,10 @@ import {
   Calculator,
   ChevronsUpDown,
   Check,
-  Droplet
+  Droplet,
+  Phone,
+  MoreVertical,
+  User2
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -419,9 +422,9 @@ export function OrderDetailsManager({
       </div>
 
       {/* ---------------- NEW LAYOUT (DISPATCH CARDS & MAP) ---------------- */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mt-6">
+      <div className="grid grid-cols-1 lg:grid-cols-7 gap-6 mt-6">
         {/* LEFT COLUMN: Dispatch Cards & Invitations */}
-        <div className="lg:col-span-3 space-y-6">
+        <div className="lg:col-span-4 space-y-6">
           
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -451,95 +454,81 @@ export function OrderDetailsManager({
           ) : (
             <div className="space-y-4">
               {transports.map((t: any) => (
-                <Card key={t.id} className="border-stone-200 overflow-hidden shadow-md bg-white hover:shadow-lg transition-all duration-200 group">
-                  <div className="bg-gradient-to-r from-muted/40 to-muted/10 px-5 py-4 border-b border-border flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="size-12 shrink-0 bg-white shadow-sm border rounded-lg flex items-center justify-center p-2">
-                        <Image
-                          src="/assets/icons/gas-truck.png"
-                          alt="Truck"
-                          width={40}
-                          height={40}
-                          className="object-contain drop-shadow-sm group-hover:scale-110 transition-transform duration-300"
-                        />
-                      </div>
-                      <div>
-                        <p className="font-bold text-base text-stone-800 dark:text-stone-100">{t.truck?.plateNumber || "Unknown Truck"}</p>
-                        <p className="text-xs font-medium text-muted-foreground flex items-center gap-1 mt-0.5">
-                          <Building2 size={12} className="opacity-70" />
-                          {t.transporter?.name}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className={cn("px-3 py-1 shadow-sm text-xs font-semibold tracking-wide uppercase",
-                      t.status === "COMPLETED" ? "text-emerald-700 bg-emerald-100/50 border-emerald-300" :
-                      t.status === "IN_TRANSIT" ? "text-blue-700 bg-blue-100/50 border-blue-300" : "text-stone-700 bg-stone-100/50"
+                <Card key={t.id} className="border-border/40 shadow-xs bg-white dark:bg-stone-950 overflow-hidden">
+                  <CardHeader className="flex flex-row items-center justify-between px-5 pt-4 pb-4 border-b border-border/40 space-y-0">
+                    <p className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <Building2 size={16} className="text-muted-foreground" />
+                      {t.transporter?.name || "Unknown Company"}
+                    </p>
+                    <Badge variant="secondary" className={cn("px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize", 
+                      t.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
+                      t.status === "IN_TRANSIT" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : 
+                      "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300"
                     )}>
-                      {t.status}
+                      {t.status.replace(/_/g, ' ').toLowerCase()}
                     </Badge>
-                  </div>
-                  <CardContent className="p-5">
-                    <div className="grid grid-cols-2 gap-4 mb-2">
-                      <div className="bg-muted/20 p-3 rounded-lg border border-border/50">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-1">Driver</p>
-                        <p className="font-semibold text-sm text-foreground truncate" title={t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "Unassigned"}>
-                          {t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "Unassigned"}
-                        </p>
-                      </div>
-                      <div className="bg-muted/20 p-3 rounded-lg border border-border/50">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-1">Volume</p>
-                        <p className="font-semibold text-sm text-emerald-600 dark:text-emerald-400">
-                          {Number(t.litersCarried).toLocaleString()} L
-                        </p>
-                      </div>
-                      <div className="bg-muted/20 p-3 rounded-lg border border-border/50">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-1">Destination</p>
-                        <p className="font-semibold text-sm text-foreground truncate" title={t.destination}>{t.destination}</p>
-                      </div>
-                      <div className="bg-muted/20 p-3 rounded-lg border border-border/50">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-1">Freight Cost</p>
-                        <p className="font-semibold text-sm text-blue-600 dark:text-blue-400">
-                          ₦{(Number(t.ratePerLiter || 0) * Number(t.litersCarried || 0)).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Trip Legs Section */}
-                    {t.transportTripLegs && t.transportTripLegs.length > 0 && (
-                      <div className="mt-5 border-t pt-5">
-                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
-                          <MapPin size={14} /> Trip Legs Tracker
-                        </p>
-                        <div className="space-y-3">
-                          {t.transportTripLegs.map((leg: any, idx: number) => {
-                            const activeAssignment = leg.driverAssignments?.find((a: any) => a.status === 'ACTIVE') || leg.driverAssignments?.[0];
-                            return (
-                              <div key={leg.id} className="flex items-center justify-between px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 text-sm shadow-sm">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-xs font-bold text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 shrink-0">
-                                    {idx + 1}
-                                  </div>
-                                  <div>
-                                    <p className="font-semibold text-foreground text-[13px]">{leg.type.replace(/_/g, ' ')}</p>
-                                    <p className="text-xs text-muted-foreground font-medium mt-0.5">{leg.origin || "Unknown"} &rarr; {leg.destination || "Unknown"}</p>
-                                  </div>
-                                </div>
-                                <div className="text-right flex items-center gap-4">
-                                  <div className="hidden sm:block text-xs bg-muted/40 px-2.5 py-1 rounded-md border border-border/50">
-                                    <span className="text-muted-foreground mr-1">Driver:</span>
-                                    <span className="font-semibold">{activeAssignment?.driver ? `${activeAssignment.driver.firstName} ${activeAssignment.driver.lastName}` : 'Pending'}</span>
-                                  </div>
-                                  <Badge variant={leg.status === 'COMPLETED' ? 'default' : 'secondary'} className={cn("text-[10px] font-bold tracking-wider", leg.status === 'COMPLETED' ? "bg-stone-800 text-white" : "")}>
-                                    {leg.status}
-                                  </Badge>
-                                </div>
-                              </div>
-                            );
-                          })}
+                  </CardHeader>
+                  
+                  <CardContent className="px-5">
+                    <div className="relative">
+                      {/* Timeline dashed line */}
+                      <div className="absolute left-[11px] top-7 bottom-7 w-px border-l-2 border-dashed border-border"></div>
+                      
+                      {/* Origin point */}
+                      <div className="flex gap-6 mb-6">
+                        <div className="relative z-10 mt-1">
+                          <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center border-2 border-blue-500 dark:border-blue-400 ring-4 ring-white dark:ring-stone-950">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
+                          </div>
+                        </div>
+                        <div className="flex-1 grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{formatHumanReadableDate(t.createdAt)}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-foreground truncate">{order.sourceDepot || "Unknown Depot"}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5 truncate">Origin</p>
+                          </div>
                         </div>
                       </div>
-                    )}
+
+                      {/* Destination point */}
+                      <div className="flex gap-6">
+                        <div className="relative z-10 mt-1">
+                          <div className="w-6 h-6 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center border-2 border-stone-400 dark:border-stone-500 ring-4 ring-white dark:ring-stone-950">
+                            <div className="w-1.5 h-1.5 rounded-full bg-stone-400 dark:bg-stone-500" />
+                          </div>
+                        </div>
+                        <div className="flex-1 grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{t.status === 'COMPLETED' ? formatHumanReadableDate(t.updatedAt) : 'Pending'}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{t.status === 'COMPLETED' ? new Date(t.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-foreground truncate">{t.destination}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5 truncate">Destination</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </CardContent>
+
+                  <CardFooter className="px-5 py-4 border-t border-border/40 flex items-center justify-between bg-muted/10 pt-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-stone-100 dark:bg-stone-900/40 text-stone-600 dark:text-stone-400 flex items-center justify-center border border-stone-200 dark:border-stone-800/50">
+                        <Truck size={20} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{t.truck?.plateNumber || "Unknown Truck"}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Truck Assigned</p>
+                      </div>
+                    </div>
+                    <div className="text-right flex flex-col justify-center">
+                      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Volume</p>
+                      <p className="text-sm font-bold text-foreground">{Number(t.litersCarried).toLocaleString()} L</p>
+                    </div>
+                  </CardFooter>
                 </Card>
               ))}
             </div>
@@ -547,7 +536,7 @@ export function OrderDetailsManager({
         </div>
 
         {/* RIGHT COLUMN: Map */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-3">
           <Card className="sticky top-6 overflow-hidden border-stone-200 shadow-sm h-[500px] flex flex-col py-0">
             <div className="flex-1 relative bg-stone-100 z-0">
               <LeafletMap transports={transports} />

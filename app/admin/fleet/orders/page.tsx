@@ -4,8 +4,15 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { OrdersTable } from "./table";
 import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Box, Droplet, Clock, CheckCircle2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default async function OrdersPage({
   searchParams,
@@ -89,57 +96,110 @@ export default async function OrdersPage({
 
   const totalPages = Math.ceil(totalCount / take);
 
+  const statCards = [
+    {
+      title: "Total Orders",
+      value: totalCount.toString(),
+      fullValue: null,
+      icon: Box,
+      iconColor: "text-teal-600",
+    },
+    {
+      title: "Total Volume",
+      value: `${totalVolume.toLocaleString()} L`,
+      fullValue: `${totalVolume.toLocaleString()} Liters`,
+      icon: Droplet,
+      iconColor: "text-blue-600",
+      valueColor: "text-blue-600",
+    },
+    {
+      title: "Active Orders",
+      value: activeOrders.toString(),
+      fullValue: null,
+      icon: Clock,
+      iconColor: "text-amber-600",
+      valueColor: "text-amber-600",
+    },
+    {
+      title: "Completed",
+      value: completedOrders.toString(),
+      fullValue: null,
+      icon: CheckCircle2,
+      iconColor: "text-emerald-600",
+      valueColor: "text-emerald-600",
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <Box className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalCount}</div>
-            <p className="text-xs text-muted-foreground">Based on current filters</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Total Volume</CardTitle>
-            <Droplet className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalVolume.toLocaleString()} L</div>
-            <p className="text-xs text-muted-foreground">Volume for filtered orders</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Active Orders</CardTitle>
-            <Clock className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{activeOrders}</div>
-            <p className="text-xs text-muted-foreground">Pending, Confirmed or Loaded</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Completed Orders</CardTitle>
-            <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{completedOrders}</div>
-            <p className="text-xs text-muted-foreground">Fully delivered & settled</p>
-          </CardContent>
-        </Card>
-      </div>
-
       <DataTableToolbar
         title="Procurement Orders"
         createHref="/admin/fleet/orders/new"
         createLabel="Add Order"
-        description="Manage fuel procurement orders from depots."
+        description="Manage bulk procurement from NNPC and private depots."
       />
+
+      <TooltipProvider delayDuration={200}>
+        <Card className="p-0 shadow-xs border-border/40">
+          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0">
+            {statCards.map((item, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "w-full md:flex-1 min-w-[150px] border-border",
+                  index === statCards.length - 1 ? "border-b-0" : "border-b",
+                  "md:border-b-0",
+                  index === statCards.length - 1 ? "md:border-e-0" : "md:border-e"
+                )}
+              >
+                {item.fullValue ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="p-4 flex items-start justify-between cursor-default hover:bg-muted/30 transition-colors h-full">
+                        <div className="flex flex-col gap-2">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.title}</p>
+                          <div>
+                            <p className={cn("text-md font-semibold text-card-foreground", item.valueColor)}>
+                              {item.value}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
+                          <item.icon
+                            size={14}
+                            className={cn("text-muted-foreground", item.iconColor)}
+                          />
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                      {item.fullValue}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div className="p-4 flex items-start justify-between h-full">
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.title}</p>
+                      <div>
+                        <p className={cn("text-md font-semibold text-card-foreground", item.valueColor)}>
+                          {item.value}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
+                      <item.icon
+                        size={14}
+                        className={cn("text-muted-foreground", item.iconColor)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </TooltipProvider>
+
       <OrdersTable
         data={rows}
         serverPagination={{

@@ -4,6 +4,15 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { TransportsTable } from "./table";
 import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Truck as TruckIcon, Navigation, CheckCircle2, Droplets } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default async function TransportsPage({
   searchParams,
@@ -33,7 +42,7 @@ export default async function TransportsPage({
     };
   }
 
-  const [totalCount, transports, pendingInvitations] = await Promise.all([
+  const [totalCount, transports, pendingInvitations, statsRaw] = await Promise.all([
     prisma.transport.count({ where }),
     prisma.transport.findMany({
       where,
@@ -59,7 +68,13 @@ export default async function TransportsPage({
         order: { select: { reference: true, productType: true } },
         transporter: { select: { name: true } }
       }
-    })
+    }),
+    prisma.transport.groupBy({
+      by: ["status"],
+      where,
+      _sum: { litersCarried: true },
+      _count: { _all: true },
+    }),
   ]);
 
   const rows = transports.map((t) => ({
@@ -79,8 +94,114 @@ export default async function TransportsPage({
 
   const totalPages = Math.ceil(totalCount / take);
 
+  const totalVolume = statsRaw.reduce((acc, curr) => acc + Number(curr._sum.litersCarried || 0), 0);
+  const inTransitCount = statsRaw.filter(s => s.status === "IN_TRANSIT").reduce((acc, curr) => acc + curr._count._all, 0);
+  const completedCount = statsRaw.filter(s => s.status === "COMPLETED").reduce((acc, curr) => acc + curr._count._all, 0);
+
+  const statCards = [
+    {
+      title: "Total Transports",
+      value: totalCount.toString(),
+      fullValue: null,
+      icon: TruckIcon,
+      iconColor: "text-teal-600",
+    },
+    {
+      title: "In Transit",
+      value: inTransitCount.toString(),
+      fullValue: null,
+      icon: Navigation,
+      iconColor: "text-amber-600",
+      valueColor: "text-amber-600",
+    },
+    {
+      title: "Completed",
+      value: completedCount.toString(),
+      fullValue: null,
+      icon: CheckCircle2,
+      iconColor: "text-emerald-600",
+      valueColor: "text-emerald-600",
+    },
+    {
+      title: "Volume Carried",
+      value: `${totalVolume.toLocaleString()} L`,
+      fullValue: `${totalVolume.toLocaleString()} Liters`,
+      icon: Droplets,
+      iconColor: "text-blue-600",
+      valueColor: "text-blue-600",
+    },
+  ];
+
   return (
     <div className="space-y-8">
+      <DataTableToolbar
+        title="Transports"
+        createHref="/admin/fleet/transports/new"
+        createLabel="Add Transport"
+        description="Manage active and completed truck dispatch trips."
+      />
+
+      <TooltipProvider delayDuration={200}>
+        <Card className="p-0 shadow-xs border-border/40">
+          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0">
+            {statCards.map((item, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "w-full md:flex-1 min-w-[150px] border-border",
+                  index === statCards.length - 1 ? "border-b-0" : "border-b",
+                  "md:border-b-0",
+                  index === statCards.length - 1 ? "md:border-e-0" : "md:border-e"
+                )}
+              >
+                {item.fullValue ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="p-4 flex items-start justify-between cursor-default hover:bg-muted/30 transition-colors h-full">
+                        <div className="flex flex-col gap-2">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.title}</p>
+                          <div>
+                            <p className={cn("text-md font-semibold text-card-foreground", item.valueColor)}>
+                              {item.value}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
+                          <item.icon
+                            size={14}
+                            className={cn("text-muted-foreground", item.iconColor)}
+                          />
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                      {item.fullValue}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div className="p-4 flex items-start justify-between h-full">
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.title}</p>
+                      <div>
+                        <p className={cn("text-md font-semibold text-card-foreground", item.valueColor)}>
+                          {item.value}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
+                      <item.icon
+                        size={14}
+                        className={cn("text-muted-foreground", item.iconColor)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </TooltipProvider>
+
       {pendingInvitations.length > 0 && (
         <div className="bg-white dark:bg-stone-950 p-6 rounded-xl border border-border shadow-sm">
           <h2 className="text-lg font-bold mb-4">Pending Transport Invitations</h2>
@@ -125,12 +246,6 @@ export default async function TransportsPage({
       )}
 
       <div>
-        <DataTableToolbar
-          title="Transports"
-          createHref="/admin/fleet/transports/new"
-          createLabel="Add Transport"
-          description="Manage active and completed truck dispatch trips."
-        />
         <TransportsTable
           data={rows}
           serverPagination={{

@@ -180,7 +180,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
             <TabsList className="w-full justify-start h-14 bg-muted/50 backdrop-blur-xs rounded-3xl border border-border">
               <TabsTrigger value="overview" className="text-[15px] font-semibold">Overview</TabsTrigger>
               <TabsTrigger value="destinations" className="text-[15px] font-semibold">Route & Trip Legs</TabsTrigger>
-              <TabsTrigger value="distribution" className="text-[15px] font-semibold">Distribution ({transport.sales?.length || 0})</TabsTrigger>
+              <TabsTrigger value="distribution" className="text-[15px] font-semibold">Distribution ({transport.deliveries?.length || 0})</TabsTrigger>
               <TabsTrigger value="losses" className="text-[15px] font-semibold text-red-600 dark:text-red-400">Loss Logs ({lossLogs.length})</TabsTrigger>
               <TabsTrigger value="payments" className="text-[15px] font-semibold">Payments & Expenses ({(transport.transactions || []).length})</TabsTrigger>
 
@@ -203,11 +203,11 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
 
                 {(() => {
                   const carriedVolume = Number(transport.litersCarried) || 0;
-                  const salesVol = (transport.sales || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
+                  const salesVol = (transport.deliveries || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
                   const distributedVolume = salesVol;
                   const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
 
-                  const variance = (transport.sales || []).reduce((sum: number, item: any) => {
+                  const variance = (transport.deliveries || []).reduce((sum: number, item: any) => {
                     const despatched = Number(item.litersDespatched || item.litersSold || 0);
                     const received = item.litersReceived;
                     if (received !== null && received !== undefined) {
@@ -379,7 +379,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
                     </tr>
                   </thead>
                   <tbody>
-                    {(!transport.sales || transport.sales.length === 0) ? (
+                    {(!transport.deliveries || transport.deliveries.length === 0) ? (
                       <tr>
                         <td colSpan={6} className="py-8 text-center text-muted-foreground">
                           No sales/distribution recorded for this trip.
@@ -387,7 +387,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
                       </tr>
                     ) : (
                       <>
-                        {transport.sales?.map((sale: any) => (
+                        {transport.deliveries?.map((sale: any) => (
                           <tr key={sale.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
                             <td className="py-3 px-4 text-foreground/90 whitespace-nowrap">
                               {new Date(sale.createdAt).toLocaleDateString()}
@@ -428,33 +428,33 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
                     )}
                   </tbody>
                   <tfoot>
-                    {((transport.sales && transport.sales.length > 0)) ? (
+                    {((transport.deliveries && transport.deliveries.length > 0)) ? (
                       <>
                         <tr className="bg-muted/30 border-t border-border/50 font-bold">
                           <td colSpan={2} className="text-right py-3 px-4 text-foreground">Total:</td>
                         <td className="text-right py-3 px-4 text-foreground">
                           {(() => {
-                             const salesDespatched = (transport.sales || []).reduce((sum: number, sale: any) => sum + Number(sale.litersDespatched || sale.litersSold || 0), 0);
+                             const salesDespatched = (transport.deliveries || []).reduce((sum: number, sale: any) => sum + Number(sale.litersDespatched || sale.litersSold || 0), 0);
                              return `${(salesDespatched).toLocaleString()} L`;
                           })()}
                         </td>
                         <td className="text-right py-3 px-4 text-emerald-600 dark:text-emerald-500">
                           {(() => {
-                             const salesReceived = (transport.sales || []).reduce((sum: number, sale: any) => sum + (sale.litersReceived !== null && sale.litersReceived !== undefined ? Number(sale.litersReceived) : 0), 0);
+                             const salesReceived = (transport.deliveries || []).reduce((sum: number, sale: any) => sum + (sale.litersReceived !== null && sale.litersReceived !== undefined ? Number(sale.litersReceived) : 0), 0);
                              return `${(salesReceived).toLocaleString()} L`;
                           })()}
                         </td>
                         <td></td>
                         <td className="text-right py-3 px-4 text-foreground font-mono text-xs">
                           {(() => {
-                             const salesAmount = (transport.sales || []).reduce((sum: number, sale: any) => sum + Number(sale.totalExpectedAmount || sale.totalAmount || (Number(sale.litersDespatched || sale.litersSold || 0) * Number(sale.amountPerLiter || 0))), 0);
+                             const salesAmount = (transport.deliveries || []).reduce((sum: number, sale: any) => sum + Number(sale.totalExpectedAmount || sale.totalAmount || (Number(sale.litersDespatched || sale.litersSold || 0) * Number(sale.amountPerLiter || 0))), 0);
                              return `₦${(salesAmount).toLocaleString()}`;
                           })()}
                         </td>
                         <td></td>
                       </tr>
                       {(() => {
-                         const variance = (transport.sales || []).reduce((sum: number, item: any) => {
+                         const variance = (transport.deliveries || []).reduce((sum: number, item: any) => {
                            const despatched = Number(item.litersDespatched || item.litersSold || 0);
                            const received = item.litersReceived;
                            if (received !== null && received !== undefined) {

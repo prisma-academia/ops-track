@@ -241,6 +241,21 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
     });
   }
 
+  const allInternalOrgs = await prisma.organization.findMany({
+    where: { tenantId: actor.tenantId, type: "INTERNAL" },
+    select: { id: true, name: true, slug: true, logoKey: true },
+    orderBy: { name: "asc" }
+  });
+
+  const internalOrganizations = allInternalOrgs.map(org => ({
+    id: org.id,
+    name: org.name,
+    slug: org.slug || null,
+    logoUrl: org.logoKey?.startsWith("http")
+      ? org.logoKey
+      : (org.logoKey && s3Configured() ? publicUrlForKey(org.logoKey) : null)
+  }));
+
   const mappedStations = allowedStations.map(s => {
     let sLogoUrl = null;
     if (s.organization?.logoKey) {
@@ -300,6 +315,7 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
       logoutRedirect="/admin/auth/login"
       logoutContext="tenant-admin"
       stations={mappedStations}
+      internalOrganizations={internalOrganizations}
       enabledModules={Array.from(new Set([
         ...settings.enabledModules,
         ...(tenant.activeModules?.map((m: string) => m.toLowerCase()) || []),

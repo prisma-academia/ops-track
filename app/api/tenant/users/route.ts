@@ -39,7 +39,6 @@ export async function GET(request: Request) {
 
     const whereClause: any = { 
       tenantId: actor.tenantId,
-      ...genericOrgFilter(actor),
       ...(moduleFilter ? { activeModules: { has: moduleFilter } } : {})
     };
 
@@ -48,7 +47,7 @@ export async function GET(request: Request) {
         where: { id: activeStationId },
         select: { organizationId: true }
       });
-      const targetOrgId = activeStation?.organizationId || actor.organizationId;
+      const targetOrgId = activeStation?.organizationId || (await prisma.organization.findUnique({ where: { id: activeStationId } }))?.id || actor.organizationId;
 
       if (targetOrgId) {
         whereClause.OR = [
@@ -58,7 +57,6 @@ export async function GET(request: Request) {
           { stations: { some: { id: activeStationId } } },
           { stations: { some: { organizationId: targetOrgId } } },
         ];
-        delete whereClause.organizationId;
       } else {
         whereClause.OR = [
           { isOwner: true },
@@ -72,7 +70,6 @@ export async function GET(request: Request) {
         { ownedOrganizations: { some: { id: actor.organizationId } } },
         { stations: { some: { organizationId: actor.organizationId } } },
       ];
-      delete whereClause.organizationId;
     }
 
     const userSelect = {

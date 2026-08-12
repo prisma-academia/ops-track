@@ -2,12 +2,25 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { SalesReportsManager } from "./sales-reports-manager";
+import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 
 export default async function SalesReportsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_SALES_REPORTS_READ.key);
 
+  const activeOrgId = await resolveActiveOrgId(actor);
+
+  const salesReportWhere: any = { tenantId: actor.tenantId };
+  if (activeOrgId) {
+    salesReportWhere.station = { organizationId: activeOrgId };
+  }
+
+  const stationWhere: any = {
+    tenantId: actor.tenantId,
+    ...(activeOrgId ? { organizationId: activeOrgId } : {}),
+  };
+
   const salesReports = await prisma.salesLog.findMany({
-    where: { tenantId: actor.tenantId },
+    where: salesReportWhere,
     orderBy: { logDate: "desc" },
     include: {
       station: {
@@ -49,7 +62,7 @@ export default async function SalesReportsPage() {
   });
 
   const stations = await prisma.station.findMany({
-    where: { tenantId: actor.tenantId },
+    where: stationWhere,
     select: {
       id: true,
       name: true,

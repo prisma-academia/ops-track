@@ -251,6 +251,17 @@ export function FleetPnlReportManager({ initialTransactions, trucks }: Props) {
         ),
       },
       {
+        id: "paymentPurpose",
+        accessorKey: "paymentPurpose",
+        header: "Purpose",
+        size: 160,
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {row.original.paymentPurpose ? row.original.paymentPurpose.replace(/_/g, " ") : "—"}
+          </span>
+        ),
+      },
+      {
         id: "description",
         accessorKey: "description",
         header: "Description",

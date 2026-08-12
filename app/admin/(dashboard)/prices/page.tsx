@@ -3,12 +3,25 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { PricesManager } from "./prices-manager";
+import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 
 export default async function PricesPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_PRICES_READ.key);
 
+  const activeOrgId = await resolveActiveOrgId(actor);
+
+  const stationWhere: any = {
+    tenantId: actor.tenantId,
+    ...(activeOrgId ? { organizationId: activeOrgId } : {}),
+  };
+
+  const priceWhere: any = { tenantId: actor.tenantId };
+  if (activeOrgId) {
+    priceWhere.station = { organizationId: activeOrgId };
+  }
+
   const stations = await prisma.station.findMany({
-    where: { tenantId: actor.tenantId },
+    where: stationWhere,
     select: {
       id: true,
       name: true,
@@ -23,7 +36,7 @@ export default async function PricesPage() {
 
   // Fetch all prices ordered by most recent first
   const allPrices = await prisma.priceControl.findMany({
-    where: { tenantId: actor.tenantId },
+    where: priceWhere,
     orderBy: { effectiveFrom: "desc" },
   });
 

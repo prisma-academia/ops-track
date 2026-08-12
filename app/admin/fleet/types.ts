@@ -57,6 +57,11 @@ export interface FleetOverviewData {
     totalTransports: KpiMetric
     shortageDeductions: KpiMetric
     deliveredVolume: KpiMetric
+    pnl?: {
+      revenue: KpiMetric
+      expenses: KpiMetric
+      netProfit: KpiMetric
+    }
   }
   counts: FleetCounts
   comparativeVolume: ComparativeVolumePoint[]

@@ -7,6 +7,7 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 import { sendPushNotification } from "@/lib/notifications";
+import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 
 const CreateWaybillSchema = z.object({
   number: z.string().min(1).max(50),
@@ -48,6 +49,9 @@ export async function GET(request: Request) {
     const dateStart = url.searchParams.get("dateStart") ? new Date(url.searchParams.get("dateStart") as string) : undefined;
     const dateEnd = url.searchParams.get("dateEnd") ? new Date(url.searchParams.get("dateEnd") as string) : undefined;
 
+    const activeOrgId = await resolveActiveOrgId(actor);
+    const orgStationFilter = activeOrgId ? { station: { organizationId: activeOrgId } } : {};
+
     const include = {
       station: {
         select: {
@@ -81,6 +85,7 @@ export async function GET(request: Request) {
             tenantId: actor.tenantId,
             ...(stationId ? { stationId } : {}),
             ...(status ? { status: status as any } : {}),
+            ...orgStationFilter,
             waybill: {
               ...(product ? { productType: product as any } : {}),
               ...(loadedMin !== undefined || loadedMax !== undefined ? { litersLoaded: { gte: loadedMin, lte: loadedMax } } : {}),
@@ -93,6 +98,7 @@ export async function GET(request: Request) {
             tenantId: actor.tenantId,
             ...(stationId ? { stationId } : {}),
             ...(status ? { status: status as any } : {}),
+            ...orgStationFilter,
             waybill: {
               ...(product ? { productType: product as any } : {}),
               ...(loadedMin !== undefined || loadedMax !== undefined ? { litersLoaded: { gte: loadedMin, lte: loadedMax } } : {}),
@@ -115,6 +121,7 @@ export async function GET(request: Request) {
           tenantId: actor.tenantId,
           ...(stationId ? { stationId } : {}),
           ...(status ? { status: status as any } : {}),
+          ...orgStationFilter,
           waybill: {
             ...(product ? { productType: product as any } : {}),
             ...(loadedMin !== undefined || loadedMax !== undefined ? { litersLoaded: { gte: loadedMin, lte: loadedMax } } : {}),

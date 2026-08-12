@@ -94,7 +94,7 @@ export function CreateSaleForm({
   const { register, handleSubmit, formState, setValue, watch, control } = useForm<Values>({
     resolver: zodResolver(FormSchema) as any,
     defaultValues: {
-      recipientType: "CUSTOMER",
+      recipientType: "STATION",
       customerId: "",
       stationId: "",
       transportCostBorneBy: "CLIENT",
@@ -127,12 +127,13 @@ export function CreateSaleForm({
       stationId: values.recipientType === "STATION" ? values.stationId : undefined,
     };
     
-    const res = await apiPost<{ delivery: { id: string } }>("/api/tenant/fleet/deliveries", payload);
+    const res = await apiPost<{ delivery?: { id: string }, Delivery?: { id: string } }>("/api/tenant/fleet/deliveries", payload);
     if (res.error) {
       setError(res.error.message);
       return;
     }
-    if (res.data?.delivery?.id) {
+    const createdId = res.data?.delivery?.id || res.data?.Delivery?.id;
+    if (createdId) {
       if (preselectedTransportId) {
         // Go back to transport details
         router.push(`/admin/fleet/transports/${preselectedTransportId}`);
@@ -198,7 +199,7 @@ export function CreateSaleForm({
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
                             <Store className="h-5 w-5 text-muted-foreground" />
-                            <span className="font-semibold text-base">Owned Station</span>
+                            <span className="font-semibold text-base">Managed Stations</span>
                           </div>
                           <span className="text-sm text-muted-foreground font-normal">Internal transfer to a station</span>
                         </div>
@@ -212,7 +213,7 @@ export function CreateSaleForm({
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
                             <UserCircle className="h-5 w-5 text-muted-foreground" />
-                            <span className="font-semibold text-base">External Client</span>
+                            <span className="font-semibold text-base">B2B Clients</span>
                           </div>
                           <span className="text-sm text-muted-foreground font-normal">delivery to a third-party customer</span>
                         </div>
@@ -250,7 +251,7 @@ export function CreateSaleForm({
                               {customers.map((c) => (
                                 <CommandItem
                                   key={c.id}
-                                  value={c.name.toLowerCase()}
+                                  value={`${c.name} ${c.id}`.toLowerCase()}
                                   onSelect={() => {
                                     setValue("customerId", c.id, { shouldValidate: true });
                                     setOpenCustomerSelect(false);
@@ -296,7 +297,7 @@ export function CreateSaleForm({
                               {stations.map((s) => (
                                 <CommandItem
                                   key={s.id}
-                                  value={s.name.toLowerCase()}
+                                  value={`${s.name} ${s.code} ${s.id}`.toLowerCase()}
                                   onSelect={() => {
                                     setValue("stationId", s.id, { shouldValidate: true });
                                     setOpenStationSelect(false);
@@ -347,7 +348,7 @@ export function CreateSaleForm({
                               return (
                                 <CommandItem
                                   key={t.id}
-                                  value={`${t.order?.reference || ''} ${t.truck.name} ${t.destination}`.toLowerCase()}
+                                  value={`${t.order?.reference || ''} ${t.destination} ${t.truck.plateNumber || ''} ${t.truck.name} ${t.id}`.toLowerCase()}
                                   onSelect={() => {
                                     setValue("transportId", t.id, { shouldValidate: true });
                                     setOpenTransportSelect(false);

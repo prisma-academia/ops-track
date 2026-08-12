@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/db/client";
 import { cookies } from "next/headers";
-import { genericOrgFilter } from "@/lib/auth/org-scope";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
@@ -18,7 +17,6 @@ export default async function TenantUsersPage() {
   const whereClause: any = { 
     tenantId: actor.tenantId, 
     activeModules: { has: "STATION" },
-    ...genericOrgFilter(actor)
   };
 
   if (activeStationId !== "all") {
@@ -26,7 +24,7 @@ export default async function TenantUsersPage() {
       where: { id: activeStationId },
       select: { organizationId: true }
     });
-    const targetOrgId = activeStation?.organizationId || actor.organizationId;
+    const targetOrgId = activeStation?.organizationId || (await prisma.organization.findUnique({ where: { id: activeStationId } }))?.id || actor.organizationId;
 
     if (targetOrgId) {
       whereClause.OR = [
@@ -36,7 +34,6 @@ export default async function TenantUsersPage() {
         { stations: { some: { id: activeStationId } } },
         { stations: { some: { organizationId: targetOrgId } } },
       ];
-      delete whereClause.organizationId;
     } else {
       whereClause.OR = [
         { isOwner: true },
@@ -50,7 +47,6 @@ export default async function TenantUsersPage() {
       { ownedOrganizations: { some: { id: actor.organizationId } } },
       { stations: { some: { organizationId: actor.organizationId } } },
     ];
-    delete whereClause.organizationId;
   }
 
   const [totalCount, users] = await Promise.all([

@@ -1,6 +1,7 @@
 import { Suspense } from "react"
 import { prisma } from "@/lib/db/client"
 import { requireTenantPage } from "@/lib/auth/page-guards"
+import { resolveActiveOrgId } from "@/lib/auth/org-scope"
 // import { PERMISSIONS } from "@/lib/auth/permissions"
 
 import {
@@ -63,38 +64,73 @@ export default async function DashboardPage({
         key={`${fromDate.toISOString()}-${toDate.toISOString()}`} 
         fallback={<DashboardContentSkeleton />}
       >
-        <DashboardDataContent tenantId={tenantId} fromDate={fromDate} toDate={toDate} />
+        <DashboardDataContent tenantId={tenantId} organizationId={(await resolveActiveOrgId(actor)) ?? undefined} fromDate={fromDate} toDate={toDate} />
       </Suspense>
     </div>
   )
 }
 
-async function DashboardDataContent({ tenantId, fromDate, toDate }: { tenantId: string, fromDate: Date, toDate: Date }) {
+async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate }: { tenantId: string, organizationId?: string, fromDate: Date, toDate: Date }) {
+  const stationWhere: any = { tenantId };
+  if (organizationId) {
+    stationWhere.organizationId = organizationId;
+  }
+
+  const userWhere: any = { tenantId, activeModules: { has: "STATION" } };
+  if (organizationId) {
+    userWhere.OR = [
+      { isOwner: true },
+      { organizationId },
+      { ownedOrganizations: { some: { id: organizationId } } },
+      { stations: { some: { organizationId } } },
+    ];
+  }
+
+  const expenseWhere: any = { 
+    tenantId, 
+    status: "APPROVED",
+    createdAt: { gte: fromDate, lte: toDate }
+  };
+  if (organizationId) {
+    expenseWhere.station = { organizationId };
+  }
+
+  const salesWhere: any = { 
+    tenantId, 
+    status: "APPROVED",
+    logDate: { gte: fromDate, lte: toDate }
+  };
+  if (organizationId) {
+    salesWhere.station = { organizationId };
+  }
+
+  const deliveryWhere: any = { tenantId, status: "DISPATCHED" };
+  if (organizationId) {
+    deliveryWhere.station = { organizationId };
+  }
+
+  const tankWhere: any = { tenantId };
+  if (organizationId) {
+    tankWhere.station = { organizationId };
+  }
+
   // 1. Fetch Top Stats
   const totalStations = await prisma.station.count({
-    where: { tenantId }
+    where: stationWhere
   });
 
   const totalUsers = await prisma.tenantUser.count({
-    where: { tenantId }
+    where: userWhere
   });
 
   const expensesAgg = await prisma.expense.aggregate({
-    where: { 
-      tenantId, 
-      status: "APPROVED",
-      createdAt: { gte: fromDate, lte: toDate }
-    },
+    where: expenseWhere,
     _sum: { amount: true }
   });
   const totalExpenses = Number(expensesAgg._sum.amount || 0);
 
   const revenueAgg = await prisma.salesLog.aggregate({
-    where: { 
-      tenantId, 
-      status: "APPROVED",
-      logDate: { gte: fromDate, lte: toDate }
-    },
+    where: salesWhere,
     _sum: { amountPos: true, amountTransfer: true }
   });
   const totalRevenue = 
@@ -102,7 +138,7 @@ async function DashboardDataContent({ tenantId, fromDate, toDate }: { tenantId: 
     Number(revenueAgg._sum.amountTransfer || 0);
 
   const activeDeliveries = await prisma.waybillAllocation.count({
-    where: { tenantId, status: "DISPATCHED" }
+    where: deliveryWhere
   });
 
   const topStats: TopStats = {
@@ -116,7 +152,7 @@ async function DashboardDataContent({ tenantId, fromDate, toDate }: { tenantId: 
   // 2. Fetch Tanks Aggregated Data
   const tanksData = await prisma.tank.groupBy({
     by: ['productType'],
-    where: { tenantId },
+    where: tankWhere,
     _sum: { currentLiters: true, capacity: true }
   });
 
@@ -130,13 +166,13 @@ async function DashboardDataContent({ tenantId, fromDate, toDate }: { tenantId: 
 
   // 3. Fetch Monthly Data (Based on Date Picker Range)
   const salesData = await prisma.salesLog.findMany({
-    where: { tenantId, status: "APPROVED", logDate: { gte: fromDate, lte: toDate } },
+    where: salesWhere,
     select: { logDate: true, amountPos: true, amountTransfer: true }
   });
 
 
   const expensesDataList = await prisma.expense.findMany({
-    where: { tenantId, status: "APPROVED", createdAt: { gte: fromDate, lte: toDate } },
+    where: expenseWhere,
     select: { createdAt: true, amount: true }
   });
 

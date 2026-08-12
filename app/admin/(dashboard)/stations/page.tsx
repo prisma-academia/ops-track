@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { StationsTable } from "./table";
 import { stationIncludeQuery, formatStationRows } from "@/lib/station-format";
+import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 
 export default async function StationsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_STATIONS_READ.key);
@@ -11,12 +12,19 @@ export default async function StationsPage() {
   const take = 25;
   const skip = 0;
 
+  const activeOrgId = await resolveActiveOrgId(actor);
+
+  const whereClause: any = {
+    tenantId: actor.tenantId,
+    ...(activeOrgId ? { organizationId: activeOrgId } : {}),
+  };
+
   const [totalCount, rawRows] = await Promise.all([
     prisma.station.count({
-      where: { tenantId: actor.tenantId },
+      where: whereClause,
     }),
     prisma.station.findMany({
-      where: { tenantId: actor.tenantId },
+      where: whereClause,
       orderBy: { createdAt: "desc" },
       take,
       skip,
@@ -48,3 +56,4 @@ export default async function StationsPage() {
     </div>
   );
 }
+

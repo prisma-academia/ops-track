@@ -30,28 +30,34 @@ interface AppSidebarProps {
   enabledModules?: string[];
   stations?: { id: string; name: string; code: string; organization?: { name: string | null; slug: string | null; logoUrl: string | null; type: string | null } }[];
   tenant?: { name: string; slug: string; logoUrl: string | null };
+  internalOrganizations?: { id: string; name: string; slug: string | null; logoUrl: string | null }[];
 }
 
-export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, context, enabledModules, stations = [], tenant }: AppSidebarProps) {
+export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, context, enabledModules, stations = [], tenant, internalOrganizations: explicitInternalOrgs }: AppSidebarProps) {
   const { isMobile } = useSidebar();
   const [openCommand, setOpenCommand] = useState(false);
   const pathname = usePathname();
   const isFleet = pathname?.startsWith("/admin/fleet");
   const moduleName = isFleet ? "Fleet Management" : "Station Management";
 
-  const showStationSwitch = context !== "platform" && (!enabledModules || enabledModules.includes("operations") || enabledModules.includes("stations"));
+  const showStationSwitch = context !== "platform" && (!enabledModules || enabledModules.includes("operations") || enabledModules.includes("stations") || enabledModules.includes("station"));
   const showFleetSwitch = context !== "platform" && (!enabledModules || enabledModules.includes("fleet"));
   const showDropdown = context !== "platform" && (showStationSwitch && showFleetSwitch);
   
   const internalOrganizations = useMemo(() => {
-    const orgMap = new Map<string, { stationId: string; name: string; slug: string | null; logoUrl: string | null }>();
+    if (explicitInternalOrgs && explicitInternalOrgs.length > 0) {
+      return explicitInternalOrgs;
+    }
+
+    const orgMap = new Map<string, { id: string; name: string; slug: string | null; logoUrl: string | null }>();
     
     for (const s of stations) {
       if (s.organization && s.organization.type === "INTERNAL" && s.organization.name) {
         const key = s.organization.name;
         if (!orgMap.has(key)) {
+          // Fallback to storing the first station's ID as the organization "id" for switching
           orgMap.set(key, {
-            stationId: s.id,
+            id: s.id,
             name: s.organization.name,
             slug: s.organization.slug || null,
             logoUrl: s.organization.logoUrl || null,
@@ -61,7 +67,7 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
     }
     
     return Array.from(orgMap.values());
-  }, [stations]);
+  }, [stations, explicitInternalOrgs]);
 
   return (
     <Sidebar className="px-0 h-full [&_[data-slot=sidebar-inner]]:h-full">
@@ -103,7 +109,7 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                       <CommandList>
                         <CommandEmpty>No results found.</CommandEmpty>
                         {showFleetSwitch && (
-                          <CommandGroup heading="Modules">
+                          <CommandGroup heading="Fleet Organisation">
                             <CommandItem 
                               onSelect={() => { setOpenCommand(false); window.location.href = "/admin/fleet"; }}
                               className="flex items-center gap-2.5 py-2 cursor-pointer"
@@ -113,40 +119,47 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                               ) : (
                                 <Truck className="h-4 w-4 text-muted-foreground" />
                               )}
-                              <div className="flex flex-col">
+                              <div className="flex flex-col flex-1">
                                 <span className="font-extrabold">{tenant?.name ?? "Admin Fleet"}</span>
                                 {tenant?.slug && (
                                   <span className="text-sm text-muted-foreground">{tenant.slug}</span>
                                 )}
                               </div>
+                              {isFleet && <CheckCircle className="ml-auto h-4 w-4 text-primary" />}
                             </CommandItem>
                           </CommandGroup>
                         )}
                         {showStationSwitch && internalOrganizations.length > 0 && (
                           <CommandGroup heading="Managed Organisation">
-                            {internalOrganizations.map((org) => (
-                              <CommandItem 
-                                key={org.slug || org.name} 
-                                onSelect={() => {
-                                  setOpenCommand(false);
-                                  document.cookie = `active-station-id=${org.stationId}; path=/;`;
-                                  window.location.href = "/admin/dashboard";
-                                }}
-                                className="flex items-center gap-2.5 py-2 cursor-pointer"
-                              >
-                                {org.logoUrl ? (
-                                  <img src={org.logoUrl} alt="" className="h-5 w-5 object-contain" />
-                                ) : (
-                                  <Building2 className="h-4 w-4 text-muted-foreground" />
-                                )}
-                                <div className="flex flex-col">
-                                  <span className="font-extrabold">{org.name}</span>
-                                  {org.slug && (
-                                    <span className="text-sm text-muted-foreground">{org.slug}</span>
+                            {internalOrganizations.map((org) => {
+                              const isActiveOrg = !isFleet && org.name === title;
+                              return (
+                                <CommandItem 
+                                  key={org.slug || org.name} 
+                                  onSelect={() => {
+                                    setOpenCommand(false);
+                                    // Setting active-org-id or if it expects a station, we just pass the ID.
+                                    // The dashboard layout will handle if the ID belongs to an org.
+                                    document.cookie = `active-station-id=${org.id}; path=/;`;
+                                    window.location.href = "/admin/dashboard";
+                                  }}
+                                  className="flex items-center gap-2.5 py-2 cursor-pointer"
+                                >
+                                  {org.logoUrl ? (
+                                    <img src={org.logoUrl} alt="" className="h-5 w-5 object-contain" />
+                                  ) : (
+                                    <Building2 className="h-4 w-4 text-muted-foreground" />
                                   )}
-                                </div>
-                              </CommandItem>
-                            ))}
+                                  <div className="flex flex-col flex-1">
+                                    <span className="font-extrabold">{org.name}</span>
+                                    {org.slug && (
+                                      <span className="text-sm text-muted-foreground">{org.slug}</span>
+                                    )}
+                                  </div>
+                                  {isActiveOrg && <CheckCircle className="ml-auto h-4 w-4 text-primary" />}
+                                </CommandItem>
+                              );
+                            })}
                           </CommandGroup>
                         )}
                       </CommandList>

@@ -221,10 +221,10 @@ export function EditOrgForm({ organization, users }: { organization: any, users:
               name="type"
               render={({ field }) => (
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <SelectTrigger id="type">
+                  <SelectTrigger className="w-full" id="type">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper">
                     <SelectItem value="INTERNAL">Internal (Own Company)</SelectItem>
                     <SelectItem value="EXTERNAL">External (Client)</SelectItem>
                   </SelectContent>

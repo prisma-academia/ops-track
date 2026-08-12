@@ -37,7 +37,7 @@ export async function getFleetOverviewData(
     999
   )
 
-  const [thisMonthTransports, lastMonthTransports] = await Promise.all([
+  const [thisMonthTransports, lastMonthTransports, thisMonthTx, lastMonthTx] = await Promise.all([
     prisma.transport.findMany({
       where: { tenantId, createdAt: { gte: thisMonthStart } },
       select: {
@@ -60,6 +60,22 @@ export async function getFleetOverviewData(
         netTransportFeePaid: true,
         totalDeduction: true,
       },
+    }),
+    prisma.transaction.findMany({
+      where: {
+        tenantId,
+        createdAt: { gte: thisMonthStart },
+        category: { in: ["TRANSPORT_PAYMENT", "FLEET_EXPENSE"] },
+      },
+      select: { createdAt: true, amount: true, type: true, category: true },
+    }),
+    prisma.transaction.findMany({
+      where: {
+        tenantId,
+        createdAt: { gte: lastMonthStart, lte: lastMonthEnd },
+        category: { in: ["TRANSPORT_PAYMENT", "FLEET_EXPENSE"] },
+      },
+      select: { createdAt: true, amount: true, type: true, category: true },
     }),
   ])
 
@@ -91,6 +107,14 @@ export async function getFleetOverviewData(
     0
   )
 
+  // -- PnL aggregates --
+  const currentRev = thisMonthTx.filter(t => t.type === "INFLOW" && t.category === "TRANSPORT_PAYMENT").reduce((s, t) => s + Number(t.amount || 0), 0)
+  const prevRev = lastMonthTx.filter(t => t.type === "INFLOW" && t.category === "TRANSPORT_PAYMENT").reduce((s, t) => s + Number(t.amount || 0), 0)
+  const currentExp = thisMonthTx.filter(t => t.type === "OUTFLOW" && t.category === "FLEET_EXPENSE").reduce((s, t) => s + Number(t.amount || 0), 0)
+  const prevExp = lastMonthTx.filter(t => t.type === "OUTFLOW" && t.category === "FLEET_EXPENSE").reduce((s, t) => s + Number(t.amount || 0), 0)
+  const currentProfit = currentRev - currentExp
+  const prevProfit = prevRev - prevExp
+
   const currentTrips = thisMonthTransports.length
   const prevTrips = lastMonthTransports.length
 
@@ -117,6 +141,8 @@ export async function getFleetOverviewData(
         (sum, t) => sum + (Number(t.totalDeduction) || 0),
         0
       ),
+      revenue: thisMonthTx.filter(t => t.createdAt.getDate() >= startDay && t.createdAt.getDate() <= endDay && t.type === "INFLOW" && t.category === "TRANSPORT_PAYMENT").reduce((s, t) => s + Number(t.amount), 0),
+      expenses: thisMonthTx.filter(t => t.createdAt.getDate() >= startDay && t.createdAt.getDate() <= endDay && t.type === "OUTFLOW" && t.category === "FLEET_EXPENSE").reduce((s, t) => s + Number(t.amount), 0),
       trips: chunk.length,
     }
   })
@@ -298,6 +324,23 @@ export async function getFleetOverviewData(
           value: w.volume,
         })),
       },
+      pnl: {
+        revenue: {
+          formattedValue: formatCurrency(currentRev),
+          percentageChange: calcChange(currentRev, prevRev),
+          weeklyTrend: weeklyTrends.map((w) => ({ label: w.label, value: w.revenue }))
+        },
+        expenses: {
+          formattedValue: formatCurrency(currentExp),
+          percentageChange: calcChange(currentExp, prevExp),
+          weeklyTrend: weeklyTrends.map((w) => ({ label: w.label, value: w.expenses }))
+        },
+        netProfit: {
+          formattedValue: formatCurrency(currentProfit),
+          percentageChange: calcChange(currentProfit, prevProfit),
+          weeklyTrend: weeklyTrends.map((w) => ({ label: w.label, value: w.revenue - w.expenses }))
+        }
+      }
     },
     counts: {
       transporters: transportersCount,

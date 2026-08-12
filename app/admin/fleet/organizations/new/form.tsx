@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { useForm, Controller } from "react-hook-form";
@@ -16,6 +16,7 @@ import { Loader2, ImagePlusIcon, XIcon, AlertCircleIcon, ChevronsUpDownIcon } fr
 import { cn } from "@/lib/utils";
 import { apiPost } from "@/lib/client/api";
 import { useFileUpload } from "@/hooks/use-file-upload";
+import nigerianLocations from "@/constant/nigerian-locations.json";
 
 const formSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(100),
@@ -43,7 +44,10 @@ export function OrganizationForm({ users }: { users: { id: string; firstName: st
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
-  const { register, handleSubmit, formState: { errors }, control } = useForm<FormValues>({
+  const [openStateSelect, setOpenStateSelect] = useState(false);
+  const [openLgaSelect, setOpenLgaSelect] = useState(false);
+
+  const { register, handleSubmit, formState: { errors }, control, watch, setValue } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
@@ -60,6 +64,17 @@ export function OrganizationForm({ users }: { users: { id: string; firstName: st
       ownerId: "none",
     },
   });
+
+  const selectedState = watch("state");
+  const selectedLga = watch("lga");
+
+  useEffect(() => {
+    setValue("lga", "", { shouldValidate: false });
+  }, [selectedState, setValue]);
+
+  const availableLgas = selectedState
+    ? nigerianLocations.find((loc) => loc.state === selectedState)?.lgas || []
+    : [];
 
   const maxSize = 2 * 1024 * 1024; // 2MB
 
@@ -177,10 +192,10 @@ export function OrganizationForm({ users }: { users: { id: string; firstName: st
                     name="type"
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <SelectTrigger id="type">
+                        <SelectTrigger className="w-full" id="type">
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent position="popper">
                           <SelectItem value="INTERNAL">Internal (Own Company)</SelectItem>
                           <SelectItem value="EXTERNAL">External (Client)</SelectItem>
                         </SelectContent>
@@ -210,7 +225,7 @@ export function OrganizationForm({ users }: { users: { id: string; firstName: st
                             >
                               {selectedUser ? (
                                 <div className="flex flex-col items-start text-left gap-0.5">
-                                  <span className="font-medium text-sm leading-none">{selectedUser.firstName} {selectedUser.lastName}</span>
+                                  {/* <span className="font-medium text-sm leading-none">{selectedUser.firstName} {selectedUser.lastName}</span> */}
                                   <span className="text-xs text-muted-foreground">{selectedUser.email}</span>
                                 </div>
                               ) : (
@@ -256,7 +271,7 @@ export function OrganizationForm({ users }: { users: { id: string; firstName: st
               </div>
 
               <div className="pt-4 border-t space-y-4">
-                <h3 className="font-medium">Contact Details</h3>
+                <h3 className="font-bold text-xl">Contact Details</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="companyEmail">Company Email</Label>
@@ -279,13 +294,90 @@ export function OrganizationForm({ users }: { users: { id: string; firstName: st
                     <Input id="address" placeholder="123 Business Way" {...register("address")} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lga">LGA</Label>
-                    <Input id="lga" placeholder="LGA" {...register("lga")} />
-                  </div>
-                  <div className="space-y-2">
                     <Label htmlFor="state">State</Label>
-                    <Input id="state" placeholder="State" {...register("state")} />
+                    <Popover open={openStateSelect} onOpenChange={setOpenStateSelect}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          id="state"
+                          className={cn("w-full justify-between font-normal bg-background", errors.state && "border-destructive")}
+                        >
+                          <span className="truncate">{selectedState || "Select state..."}</span>
+                          <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search state..." />
+                          <CommandList className="max-h-[200px] overflow-y-auto">
+                            <CommandEmpty>No state found.</CommandEmpty>
+                            <CommandGroup>
+                              {nigerianLocations.map((loc) => (
+                                <CommandItem
+                                  key={loc.state}
+                                  value={loc.state.toLowerCase()}
+                                  onSelect={() => {
+                                    setValue("state", loc.state, { shouldValidate: true });
+                                    setOpenStateSelect(false);
+                                  }}
+                                  data-checked={selectedState === loc.state}
+                                >
+                                  {loc.state}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <input type="hidden" {...register("state")} />
+                    {errors.state && <p className="text-xs text-destructive">{errors.state.message as string}</p>}
                   </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="lga">LGA</Label>
+                    <Popover open={openLgaSelect} onOpenChange={setOpenLgaSelect}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          id="lga"
+                          disabled={!selectedState}
+                          className={cn("w-full justify-between font-normal bg-background", errors.lga && "border-destructive")}
+                        >
+                          <span className="truncate">{selectedLga || "Select LGA..."}</span>
+                          <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search LGA..." />
+                          <CommandList className="max-h-[200px] overflow-y-auto">
+                            <CommandEmpty>No LGA found.</CommandEmpty>
+                            <CommandGroup>
+                              {availableLgas.map((lga) => (
+                                <CommandItem
+                                  key={lga.name}
+                                  value={lga.name.toLowerCase()}
+                                  onSelect={() => {
+                                    setValue("lga", lga.name, { shouldValidate: true });
+                                    setOpenLgaSelect(false);
+                                  }}
+                                  data-checked={selectedLga === lga.name}
+                                >
+                                  {lga.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <input type="hidden" {...register("lga")} />
+                    {errors.lga && <p className="text-xs text-destructive">{errors.lga.message as string}</p>}
+                  </div>
+
                 </div>
               </div>
               

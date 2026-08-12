@@ -72,7 +72,10 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
 
   if (!hasAssignedStations) {
     allowedStations = await prisma.station.findMany({
-      where: { tenantId: actor.tenantId },
+      where: { 
+        tenantId: actor.tenantId,
+        ...(actor.organizationId ? { organizationId: actor.organizationId } : {})
+      },
       select: { 
         id: true, 
         name: true, 
@@ -85,7 +88,20 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
 
   const jar = await cookies();
   let activeStationId = jar.get("active-station-id")?.value || "all";
-  const isAllowed = activeStationId === "all" || allowedStations.some((s) => s.id === activeStationId);
+  
+  const allInternalOrgs = await prisma.organization.findMany({
+    where: { tenantId: actor.tenantId, type: "INTERNAL" },
+    select: { id: true, name: true, slug: true, logoKey: true }
+  });
+
+  let isAllowed = activeStationId === "all" || allowedStations.some((s) => s.id === activeStationId);
+  if (!isAllowed) {
+    // Handle if the ID belongs to an org
+    if (allInternalOrgs.some(org => org.id === activeStationId)) {
+      isAllowed = true;
+    }
+  }
+
   if (!isAllowed) {
     activeStationId = hasAssignedStations ? (allowedStations[0]?.id || "all") : "all";
   }
@@ -98,6 +114,10 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
     });
     if (activeStation?.organization) {
       orgInfo = activeStation.organization;
+    } else {
+      // It might be an organization ID
+      const org = allInternalOrgs.find(o => o.id === activeStationId);
+      if (org) orgInfo = org;
     }
   }
   
@@ -165,6 +185,15 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
       : null;
   }
   
+  const internalOrganizations = allInternalOrgs.map(org => ({
+    id: org.id,
+    name: org.name,
+    slug: org.slug || null,
+    logoUrl: org.logoKey?.startsWith("http")
+      ? org.logoKey
+      : (org.logoKey && s3Configured() ? publicUrlForKey(org.logoKey) : null)
+  }));
+  
   const mappedStations = allowedStations.map(s => {
     let sLogoUrl = null;
     if (s.organization?.logoKey) {
@@ -217,6 +246,7 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
       logoutRedirect="/"
       logoutContext="tenant-admin"
       stations={mappedStations}
+      internalOrganizations={internalOrganizations}
       activeStationId={activeStationId}
       enabledModules={enabled}
       tenant={{

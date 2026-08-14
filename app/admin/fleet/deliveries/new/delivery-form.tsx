@@ -27,6 +27,7 @@ const BaseSchema = z.object({
   litersDespatched: z.coerce.number().positive("Liters despatched must be > 0"),
   litersReceived: z.union([z.coerce.number().positive(), z.literal(""), z.undefined()]).transform(v => (v === "" || v === undefined ? null : Number(v))).optional().nullable(),
   amountPerLiter: z.coerce.number().positive("Amount per liter must be > 0"),
+  transportCostPerLiter: z.coerce.number().min(0, "Transport cost must be >= 0").optional().default(0),
 });
 
 type Values = z.infer<typeof BaseSchema>;
@@ -102,6 +103,7 @@ export function CreateSaleForm({
       litersDespatched: 0,
       litersReceived: undefined,
       amountPerLiter: 0,
+      transportCostPerLiter: 0,
     },
   });
 
@@ -459,8 +461,26 @@ export function CreateSaleForm({
                   {formState.errors.amountPerLiter && <p className="text-xs text-destructive">{formState.errors.amountPerLiter.message}</p>}
                 </div>
 
-                <div className="space-y-3">
-                  <Label>Transport Cost Borne By</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="transportCostPerLiter" className={formState.errors.transportCostPerLiter ? "text-destructive" : ""}>Transport Fee (₦/L)</Label>
+                  <Controller
+                    control={control}
+                    name="transportCostPerLiter"
+                    render={({ field }) => (
+                      <FormattedNumberInput 
+                        id="transportCostPerLiter" 
+                        placeholder="e.g. 50" 
+                        {...field}
+                        className={formState.errors.transportCostPerLiter ? "border-destructive" : ""}
+                        prefixText="₦"
+                      />
+                    )}
+                  />
+                  {formState.errors.transportCostPerLiter && <p className="text-xs text-destructive">{formState.errors.transportCostPerLiter.message}</p>}
+                </div>
+
+                <div className="space-y-3 col-span-2 mt-2">
+                  <Label className={formState.errors.transportCostBorneBy ? "text-destructive" : ""}>Transport Cost Borne By*</Label>
                   <Controller
                     control={control}
                     name="transportCostBorneBy"
@@ -468,19 +488,33 @@ export function CreateSaleForm({
                       <RadioGroup 
                         onValueChange={field.onChange} 
                         value={field.value} 
-                        className="flex flex-row gap-4 h-10 items-center"
+                        className="grid grid-cols-1 md:grid-cols-2 gap-4"
                       >
-                        <div className="flex items-center space-x-2">
+                        <Label 
+                          htmlFor="tc-client" 
+                          className="flex cursor-pointer flex-row items-center justify-between rounded-lg border p-4 hover:bg-accent/50 [&:has([data-state=checked])]:border-primary [&:has([data-state=checked])]:bg-primary/5"
+                        >
+                          <div className="flex flex-col gap-1">
+                            <span className="font-semibold text-sm">Client</span>
+                            <span className="text-xs text-muted-foreground font-normal">Charged to the customer</span>
+                          </div>
                           <RadioGroupItem value="CLIENT" id="tc-client" />
-                          <Label htmlFor="tc-client" className="font-normal cursor-pointer">Client</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
+                        </Label>
+
+                        <Label 
+                          htmlFor="tc-company" 
+                          className="flex cursor-pointer flex-row items-center justify-between rounded-lg border p-4 hover:bg-accent/50 [&:has([data-state=checked])]:border-primary [&:has([data-state=checked])]:bg-primary/5"
+                        >
+                          <div className="flex flex-col gap-1">
+                            <span className="font-semibold text-sm">Company</span>
+                            <span className="text-xs text-muted-foreground font-normal">Absorbed by the company</span>
+                          </div>
                           <RadioGroupItem value="COMPANY" id="tc-company" />
-                          <Label htmlFor="tc-company" className="font-normal cursor-pointer">Company</Label>
-                        </div>
+                        </Label>
                       </RadioGroup>
                     )}
                   />
+                  {formState.errors.transportCostBorneBy && <p className="text-xs text-destructive">{formState.errors.transportCostBorneBy.message}</p>}
                 </div>
               </div>
 

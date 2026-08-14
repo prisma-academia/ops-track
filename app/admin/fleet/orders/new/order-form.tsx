@@ -262,7 +262,7 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
   );
 
   const productTotal = Number(watchPricePerLitre || 0) * Number(watchLitersOrdered || 0);
-  const loadingTotal = Number(watchLoadingCost || 0);
+  const loadingTotal = Number(watchLoadingCost || 0) * Number(watchLitersOrdered || 0);
   const grandTotal = productTotal + loadingTotal;
 
   const selectedTransporter = transporters.find(t => t.id === watchTransporterId);
@@ -397,22 +397,24 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
                           {...field}
                           className={formState.errors.pricePerLitre ? "border-destructive" : ""}
                           prefixText="₦"
+                          maxLength={5}
                         />
                       )}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="loadingCost" className={formState.errors.loadingCost ? "text-destructive" : ""}>Flat Loading Fee (₦)</Label>
+                    <Label htmlFor="loadingCost" className={formState.errors.loadingCost ? "text-destructive" : ""}>Loading Fee Per Litre (₦)</Label>
                     <Controller
                       control={control}
                       name="loadingCost"
                       render={({ field }) => (
                         <FormattedNumberInput 
                           id="loadingCost" 
-                          placeholder="e.g. 15000"
+                          placeholder="e.g. 5"
                           {...field}
                           className={formState.errors.loadingCost ? "border-destructive" : ""}
                           prefixText="₦"
+                          maxLength={4}
                         />
                       )}
                     />
@@ -611,7 +613,7 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
                   <span className="font-bold text-foreground">₦{productTotal.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Loading Fee:</span>
+                  <span>Total Loading Fee:</span>
                   <span className="font-bold text-foreground">₦{loadingTotal.toLocaleString()}</span>
                 </div>
                 

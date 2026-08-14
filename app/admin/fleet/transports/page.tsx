@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { TransportsTable } from "./table";
 import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Tooltip,
   TooltipContent,
@@ -92,6 +92,25 @@ export default async function TransportsPage({
     createdAt: t.createdAt.toISOString(),
   }));
 
+  const invitationRows = pendingInvitations.map((inv) => ({
+    id: inv.id,
+    destination: inv.destination,
+    sourceDepot: "Depot",
+    transporterName: inv.transporter.name,
+    truckName: "Unassigned",
+    driverName: "Unassigned",
+    orderReference: inv.order?.reference || "-",
+    status: inv.status,
+    productType: inv.order?.productType || "-",
+    salesCount: 0,
+    litersCarried: Number(inv.litersRequested),
+    createdAt: inv.createdAt.toISOString(),
+    isInvitation: true,
+    invitationId: inv.id,
+  }));
+
+  const allRows = [...invitationRows, ...rows];
+
   const totalPages = Math.ceil(totalCount / take);
 
   const totalVolume = statsRaw.reduce((acc, curr) => acc + Number(curr._sum.litersCarried || 0), 0);
@@ -136,8 +155,6 @@ export default async function TransportsPage({
     <div className="space-y-8">
       <DataTableToolbar
         title="Transports"
-        createHref="/admin/fleet/transports/new"
-        createLabel="Add Transport"
         description="Manage active and completed truck dispatch trips."
       />
 
@@ -202,52 +219,11 @@ export default async function TransportsPage({
         </Card>
       </TooltipProvider>
 
-      {pendingInvitations.length > 0 && (
-        <div className="bg-white dark:bg-stone-950 p-6 rounded-xl border border-border shadow-sm">
-          <h2 className="text-lg font-bold mb-4">Pending Transport Invitations</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {pendingInvitations.map(inv => (
-              <div key={inv.id} className="p-4 border rounded-lg flex flex-col gap-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-semibold">{inv.order.reference || "Order"}</p>
-                    <p className="text-sm text-muted-foreground">{inv.transporter.name}</p>
-                  </div>
-                  <span className="text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-1 rounded-full">
-                    {inv.status}
-                  </span>
-                </div>
-                <div className="text-sm grid grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-muted-foreground text-xs">Destination</p>
-                    <p className="font-medium">{inv.destination}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground text-xs">Volume</p>
-                    <p className="font-medium">{Number(inv.litersRequested).toLocaleString()} L</p>
-                  </div>
-                </div>
-                {/* Accept/Reject form actions will be handled by client components in the future, 
-                    for now we link to the new transport form with the invitation ID */}
-                <div className="flex gap-2 mt-2 pt-3 border-t">
-                  <form action={`/api/tenant/fleet/transports/invitations/${inv.id}/reject`} method="POST" className="flex-1">
-                    <button type="submit" className="w-full px-3 py-1.5 text-sm bg-destructive/10 text-destructive hover:bg-destructive/20 rounded-md transition-colors">
-                      Reject
-                    </button>
-                  </form>
-                  <a href={`/admin/fleet/transports/new?invitationId=${inv.id}`} className="flex-1 text-center px-3 py-1.5 text-sm bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors">
-                    Accept
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+
 
       <div>
         <TransportsTable
-          data={rows}
+          data={allRows}
           serverPagination={{
             page,
             pageSize: take,

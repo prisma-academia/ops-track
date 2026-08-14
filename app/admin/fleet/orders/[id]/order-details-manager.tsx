@@ -125,7 +125,7 @@ export function OrderDetailsManager({
   const watchDepot = watch("sourceDepot");
 
   const productTotal = Number(watchPricePerLitre || 0) * Number(watchLitersOrdered || 0);
-  const loadingTotal = Number(watchLoadingCost) || 0;
+  const loadingTotal = (Number(watchLoadingCost) || 0) * Number(watchLitersOrdered || 0);
   const grandTotal = productTotal + loadingTotal;
 
   const onUpdateStatus = async (newStatus: string) => {
@@ -180,7 +180,7 @@ export function OrderDetailsManager({
     }
   };
 
-  const currentGrandTotal = (Number(order.pricePerLitre) * Number(order.litersOrdered)) + Number(order.loadingCost) + totalTransportCost;
+  const currentGrandTotal = (Number(order.pricePerLitre) * Number(order.litersOrdered)) + (Number(order.loadingCost) * Number(order.litersOrdered)) + totalTransportCost;
 
   return (
     <div className="space-y-6">
@@ -403,8 +403,8 @@ export function OrderDetailsManager({
                     <span className="font-mono font-medium">₦{(Number(order.pricePerLitre) * Number(order.litersOrdered)).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between border-b pb-1">
-                    <span className="text-muted-foreground">Loading:</span>
-                    <span className="font-mono font-medium">₦{Number(order.loadingCost).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Total Loading:</span>
+                    <span className="font-mono font-medium">₦{(Number(order.loadingCost) * Number(order.litersOrdered)).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between border-b pb-1">
                     <span className="text-muted-foreground">Logistics:</span>
@@ -677,6 +677,7 @@ export function OrderDetailsManager({
                         {...field} 
                         value={(field.value as string | number) ?? ""} 
                         prefixText="₦" 
+                        maxLength={5}
                       />
                     )}
                   />
@@ -685,7 +686,7 @@ export function OrderDetailsManager({
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="loadingCost">Flat Loading Fee (₦)</Label>
+                  <Label htmlFor="loadingCost">Loading Fee Per Litre (₦)</Label>
                   <Controller
                     control={control}
                     name="loadingCost"
@@ -695,6 +696,7 @@ export function OrderDetailsManager({
                         {...field} 
                         value={(field.value as string | number) ?? ""} 
                         prefixText="₦" 
+                        maxLength={4}
                       />
                     )}
                   />
@@ -704,7 +706,7 @@ export function OrderDetailsManager({
               {/* Live Calc summary inline */}
               <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-100 dark:border-blue-900 mt-4 space-y-2 text-sm">
                 <div className="flex justify-between font-medium"><span>Product Total:</span><span className="font-mono">₦{productTotal.toLocaleString()}</span></div>
-                <div className="flex justify-between text-muted-foreground"><span>Fixed Loading:</span><span className="font-mono">₦{loadingTotal.toLocaleString()}</span></div>
+                <div className="flex justify-between text-muted-foreground"><span>Total Loading Fee:</span><span className="font-mono">₦{loadingTotal.toLocaleString()}</span></div>
                 <div className="flex justify-between border-t border-blue-200 dark:border-blue-800 pt-2 font-bold text-blue-900 dark:text-blue-200">
                   <span>New Total Value:</span><span className="font-mono">₦{grandTotal.toLocaleString()}</span>
                 </div>

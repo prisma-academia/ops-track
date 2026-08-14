@@ -36,6 +36,7 @@ export default async function NewTransportPage(
       reference: true, 
       productType: true,
       litersOrdered: true,
+      sourceDepot: true,
       transports: { 
         where: { status: { not: "CANCELLED" } },
         select: { litersCarried: true } 
@@ -63,6 +64,15 @@ export default async function NewTransportPage(
         id: searchParams.invitationId,
         tenantId: actor.tenantId,
         status: "PENDING"
+      },
+      include: {
+        order: {
+          select: {
+            reference: true,
+            sourceDepot: true,
+            productType: true
+          }
+        }
       }
     });
   }

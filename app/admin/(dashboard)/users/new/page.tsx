@@ -24,8 +24,18 @@ export default async function NewTenantUserPage() {
       where: { id: activeStationId },
       select: { organizationId: true, id: true }
     });
-    organizationId = station?.organizationId || null;
-    stationId = station?.id || null;
+    if (station) {
+      organizationId = station.organizationId;
+      stationId = station.id;
+    } else {
+      const org = await prisma.organization.findUnique({
+        where: { id: activeStationId },
+        select: { id: true }
+      });
+      if (org) {
+        organizationId = org.id;
+      }
+    }
   } else if (actor.organizationId) {
     organizationId = actor.organizationId;
   }

@@ -12,23 +12,103 @@ import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, Check, ChevronsUpDown, AlertCircleIcon, ImageIcon, UploadIcon, XIcon, Loader2, CreditCard } from "lucide-react";
+import {
+  Save,
+  Check,
+  ChevronsUpDown,
+  AlertCircleIcon,
+  ImageIcon,
+  UploadIcon,
+  XIcon,
+  Loader2,
+  CreditCard,
+  Wallet,
+  Truck as TruckIcon,
+  Route,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiPost } from "@/lib/client/api";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { useRouter } from "next/navigation";
+import type { TransportFeeLeg } from "@/lib/generated/prisma/client";
+import {
+  getAvailableFeeLegs,
+  getFeeLegBreakdown,
+  getRemainingForLeg,
+} from "@/lib/fleet/transport-fees";
+import { PaymentConfirmDialog, PaymentResultDialog, type PaymentSummaryRow } from "@/components/fleet/payments/payment-dialogs";
+
+type ExpenseCategory = "PERSONAL_EXPENSE" | "FLEET_EXPENSE" | "TRANSPORT_FEE";
+
+function SummaryRow({
+  label,
+  value,
+  emphasis,
+  subtle,
+}: {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+  subtle?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm border-b border-border/60 last:border-b-0">
+      <span className={cn("text-muted-foreground", subtle && "opacity-60")}>{label}</span>
+      <span className={cn("font-medium text-right truncate max-w-[60%]", emphasis && "font-semibold", subtle && "opacity-60")}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+const CATEGORY_OPTIONS: Array<{
+  value: ExpenseCategory;
+  title: string;
+  description: string;
+  icon: typeof Wallet;
+}> = [
+  {
+    value: "PERSONAL_EXPENSE",
+    title: "Personal / Administrative",
+    description: "Office supplies, admin costs, and other non-fleet expenses.",
+    icon: Wallet,
+  },
+  {
+    value: "FLEET_EXPENSE",
+    title: "Fleet-Related Expense",
+    description: "Fuel, maintenance, tickets, or other trip-related costs.",
+    icon: TruckIcon,
+  },
+  {
+    value: "TRANSPORT_FEE",
+    title: "Transport Fee Payment",
+    description: "Payout to a transporter for a completed delivery leg.",
+    icon: Route,
+  },
+];
 
 export default function OutgoingPaymentForm({ metadata, loading }: { metadata: any, loading: boolean }) {
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
-  
-  const [category, setCategory] = useState<"PERSONAL_EXPENSE" | "FLEET_EXPENSE" | "TRANSPORT_FEE">("PERSONAL_EXPENSE");
+
+  const [category, setCategory] = useState<ExpenseCategory | "">("");
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [result, setResult] = useState<{ status: "success" | "error"; title: string; description?: string } | null>(null);
   const [transportOpen, setTransportOpen] = useState(false);
   const [transporterOpen, setTransporterOpen] = useState(false);
   const [truckOpen, setTruckOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
   const [bankOpen, setBankOpen] = useState(false);
-  const [tripLeg, setTripLeg] = useState<"DEPOT_TO_PRIMARY" | "PRIMARY_TO_SECONDARY" | "">("");
+  const [feeLegOpen, setFeeLegOpen] = useState(false);
+  const [feeLeg, setFeeLeg] = useState<TransportFeeLeg | "">("");
+  const [deliveryId, setDeliveryId] = useState("");
+
+  const feeLegSelectionKey = feeLeg
+    ? feeLeg === "PRIMARY_TO_SUBSEQUENT" && deliveryId
+      ? `${feeLeg}:${deliveryId}`
+      : feeLeg
+    : "";
 
   const [formData, setFormData] = useState({
     amount: "",
@@ -106,13 +186,26 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
   const previewUrl = formData.receiptUrl || (files[0]?.preview || null);
   const displayFileName = files[0]?.file.name || "Payment Receipt";
 
+  const originToDepotFee = metadata?.originToDepotFee ?? 0;
+
+  const selectedTransport = formData.transportId 
+    ? metadata?.transports?.find((t: any) => t.id === formData.transportId)
+    : null;
+
+  const availableFeeLegs = selectedTransport && category === "TRANSPORT_FEE"
+    ? getAvailableFeeLegs(selectedTransport, selectedTransport.transactions || [], { originToDepotFee })
+    : [];
+
+  const feeBreakdown = selectedTransport && category === "TRANSPORT_FEE"
+    ? getFeeLegBreakdown(selectedTransport, selectedTransport.transactions || [], { originToDepotFee })
+    : [];
+
   useEffect(() => {
     if ((category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && formData.transportId && metadata?.transports) {
       const t = metadata.transports.find((x: any) => x.id === formData.transportId);
       if (t) {
         setFormData((prev) => ({ 
           ...prev, 
-          amount: category === "TRANSPORT_FEE" ? (t.netTransportFeePaid?.toString() || "0") : prev.amount,
           transporterId: t.transporterId || prev.transporterId,
           truckId: t.truckId || prev.truckId,
           orderId: t.orderId || prev.orderId,
@@ -121,8 +214,25 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
     }
   }, [category, formData.transportId, metadata]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const validateBeforeConfirm = (): boolean => {
+    if (!category) {
+      toast.error("Please select an expense category.");
+      return false;
+    }
+    if (category === "TRANSPORT_FEE" && !feeLeg) {
+      toast.error("Select a transport fee leg.");
+      return false;
+    }
+    return true;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateBeforeConfirm()) return;
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmedSubmit = async () => {
     setSubmitting(true);
     try {
       let endpoint = `/api/tenant/fleet/payments/outflow/expense`;
@@ -149,10 +259,15 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
           transportId: formData.transportId,
           transporterId: formData.transporterId,
           amount: Number(formData.amount),
+          feeLeg,
+          deliveryId:
+            feeLeg === "PRIMARY_TO_SUBSEQUENT"
+              ? deliveryId || selectedTransport?.deliveries?.[0]?.id || null
+              : null,
           paymentMethod: formData.paymentMethod,
           reference: formData.reference,
           receiptUrl: formData.receiptUrl,
-          description: formData.description + (tripLeg ? ` [Leg: ${tripLeg === "DEPOT_TO_PRIMARY" ? "Depot to Primary" : "Primary to Secondary"}]` : ""),
+          description: formData.description,
           bankAccountId: formData.paymentMethod !== "CASH" ? formData.bankAccountId : undefined,
         };
       }
@@ -160,15 +275,25 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
       const res = await apiPost<any>(endpoint, payload);
 
       if (!res.error) {
-        toast.success("Payment recorded successfully!");
+        setConfirmOpen(false);
+        setResult({
+          status: "success",
+          title: "Payment recorded",
+          description: `The outgoing payment of ₦${Number(formData.amount).toLocaleString()} has been logged successfully.`,
+        });
         setFormData({ ...formData, amount: "", description: "", reference: "", receiptUrl: "", bankAccountId: "" });
-        router.push("/admin/fleet/payments");
       } else {
-        toast.error(res.error?.message || "Failed to record payment.");
+        setConfirmOpen(false);
+        setResult({
+          status: "error",
+          title: "Payment failed",
+          description: res.error?.message || "Failed to record payment. Please try again.",
+        });
       }
     } catch (e) {
       console.error(e);
-      toast.error("Error recording payment.");
+      setConfirmOpen(false);
+      setResult({ status: "error", title: "Payment failed", description: "Something went wrong while recording this payment." });
     } finally {
       setSubmitting(false);
     }
@@ -176,11 +301,42 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
 
   if (loading) return <div className="p-8 text-center text-muted-foreground"><SpinnerEllipsis /></div>;
 
-  const selectedTransport = formData.transportId 
-    ? metadata?.transports?.find((t: any) => t.id === formData.transportId)
+  const selectedDeliveries = selectedTransport?.deliveries || [];
+  const showDeliveryPicker =
+    category === "TRANSPORT_FEE" &&
+    feeLeg === "PRIMARY_TO_SUBSEQUENT" &&
+    selectedDeliveries.length > 1;
+
+  const selectedBank = formData.bankAccountId
+    ? metadata?.bankAccounts?.find((a: any) => a.id === formData.bankAccountId)
     : null;
+  const selectedTransporter = formData.transporterId
+    ? metadata?.transporters?.find((t: any) => t.id === formData.transporterId)
+    : null;
+  const categoryMeta = CATEGORY_OPTIONS.find((c) => c.value === category);
+
+  const confirmRows: PaymentSummaryRow[] = [
+    { label: "Category", value: categoryMeta?.title || "—", emphasis: true },
+    ...(category === "TRANSPORT_FEE"
+      ? [
+          { label: "Transport Trip", value: selectedTransport?.order?.reference || selectedTransport?.destination || "—" },
+          {
+            label: "Fee Leg",
+            value:
+              availableFeeLegs.find((l) => (l.deliveryId ? `${l.feeLeg}:${l.deliveryId}` : l.feeLeg) === feeLegSelectionKey)?.label ||
+              "—",
+          },
+        ]
+      : []),
+    ...(selectedTransporter ? [{ label: "Transporter", value: selectedTransporter.name }] : []),
+    { label: "Payment Method", value: formData.paymentMethod.replace(/_/g, " ") },
+    ...(selectedBank ? [{ label: "Paying From", value: `${selectedBank.bankName}${selectedBank.accountName ? " • " + selectedBank.accountName : ""}` }] : []),
+    ...(formData.reference ? [{ label: "Reference", value: formData.reference }] : []),
+    ...(formData.description ? [{ label: "Description", value: formData.description }] : []),
+  ];
 
   return (
+    <>
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2">
         <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
@@ -199,25 +355,55 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Expense Details</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4 md:col-span-2">
-                  <Label>Expense Category</Label>
-                  <Select 
-                    value={category} 
-                    onValueChange={(val) => setCategory(val as any)}
-                  >
-                    <SelectTrigger className="bg-muted/50 border-primary/20 font-medium w-full">
-                      <SelectValue placeholder="Select Category" />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="PERSONAL_EXPENSE">Personal / Administrative Expenses</SelectItem>
-                      <SelectItem value="FLEET_EXPENSE">Fleet-Related Expenses</SelectItem>
-                      <SelectItem value="TRANSPORT_FEE">Transport Fee Payment</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2 md:col-span-2">
+                  <Label>Expense Category *</Label>
+                  <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
+                    <PopoverTrigger asChild className="w-full">
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={categoryOpen}
+                        className="w-full justify-between font-normal text-left h-auto py-2"
+                      >
+                        <span className="truncate pr-4">
+                          {categoryMeta ? categoryMeta.title : "Select expense category..."}
+                        </span>
+                        <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="p-0"
+                      style={{ width: 'var(--radix-popover-trigger-width)' }}
+                      align="start"
+                    >
+                      <Command>
+                        <CommandList>
+                          <CommandGroup>
+                            {CATEGORY_OPTIONS.map((opt) => (
+                              <CommandItem
+                                key={opt.value}
+                                value={`${opt.title} ${opt.description}`}
+                                onSelect={() => {
+                                  setCategory(opt.value);
+                                  setCategoryOpen(false);
+                                }}
+                              >
+                                <Check className={cn("mr-2 h-4 w-4 shrink-0", category === opt.value ? "opacity-100" : "opacity-0")} />
+                                <div className="flex flex-col text-left">
+                                  <span className="font-semibold text-sm">{opt.title}</span>
+                                  <span className="text-xs text-muted-foreground mt-0.5">{opt.description}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
         {(category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && (
-          <div className="space-y-2 flex flex-col justify-end">
+          <div className="space-y-2 flex flex-col justify-end md:col-span-2">
             <Label>Select Transport Trip {category === "TRANSPORT_FEE" ? "*" : "(Optional)"}</Label>
             <Popover open={transportOpen} onOpenChange={setTransportOpen}>
               <PopoverTrigger asChild className="w-full">
@@ -258,8 +444,10 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                             if (formData.transportId === t.id) {
                               setFormData({ ...formData, transportId: "", transporterId: "", truckId: "", orderId: "", amount: "" });
                             } else {
-                              setFormData({ ...formData, transportId: t.id });
+                              setFormData({ ...formData, transportId: t.id, amount: "" });
                             }
+                            setFeeLeg("");
+                            setDeliveryId("");
                             setTransportOpen(false);
                           }}
                         >
@@ -284,18 +472,81 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
 
         {category === "TRANSPORT_FEE" && (
           <div className="space-y-2 flex flex-col justify-end">
-            <Label>Trip Leg *</Label>
-            <Select 
-              value={tripLeg} 
-              onValueChange={(val) => setTripLeg(val as any)}
-              required
-            >
+            <Label>Transport Fee Leg *</Label>
+            <Popover open={feeLegOpen} onOpenChange={setFeeLegOpen}>
+              <PopoverTrigger asChild className="w-full">
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={feeLegOpen}
+                  disabled={!formData.transportId}
+                  className="w-full justify-between font-normal text-left h-auto py-2"
+                >
+                  <span className="truncate pr-4">
+                    {feeLeg
+                      ? availableFeeLegs.find(
+                          (l) => (l.deliveryId ? `${l.feeLeg}:${l.deliveryId}` : l.feeLeg) === feeLegSelectionKey
+                        )?.label || "Select fee leg..."
+                      : formData.transportId
+                        ? "Select fee leg..."
+                        : "Select transport first"}
+                  </span>
+                  <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="p-0"
+                style={{ width: 'var(--radix-popover-trigger-width)' }}
+                align="start"
+              >
+                <Command>
+                  <CommandInput placeholder="Search fee leg..." />
+                  <CommandList>
+                    <CommandEmpty>No unpaid fee legs.</CommandEmpty>
+                    <CommandGroup>
+                      {availableFeeLegs.map((leg) => {
+                        const key = leg.deliveryId ? `${leg.feeLeg}:${leg.deliveryId}` : leg.feeLeg;
+                        return (
+                          <CommandItem
+                            key={key}
+                            value={`${leg.label} ${key}`}
+                            onSelect={() => {
+                              setFeeLeg(leg.feeLeg);
+                              setDeliveryId(leg.deliveryId || "");
+                              setFeeLegOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4 shrink-0", feeLegSelectionKey === key ? "opacity-100" : "opacity-0")} />
+                            <div className="flex flex-col text-left">
+                              <span className="font-semibold text-sm">{leg.label}</span>
+                              <span className="text-xs text-muted-foreground mt-0.5">
+                                ₦{leg.remaining.toLocaleString()} remaining
+                              </span>
+                            </div>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
+
+        {showDeliveryPicker && (
+          <div className="space-y-2 flex flex-col justify-end">
+            <Label>Secondary Destination *</Label>
+            <Select value={deliveryId} onValueChange={setDeliveryId} required>
               <SelectTrigger className="w-full h-auto py-2">
-                <SelectValue placeholder="Select Trip Leg" />
+                <SelectValue placeholder="Select delivery stop" />
               </SelectTrigger>
               <SelectContent position="popper">
-                <SelectItem value="DEPOT_TO_PRIMARY">Depot to Primary Destination</SelectItem>
-                <SelectItem value="PRIMARY_TO_SECONDARY">Primary to Secondary (Station/Client)</SelectItem>
+                {selectedDeliveries.map((d: any) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.station?.name || d.customer?.name || "Secondary stop"}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -669,56 +920,116 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
   </div>
 
   <div className="lg:col-span-1">
-    <div className="sticky top-6 border rounded-2xl bg-card p-5 space-y-4">
-      <div>
-        <h3 className="font-semibold text-lg">Payment Summary</h3>
-        <p className="text-sm text-muted-foreground">Details for the selected payment.</p>
+    <div className="sticky top-6 rounded-lg border border-border/60 bg-card overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
+        <h3 className="font-medium text-sm">Payment Summary</h3>
+        {Number(formData.amount) > 0 && (
+          <span className="text-sm font-semibold tabular-nums">₦{Number(formData.amount).toLocaleString()}</span>
+        )}
       </div>
-      
-      {selectedTransport ? (
-        <div className="space-y-3 pt-3 border-t">
-          <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Order Ref</span>
-            <span className="font-medium text-sm">{selectedTransport.order?.reference || "N/A"}</span>
+
+      <div>
+      {selectedTransport && category === "TRANSPORT_FEE" ? (
+        <>
+          <SummaryRow label="Order Ref" value={selectedTransport.order?.reference || "Unlinked"} />
+          <SummaryRow label="Transporter" value={selectedTransport.transporter?.name || "N/A"} />
+          <SummaryRow label="Destination" value={selectedTransport.destination || "N/A"} />
+          <div className="px-4 py-2 bg-muted/30 border-y border-border/60">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fee Breakdown</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Transporter</span>
-            <span className="font-medium text-sm">{selectedTransport.transporter?.name || "N/A"}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Truck</span>
-            <span className="font-medium text-sm">{selectedTransport.truck?.plateNumber || selectedTransport.truck?.name || "N/A"}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Destination</span>
-            <span className="font-medium text-sm">{selectedTransport.destination || "N/A"}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Product</span>
-            <span className="font-medium text-sm">{selectedTransport.productType || "N/A"}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Volume Carried</span>
-            <span className="font-medium text-sm">{Number(selectedTransport.litersCarried || 0).toLocaleString()} L</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Rate</span>
-            <span className="font-medium text-sm">₦{Number(selectedTransport.ratePerLiter || 0).toLocaleString()} / L</span>
-          </div>
-          <div className="flex justify-between font-semibold border-t pt-2 mt-2">
-            <span>Primary Transport Cost</span>
-            <span>₦{(Number(selectedTransport.litersCarried || 0) * Number(selectedTransport.ratePerLiter || 0)).toLocaleString()}</span>
-          </div>
+          {feeBreakdown.map((row) => (
+            <SummaryRow
+              key={`${row.feeLeg}-${row.deliveryId || "default"}`}
+              label={row.label}
+              value={`₦${row.paid.toLocaleString()} / ₦${row.expected.toLocaleString()}`}
+              subtle={row.status === "not_applicable"}
+            />
+          ))}
+          {feeLeg && (
+            <SummaryRow
+              label="Remaining for leg"
+              value={`₦${getRemainingForLeg(
+                selectedTransport,
+                selectedTransport.transactions || [],
+                feeLeg,
+                {
+                  deliveryId: feeLeg === "PRIMARY_TO_SUBSEQUENT" ? (deliveryId || selectedDeliveries[0]?.id) : undefined,
+                  originToDepotFee,
+                }
+              ).toLocaleString()}`}
+              emphasis
+            />
+          )}
+        </>
+      ) : selectedTransport ? (
+        <>
+          <SummaryRow label="Order Ref" value={selectedTransport.order?.reference || "N/A"} />
+          <SummaryRow label="Transporter" value={selectedTransport.transporter?.name || "N/A"} />
+          <SummaryRow label="Truck" value={selectedTransport.truck?.plateNumber || selectedTransport.truck?.name || "N/A"} />
+          <SummaryRow label="Destination" value={selectedTransport.destination || "N/A"} />
+        </>
+      ) : category ? (
+        <div className="px-4 py-6 text-center">
+          <p className="text-sm text-muted-foreground font-medium">{categoryMeta?.title}</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">Fill in the financial details to complete this payment.</p>
         </div>
       ) : (
-        <div className="pt-8 pb-4 text-center border-t border-dashed">
-          <AlertCircleIcon className="h-8 w-8 mx-auto text-muted-foreground opacity-30 mb-3" />
-          <p className="text-sm text-muted-foreground font-medium">Payment Information</p>
-          <p className="text-xs text-muted-foreground/70 mt-1">Additional details will be displayed here based on the selected outgoing payment options.</p>
+        <div className="px-4 py-6 text-center">
+          <p className="text-sm text-muted-foreground font-medium">No Category Selected</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">Choose an expense category to see relevant payment details here.</p>
         </div>
       )}
+
+      {(formData.paymentMethod || selectedBank) && (
+        <>
+          <SummaryRow label="Method" value={formData.paymentMethod.replace(/_/g, " ")} />
+          {selectedBank && <SummaryRow label="From Account" value={selectedBank.bankName} />}
+        </>
+      )}
+      </div>
     </div>
   </div>
 </div>
+
+<PaymentConfirmDialog
+  open={confirmOpen}
+  onOpenChange={setConfirmOpen}
+  onConfirm={handleConfirmedSubmit}
+  confirming={submitting}
+  tone="destructive"
+  title="Confirm outgoing payment"
+  description="Please review the payment details below before it is logged."
+  amountLabel={`₦${(Number(formData.amount) || 0).toLocaleString()}`}
+  rows={confirmRows}
+  confirmLabel="Confirm & Log Expense"
+/>
+
+{result && (
+  <PaymentResultDialog
+    open={!!result}
+    onOpenChange={(open) => !open && setResult(null)}
+    status={result.status}
+    title={result.title}
+    description={result.description}
+    primaryLabel={result.status === "success" ? "Go to Payments" : "Try Again"}
+    onPrimaryAction={() => {
+      if (result.status === "success") {
+        router.push("/admin/fleet/payments");
+      } else {
+        setResult(null);
+      }
+    }}
+    secondaryLabel={result.status === "success" ? "Log Another" : undefined}
+    onSecondaryAction={
+      result.status === "success"
+        ? () => {
+            setResult(null);
+            setCategory("");
+          }
+        : undefined
+    }
+  />
+)}
+</>
 );
 }

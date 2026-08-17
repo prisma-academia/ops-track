@@ -95,7 +95,7 @@ interface TransportData {
   transportTotalRev: number;
   transportTotalPaid: number;
   transportTotalCost: number;
-  sales: SaleData[];
+  deliveries: SaleData[];
 }
 
 interface Props {
@@ -110,7 +110,7 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
     let lossQty = 0;
 
     transports.forEach((t) => {
-      t.sales.forEach((s) => {
+      t.deliveries.forEach((s) => {
         if (s.lossLiters && s.lossLiters > 0 && s.sellingPrice > 0) {
           lossQty += s.lossLiters;
           lossRev += s.lossLiters * s.sellingPrice;
@@ -177,7 +177,7 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
       iconColor: "text-rose-600",
     },
     {
-      title: "Sales Revenue",
+      title: "deliveries Revenue",
       value: formatShortCurrency(summary.amountSoldRev),
       fullValue: fmtMoney(summary.amountSoldRev),
       icon: Receipt,
@@ -391,9 +391,9 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
         </div>
       </div>
 
-      {/* Transports & Sales Breakdown */}
+      {/* Transports & deliveries Breakdown */}
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold tracking-tight">Transports & Sales Breakdown</h2>
+        <h2 className="text-lg font-semibold tracking-tight">Transports & deliveries Breakdown</h2>
         
         {transports.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground bg-card rounded-xl border border-border/40">
@@ -466,42 +466,42 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
                           </TableCell>
                           <TableCell className="px-3 py-3 text-center">
                             <Badge variant="secondary" className="text-[10px] font-bold">
-                              {transport.sales.length} Sale{transport.sales.length === 1 ? "" : "s"}
+                              {transport.deliveries.length} delivery{transport.deliveries.length === 1 ? "" : "s"}
                             </Badge>
                           </TableCell>
                         </TableRow>
 
-                        {/* Child Sale Sub-Rows */}
-                        {transport.sales.map((sale) => {
-                          const saleOrderCost = sale.litersSold * (summary.priceBought || 0);
-                          const saleTransportCost = sale.transportCost || 0;
+                        {/* Child delivery Sub-Rows */}
+                        {transport.deliveries.map((delivery) => {
+                          const saleOrderCost = delivery.litersSold * (summary.priceBought || 0);
+                          const saleTransportCost = delivery.transportCost || 0;
                           const saleTotalCost = saleOrderCost + saleTransportCost;
-                          const salePnl = sale.salesRevenue - saleTotalCost;
+                          const salePnl = delivery.salesRevenue - saleTotalCost;
                           const isSaleProfit = salePnl >= 0;
 
                           return (
-                            <TableRow key={sale.id} className="bg-background hover:bg-muted/20 relative">
+                            <TableRow key={delivery.id} className="bg-background hover:bg-muted/20 relative">
                               {/* Station / Customer & Tree Connector */}
                               <TableCell className="px-3 py-2.5 pl-8 relative">
                                 <div className="absolute left-4 top-0 bottom-1/2 border-l border-b border-border/80 w-3 rounded-bl"></div>
-                                <p className="font-semibold text-foreground">{sale.soldTo}</p>
-                                <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{fmtDate(sale.createdAt)}</p>
+                                <p className="font-semibold text-foreground">{delivery.soldTo}</p>
+                                <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{fmtDate(delivery.createdAt)}</p>
                               </TableCell>
 
                               {/* Volume (Despatched / Recv / Loss) */}
                               <TableCell className="px-3 py-2.5 text-right font-mono">
                                 <div className="flex flex-col items-end gap-0.5">
                                   <span className="font-medium text-foreground">
-                                    {fmtQty(sale.litersSold)} L <span className="text-[9px] text-muted-foreground uppercase">despatched</span>
+                                    {fmtQty(delivery.litersSold)} L <span className="text-[9px] text-muted-foreground uppercase">despatched</span>
                                   </span>
                                   <span className="text-[10px] text-muted-foreground">
-                                    {sale.litersReceived !== null && sale.litersReceived !== undefined
-                                      ? `${fmtQty(sale.litersReceived)} L received`
+                                    {delivery.litersReceived !== null && delivery.litersReceived !== undefined
+                                      ? `${fmtQty(delivery.litersReceived)} L received`
                                       : "—"}
                                   </span>
-                                  {sale.lossLiters && sale.lossLiters > 0 ? (
+                                  {delivery.lossLiters && delivery.lossLiters > 0 ? (
                                     <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400">
-                                      Loss: {fmtQty(sale.lossLiters)} L ({fmtMoney(sale.lossLiters * sale.sellingPrice)})
+                                      Loss: {fmtQty(delivery.lossLiters)} L ({fmtMoney(delivery.lossLiters * delivery.sellingPrice)})
                                     </span>
                                   ) : null}
                                 </div>
@@ -514,7 +514,7 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
                                     Bought: {fmtMoney(summary.priceBought)}/L
                                   </span>
                                   <span className="font-semibold text-foreground">
-                                    Sold: {fmtMoney(sale.sellingPrice)}/L
+                                    Sold: {fmtMoney(delivery.sellingPrice)}/L
                                   </span>
                                 </div>
                               </TableCell>
@@ -531,7 +531,7 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
 
                               {/* Revenue */}
                               <TableCell className="px-3 py-2.5 text-right font-mono font-semibold text-indigo-600 dark:text-indigo-400">
-                                {fmtMoney(sale.salesRevenue)}
+                                {fmtMoney(delivery.salesRevenue)}
                               </TableCell>
 
                               {/* Profit / Loss */}
@@ -548,13 +548,13 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
                               <TableCell className="px-3 py-2.5 text-right font-mono">
                                 <div className="flex flex-col items-end gap-0.5">
                                   <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                                    {fmtMoney(sale.paymentReceived)}
+                                    {fmtMoney(delivery.paymentReceived)}
                                   </span>
                                   <span className={cn(
                                     "text-[10px] font-medium",
-                                    sale.debtRemaining > 0 ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground/60"
+                                    delivery.debtRemaining > 0 ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground/60"
                                   )}>
-                                    Debt: {fmtMoney(sale.debtRemaining)}
+                                    Debt: {fmtMoney(delivery.debtRemaining)}
                                   </span>
                                 </div>
                               </TableCell>
@@ -563,11 +563,11 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
                               <TableCell className="px-3 py-2.5 text-center">
                                 <Badge variant="outline" className={cn(
                                   "text-[10px] px-2 py-0.5 font-semibold",
-                                  sale.paymentStatus === "Paid" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : 
-                                  sale.paymentStatus === "Partial" ? "bg-amber-500/10 text-amber-600 border-amber-500/20" : 
+                                  delivery.paymentStatus === "Paid" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : 
+                                  delivery.paymentStatus === "Partial" ? "bg-amber-500/10 text-amber-600 border-amber-500/20" : 
                                   "bg-rose-500/10 text-rose-600 border-rose-500/20"
                                 )}>
-                                  {sale.paymentStatus}
+                                  {delivery.paymentStatus}
                                 </Badge>
                               </TableCell>
                             </TableRow>

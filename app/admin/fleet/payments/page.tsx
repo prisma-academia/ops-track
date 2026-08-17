@@ -14,6 +14,7 @@ import {
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Activity } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { LogPaymentModal } from "@/components/fleet/payments/log-payment-modal";
 import { cn, formatShortCurrency } from "@/lib/utils";
 
 export default async function PaymentsPage({
@@ -141,13 +142,11 @@ export default async function PaymentsPage({
 
   return (
     <div className="space-y-6">
-      {/* Top Page Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card text-card-foreground p-4 rounded-xl border border-border/40 shadow-xs">
-        <div className="space-y-1">
-          <h1 className="text-xl font-bold tracking-tight text-foreground">Payments Module</h1>
-          <p className="text-xs text-muted-foreground">View and manage all incoming and outgoing fleet payments.</p>
-        </div>
-      </div>
+      <DataTableToolbar
+        title="Payments Module"
+        description="View and manage all incoming and outgoing fleet payments."
+        action={<LogPaymentModal />}
+      />
 
       {/* Stats Cards */}
       <TooltipProvider delayDuration={200}>
@@ -214,11 +213,6 @@ export default async function PaymentsPage({
       {/* Table Section */}
       <PaymentsTable
         data={rows}
-        headerAction={
-          <Link href="/admin/fleet/payments/new">
-            <Button>Log Payment</Button>
-          </Link>
-        }
         serverPagination={{
           page,
           pageSize: take,

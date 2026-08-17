@@ -3,15 +3,32 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { WaybillsManager } from "./waybills-manager";
 import { buildOffsetPageMeta } from "@/lib/api/pagination";
+import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 
 export default async function WaybillsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_READ.key);
   const take = 25;
 
+  const activeOrgId = await resolveActiveOrgId(actor);
+
+  const waybillWhere: any = { tenantId: actor.tenantId };
+  if (activeOrgId) {
+    waybillWhere.allocations = {
+      some: {
+        station: { organizationId: activeOrgId }
+      }
+    };
+  }
+
+  const stationWhere: any = {
+    tenantId: actor.tenantId,
+    ...(activeOrgId ? { organizationId: activeOrgId } : {}),
+  };
+
   const [totalCount, waybills] = await Promise.all([
-    prisma.waybill.count({ where: { tenantId: actor.tenantId } }),
+    prisma.waybill.count({ where: waybillWhere }),
     prisma.waybill.findMany({
-      where: { tenantId: actor.tenantId },
+      where: waybillWhere,
       orderBy: { dispatchedAt: "desc" },
       take,
       include: {
@@ -37,7 +54,7 @@ export default async function WaybillsPage() {
   ]);
 
   const stations = await prisma.station.findMany({
-    where: { tenantId: actor.tenantId },
+    where: stationWhere,
     select: {
       id: true,
       name: true,

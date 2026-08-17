@@ -6,21 +6,11 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-
-const SubsequentLocSchema = z.object({
-  location: z.string(),
-  rate: z.number(),
-  litersDelivered: z.number(),
-  date: z.string().optional(),
-  isCustom: z.boolean().optional(),
-  productPrice: z.number().optional(),
-  // saleId links this destination to a B2B Sale for received-litres sync
-  saleId: z.string().optional().nullable(),
-});
+import { assertOrderLinkCapacity, asOrderLookupClient } from "@/lib/fleet/transport-order";
 
 const UpdateTransportSchema = z.object({
+  orderId: z.string().nullable().optional(),
   litersDelivered: z.number().min(0).optional(),
-  subsequentLocs: z.array(SubsequentLocSchema).optional(),
   addMaintenanceCost: z.number().min(0).optional(),
   addLitersLost: z.number().min(0).optional(),
   addDeposit: z.number().min(0).optional(),
@@ -39,7 +29,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET");
 
     const transport = await prisma.transport.findFirst({
       where: { id, tenantId: actor.tenantId },
@@ -48,7 +38,7 @@ export async function GET(
         transporter: true,
         truck: true,
         driver: true,
-        sales: {
+        deliveries: {
           include: {
             customer: { select: { id: true, name: true } },
           },
@@ -70,7 +60,7 @@ export async function PATCH(
   try {
     await requireCsrf(request);
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
     const body = UpdateTransportSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -79,18 +69,24 @@ export async function PATCH(
     });
     if (!existing) throw new DomainError(404, "not_found", "Transport not found.");
 
+    if (body.orderId !== undefined && body.orderId !== existing.orderId) {
+      if (body.orderId) {
+        await assertOrderLinkCapacity(
+          asOrderLookupClient(prisma),
+          actor.tenantId,
+          body.orderId,
+          Number(existing.litersCarried),
+          existing.id
+        );
+      }
+    }
+
     // Calculate financials
     const ratePerLiter = Number(existing.ratePerLiter);
     const litersCarried = Number(existing.litersCarried);
 
     // Base earnings
     let baseRate = ratePerLiter * litersCarried;
-
-    // Extra earnings from subsequent locations
-    const subsequentLocs = body.subsequentLocs ?? (existing.subsequentLocs as any[] ?? []);
-    for (const loc of subsequentLocs) {
-      baseRate += (loc.rate ?? 0) * (loc.litersDelivered ?? 0);
-    }
 
     // Deductions
     const currentMaintenance = Number(existing.maintenanceCost) + (body.addMaintenanceCost ?? 0);
@@ -104,8 +100,8 @@ export async function PATCH(
     const transport = await prisma.transport.update({
       where: { id },
       data: {
+        ...(body.orderId !== undefined && { orderId: body.orderId }),
         ...(body.litersDelivered !== undefined && { litersDelivered: body.litersDelivered }),
-        ...(body.subsequentLocs !== undefined && { subsequentLocs: body.subsequentLocs as any }),
         maintenanceCost: currentMaintenance,
         litersLost: currentLitersLost,
         totalDeduction,

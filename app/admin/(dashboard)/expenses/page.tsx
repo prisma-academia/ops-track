@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { ExpensesManager } from "./expenses-manager";
+import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 
 export default async function ExpensesPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_EXPENSES_READ.key);
@@ -9,10 +10,22 @@ export default async function ExpensesPage() {
   const take = 25;
   const skip = 0;
 
+  const activeOrgId = await resolveActiveOrgId(actor);
+
+  const expenseWhere: any = { tenantId: actor.tenantId };
+  if (activeOrgId) {
+    expenseWhere.station = { organizationId: activeOrgId };
+  }
+
+  const stationWhere: any = {
+    tenantId: actor.tenantId,
+    ...(activeOrgId ? { organizationId: activeOrgId } : {}),
+  };
+
   const [totalCount, expenses] = await Promise.all([
-    prisma.expense.count({ where: { tenantId: actor.tenantId } }),
+    prisma.expense.count({ where: expenseWhere }),
     prisma.expense.findMany({
-      where: { tenantId: actor.tenantId },
+      where: expenseWhere,
       orderBy: { createdAt: "desc" },
       take,
       skip,
@@ -46,7 +59,7 @@ export default async function ExpensesPage() {
   ]);
 
   const stations = await prisma.station.findMany({
-    where: { tenantId: actor.tenantId },
+    where: stationWhere,
     select: {
       id: true,
       name: true,

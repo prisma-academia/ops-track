@@ -36,7 +36,17 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn, formatShortCurrency } from "@/lib/utils";
-import { addDays, format } from "date-fns";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
+import { addDays, format, parseISO } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import {
   Truck,
@@ -200,6 +210,21 @@ export function StockReportManager({ initialRows, stations }: Props) {
       if (r.pnl) totalPnl += r.pnl;
     });
     return { count: filteredRows.length, totalVolume, totalStockValue, totalReceived, totalVariance, totalDeposit, totalExpenseSum, totalPnl };
+  }, [filteredRows]);
+
+  // ── Chart Data ────────────────────────────────────────────────────────────
+  const chartData = useMemo(() => {
+    const grouped = filteredRows.reduce((acc, curr) => {
+      const date = format(new Date(curr.deliveryDate), "MMM dd");
+      if (!acc[date]) {
+        acc[date] = { date, Delivery: 0, Received: 0, Variance: 0 };
+      }
+      acc[date].Delivery += Number(curr.deliveryQty || 0);
+      acc[date].Received += Number(curr.reconciledQty || 0);
+      acc[date].Variance += (Number(curr.reconciledQty || curr.deliveryQty || 0) - Number(curr.deliveryQty || 0));
+      return acc;
+    }, {} as Record<string, any>);
+    return Object.values(grouped).reverse();
   }, [filteredRows]);
 
   // ── Column defs ───────────────────────────────────────────────────────────
@@ -677,6 +702,45 @@ export function StockReportManager({ initialRows, stations }: Props) {
           </CardContent>
         </Card>
       </TooltipProvider>
+
+      {/* ── CHART VIEW ──────────────────────────────────────────────────── */}
+      {chartData.length > 0 && (
+        <Card className="border-border/40 shadow-xs hide-on-print">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-muted-foreground" />
+              Stock Delivery vs Received (Trend)
+            </h3>
+            <div className="h-[350px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="date" 
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value) => `${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  />
+                  <RechartsTooltip 
+                    cursor={{ fill: 'hsl(var(--muted)/0.4)' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                  <Bar dataKey="Delivery" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="Received" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Table ───────────────────────────────────────────────────────── */}
       <Card className="w-full py-0 overflow-hidden print:shadow-none print:border-none print:bg-transparent">

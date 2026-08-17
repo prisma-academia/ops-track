@@ -5,6 +5,8 @@ import { ok } from "@/lib/api/respond";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { requireTenantActor } from "@/lib/auth/guards";
 import { prisma } from "@/lib/db/client";
+import { StockMovementService } from "@/lib/inventory/stock-movement-service";
+import { FinanceService } from "@/lib/finance/finance-service";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +26,6 @@ const CreateSalesLogSchema = z.object({
   dippingClosingId: z.string().optional(),
   clientId: z.string().optional(),
   isDebtRepayment: z.boolean().optional().default(false),
-  parentSaleId: z.string().nullable().optional(),
 });
 
 export async function GET(
@@ -33,7 +34,7 @@ export async function GET(
 ) {
   try {
     const { id: stationId } = await params;
-    const actor = await requireTenantActor();
+    const actor = await requireTenantActor(undefined, "STATION");
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
 
@@ -86,7 +87,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id: stationId } = await params;
-    const actor = await requireTenantActor();
+    const actor = await requireTenantActor(undefined, "STATION");
     const body = CreateSalesLogSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -120,26 +121,73 @@ export async function POST(
       }
     }
 
-    const salesLog = await prisma.salesLog.create({
-      data: {
-        id: body.clientId || undefined,
+    let tankId: string | null = null;
+    if (body.dippingClosingId) {
+      const closing = await prisma.dippingClosing.findUnique({
+        where: { id: body.dippingClosingId },
+        include: { session: true },
+      });
+      if (closing) {
+        tankId = closing.session.tankId;
+      }
+    }
+
+    if (!tankId) {
+      const tank = await prisma.tank.findFirst({
+        where: { stationId, tenantId: actor.tenantId, productType: body.productType as any },
+        orderBy: { currentLiters: "desc" },
+      });
+      if (tank) {
+        tankId = tank.id;
+      }
+    }
+
+    const salesLog = await prisma.$transaction(async (tx) => {
+      const log = await tx.salesLog.create({
+        data: {
+          id: body.clientId || undefined,
+          tenantId: actor.tenantId,
+          stationId,
+          productType: body.productType,
+          litersSold: body.litersSold,
+          pricePerLiter: body.pricePerLiter,
+          amountPos: body.amountPos,
+          amountTransfer: body.amountTransfer,
+          posBankAccountId: body.posBankAccountId || null,
+          transferBankAccountId: body.transferBankAccountId || null,
+          posReceiptUrl: body.posReceiptUrl,
+          transferReceiptUrl: body.transferReceiptUrl,
+          logDate,
+          recordedById: actor.userId,
+          dippingClosingId: body.dippingClosingId,
+          isDebtRepayment: body.isDebtRepayment,
+        },
+      });
+
+      if (tankId && body.litersSold > 0) {
+        await StockMovementService.recordRetailSale(tx as any, {
+          tenantId: actor.tenantId,
+          stationId,
+          tankId,
+          productType: body.productType as any,
+          quantity: body.litersSold,
+          referenceId: log.id,
+          notes: `Retail sale ${body.dippingClosingId ? "from dipping" : ""}`,
+          recordedById: actor.userId,
+        });
+      }
+
+      await FinanceService.recordRetailSaleRevenue(tx as any, {
         tenantId: actor.tenantId,
         stationId,
-        productType: body.productType,
-        litersSold: body.litersSold,
-        pricePerLiter: body.pricePerLiter,
+        salesLogId: log.id,
         amountPos: body.amountPos,
         amountTransfer: body.amountTransfer,
         posBankAccountId: body.posBankAccountId || null,
         transferBankAccountId: body.transferBankAccountId || null,
-        posReceiptUrl: body.posReceiptUrl,
-        transferReceiptUrl: body.transferReceiptUrl,
-        logDate,
-        recordedById: actor.userId,
-        dippingClosingId: body.dippingClosingId,
-        isDebtRepayment: body.isDebtRepayment,
-        parentSaleId: body.parentSaleId || null,
-      },
+      });
+
+      return log;
     });
 
     await audit({

@@ -5,9 +5,9 @@ import { DataTable } from "@/components/data-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 
-type SaleRow = any;
+type DeliveryRow = any;
 
-const saleColumns: ColumnDef<SaleRow>[] = [
+const deliveryColumns: ColumnDef<DeliveryRow>[] = [
   {
     accessorKey: "createdAt",
     header: "Date",
@@ -48,21 +48,21 @@ const saleColumns: ColumnDef<SaleRow>[] = [
   },
 ];
 
-export function CustomerDetailsClient({ sales }: { sales: any[] }) {
+export function CustomerDetailsClient({ deliveries }: { deliveries: any[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recent Sales</CardTitle>
+        <CardTitle>Recent deliveries</CardTitle>
       </CardHeader>
       <CardContent>
-        {sales.length > 0 ? (
+        {deliveries.length > 0 ? (
           <DataTable
-            columns={saleColumns}
-            data={sales}
+            columns={deliveryColumns}
+            data={deliveries}
           />
         ) : (
           <div className="text-center py-8 text-stone-500 text-sm">
-            No sales records found for this customer.
+            No deliveries records found for this customer.
           </div>
         )}
       </CardContent>

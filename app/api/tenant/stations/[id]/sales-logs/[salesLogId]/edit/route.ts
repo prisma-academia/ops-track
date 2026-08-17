@@ -22,7 +22,7 @@ export async function PUT(
   try {
     await requireCsrf(request);
     const { id: stationId, salesLogId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_SHIFTS_WRITE.key); // Same permission as sales write
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_SHIFTS_WRITE.key, "STATION"); // Same permission as sales write
     const body = EditSalesLogSchema.parse(await request.json());
     const meta = requestMeta(request);
 

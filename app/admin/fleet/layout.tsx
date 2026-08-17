@@ -79,9 +79,9 @@ const FLEET_NAV = [
     permission: PERMISSIONS.TENANT_FLEET_READ.key,
     children: [
       {
-        href: "/admin/fleet/sales",
-        key: "sales",
-        title: "Sales",
+        href: "/admin/fleet/deliveries",
+        key: "deliveries",
+        title: "Deliveries",
         icon: "IconReceiptDollar",
         permission: PERMISSIONS.TENANT_FLEET_READ.key,
       },
@@ -112,6 +112,20 @@ const FLEET_NAV = [
         key: "stationPerformance",
         title: "Station Performance",
         icon: "IconBuildingStore",
+        permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key,
+      },
+      {
+        href: "/admin/fleet/reports/transport",
+        key: "transportReport",
+        title: "Transport Report",
+        icon: "IconTruck",
+        permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key,
+      },
+      {
+        href: "/admin/fleet/reports/assets",
+        key: "assetsReport",
+        title: "Assets Report",
+        icon: "IconBuilding",
         permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key,
       },
     ],
@@ -154,7 +168,7 @@ const FLEET_NAV = [
 ];
 
 export default async function FleetDashboardLayout({ children }: { children: React.ReactNode }) {
-  const actor = await requireTenantPage();
+  const actor = await requireTenantPage(undefined, "FLEET");
 
   const user = await prisma.tenantUser.findUnique({
     where: { id: actor.userId },
@@ -164,13 +178,25 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: actor.tenantId },
-    select: { name: true, slug: true, status: true, settingsJson: true, activeModules: true },
+    select: { 
+      name: true, 
+      slug: true, 
+      status: true, 
+      settingsJson: true, 
+      activeModules: true,
+      modules: {
+        where: { status: "ACTIVE" }
+      }
+    },
   });
   if (!tenant || tenant.status !== "ACTIVE") redirect("/maintenance");
 
-  // Check if Fleet is enabled
-  if (!tenant.activeModules.includes("FLEET")) {
-    if (tenant.activeModules.includes("STATION")) {
+  // Check if Fleet is enabled either in relational modules or legacy activeModules
+  const hasFleetModule = tenant.modules.some(m => m.module === "FLEET") || tenant.activeModules.includes("FLEET");
+  const hasStationModule = tenant.modules.some(m => m.module === "STATION") || tenant.activeModules.includes("STATION");
+  
+  if (!hasFleetModule) {
+    if (hasStationModule) {
       redirect("/admin/dashboard");
     } else {
       redirect("/admin/modules");
@@ -214,6 +240,21 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
       orderBy: { name: "asc" },
     });
   }
+
+  const allInternalOrgs = await prisma.organization.findMany({
+    where: { tenantId: actor.tenantId, type: "INTERNAL" },
+    select: { id: true, name: true, slug: true, logoKey: true },
+    orderBy: { name: "asc" }
+  });
+
+  const internalOrganizations = allInternalOrgs.map(org => ({
+    id: org.id,
+    name: org.name,
+    slug: org.slug || null,
+    logoUrl: org.logoKey?.startsWith("http")
+      ? org.logoKey
+      : (org.logoKey && s3Configured() ? publicUrlForKey(org.logoKey) : null)
+  }));
 
   const mappedStations = allowedStations.map(s => {
     let sLogoUrl = null;
@@ -274,9 +315,11 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
       logoutRedirect="/admin/auth/login"
       logoutContext="tenant-admin"
       stations={mappedStations}
+      internalOrganizations={internalOrganizations}
       enabledModules={Array.from(new Set([
         ...settings.enabledModules,
-        ...(tenant.activeModules?.map((m: string) => m.toLowerCase()) || [])
+        ...(tenant.activeModules?.map((m: string) => m.toLowerCase()) || []),
+        ...(tenant.modules?.map((m: any) => m.module.toLowerCase()) || [])
       ]))}
       tenant={{
         name: tenant.name,

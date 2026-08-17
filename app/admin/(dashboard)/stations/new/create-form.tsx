@@ -150,7 +150,7 @@ export function CreateStationForm({
     }
   };
 
-  const onSubmit = onSubmitForm(async (values) => {
+  const onSubmit = handleSubmit(async (values) => {
     setError(null);
     const payload = {
       ...values,
@@ -167,10 +167,6 @@ export function CreateStationForm({
       router.refresh();
     }
   });
-
-  function onSubmitForm(callback: (values: Values) => Promise<void>) {
-    return handleSubmit(callback);
-  }
 
   return (
     <form onSubmit={onSubmit} className="space-y-6 animate-in fade-in duration-500">
@@ -204,23 +200,8 @@ export function CreateStationForm({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            {/* Organization Select */}
-            <div className="space-y-2">
-              <Label htmlFor="organizationId" className={formState.errors.organizationId ? "text-destructive" : ""}>Organization*</Label>
-              <Select onValueChange={(val) => setValue("organizationId", val, { shouldValidate: true })} defaultValue={defaultOrgId || ""}>
-                <SelectTrigger id="organizationId" className={formState.errors.organizationId ? "border-destructive" : ""}>
-                  <SelectValue placeholder="Select organization" />
-                </SelectTrigger>
-                <SelectContent>
-                  {organizations.map(org => (
-                    <SelectItem key={org.id} value={org.id}>
-                      {org.name} {org.type === 'INTERNAL' ? '(Internal)' : '(External)'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {formState.errors.organizationId && <p className="text-xs text-destructive">{formState.errors.organizationId.message as string}</p>}
-            </div>
+            {/* Organization Select (Hidden, done behind the scenes) */}
+            <input type="hidden" {...register("organizationId")} />
 
             {/* Station Name - Full Width */}
             <div className="space-y-2">

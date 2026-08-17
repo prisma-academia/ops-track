@@ -6,9 +6,10 @@ import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
+import { assertOrderLinkCapacity, asOrderLookupClient } from "@/lib/fleet/transport-order";
 
 const CreateTransportSchema = z.object({
-  orderId: z.string().min(1),
+  orderId: z.string().optional().nullable(),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional().nullable(),
   assignments: z.array(z.object({
     transporterId: z.string().min(1),
@@ -22,7 +23,7 @@ const CreateTransportSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET");
     const url = new URL(request.url);
     const { cursor, take } = parsePagination(url.searchParams);
     const status = url.searchParams.get("status");
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
         transporter: { select: { id: true, name: true } },
         truck: { select: { id: true, name: true } },
         driver: { select: { id: true, firstName: true, lastName: true } },
-        _count: { select: { sales: true } },
+        _count: { select: { deliveries: true } },
       },
     });
 
@@ -53,28 +54,15 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
     const body = CreateTransportSchema.parse(await request.json());
     const meta = requestMeta(request);
 
     const transports = await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { id: body.orderId, tenantId: actor.tenantId },
-        include: { transports: { 
-          where: { status: { not: "CANCELLED" } },
-          select: { litersCarried: true } 
-        } }
-      });
-
-      if (!order) {
-        throw new Error("Order not found");
-      }
-
-      const existingLiters = order.transports.reduce((sum, t) => sum + Number(t.litersCarried), 0);
       const newLiters = body.assignments.reduce((sum, a) => sum + a.litersCarried, 0);
 
-      if (existingLiters + newLiters > Number(order.litersOrdered)) {
-        throw new Error("Total dispatched liters cannot exceed the ordered quantity.");
+      if (body.orderId) {
+        await assertOrderLinkCapacity(asOrderLookupClient(tx), actor.tenantId, body.orderId, newLiters);
       }
 
       const results = [];
@@ -82,7 +70,7 @@ export async function POST(request: Request) {
         const t = await tx.transport.create({
           data: {
             tenantId: actor.tenantId,
-            orderId: body.orderId,
+            orderId: body.orderId ?? null,
             transporterId: assignment.transporterId,
             truckId: assignment.truckId,
             driverId: assignment.driverId,
@@ -109,7 +97,7 @@ export async function POST(request: Request) {
           after: {
             destination: t.destination,
             transporter: t.transporter.name,
-            truck: t.truck.name,
+            truck: t.truck?.name || "Any Truck",
             litersCarried: t.litersCarried
           } as object,
           ip: meta.ip,

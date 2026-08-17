@@ -17,6 +17,7 @@ export function OrgFeatures() {
                     <Card className="relative">
                         <div className="grid items-center gap-12 divide-y p-12 md:grid-cols-2 md:divide-x md:divide-y-0">
                             <div className="pb-12 text-center md:pb-0 md:pr-12">
+                                {/* <Image src="/images/org-features.png" alt="Org Features" width={500} height={500} /> */}
                                 <h3 className="text-2xl font-semibold">Corporate Registration</h3>
                                 <p className="mt-2 text-lg">For organizations of any size</p>
 

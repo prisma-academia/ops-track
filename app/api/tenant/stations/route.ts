@@ -7,7 +7,7 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 import { stationIncludeQuery, formatStationRows } from "@/lib/station-format";
-import { stationModuleFilter, assertOrgAccess } from "@/lib/auth/org-scope";
+import { resolveActiveOrgId, assertOrgAccess } from "@/lib/auth/org-scope";
 
 const CreateStationSchema = z.object({
   code: z.string().min(2).max(50),
@@ -25,7 +25,7 @@ const CreateStationSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_READ.key, "STATION");
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
     const salesMin = url.searchParams.get("salesMin") ? Number(url.searchParams.get("salesMin")) : undefined;
@@ -35,11 +35,8 @@ export async function GET(request: Request) {
     
     const hasPostFilters = salesMin !== undefined || salesMax !== undefined || stockMin !== undefined || stockMax !== undefined;
 
-    const internalOrg = await prisma.organization.findFirst({
-      where: { tenantId: actor.tenantId, type: "INTERNAL" }
-    });
-    const orgFilter = stationModuleFilter(actor, internalOrg?.id ?? "");
-    const whereClause = { tenantId: actor.tenantId, ...orgFilter };
+    const activeOrgId = await resolveActiveOrgId(actor);
+    const whereClause: any = { tenantId: actor.tenantId, ...(activeOrgId ? { organizationId: activeOrgId } : {}) };
 
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
@@ -113,7 +110,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_WRITE.key, "STATION");
     const body = CreateStationSchema.parse(await request.json());
     const meta = requestMeta(request);
 

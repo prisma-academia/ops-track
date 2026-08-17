@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const { id: stationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_READ.key, "STATION");
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
 

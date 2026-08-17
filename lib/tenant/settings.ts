@@ -36,6 +36,8 @@ export const tenantSettingsSchema = z.object({
     .default([...MODULE_KEYS]),
   varianceThreshold: z.number().min(0).default(0),
   blockOnUnresolvedVariance: z.boolean().default(false),
+  /** Flat fee (tenant currency) for origin-to-depot transport leg payouts */
+  originToDepotFee: z.number().min(0).default(0),
 });
 
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;

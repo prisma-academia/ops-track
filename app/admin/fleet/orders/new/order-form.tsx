@@ -11,11 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ArrowLeft, Save, ChevronsUpDown, Check, Plus, Calculator, FileText, Droplet } from "lucide-react";
+import { ArrowLeft, Save, ChevronsUpDown, Check, Plus, Calculator, FileText, Droplet, Send, Truck } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+const NIGERIAN_STATES = [
+  "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
+  "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT - Abuja", "Gombe", "Imo",
+  "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa",
+  "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara"
+];
 
 const Schema = z.object({
   reference: z.string().max(50).optional().or(z.literal("")),
@@ -37,9 +45,15 @@ const Schema = z.object({
 type Values = z.infer<typeof Schema>;
 type LookupItem = { id: string; name: string };
 
-const PRODUCT_TYPES = ["PMS", "AGO", "DPK", "LPG"];
+type TransporterData = {
+  id: string;
+  name: string;
+  totalTrucks: number;
+  inTransit: number;
+  available: number;
+};
 
-export function CreateOrderForm() {
+export function CreateOrderForm({ transporters = [] }: { transporters?: TransporterData[] }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   
@@ -50,6 +64,8 @@ export function CreateOrderForm() {
   // Popover States
   const [openSupplierSelect, setOpenSupplierSelect] = useState(false);
   const [openDepotSelect, setOpenDepotSelect] = useState(false);
+  const [openTransporterSelect, setOpenTransporterSelect] = useState(false);
+  const [openDestinationSelect, setOpenDestinationSelect] = useState(false);
 
   // Modal State
   const [lookupDialog, setLookupDialog] = useState<{ type: "supplier" | "depot"; title: string } | null>(null);
@@ -76,6 +92,9 @@ export function CreateOrderForm() {
   const watchSupplier = watch("supplier");
   const watchDepot = watch("sourceDepot");
   const watchReference = watch("reference");
+  const watchSendInvitation = watch("sendInvitation");
+  const watchTransporterId = watch("transporterId");
+  const watchDestination = watch("destination");
 
   // Fetch Lookups
   useEffect(() => {
@@ -213,6 +232,8 @@ export function CreateOrderForm() {
   const loadingTotal = Number(watchLoadingCostPerLitre || 0) * Number(watchLitersOrdered || 0);
   const grandTotal = productTotal + loadingTotal;
 
+  const selectedTransporter = transporters.find(t => t.id === watchTransporterId);
+
   return (
     <>
       <form onSubmit={onSubmit} className="space-y-6 animate-in fade-in duration-500">
@@ -344,6 +365,7 @@ export function CreateOrderForm() {
                           {...field}
                           className={formState.errors.pricePerLitre ? "border-destructive" : ""}
                           prefixText="₦"
+                          maxLength={5}
                         />
                       )}
                     />
@@ -361,12 +383,151 @@ export function CreateOrderForm() {
                           {...field}
                           className={formState.errors.loadingCostPerLitre ? "border-destructive" : ""}
                           prefixText="₦"
+                          maxLength={4}
                         />
                       )}
                     />
                   </div>
                 </div>
               </CardContent>
+            </Card>
+
+            <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
+              <CardHeader className="pb-4 border-b border-border/30 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                  <Send size={16} />
+                  Transport Invitation
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="sendInvitation" className="text-sm cursor-pointer">Send Invitation Now</Label>
+                  <Controller
+                    control={control}
+                    name="sendInvitation"
+                    render={({ field }) => (
+                      <Switch 
+                        id="sendInvitation"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    )}
+                  />
+                </div>
+              </CardHeader>
+              
+              {watchSendInvitation && (
+                <CardContent className="space-y-6 pt-6 animate-in slide-in-from-top-2 duration-300">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2 col-span-2 md:col-span-1">
+                      <Label className={formState.errors.transporterId ? "text-destructive" : ""}>Transporter*</Label>
+                      <Popover open={openTransporterSelect} onOpenChange={setOpenTransporterSelect}>
+                        <PopoverTrigger asChild>
+                          <Button type="button" variant="outline" className={`w-full justify-between font-normal ${formState.errors.transporterId ? "border-destructive" : ""}`}>
+                            <span className="truncate">{transporters.find(t => t.id === watchTransporterId)?.name || "Select Transporter..."}</span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search transporter..." />
+                            <CommandList className="max-h-[200px] overflow-y-auto">
+                              <CommandEmpty>No transporter found.</CommandEmpty>
+                              <CommandGroup>
+                                {transporters.map((t) => (
+                                  <CommandItem key={t.id} value={t.name.toLowerCase()} onSelect={() => { 
+                                    setValue("transporterId", t.id, { shouldValidate: true }); 
+                                    setOpenTransporterSelect(false); 
+                                  }}>
+                                    {t.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      {formState.errors.transporterId && <p className="text-xs text-destructive">{formState.errors.transporterId.message}</p>}
+                    </div>
+
+                    <div className="space-y-2 col-span-2 md:col-span-1">
+                      <Label className={formState.errors.destination ? "text-destructive" : ""}>Destination State/Station*</Label>
+                      <Popover open={openDestinationSelect} onOpenChange={setOpenDestinationSelect}>
+                        <PopoverTrigger asChild>
+                          <Button type="button" variant="outline" className={`w-full justify-between font-normal ${formState.errors.destination ? "border-destructive" : ""}`}>
+                            <span className="truncate">{watchDestination || "Select destination..."}</span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search destination..." />
+                            <CommandList className="max-h-[200px] overflow-y-auto">
+                              <CommandEmpty>No destination found.</CommandEmpty>
+                              <CommandGroup>
+                                {NIGERIAN_STATES.map((state) => (
+                                  <CommandItem key={state} value={state.toLowerCase()} onSelect={() => { 
+                                    setValue("destination", state, { shouldValidate: true }); 
+                                    setOpenDestinationSelect(false); 
+                                  }}>
+                                    {state}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      {formState.errors.destination && <p className="text-xs text-destructive">{formState.errors.destination.message}</p>}
+                    </div>
+
+                    <div className="space-y-2 col-span-2 md:col-span-1">
+                      <Label className={formState.errors.litersRequested ? "text-destructive" : ""}>Requested Volume (Liters)*</Label>
+                      <Controller
+                        control={control}
+                        name="litersRequested"
+                        render={({ field }) => (
+                          <FormattedNumberInput 
+                            placeholder="e.g. 45000" 
+                            {...field}
+                            value={field.value ?? ""}
+                            className={formState.errors.litersRequested ? "border-destructive" : ""}
+                            prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
+                          />
+                        )}
+                      />
+                      {formState.errors.litersRequested && <p className="text-xs text-destructive">{formState.errors.litersRequested.message}</p>}
+                    </div>
+                  </div>
+
+                  {selectedTransporter && (
+                    <div className="mt-4 p-4 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/50 flex flex-col sm:flex-row items-center gap-4 sm:gap-8 text-center sm:text-left animate-in fade-in duration-300">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-full text-blue-600 dark:text-blue-400">
+                          <Truck className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Fleet Status</p>
+                          <p className="font-semibold text-sm">{selectedTransporter.name}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-1 justify-center sm:justify-end gap-6 sm:gap-8">
+                        <div>
+                          <p className="text-2xl font-bold text-foreground font-mono">{selectedTransporter.totalTrucks}</p>
+                          <p className="text-xs text-muted-foreground">Total Trucks</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-amber-600 dark:text-amber-500 font-mono">{selectedTransporter.inTransit}</p>
+                          <p className="text-xs text-muted-foreground">In Transit</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-green-600 dark:text-green-500 font-mono">{selectedTransporter.available}</p>
+                          <p className="text-xs text-muted-foreground">Available</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              )}
             </Card>
 
             {error ? <p className="text-sm text-red-600 px-2">{error}</p> : null}
@@ -393,7 +554,7 @@ export function CreateOrderForm() {
                 ) : (
                   <>
                     <Save className="h-4 w-4" />
-                    <span>Create Order</span>
+                    <span>Create Order {watchSendInvitation ? "& Invite" : ""}</span>
                   </>
                 )}
               </Button>
@@ -421,7 +582,7 @@ export function CreateOrderForm() {
                   <span className="font-bold text-foreground">₦{productTotal.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Loading Fee:</span>
+                  <span>Total Loading Fee:</span>
                   <span className="font-bold text-foreground">₦{loadingTotal.toLocaleString()}</span>
                 </div>
                 

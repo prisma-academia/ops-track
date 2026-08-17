@@ -6,6 +6,7 @@ import { Route } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 
 export type TransportRow = {
   id: string;
@@ -15,6 +16,7 @@ export type TransportRow = {
   truckName: string;
   driverName: string;
   orderReference: string;
+  isUnlinked?: boolean;
   status: string;
   productType: string;
   salesCount: number;
@@ -31,8 +33,14 @@ const columns: ColumnDef<TransportRow>[] = [
       const source = row.original.sourceDepot || "Depot";
       return (
         <div className="flex items-center gap-3 py-1">
-          <div className="size-10 flex items-center justify-center shrink-0 text-primary bg-primary/10 rounded-md">
-            <Route className="w-5 h-5" />
+          <div className="size-10 flex items-center justify-center shrink-0">
+            <Image
+              src="/assets/icons/gas-truck.png"
+              alt="Transport"
+              width={40}
+              height={40}
+              className="object-contain"
+            />
           </div>
           <div className="flex flex-col">
             <span className="font-semibold text-foreground">{source} to {dest}</span>
@@ -52,12 +60,13 @@ const columns: ColumnDef<TransportRow>[] = [
     header: "Status",
     cell: ({ row }) => {
       const status = row.original.status;
-      let variant: "default" | "secondary" | "destructive" | "outline" = "secondary";
+      let variant: "default" | "secondary" | "destructive" | "outline" | "warning" = "secondary";
+      if (status === "PENDING") variant = "warning";
       if (status === "IN_TRANSIT") variant = "secondary";
       if (status === "COMPLETED") variant = "default";
-      if (status === "CANCELLED") variant = "destructive";
+      if (status === "CANCELLED" || status === "REJECTED") variant = "destructive";
       return (
-        <Badge variant={variant}>
+        <Badge variant={variant === "warning" ? "default" : variant} className={variant === "warning" ? "bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300" : ""}>
           {status}
         </Badge>
       );
@@ -74,6 +83,18 @@ const columns: ColumnDef<TransportRow>[] = [
         </Badge>
       );
     }
+  },
+  {
+    accessorKey: "orderReference",
+    header: "Order",
+    cell: ({ row }) => (
+      <div className="flex items-center gap-2">
+        <span className="text-sm">{row.original.orderReference}</span>
+        {row.original.isUnlinked && (
+          <Badge variant="outline" className="text-[10px]">Unlinked</Badge>
+        )}
+      </div>
+    ),
   },
   { 
     accessorKey: "salesCount", 

@@ -897,7 +897,9 @@ export function StationDetailsManager({
                     <div className="w-full lg:w-[320px] xl:w-[380px] shrink-0 relative flex flex-col justify-center">
                        <div className="mb-3 flex items-center justify-between px-1">
                          <div className="flex items-center gap-2">
-                           <span className="text-sm font-bold text-foreground">{tank.name}</span>
+                           <Link href={`/admin/stations/${station.id}/tanks/${tank.id}`}>
+                             <span className="text-sm font-bold text-foreground hover:underline cursor-pointer">{tank.name}</span>
+                           </Link>
                            <StatusBadge status={tank.status || "ACTIVE"} />
                          </div>
                          <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">{tank.productType}</Badge>

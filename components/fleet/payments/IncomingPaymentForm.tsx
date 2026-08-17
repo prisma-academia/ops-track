@@ -11,17 +11,38 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
-import { Save, AlertCircleIcon, ImageIcon, UploadIcon, XIcon, Loader2, Check, ChevronsUpDown, CreditCard } from "lucide-react";
+import {
+  Save,
+  AlertCircleIcon,
+  ImageIcon,
+  UploadIcon,
+  XIcon,
+  Loader2,
+  Check,
+  ChevronsUpDown,
+  CreditCard,
+} from "lucide-react";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { apiPost } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
-import { Separator } from "@/components/ui/separator";
 import { useRouter } from "next/navigation";
+import { PaymentConfirmDialog, PaymentResultDialog, type PaymentSummaryRow } from "@/components/fleet/payments/payment-dialogs";
+
+function SummaryRow({ label, value, emphasis }: { label: string; value: string; emphasis?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm border-b border-border/60 last:border-b-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn("font-medium text-right truncate max-w-[60%]", emphasis && "font-semibold")}>{value}</span>
+    </div>
+  );
+}
 
 export default function IncomingPaymentForm({ metadata, loading }: { metadata: any, loading: boolean }) {
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
   const [saleOpen, setSaleOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [result, setResult] = useState<{ status: "success" | "error"; title: string; description?: string } | null>(null);
   
   const [formData, setFormData] = useState({
     clientId: "",
@@ -99,13 +120,11 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
   const displayFileName = files[0]?.file.name || "Payment Receipt";
 
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
-    
+
     if (!formData.clientId) {
       toast.error("Please select a client or station");
-      setSubmitting(false);
       return;
     }
 
@@ -113,11 +132,15 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
       const outstanding = getSaleOutstanding(selectedSaleDetails);
       if (Number(formData.amount) > outstanding) {
         toast.error(`Amount cannot exceed the outstanding balance of ₦${outstanding.toLocaleString()}`);
-        setSubmitting(false);
         return;
       }
     }
 
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmedSubmit = async () => {
+    setSubmitting(true);
     try {
       const payload = {
         customerId: formData.clientId,
@@ -131,15 +154,25 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
       };
       const res = await apiPost<any>(`/api/tenant/fleet/payments/inflow`, payload);
       if (!res.error) {
-        toast.success("Payment recorded successfully!");
+        setConfirmOpen(false);
+        setResult({
+          status: "success",
+          title: "Payment recorded",
+          description: `The incoming payment of ₦${Number(formData.amount).toLocaleString()} has been logged successfully.`,
+        });
         setFormData({ ...formData, amount: "", reference: "", receiptUrl: "", saleId: "none", bankAccountId: "" });
-        router.push("/admin/fleet/payments");
       } else {
-        toast.error(res.error?.message || "Failed to record payment.");
+        setConfirmOpen(false);
+        setResult({
+          status: "error",
+          title: "Payment failed",
+          description: res.error?.message || "Failed to record payment. Please try again.",
+        });
       }
     } catch (e: any) {
       console.error(e);
-      toast.error(e.message || "Error recording payment.");
+      setConfirmOpen(false);
+      setResult({ status: "error", title: "Payment failed", description: e?.message || "Something went wrong while recording this payment." });
     } finally {
       setSubmitting(false);
     }
@@ -167,9 +200,25 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
   };
 
   const selectedCustomer = metadata?.customers?.find((c: any) => c.id === formData.clientId);
+  const selectedStation = metadata?.stations?.find((s: any) => s.id === formData.clientId);
   const depositBalance = selectedCustomer ? Number(selectedCustomer.depositBalance || 0) : 0;
+  const selectedBank = formData.bankAccountId
+    ? metadata?.bankAccounts?.find((a: any) => a.id === formData.bankAccountId)
+    : null;
+
+  const confirmRows: PaymentSummaryRow[] = [
+    { label: "Client / Station", value: selectedCustomer?.name || selectedStation?.name || "—", emphasis: true },
+    { label: "Payment Type", value: formData.paymentType.replace(/_/g, " ") },
+    { label: "Payment Method", value: formData.paymentMethod.replace(/_/g, " ") },
+    ...(selectedSaleDetails
+      ? [{ label: "Applied To Sale", value: `${Number(selectedSaleDetails.litersDespatched).toLocaleString()} L despatch` }]
+      : []),
+    ...(selectedBank ? [{ label: "Receiving Account", value: `${selectedBank.bankName}${selectedBank.accountName ? " • " + selectedBank.accountName : ""}` }] : []),
+    ...(formData.reference ? [{ label: "Reference", value: formData.reference }] : []),
+  ];
 
   return (
+    <>
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2">
         <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
@@ -561,84 +610,105 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
   
   {/* Right Column: Sale Details Card */}
   <div className="lg:col-span-1">
-    <div className="sticky top-6 border rounded-2xl bg-card p-5 space-y-4">
-      <div>
-        <h3 className="font-semibold text-lg">Sale Summary</h3>
-        <p className="text-sm text-muted-foreground">Details for the selected pending sale.</p>
+    <div className="sticky top-6 rounded-lg border border-border/60 bg-card overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
+        <h3 className="font-medium text-sm">Sale Summary</h3>
+        {Number(formData.amount) > 0 && (
+          <span className="text-sm font-semibold tabular-nums">₦{Number(formData.amount).toLocaleString()}</span>
+        )}
       </div>
-      
+
+      <div>
       {selectedSaleDetails ? (
-        <div className="space-y-3 pt-3 border-t">
-          <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Despatched On</span>
-            <span className="font-medium text-sm">{new Date(selectedSaleDetails.createdAt).toLocaleDateString()}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Volume (Despatched)</span>
-            <span className="font-medium text-sm">{Number(selectedSaleDetails.litersDespatched).toLocaleString()} L</span>
-          </div>
+        <>
+          <SummaryRow label="Despatched On" value={new Date(selectedSaleDetails.createdAt).toLocaleDateString()} />
+          <SummaryRow label="Volume (Despatched)" value={`${Number(selectedSaleDetails.litersDespatched).toLocaleString()} L`} />
           {selectedSaleDetails.litersReceived !== null && (
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Volume (Received)</span>
-              <div className="text-right">
-                <span className="font-medium text-sm">{Number(selectedSaleDetails.litersReceived).toLocaleString()} L</span>
-                {(() => {
-                  const variance = Number(selectedSaleDetails.litersReceived) - Number(selectedSaleDetails.litersDespatched);
-                  if (variance === 0) return null;
-                  return (
-                    <span className={`text-xs ml-2 ${variance > 0 ? "text-emerald-500" : "text-destructive"}`}>
-                      ({variance > 0 ? "+" : ""}{variance.toLocaleString()} L variance)
-                    </span>
-                  );
-                })()}
-              </div>
-            </div>
+            <SummaryRow
+              label="Volume (Received)"
+              value={(() => {
+                const variance = Number(selectedSaleDetails.litersReceived) - Number(selectedSaleDetails.litersDespatched);
+                const base = `${Number(selectedSaleDetails.litersReceived).toLocaleString()} L`;
+                if (variance === 0) return base;
+                return `${base} (${variance > 0 ? "+" : ""}${variance.toLocaleString()} L)`;
+              })()}
+            />
           )}
-          <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Product Amount</span>
-            <span className="font-medium text-sm">₦{Number(selectedSaleDetails.totalExpectedAmount).toLocaleString()}</span>
-          </div>
+          <SummaryRow label="Product Amount" value={`₦${Number(selectedSaleDetails.totalExpectedAmount).toLocaleString()}`} />
           {Number(selectedSaleDetails.transportCost || 0) > 0 && (
-            <div className="flex justify-between">
-              <span className="text-sm text-muted-foreground">
-                Transport Fee ({selectedSaleDetails.transportCostBorneBy === "CLIENT" ? "Client Billed" : "Company Borne"})
-              </span>
-              <span className="font-medium text-sm">₦{Number(selectedSaleDetails.transportCost).toLocaleString()}</span>
-            </div>
+            <SummaryRow
+              label={`Transport Fee (${selectedSaleDetails.transportCostBorneBy === "CLIENT" ? "Client Billed" : "Company Borne"})`}
+              value={`₦${Number(selectedSaleDetails.transportCost).toLocaleString()}`}
+            />
           )}
-          {getSaleTransportFee(selectedSaleDetails) > 0 && (
-            <div className="flex justify-between font-medium">
-              <span className="text-sm text-muted-foreground">Total Expected</span>
-              <span className="font-medium text-sm">₦{getSaleTotalExpected(selectedSaleDetails).toLocaleString()}</span>
-            </div>
-          )}
-          {getSaleTransportFee(selectedSaleDetails) === 0 && (
-            <div className="flex justify-between">
-              <span className="text-sm text-muted-foreground">Total Expected</span>
-              <span className="font-medium text-sm">₦{getSaleTotalExpected(selectedSaleDetails).toLocaleString()}</span>
-            </div>
-          )}
-          <div className="flex justify-between text-green-600 dark:text-green-500">
-            <span className="text-sm">Amount Paid</span>
-            <span className="font-medium text-sm">₦{Number(selectedSaleDetails.paymentReceived).toLocaleString()}</span>
+          <SummaryRow label="Total Expected" value={`₦${getSaleTotalExpected(selectedSaleDetails).toLocaleString()}`} emphasis />
+          <SummaryRow label="Amount Paid" value={`₦${Number(selectedSaleDetails.paymentReceived).toLocaleString()}`} />
+          <SummaryRow label="Outstanding" value={`₦${getSaleOutstanding(selectedSaleDetails).toLocaleString()}`} emphasis />
+        </>
+      ) : selectedCustomer || selectedStation ? (
+        <>
+          <SummaryRow label="Account" value={selectedCustomer?.name || selectedStation?.name || "—"} />
+          {selectedCustomer && <SummaryRow label="Deposit Balance" value={`₦${depositBalance.toLocaleString()}`} />}
+          <div className="px-4 py-3 text-center border-t border-border/60">
+            <p className="text-xs text-muted-foreground/80">No specific sale selected — this will be applied at the account level.</p>
           </div>
-          <Separator className="my-2" />
-          <div className="flex justify-between">
-            <span className="font-semibold text-foreground">Outstanding</span>
-            <span className="font-bold text-destructive">
-              ₦{getSaleOutstanding(selectedSaleDetails).toLocaleString()}
-            </span>
-          </div>
-        </div>
+        </>
       ) : (
-        <div className="pt-8 pb-4 text-center border-t border-dashed">
-          <AlertCircleIcon className="h-8 w-8 mx-auto text-muted-foreground opacity-30 mb-3" />
-          <p className="text-sm text-muted-foreground font-medium">No Pending Sale Selected</p>
-          <p className="text-xs text-muted-foreground/70 mt-1">Select a pending sale to view its summary and outstanding balance.</p>
+        <div className="px-4 py-6 text-center">
+          <p className="text-sm text-muted-foreground font-medium">No Client Selected</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">Select a client or station to view sale and balance details here.</p>
         </div>
       )}
+
+      {(formData.paymentMethod || selectedBank) && (
+        <>
+          <SummaryRow label="Method" value={formData.paymentMethod.replace(/_/g, " ")} />
+          {selectedBank && <SummaryRow label="To Account" value={selectedBank.bankName} />}
+        </>
+      )}
+      </div>
     </div>
   </div>
 </div>
+
+<PaymentConfirmDialog
+  open={confirmOpen}
+  onOpenChange={setConfirmOpen}
+  onConfirm={handleConfirmedSubmit}
+  confirming={submitting}
+  title="Confirm incoming payment"
+  description="Please review the payment details below before it is logged."
+  amountLabel={`₦${(Number(formData.amount) || 0).toLocaleString()}`}
+  rows={confirmRows}
+  confirmLabel="Confirm & Log Payment"
+/>
+
+{result && (
+  <PaymentResultDialog
+    open={!!result}
+    onOpenChange={(open) => !open && setResult(null)}
+    status={result.status}
+    title={result.title}
+    description={result.description}
+    primaryLabel={result.status === "success" ? "Go to Payments" : "Try Again"}
+    onPrimaryAction={() => {
+      if (result.status === "success") {
+        router.push("/admin/fleet/payments");
+      } else {
+        setResult(null);
+      }
+    }}
+    secondaryLabel={result.status === "success" ? "Log Another" : undefined}
+    onSecondaryAction={
+      result.status === "success"
+        ? () => {
+            setResult(null);
+            setFormData((prev) => ({ ...prev, clientId: "" }));
+          }
+        : undefined
+    }
+  />
+)}
+</>
 );
 }

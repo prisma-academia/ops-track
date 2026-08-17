@@ -32,9 +32,11 @@ export default async function OrderDetailPage({
     redirect("/admin/fleet/orders");
   }
 
-  // Lookups for the Edit modal
   const suppliers = await prisma.supplier.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
-  const depots = await prisma.depot.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
+  const depots = await prisma.depot.findMany({ 
+    select: { id: true, name: true, latitude: true, longitude: true }, 
+    orderBy: { name: "asc" } 
+  });
 
   const serializedOrder = JSON.parse(JSON.stringify(order));
   const pnl = await calculateOrderPnL(order.id);

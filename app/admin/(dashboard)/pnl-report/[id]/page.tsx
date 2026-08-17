@@ -23,7 +23,7 @@ export default async function PnlReportDetailsPage({ params }: { params: { id: s
           recordedBy: true
         }
       },
-      sale: true,
+      delivery: true,
     },
   });
 
@@ -53,10 +53,10 @@ export default async function PnlReportDetailsPage({ params }: { params: { id: s
   
   const totalExpense = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
-  // Note: True accurate matching of sales requires chronological processing of all deliveries. 
-  // For the details view, we can just show the total sales logs since delivery that might be related,
+  // Note: True accurate matching of deliveries requires chronological processing of all deliveries. 
+  // For the details view, we can just show the total deliveries logs since delivery that might be related,
   // or we can just omit the complex exact breakdown logic since it spans multiple deliveries.
-  // We'll show the fetched sales logs for this station & product from delivery date.
+  // We'll show the fetched deliveries logs for this station & product from delivery date.
   const salesLogs = await prisma.salesLog.findMany({
     where: {
       stationId: allocation.stationId,
@@ -191,13 +191,13 @@ export default async function PnlReportDetailsPage({ params }: { params: { id: s
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Banknote className="size-5 text-muted-foreground" />
-              Sales Logs Since Delivery
+              deliveries Logs Since Delivery
             </CardTitle>
-            <CardDescription>Approved sales logs that could match this delivery.</CardDescription>
+            <CardDescription>Approved deliveries logs that could match this delivery.</CardDescription>
           </CardHeader>
           <CardContent>
             {salesLogs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No approved sales recorded yet.</p>
+              <p className="text-sm text-muted-foreground">No approved deliveries recorded yet.</p>
             ) : (
               <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
                 {salesLogs.map(s => {

@@ -12,7 +12,7 @@ export default async function StationPerformancePage() {
     include: {
       organization: { select: { id: true, name: true, logoKey: true } },
       tanks: { select: { id: true, name: true, productType: true, capacity: true, currentLiters: true } },
-      stationSales: {
+      deliveries: {
         select: {
           id: true,
           litersDespatched: true,
@@ -34,27 +34,27 @@ export default async function StationPerformancePage() {
     orderBy: { name: "asc" },
   });
 
-  const formattedStations = stations.map((s) => {
+  const formattedStations = stations.map((d) => {
     let logoUrl = null;
-    if (s.organization?.logoKey) {
-      logoUrl = s.organization.logoKey.startsWith("http")
-        ? s.organization.logoKey
+    if (d.organization?.logoKey) {
+      logoUrl = d.organization.logoKey.startsWith("http")
+        ? d.organization.logoKey
         : s3Configured()
-        ? publicUrlForKey(s.organization.logoKey)
+        ? publicUrlForKey(d.organization.logoKey)
         : null;
     }
 
-    const totalCapacity = s.tanks.reduce((acc, t) => acc + Number(t.capacity || 0), 0);
-    const currentStock = s.tanks.reduce((acc, t) => acc + Number(t.currentLiters || 0), 0);
+    const totalCapacity = d.tanks?.reduce((acc, t) => acc + Number(t.capacity || 0), 0);
+    const currentStock = d.tanks?.reduce((acc, t) => acc + Number(t.currentLiters || 0), 0);
     const fillPercentage = totalCapacity > 0 ? Math.min(100, Math.round((currentStock / totalCapacity) * 100)) : 0;
 
-    const litersSold = s.stationSales.reduce((acc, sale) => acc + Number(sale.litersDespatched || 0), 0);
-    const totalRevenue = s.stationSales.reduce((acc, sale) => acc + Number(sale.totalExpectedAmount || 0), 0);
-    const totalPaymentsReceived = s.stationSales.reduce((acc, sale) => acc + Number(sale.paymentReceived || 0), 0);
+    const litersSold = d.deliveries?.reduce((acc: number, delivery: any) => acc + Number(delivery.litersDespatched || 0), 0) || 0;
+    const totalRevenue = d.deliveries?.reduce((acc: number, delivery: any) => acc + Number(delivery.totalExpectedAmount || 0), 0) || 0;
+    const totalPaymentsReceived = d.deliveries?.reduce((acc: number, delivery: any) => acc + Number(delivery.paymentReceived || 0), 0) || 0;
 
-    const litersOrdered = s.waybillAllocations.reduce((acc, w) => acc + Number(w.litersToDispense || 0), 0);
+    const litersOrdered = d.waybillAllocations?.reduce((acc: number, w: any) => acc + Number(w.litersToDispense || 0), 0) || 0;
 
-    const oldestSale = s.stationSales[s.stationSales.length - 1];
+    const oldestSale = d.deliveries && d.deliveries.length > 0 ? d.deliveries[d.deliveries.length - 1] : null;
     const daysActive = oldestSale
       ? Math.max(1, Math.ceil((Date.now() - new Date(oldestSale.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
       : 1;
@@ -76,16 +76,16 @@ export default async function StationPerformancePage() {
     const recommendedAllocation = Math.round(rawDeficit / 1000) * 1000;
 
     return {
-      id: s.id,
-      code: s.code,
-      name: s.name,
-      location: s.location || "N/A",
+      id: d.id,
+      code: d.code,
+      name: d.name,
+      location: d.location || "N/A",
       organization: {
-        id: s.organization.id,
-        name: s.organization.name,
+        id: d.organization.id,
+        name: d.organization.name,
         logoUrl,
       },
-      tanksCount: s.tanks.length,
+      tanksCount: d.tanks.length,
       totalCapacity,
       currentStock,
       fillPercentage,

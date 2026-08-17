@@ -14,26 +14,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, MapPin, Truck, AlertTriangle, CheckCircle, PackageOpen, MoreVertical, Droplets, Wallet, Coins, FileText } from "lucide-react";
+import { ArrowLeft, Truck, AlertTriangle, CheckCircle, Droplets, Wallet, Coins, FileText, Link2, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
 import { AssetTank } from "@/components/asset-tank";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Droplet } from "lucide-react";
+import { TransportFeeBreakdown, getTransactionFeeLegLabel } from "@/components/fleet/transport-fee-breakdown";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
-export function TransportDetailsManager({ transport, stations = [] }: { transport: any, stations?: any[] }) {
+export function TransportDetailsManager({
+  transport,
+  orders = [],
+  originToDepotFee = 0,
+}: {
+  transport: any;
+  orders?: any[];
+  originToDepotFee?: number;
+}) {
   const router = useRouter();
   
   const [openStatusDialog, setOpenStatusDialog] = useState(false);
-  const [openAssignDestinationDialog, setOpenAssignDestinationDialog] = useState(false);
   const [openIncidentDialog, setOpenIncidentDialog] = useState(false);
+  const [openLinkOrderDialog, setOpenLinkOrderDialog] = useState(false);
+  const [openOrderSelect, setOpenOrderSelect] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState(transport.orderId || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Assign Sale state
-  const [assignSaleId, setAssignSaleId] = useState("");
-  const [assignTransportRate, setAssignTransportRate] = useState("");
 
   // Status form state
   const [newStatus, setNewStatus] = useState(transport.status);
@@ -62,49 +71,20 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
     }
   };
 
-  const handleAssignDestination = async () => {
+
+
+  const handleLinkOrder = async () => {
     setIsSubmitting(true);
     setError(null);
-
-    try {
-      if (!assignSaleId) throw new Error("Please select a sale");
-      if (Number(assignTransportRate) < 0) throw new Error("Transport rate cannot be negative");
-
-      const sale = transport.sales.find((s: any) => s.id === assignSaleId);
-      if (!sale) throw new Error("Sale not found");
-
-      // 1. Update Sale with transport rate and cost
-      const transportCost = Number(assignTransportRate || 0) * Number(sale.litersDespatched);
-      const resSale = await apiPatch(`/api/tenant/fleet/sales/${sale.id}`, {
-        transportRate: Number(assignTransportRate || 0),
-        transportCost: transportCost
-      });
-      if (resSale.error) throw new Error(resSale.error.message || "Failed to update sale transport rate");
-
-      // 2. Append to Transport's subsequentLocs
-      const currentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
-      const newLocs = [...currentLocs, {
-        saleId: sale.id,
-        location: sale.station ? sale.station.name : (sale.customer ? sale.customer.name : "Unknown"),
-        rate: Number(assignTransportRate || 0),
-        litersDelivered: Number(sale.litersDespatched),
-        date: new Date().toISOString()
-      }];
-      
-      const resTransport = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, {
-        subsequentLocs: newLocs
-      });
-      if (resTransport.error) throw new Error(resTransport.error.message || "Failed to add destination");
-      
-      setAssignSaleId("");
-      setAssignTransportRate("");
-      
+    const res = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, {
+      orderId: selectedOrderId || null,
+    });
+    setIsSubmitting(false);
+    if (res.error) {
+      setError(res.error.message);
+    } else {
+      setOpenLinkOrderDialog(false);
       router.refresh();
-      setOpenAssignDestinationDialog(false);
-    } catch (e: any) {
-      setError(e.message || "An error occurred");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -163,11 +143,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
 
 
 
-  const subsequentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
   const lossLogs = transport.lossLogs || [];
-
-  const salesRecipientNames = (transport.sales || []).map((s: any) => s.station?.name || s.customer?.name).filter(Boolean);
-  const customDistributions = subsequentLocs.filter((loc: any) => !salesRecipientNames.includes(loc.location));
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -186,7 +162,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
               </Badge>
             </h2>
             <p className="text-xs text-muted-foreground mt-1">
-              {transport.transporter.name} • {transport.truck.name} • {transport.productType}
+              {transport.transporter?.name} • {transport.truck?.name || "No truck"} • {transport.productType || "—"}
             </p>
           </div>
         </div>
@@ -204,7 +180,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Truck</p>
-          <p className="text-sm font-medium text-foreground mt-0.5">{transport.truck.name}</p>
+          <p className="text-sm font-medium text-foreground mt-0.5">{transport.truck?.name || "Unassigned"}</p>
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Driver</p>
@@ -216,13 +192,21 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Order Reference</p>
-          <p className="text-sm font-medium text-foreground mt-0.5">
+          <div className="flex items-center gap-2 mt-0.5">
             {transport.order?.reference ? (
-              <Link href={`/admin/fleet/orders/${transport.order.id}`} className="text-primary hover:underline">
+              <Link href={`/admin/fleet/orders/${transport.order.id}`} className="text-sm font-medium text-primary hover:underline">
                 {transport.order.reference}
               </Link>
-            ) : "No Order Linked"}
-          </p>
+            ) : (
+              <>
+                <span className="text-sm font-medium text-muted-foreground">No order linked</span>
+                <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => setOpenLinkOrderDialog(true)}>
+                  <Link2 className="h-3 w-3 mr-1" />
+                  Link
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -231,8 +215,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
           <Tabs defaultValue="overview" className="w-full">
             <TabsList className="w-full justify-start h-14 bg-muted/50 backdrop-blur-xs rounded-3xl border border-border">
               <TabsTrigger value="overview" className="text-[15px] font-semibold">Overview</TabsTrigger>
-              <TabsTrigger value="destinations" className="text-[15px] font-semibold">Destinations ({subsequentLocs.length})</TabsTrigger>
-              <TabsTrigger value="distribution" className="text-[15px] font-semibold">Distribution ({(transport.sales?.length || 0) + customDistributions.length})</TabsTrigger>
+              <TabsTrigger value="distribution" className="text-[15px] font-semibold">Distribution ({transport.deliveries?.length || 0})</TabsTrigger>
               <TabsTrigger value="losses" className="text-[15px] font-semibold text-red-600 dark:text-red-400">Loss Logs ({lossLogs.length})</TabsTrigger>
               <TabsTrigger value="payments" className="text-[15px] font-semibold">Payments & Expenses ({(transport.transactions || []).length})</TabsTrigger>
 
@@ -255,14 +238,12 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
 
                 {(() => {
                   const carriedVolume = Number(transport.litersCarried) || 0;
-                  const salesVol = (transport.sales || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
-                  const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
-                  const distributedVolume = salesVol + locsVol;
+                  const salesVol = (transport.deliveries || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
+                  const distributedVolume = salesVol;
                   const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
 
-                  const variance = [...(transport.sales || []), ...customDistributions].reduce((sum: number, item: any) => {
-                    const isSale = 'litersDespatched' in item || 'litersSold' in item;
-                    const despatched = Number(isSale ? (item.litersDespatched || item.litersSold || 0) : (item.litersDelivered || 0));
+                  const variance = (transport.deliveries || []).reduce((sum: number, item: any) => {
+                    const despatched = Number(item.litersDespatched || item.litersSold || 0);
                     const received = item.litersReceived;
                     if (received !== null && received !== undefined) {
                       return sum + (despatched - Number(received));
@@ -350,9 +331,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                 </div>
 
                 {(() => {
-                  const primaryFee = Number(transport.ratePerLiter || 0) * Number(transport.litersCarried || 0);
-                  const subsequentFee = subsequentLocs.reduce((acc: number, loc: any) => acc + (Number(loc.rate || 0) * Number(loc.litersDelivered || 0)), 0);
-                  const expectedFee = primaryFee + subsequentFee;
+                  const expectedFee = Number(transport.ratePerLiter || 0) * Number(transport.litersCarried || 0);
                   const totalLossDeductions = lossLogs.reduce((sum: number, log: any) => sum + Number(log.expensesIncurred || 0), 0);
                   const totalExpenses = (transport.transactions || []).reduce((sum: number, txn: any) => sum + Number(txn.amount || 0), 0);
                   const netFee = expectedFee - totalLossDeductions - totalExpenses;
@@ -360,18 +339,6 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                   return (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                       <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="p-4 rounded-xl border bg-card/50 flex flex-col justify-center">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Primary Transport Fee</p>
-                          <p className="text-xl font-bold text-foreground">₦{primaryFee.toLocaleString()}</p>
-                          <p className="text-[10px] text-muted-foreground mt-2">Base fee for main destination</p>
-                        </div>
-                        
-                        <div className="p-4 rounded-xl border bg-card/50 flex flex-col justify-center">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Subsequent Fee</p>
-                          <p className="text-xl font-bold text-foreground">₦{subsequentFee.toLocaleString()}</p>
-                          <p className="text-[10px] text-muted-foreground mt-2">Earnings from additional drops</p>
-                        </div>
-
                         <div className="sm:col-span-2 p-4 rounded-xl border bg-blue-50/30 dark:bg-blue-950/10 flex items-center justify-between">
                           <div>
                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Expected Transport Fee</p>
@@ -422,134 +389,10 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                   </div>
                 </>
               )}
-            </TabsContent>
 
-            <TabsContent value="destinations" className="mt-6 space-y-4">
-              <div className="flex justify-between items-end mb-2">
-                <div>
-                  <h3 className="font-semibold text-lg">Route Destinations</h3>
-                  <p className="text-sm text-muted-foreground">Manage and track custom route stops for this trip.</p>
-                </div>
-                <Button onClick={() => setOpenAssignDestinationDialog(true)}>
-                  <PackageOpen className="h-4 w-4 mr-2" />
-                  Assign Subsequent Destination
-                </Button>
-              </div>
-              <div className="space-y-6">
-                {/* Primary Destination Table */}
-                <div>
-                  <h4 className="font-medium text-sm text-muted-foreground mb-3 uppercase tracking-wider">Primary Destination</h4>
-                  <div className="border rounded-2xl overflow-hidden bg-card">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border/50 bg-muted/50">
-                          <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Location</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Product Price/L (₦)</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Liters Carried</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Product Total (₦)</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Transport Rate/L (₦)</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Transport Total (₦)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="bg-muted/5">
-                          <td className="py-3 px-4">
-                            <div className="font-medium text-foreground">{transport.destination}</div>
-                            <div className="text-[10px] text-muted-foreground uppercase mt-0.5">Primary / Loaded Amount</div>
-                          </td>
-                          <td className="text-right py-3 px-4 text-foreground/90">{transport.order?.pricePerLitre ? Number(transport.order.pricePerLitre).toLocaleString() : '—'}</td>
-                          <td className="text-right py-3 px-4 text-foreground/90">{Number(transport.litersCarried).toLocaleString()} L</td>
-                          <td className="text-right py-3 px-4 text-foreground/90 font-medium">
-                            {transport.order?.pricePerLitre ? (Number(transport.order.pricePerLitre) * Number(transport.litersCarried)).toLocaleString() : '—'}
-                          </td>
-                          <td className="text-right py-3 px-4 text-foreground/90">{Number(transport.ratePerLiter).toLocaleString()}</td>
-                          <td className="text-right py-3 px-4 text-foreground/90 font-medium">{(Number(transport.ratePerLiter) * Number(transport.litersCarried)).toLocaleString()}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+              <Separator />
 
-                {/* Subsequent Destinations Table */}
-                <div>
-                  <h4 className="font-medium text-sm text-muted-foreground mb-3 uppercase tracking-wider">Subsequent Destinations</h4>
-                  <div className="border rounded-2xl overflow-hidden bg-card">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border/50 bg-muted/50">
-                          <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Location</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Product Price/L (₦)</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Liters to Deliver</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Product Total (₦)</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Transport Rate/L (₦)</th>
-                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Transport Total (₦)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {subsequentLocs.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="py-6 text-center text-muted-foreground">No subsequent destinations recorded.</td>
-                          </tr>
-                        ) : (
-                          subsequentLocs.map((loc: any, idx: number) => {
-                            const saleMatch = transport.sales?.find((s: any) => s.station?.name === loc.location || s.customer?.name === loc.location);
-                            const priceToUse = loc.productPrice || saleMatch?.amountPerLiter;
-                            
-                            return (
-                              <tr key={`loc-${idx}`} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
-                                <td className="py-3 px-4 text-foreground/90">
-                                  <div className="font-medium">{loc.location}</div>
-                                  <div className="text-[10px] text-muted-foreground uppercase mt-0.5">{loc.isCustom ? 'Custom Destination' : 'Station Destination'}</div>
-                                </td>
-                                <td className="text-right py-3 px-4 text-foreground/90">
-                                  {priceToUse ? Number(priceToUse).toLocaleString() : '—'}
-                                </td>
-                                <td className="text-right py-3 px-4 text-foreground/90">{Number(loc.litersDelivered).toLocaleString()} L</td>
-                                <td className="text-right py-3 px-4 text-foreground/90 font-medium">
-                                  {priceToUse ? (Number(priceToUse) * Number(loc.litersDelivered)).toLocaleString() : '—'}
-                                </td>
-                                <td className="text-right py-3 px-4 text-foreground/90">{Number(loc.rate).toLocaleString()}</td>
-                                <td className="text-right py-3 px-4 text-foreground/90 font-medium">{(Number(loc.rate) * Number(loc.litersDelivered)).toLocaleString()}</td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                      {subsequentLocs.length > 0 && (
-                        <tfoot>
-                          <tr className="bg-muted/30 border-t border-border/50 font-bold">
-                            <td className="text-right py-3 px-4 text-foreground">Totals:</td>
-                            <td className="text-right py-3 px-4"></td>
-                            <td className="text-right py-3 px-4 text-foreground">
-                              {(() => {
-                                 const totalLiters = subsequentLocs.reduce((sum: number, loc: any) => sum + Number(loc.litersDelivered || 0), 0);
-                                 return `${totalLiters.toLocaleString()} L`;
-                              })()}
-                            </td>
-                            <td className="text-right py-3 px-4 text-foreground">
-                              {(() => {
-                                 const totalProd = subsequentLocs.reduce((sum: number, loc: any) => {
-                                   const saleMatch = transport.sales?.find((s: any) => s.station?.name === loc.location || s.customer?.name === loc.location);
-                                   const priceToUse = loc.productPrice || saleMatch?.amountPerLiter;
-                                   return sum + (Number(priceToUse || 0) * Number(loc.litersDelivered || 0));
-                                 }, 0);
-                                 return `₦${totalProd.toLocaleString()}`;
-                              })()}
-                            </td>
-                            <td className="text-right py-3 px-4"></td>
-                            <td className="text-right py-3 px-4 text-foreground">
-                              {(() => {
-                                 const totalCost = subsequentLocs.reduce((sum: number, loc: any) => sum + (Number(loc.rate || 0) * Number(loc.litersDelivered || 0)), 0);
-                                 return `₦${totalCost.toLocaleString()}`;
-                              })()}
-                            </td>
-                          </tr>
-                        </tfoot>
-                      )}
-                    </table>
-                  </div>
-                </div>
-              </div>
+              <TransportFeeBreakdown transport={transport} originToDepotFee={originToDepotFee} />
             </TabsContent>
 
             <TabsContent value="distribution" className="mt-6 space-y-4">
@@ -571,7 +414,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                     </tr>
                   </thead>
                   <tbody>
-                    {(!transport.sales || transport.sales.length === 0) && customDistributions.length === 0 ? (
+                    {(!transport.deliveries || transport.deliveries.length === 0) ? (
                       <tr>
                         <td colSpan={6} className="py-8 text-center text-muted-foreground">
                           No sales/distribution recorded for this trip.
@@ -579,7 +422,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                       </tr>
                     ) : (
                       <>
-                        {transport.sales?.map((sale: any) => (
+                        {transport.deliveries?.map((sale: any) => (
                           <tr key={sale.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
                             <td className="py-3 px-4 text-foreground/90 whitespace-nowrap">
                               {new Date(sale.createdAt).toLocaleDateString()}
@@ -616,68 +459,38 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                             </td>
                           </tr>
                         ))}
-                        {customDistributions.map((loc: any, idx: number) => (
-                          <tr key={`cdist-${idx}`} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
-                            <td className="py-3 px-4 text-foreground/90 whitespace-nowrap">
-                              {new Date(loc.date || transport.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="py-3 px-4">
-                              <div className="font-medium text-foreground">
-                                {loc.location}
-                              </div>
-                              <div className="text-[10px] text-muted-foreground uppercase">
-                                CUSTOM LOCATION
-                              </div>
-                            </td>
-                            <td className="text-right py-3 px-4 text-foreground/90 font-medium">{Number(loc.litersDelivered).toLocaleString()} L</td>
-                            <td className="text-right py-3 px-4 text-foreground/90 font-medium text-amber-600 dark:text-amber-500">
-                              {loc.litersReceived !== undefined ? `${Number(loc.litersReceived).toLocaleString()} L` : '—'}
-                            </td>
-                            <td className="text-right py-3 px-4 text-foreground/90 font-mono text-xs">₦{Number(loc.productPrice || 0).toLocaleString()}</td>
-                            <td className="text-right py-3 px-4 text-foreground/90 font-medium">{(Number(loc.litersDelivered) * Number(loc.productPrice || 0)).toLocaleString()}</td>
-                            <td className="text-right py-3 px-4 text-foreground/90">
-                              <Badge variant="default" className="text-[10px]">
-                                CLIENT
-                              </Badge>
-                            </td>
-                          </tr>
-                        ))}
                       </>
                     )}
                   </tbody>
                   <tfoot>
-                    {((transport.sales && transport.sales.length > 0) || customDistributions.length > 0) ? (
+                    {((transport.deliveries && transport.deliveries.length > 0)) ? (
                       <>
                         <tr className="bg-muted/30 border-t border-border/50 font-bold">
                           <td colSpan={2} className="text-right py-3 px-4 text-foreground">Total:</td>
                         <td className="text-right py-3 px-4 text-foreground">
                           {(() => {
-                             const salesDespatched = (transport.sales || []).reduce((sum: number, sale: any) => sum + Number(sale.litersDespatched || sale.litersSold || 0), 0);
-                             const customDespatched = customDistributions.reduce((sum: number, loc: any) => sum + Number(loc.litersDelivered || 0), 0);
-                             return `${(salesDespatched + customDespatched).toLocaleString()} L`;
+                             const salesDespatched = (transport.deliveries || []).reduce((sum: number, sale: any) => sum + Number(sale.litersDespatched || sale.litersSold || 0), 0);
+                             return `${(salesDespatched).toLocaleString()} L`;
                           })()}
                         </td>
                         <td className="text-right py-3 px-4 text-emerald-600 dark:text-emerald-500">
                           {(() => {
-                             const salesReceived = (transport.sales || []).reduce((sum: number, sale: any) => sum + (sale.litersReceived !== null && sale.litersReceived !== undefined ? Number(sale.litersReceived) : 0), 0);
-                             const customReceived = customDistributions.reduce((sum: number, loc: any) => sum + (loc.litersReceived !== undefined ? Number(loc.litersReceived) : 0), 0);
-                             return `${(salesReceived + customReceived).toLocaleString()} L`;
+                             const salesReceived = (transport.deliveries || []).reduce((sum: number, sale: any) => sum + (sale.litersReceived !== null && sale.litersReceived !== undefined ? Number(sale.litersReceived) : 0), 0);
+                             return `${(salesReceived).toLocaleString()} L`;
                           })()}
                         </td>
                         <td></td>
                         <td className="text-right py-3 px-4 text-foreground font-mono text-xs">
                           {(() => {
-                             const salesAmount = (transport.sales || []).reduce((sum: number, sale: any) => sum + Number(sale.totalExpectedAmount || sale.totalAmount || (Number(sale.litersDespatched || sale.litersSold || 0) * Number(sale.amountPerLiter || 0))), 0);
-                             const customAmount = customDistributions.reduce((sum: number, loc: any) => sum + (Number(loc.litersDelivered) * Number(loc.productPrice || 0)), 0);
-                             return `₦${(salesAmount + customAmount).toLocaleString()}`;
+                             const salesAmount = (transport.deliveries || []).reduce((sum: number, sale: any) => sum + Number(sale.totalExpectedAmount || sale.totalAmount || (Number(sale.litersDespatched || sale.litersSold || 0) * Number(sale.amountPerLiter || 0))), 0);
+                             return `₦${(salesAmount).toLocaleString()}`;
                           })()}
                         </td>
                         <td></td>
                       </tr>
                       {(() => {
-                         const variance = [...(transport.sales || []), ...customDistributions].reduce((sum: number, item: any) => {
-                           const isSale = 'litersDespatched' in item || 'litersSold' in item;
-                           const despatched = Number(isSale ? (item.litersDespatched || item.litersSold || 0) : (item.litersDelivered || 0));
+                         const variance = (transport.deliveries || []).reduce((sum: number, item: any) => {
+                           const despatched = Number(item.litersDespatched || item.litersSold || 0);
                            const received = item.litersReceived;
                            if (received !== null && received !== undefined) {
                              return sum + (despatched - Number(received));
@@ -765,6 +578,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                       <tr className="border-b border-border/50 bg-muted/50">
                         <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Date</th>
                         <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Category</th>
+                        <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Fee Leg</th>
                         <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Description</th>
                         <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Method & Ref</th>
                         <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Receipt</th>
@@ -779,8 +593,11 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                           </td>
                           <td className="py-3 px-4">
                             <div className="font-medium text-foreground">
-                              {txn.category === "FLEET_EXPENSE" ? "Fleet Expense" : txn.category === "TRANSPORT_FEE" ? "Transport Fee" : txn.category}
+                              {txn.category === "FLEET_EXPENSE" ? "Fleet Expense" : txn.category === "TRANSPORT_PAYMENT" ? "Transport Fee" : txn.category}
                             </div>
+                          </td>
+                          <td className="py-3 px-4 text-foreground/90 text-xs">
+                            {txn.category === "TRANSPORT_PAYMENT" ? getTransactionFeeLegLabel(txn) : "—"}
                           </td>
                           <td className="py-3 px-4 text-foreground/90 max-w-[200px] truncate" title={txn.description || ""}>
                             {txn.description || "—"}
@@ -804,7 +621,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
                     </tbody>
                     <tfoot>
                       <tr className="bg-muted/30 border-t border-border/50 font-bold">
-                        <td colSpan={5} className="text-right py-3 px-4 text-foreground">Total Payments & Expenses:</td>
+                        <td colSpan={6} className="text-right py-3 px-4 text-foreground">Total Payments & Expenses:</td>
                         <td className="text-right py-3 px-4 text-destructive font-mono text-base">
                           {(() => {
                              const totalAmount = transport.transactions.reduce((sum: number, txn: any) => sum + Number(txn.amount || 0), 0);
@@ -822,128 +639,7 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
         </div>
       </div>
 
-      {/* Unified Assign Destination Dialog */}
-      <Dialog open={openAssignDestinationDialog} onOpenChange={(open) => {
-        setOpenAssignDestinationDialog(open);
-        if (!open) setError(null);
-      }}>
-        <DialogContent className={cn(
-          "w-[calc(100%-2rem)] p-0 gap-0 flex flex-col",
-          "max-h-[min(85vh,720px)]",
-          "sm:max-w-2xl"
-        )}>
-          {/* Fixed Header */}
-          <div className="px-6 pt-6 pb-0 shrink-0">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-primary" />
-                Assign Destination
-              </DialogTitle>
-              <DialogDescription>
-                Route fuel to a station or record a custom drop location.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
 
-          {/* Scrollable Body */}
-          {(() => {
-            const carriedVolume = Number(transport.litersCarried) || 0;
-            const salesVol = (transport.sales || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
-            const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
-            const distributedVolume = salesVol + locsVol;
-            const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
-            
-            // Available sales that haven't been assigned a transport destination yet
-            const availableSales = (transport.sales || []).filter((s: any) => {
-              const isAssigned = subsequentLocs.some((loc: any) => loc.saleId === s.id);
-              return !isAssigned;
-            });
-
-            return (
-          <>
-          <ScrollArea className="flex-1 min-h-0">
-            <div className="px-6 py-5 space-y-5">
-              {/* Allocation Summary */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="p-3 rounded-xl border bg-muted/30 text-center">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">Carried</p>
-                  <p className="text-base font-bold mt-0.5">{carriedVolume.toLocaleString()} L</p>
-                </div>
-                <div className="p-3 rounded-xl border bg-muted/30 text-center">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">Allocated</p>
-                  <p className="text-base font-bold mt-0.5">{distributedVolume.toLocaleString()} L</p>
-                </div>
-                <div className={cn(
-                  "p-3 rounded-xl border text-center",
-                  "bg-primary/5 border-primary/20"
-                )}>
-                  <p className={cn("text-[10px] uppercase tracking-widest font-medium", "text-primary/70")}>Available</p>
-                  <p className={cn("text-base font-bold mt-0.5", "text-primary")}>{remainingVolume.toLocaleString()} L</p>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Select Linked Sale</Label>
-                  <Select value={assignSaleId} onValueChange={setAssignSaleId}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a sale..." />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      {availableSales.length === 0 ? (
-                        <SelectItem value="none" disabled>No available sales</SelectItem>
-                      ) : (
-                        availableSales.map((sale: any) => (
-                          <SelectItem key={sale.id} value={sale.id}>
-                            {sale.station ? sale.station.name : (sale.customer ? sale.customer.name : "Unknown")} - {Number(sale.litersDespatched).toLocaleString()} L
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground mt-1">Only sales linked to this transport are shown.</p>
-                </div>
-                
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Transport Rate / L (₦)</Label>
-                  <FormattedNumberInput min="0" value={assignTransportRate} onChange={(e) => setAssignTransportRate(e.target.value)} placeholder="0.00" prefixText="₦" />
-                  
-                  {assignSaleId && assignTransportRate && Number(assignTransportRate) > 0 && (
-                    <div className="pt-2 text-xs font-medium text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 p-2 rounded border border-emerald-100 dark:border-emerald-500/20 mt-2 flex justify-between items-center">
-                      <span>Total expected cost:</span>
-                      <span className="font-bold">
-                        ₦{(Number(transport.sales?.find((s: any) => s.id === assignSaleId)?.litersDespatched || 0) * Number(assignTransportRate)).toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {error && (
-                <p className="text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2">
-                  {error}
-                </p>
-              )}
-            </div>
-          </ScrollArea>
-
-          {/* Fixed Footer */}
-          <Separator />
-          <div className="px-6 py-4 shrink-0">
-            <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setOpenAssignDestinationDialog(false)}>Cancel</Button>
-              <Button size="sm" onClick={handleAssignDestination} disabled={isSubmitting || !assignSaleId}>
-                {isSubmitting ? <SpinnerEllipsis /> : "Confirm Assignment"}
-              </Button>
-            </DialogFooter>
-          </div>
-          </>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
 
       {/* Update Status Dialog */}
       <Dialog open={openStatusDialog} onOpenChange={setOpenStatusDialog}>
@@ -1037,6 +733,66 @@ export function TransportDetailsManager({ transport, stations = [] }: { transpor
             <Button variant="outline" onClick={() => setOpenIncidentDialog(false)}>Cancel</Button>
             <Button onClick={handleLogIncident} disabled={isSubmitting} variant="destructive">
               {isSubmitting ? <SpinnerEllipsis /> : "Submit Incident"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openLinkOrderDialog} onOpenChange={setOpenLinkOrderDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Link to Order</DialogTitle>
+            <DialogDescription>
+              Associate this transport with a procurement order for volume tracking.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Procurement Order</Label>
+              <Popover open={openOrderSelect} onOpenChange={setOpenOrderSelect}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="w-full justify-between font-normal">
+                    <span className="truncate">
+                      {selectedOrderId
+                        ? (() => {
+                            const o = orders.find((x: any) => x.id === selectedOrderId);
+                            return o ? `${o.sourceDepot || "Depot"} - ${o.reference || "Unnamed"}` : "Select order...";
+                          })()
+                        : "Select order..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search order..." />
+                    <CommandList>
+                      <CommandEmpty>No order found.</CommandEmpty>
+                      <CommandGroup>
+                        {orders.map((o: any) => (
+                          <CommandItem
+                            key={o.id}
+                            value={`${o.reference || o.id} ${o.sourceDepot || ""}`}
+                            onSelect={() => {
+                              setSelectedOrderId(o.id);
+                              setOpenOrderSelect(false);
+                            }}
+                          >
+                            {o.sourceDepot || "Depot"} - {o.reference || "Unnamed"}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenLinkOrderDialog(false)}>Cancel</Button>
+            <Button onClick={handleLinkOrder} disabled={isSubmitting || !selectedOrderId}>
+              {isSubmitting ? <SpinnerEllipsis /> : "Link Order"}
             </Button>
           </DialogFooter>
         </DialogContent>

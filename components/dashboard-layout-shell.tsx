@@ -58,6 +58,7 @@ interface DashboardLayoutShellProps {
   tenant?: { name: string; slug: string; logoUrl: string | null };
   activeStationId?: string;
   enabledModules?: string[];
+  internalOrganizations?: { id: string; name: string; slug: string | null; logoUrl: string | null }[];
 }
 
 export function DashboardLayoutShell({
@@ -73,6 +74,7 @@ export function DashboardLayoutShell({
   stations,
   activeStationId,
   enabledModules,
+  internalOrganizations,
   tenant,
 }: DashboardLayoutShellProps) {
   const [searchOpen, setSearchOpen] = useState(false);
@@ -116,6 +118,7 @@ export function DashboardLayoutShell({
           enabledModules={enabledModules}
           stations={stations}
           tenant={tenant}
+          internalOrganizations={internalOrganizations}
         />
 
         <SidebarInset className="bg-background overflow-hidden">

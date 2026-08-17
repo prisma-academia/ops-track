@@ -20,7 +20,7 @@ export default async function CustomerDetailsPage({
       tenantId: actor.tenantId,
     },
     include: {
-      sales: {
+      deliveries: {
         orderBy: { createdAt: "desc" },
         take: 10,
         include: {
@@ -138,8 +138,9 @@ export default async function CustomerDetailsPage({
       </div>
 
       <div className="mt-8">
-        <CustomerDetailsClient sales={JSON.parse(JSON.stringify(customer.sales))} />
+        <CustomerDetailsClient deliveries={JSON.parse(JSON.stringify(customer.deliveries))} />
       </div>
     </div>
   );
 }
+

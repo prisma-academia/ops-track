@@ -20,7 +20,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id: stationId, shiftId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_SHIFTS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_SHIFTS_WRITE.key, "STATION");
     const body = CloseShiftSchema.parse(await request.json());
     const meta = requestMeta(request);
 

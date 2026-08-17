@@ -7,7 +7,7 @@ export async function resolveActivityLogRows(rows: any[]) {
   const stationIds = Array.from(new Set(rows.filter((r) => r.targetType === "Station" && r.targetId).map((r) => r.targetId as string)));
   const orderIds = Array.from(new Set(rows.filter((r) => r.targetType === "Order" && r.targetId).map((r) => r.targetId as string)));
   const transportIds = Array.from(new Set(rows.filter((r) => r.targetType === "Transport" && r.targetId).map((r) => r.targetId as string)));
-  const saleIds = Array.from(new Set(rows.filter((r) => r.targetType === "Sale" && r.targetId).map((r) => r.targetId as string)));
+  const saleIds = Array.from(new Set(rows.filter((r) => r.targetType === "Delivery" && r.targetId).map((r) => r.targetId as string)));
   const transactionIds = Array.from(new Set(rows.filter((r) => r.targetType === "Transaction" && r.targetId).map((r) => r.targetId as string)));
   const driverIds = Array.from(new Set(rows.filter((r) => r.targetType === "Driver" && r.targetId).map((r) => r.targetId as string)));
   const transporterIds = Array.from(new Set(rows.filter((r) => r.targetType === "Transporter" && r.targetId).map((r) => r.targetId as string)));
@@ -16,7 +16,7 @@ export async function resolveActivityLogRows(rows: any[]) {
 
   const allUserIds = Array.from(new Set([...tenantUserIds, ...targetUserIds]));
 
-  const [users, stations, orders, transports, sales, transactions, drivers, transporters, trucks] = await Promise.all([
+  const [users, stations, orders, transports, Deliveries, transactions, drivers, transporters, trucks] = await Promise.all([
     allUserIds.length > 0
       ? prisma.tenantUser.findMany({ where: { id: { in: allUserIds } }, select: { id: true, firstName: true, lastName: true, email: true } })
       : [],
@@ -30,7 +30,7 @@ export async function resolveActivityLogRows(rows: any[]) {
       ? prisma.transport.findMany({ where: { id: { in: transportIds } }, select: { id: true, destination: true, productType: true, litersCarried: true } })
       : [],
     saleIds.length > 0
-      ? prisma.sale.findMany({ where: { id: { in: saleIds } }, select: { id: true, totalExpectedAmount: true, litersDespatched: true } })
+      ? prisma.delivery.findMany({ where: { id: { in: saleIds } }, select: { id: true, totalExpectedAmount: true, litersDespatched: true } })
       : [],
     transactionIds.length > 0
       ? prisma.transaction.findMany({ where: { id: { in: transactionIds } }, select: { id: true, amount: true, category: true, type: true } })
@@ -50,7 +50,7 @@ export async function resolveActivityLogRows(rows: any[]) {
   const stationMap = new Map(stations.map((s) => [s.id, s]));
   const orderMap = new Map(orders.map((o) => [o.id, o]));
   const transportMap = new Map(transports.map((t) => [t.id, t]));
-  const saleMap = new Map(sales.map((s) => [s.id, s]));
+  const saleMap = new Map(Deliveries.map((delivery) => [delivery.id, delivery]));
   const transactionMap = new Map(transactions.map((tx) => [tx.id, tx]));
   const driverMap = new Map(drivers.map((d) => [d.id, d]));
   const transporterMap = new Map(transporters.map((tr) => [tr.id, tr]));
@@ -81,9 +81,9 @@ export async function resolveActivityLogRows(rows: any[]) {
       } else if (r.targetType === "Transport") {
         const tr = transportMap.get(r.targetId);
         if (tr) targetDisplay = `Transport: ${tr.destination} (${tr.productType || ""})`;
-      } else if (r.targetType === "Sale") {
-        const s = saleMap.get(r.targetId);
-        if (s) targetDisplay = `Sale: ₦${Number(s.totalExpectedAmount).toLocaleString()}`;
+      } else if (r.targetType === "Delivery") {
+        const delivery = saleMap.get(r.targetId);
+        if (delivery) targetDisplay = `Delivery: ₦${Number(delivery.totalExpectedAmount).toLocaleString()}`;
       } else if (r.targetType === "Transaction") {
         const tx = transactionMap.get(r.targetId);
         if (tx) targetDisplay = `Transaction (${tx.type}): ₦${Number(tx.amount).toLocaleString()}`;

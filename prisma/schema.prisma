@@ -63,6 +63,21 @@ enum OrganizationType {
   EXTERNAL // Client company managed by fleet manager
 }
 
+model TenantModule {
+  id        String    @id @default(uuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  module    AppModule
+  status    String    @default("ACTIVE") // ACTIVE, SUSPENDED, EXPIRED
+  enabledAt DateTime  @default(now())
+  expiresAt DateTime?
+  settings  Json?
+
+  @@unique([tenantId, module])
+  @@index([tenantId])
+  @@map("tenant_modules")
+}
+
 model Tenant {
   id           String       @id @default(cuid())
   slug         String       @unique
@@ -105,18 +120,24 @@ model Tenant {
   shiftLogs                  ShiftLog[]
   expenses                   Expense[]
 
-  activeModules     String[]           @default(["FLEET", "STATION"])
-  transporters      Transporter[]
-  trucks            Truck[]
-  drivers           Driver[]
-  orders            Order[]
-  transports        Transport[]
-  sales             Sale[]
-  transactions      Transaction[]
-  transportLossLogs TransportLossLog[]
-  dippingSessions   DippingSession[]
-  bankAccounts      BankAccount[]
-  varianceLogs      VarianceLog[]
+  activeModules        String[]              @default(["FLEET", "STATION"])
+  modules              TenantModule[]
+  transporters         Transporter[]
+  trucks               Truck[]
+  drivers              Driver[]
+  orders               Order[]
+  transports           Transport[]
+  deliveries           Delivery[]
+  transactions         Transaction[]
+  transportLossLogs    TransportLossLog[]
+  dippingSessions      DippingSession[]
+  bankAccounts         BankAccount[]
+  varianceLogs         VarianceLog[]
+  transportTripLegs    TransportTripLeg[]
+  driverAssignments    DriverAssignment[]
+  transportInvitations TransportInvitation[]
+  depots               Depot[]
+  stockMovements       StockMovement[]
 
   @@index([status])
 }
@@ -140,28 +161,28 @@ model PlatformUser {
 }
 
 model TenantUser {
-  id                  String     @id @default(cuid())
+  id                  String         @id @default(cuid())
   tenantId            String
-  tenant              Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant              Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   email               String
   passwordHash        String
-  mustChangePassword  Boolean    @default(true)
-  status              UserStatus @default(ACTIVE)
+  mustChangePassword  Boolean        @default(true)
+  status              UserStatus     @default(ACTIVE)
   firstName           String?
   lastName            String?
   otherName           String?
   phone               String?
-  isOwner             Boolean      @default(false)
+  isOwner             Boolean        @default(false)
   organizationId      String?
-  organization        Organization? @relation("OrgUsers", fields: [organizationId], references: [id], onDelete: SetNull)
-  activeModules       AppModule[]  @default([STATION, FLEET])
-  stationPermissions  String[]     @default([])
-  fleetPermissions    String[]     @default([])
-  createdAt           DateTime     @default(now())
+  organization        Organization?  @relation("OrgUsers", fields: [organizationId], references: [id], onDelete: SetNull)
+  activeModules       AppModule[]    @default([STATION, FLEET])
+  stationPermissions  String[]       @default([])
+  fleetPermissions    String[]       @default([])
+  createdAt           DateTime       @default(now())
   lastLoginAt         DateTime?
-  failedLoginAttempts Int        @default(0)
+  failedLoginAttempts Int            @default(0)
   lockedUntil         DateTime?
-  expoPushTokens      String[]   @default([])
+  expoPushTokens      String[]       @default([])
   ownedOrganizations  Organization[] @relation("OrgOwner")
 
   stations                Station[]        @relation("StationStaff")
@@ -175,6 +196,7 @@ model TenantUser {
   recordedExpenses        Expense[]        @relation("ExpenseRecordedBy")
   approvedExpenses        Expense[]        @relation("ExpenseApprovedBy")
   recordedWaybillDippings WaybillDipping[]
+  stockMovements          StockMovement[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -348,40 +370,41 @@ model ReservedSlug {
 }
 
 model Organization {
-  id          String           @id @default(cuid())
-  tenantId    String
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name        String
-  slug        String           // URL-friendly identifier within tenant
-  type        OrganizationType @default(EXTERNAL)
-  logoKey     String?          // S3 key for org logo
+  id       String           @id @default(cuid())
+  tenantId String
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name     String
+  slug     String // URL-friendly identifier within tenant
+  type     OrganizationType @default(EXTERNAL)
+  logoKey  String? // S3 key for org logo
 
   // Contact info
   companyEmail String?
   companyPhone String?
-  address     String?
-  state       String?
-  lga         String?
+  address      String?
+  state        String?
+  lga          String?
 
   // Financial tracking
-  outstandingBalance Decimal   @default(0.00) @db.Decimal(12, 2)
-  depositBalance     Decimal   @default(0.00) @db.Decimal(12, 2)
+  outstandingBalance Decimal @default(0.00) @db.Decimal(12, 2)
+  depositBalance     Decimal @default(0.00) @db.Decimal(12, 2)
 
   contactPerson   String?
   contactPhone    String?
   contactPosition String?
 
-  isActive    Boolean          @default(true)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  ownerId        String?
-  owner          TenantUser?      @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  stations       Station[]
-  users          TenantUser[]     @relation("OrgUsers")
-  sales          Sale[]
-  priceControls  PriceControl[]
+  ownerId       String?
+  owner         TenantUser?    @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  stations      Station[]
+  users         TenantUser[]   @relation("OrgUsers")
+  deliveries    Delivery[]
+  priceControls PriceControl[]
+  transactions  Transaction[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -481,11 +504,11 @@ model Station {
   state          String?
   lga            String?
   ward           String?
-  latitude       Decimal? @db.Decimal(9, 6)
-  longitude      Decimal? @db.Decimal(9, 6)
-  altitude       Decimal? @db.Decimal(9, 6)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  latitude       Decimal?     @db.Decimal(9, 6)
+  longitude      Decimal?     @db.Decimal(9, 6)
+  altitude       Decimal?     @db.Decimal(9, 6)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   // Relations
   staff              TenantUser[]        @relation("StationStaff")
@@ -497,8 +520,10 @@ model Station {
   waybillAllocations WaybillAllocation[]
   pumps              Pump[]
   expenses           Expense[]
+  stockMovements     StockMovement[]
 
-  stationSales    Sale[]           @relation("StationSales")
+  deliveries      Delivery[]       @relation("StationSales")
+  transactions    Transaction[]
   dippingSessions DippingSession[]
 
   @@unique([tenantId, code])
@@ -524,6 +549,7 @@ model Tank {
   pumps           Pump[]
   dippingSessions DippingSession[]
   varianceLogs    VarianceLog[]
+  stockMovements  StockMovement[]
 
   @@index([tenantId])
   @@index([stationId])
@@ -571,10 +597,11 @@ model SalesLog {
   approvedBy         TenantUser?    @relation("SalesApprovedBy", fields: [approvedById], references: [id])
   approvedAt         DateTime?
 
-  isDebtRepayment Boolean    @default(false)
-  parentSaleId    String? // Links to the original sale that was short
-  parentSale      SalesLog?  @relation("DebtRepayments", fields: [parentSaleId], references: [id])
-  debtRepayments  SalesLog[] @relation("DebtRepayments")
+  isDebtRepayment  Boolean       @default(false)
+  parentdeliveryId String? // Links to the original sale that was short
+  parentSale       SalesLog?     @relation("DebtRepayments", fields: [parentdeliveryId], references: [id])
+  debtRepayments   SalesLog[]    @relation("DebtRepayments")
+  transactions     Transaction[]
 
   dippingClosing   DippingClosing?
   dippingClosingId String?         @unique
@@ -654,7 +681,7 @@ model Ticket {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
-  varianceLog  VarianceLog?
+  varianceLog VarianceLog?
 
   @@index([tenantId])
   @@index([stationId])
@@ -669,22 +696,22 @@ enum VarianceType {
 }
 
 model VarianceLog {
-  id              String      @id @default(uuid())
-  tenantId        String
-  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ticketId        String      @unique
-  ticket          Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  varianceType    VarianceType
-  expectedVolume  Decimal     @db.Decimal(12, 2)
-  actualVolume    Decimal     @db.Decimal(12, 2)
-  varianceVolume  Decimal     @db.Decimal(12, 2)
-  
-  tankId          String?
-  tank            Tank?       @relation(fields: [tankId], references: [id], onDelete: SetNull)
-  waybillId       String?
-  waybill         Waybill?    @relation(fields: [waybillId], references: [id], onDelete: SetNull)
+  id             String       @id @default(uuid())
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticketId       String       @unique
+  ticket         Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  varianceType   VarianceType
+  expectedVolume Decimal      @db.Decimal(12, 2)
+  actualVolume   Decimal      @db.Decimal(12, 2)
+  varianceVolume Decimal      @db.Decimal(12, 2)
 
-  createdAt       DateTime    @default(now())
+  tankId    String?
+  tank      Tank?    @relation(fields: [tankId], references: [id], onDelete: SetNull)
+  waybillId String?
+  waybill   Waybill? @relation(fields: [waybillId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
 
   @@index([tenantId])
   @@index([ticketId])
@@ -709,7 +736,7 @@ model Customer {
   depositBalance     Decimal  @default(0.00) @db.Decimal(12, 2)
   createdAt          DateTime @default(now())
 
-  sales        Sale[]
+  deliveries   Delivery[]
   transactions Transaction[]
 
   @@index([tenantId])
@@ -737,8 +764,8 @@ model Waybill {
   recordedById String
   recordedBy   TenantUser @relation(fields: [recordedById], references: [id], onDelete: Restrict)
 
-  allocations WaybillAllocation[]
-  dippings    WaybillDipping[]
+  allocations  WaybillAllocation[]
+  dippings     WaybillDipping[]
   varianceLogs VarianceLog[]
 
   @@unique([tenantId, number])
@@ -775,8 +802,8 @@ model WaybillAllocation {
   waybillVerified     Boolean @default(false)
   cancellationReason  String? @db.Text
 
-  saleId String?
-  sale   Sale?   @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  deliveryId String?
+  delivery   Delivery? @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -787,7 +814,7 @@ model WaybillAllocation {
   @@index([tenantId])
   @@index([waybillId])
   @@index([stationId])
-  @@index([saleId])
+  @@index([deliveryId])
   @@map("waybill_allocations")
 }
 
@@ -862,12 +889,23 @@ model ShiftLog {
   @@map("shift_logs")
 }
 
+enum ExpenseContext {
+  STATION
+  FLEET
+}
+
 model Expense {
   id            String          @id @default(uuid())
   tenantId      String
   tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  stationId     String
-  station       Station         @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  
+  context       ExpenseContext  @default(STATION)
+  
+  stationId     String?
+  station       Station?        @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  truckId       String?
+  truck         Truck?          @relation(fields: [truckId], references: [id], onDelete: SetNull)
   category      ExpenseCategory
   paymentMethod PaymentMethod
   amount        Decimal         @db.Decimal(12, 2)
@@ -883,7 +921,8 @@ model Expense {
   approvedById String?
   approvedBy   TenantUser? @relation("ExpenseApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
 
-  createdAt DateTime @default(now())
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
 
   @@index([tenantId])
   @@index([stationId])
@@ -924,18 +963,19 @@ model Supplier {
 
 model Depot {
   id        String   @id @default(uuid())
-  name      String   @unique
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  country   String?
+  state     String?
+  lga       String?
+  latitude  Decimal? @db.Decimal(9, 6)
+  longitude Decimal? @db.Decimal(9, 6)
   createdAt DateTime @default(now())
 
+  @@unique([tenantId, name])
+  @@index([tenantId])
   @@map("depots")
-}
-
-model TransportCompany {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-
-  @@map("transport_companies")
 }
 
 // ==========================================
@@ -943,12 +983,15 @@ model TransportCompany {
 // ==========================================
 
 enum OrderStatus {
+  DRAFT
   PENDING
   CONFIRMED
-  LOADED
-  CHANGED
-  CANCELLED
+  ASSIGNED
+  IN_TRANSIT
+  DELIVERED
   COMPLETED
+  CANCELLED
+  REJECTED
 }
 
 enum TransportStatus {
@@ -969,11 +1012,26 @@ enum TransactionType {
   OUTFLOW
 }
 
+enum TransportFeeLeg {
+  ORIGIN_TO_DEPOT
+  DEPOT_TO_PRIMARY
+  PRIMARY_TO_SUBSEQUENT
+  FULL_TRIP
+}
+
 enum TransactionCategory {
   TRANSPORT_PAYMENT
   CLIENT_PAYMENT
-  EXPENSE
+  PRODUCT_SUPPLY // Wholesale product delivery payments
+  STATION_SALE // Retail sales at the station level
+  STATION_EXPENSE // Station-level expenses
+  FLEET_EXPENSE // Fleet-level expenses
+  EXPENSE // Generic expenses
+  OTHER_INFLOW
+  OTHER_OUTFLOW
   OTHER
+  ASSET_PURCHASE
+  SALARY_PAYMENT
 }
 
 enum PaymentType {
@@ -989,9 +1047,9 @@ enum TransporterOwnership {
 }
 
 model Transporter {
-  id                 String      @id @default(uuid())
+  id                 String               @id @default(uuid())
   tenantId           String
-  tenant             Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name               String
   email              String?
   phone              String?
@@ -1005,16 +1063,17 @@ model Transporter {
   ward               String?
   address            String?
   ownership          TransporterOwnership @default(EXTERNAL)
-  kycDocuments       Json        @default("{}")
-  status             AssetStatus @default(ACTIVE)
-  isActive           Boolean     @default(true)
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  kycDocuments       Json                 @default("{}")
+  status             AssetStatus          @default(ACTIVE)
+  isActive           Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
-  trucks       Truck[]
-  drivers      Driver[]
-  transports   Transport[]
-  transactions Transaction[]
+  trucks               Truck[]
+  drivers              Driver[]
+  transports           Transport[]
+  transactions         Transaction[]
+  transportInvitations TransportInvitation[]
 
   @@index([tenantId])
   @@map("fleet_transporters")
@@ -1039,9 +1098,11 @@ model Truck {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  transports         Transport[]
-  maintenanceHistory TruckMaintenanceHistory[]
-  transactions       Transaction[]
+  transports           Transport[]
+  maintenanceHistory   TruckMaintenanceHistory[]
+  transactions         Transaction[]
+  transportInvitations TransportInvitation[]
+  expenses             Expense[]
 
   @@index([tenantId])
   @@index([transporterId])
@@ -1079,7 +1140,9 @@ model Driver {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
-  transports Transport[]
+  transports           Transport[]
+  driverAssignments    DriverAssignment[]
+  transportInvitations TransportInvitation[]
 
   @@index([tenantId])
   @@index([transporterId])
@@ -1101,8 +1164,9 @@ model Order {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  transports   Transport[]
-  transactions Transaction[]
+  transports           Transport[]
+  transactions         Transaction[]
+  transportInvitations TransportInvitation[]
 
   @@index([tenantId])
   @@map("fleet_orders")
@@ -1112,36 +1176,34 @@ model Transport {
   id            String      @id @default(uuid())
   tenantId      String
   tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  orderId       String
-  order         Order       @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderId       String?
+  order         Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
   transporterId String
   transporter   Transporter @relation(fields: [transporterId], references: [id], onDelete: Restrict)
-  truckId       String
-  truck         Truck       @relation(fields: [truckId], references: [id], onDelete: Restrict)
-  driverId      String
-  driver        Driver      @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  truckId       String?
+  truck         Truck?      @relation(fields: [truckId], references: [id], onDelete: Restrict)
+  driverId      String?
+  driver        Driver?     @relation(fields: [driverId], references: [id], onDelete: Restrict)
 
-  destination   String
-  productType   ProductType?
-  ratePerLiter  Decimal      @db.Decimal(10, 2)
-  litersCarried Decimal      @db.Decimal(12, 2)
-
-  subsequentLocs Json @default("[]") // Array of { location, rate, litersDelivered }
-
-  litersDelivered     Decimal? @db.Decimal(12, 2)
-  maintenanceCost     Decimal  @default(0.00) @db.Decimal(12, 2)
-  litersLost          Decimal  @default(0.00) @db.Decimal(12, 2)
-  totalDeduction      Decimal  @default(0.00) @db.Decimal(12, 2)
-  netTransportFeePaid Decimal  @default(0.00) @db.Decimal(12, 2)
+  destination         String
+  productType         ProductType?
+  ratePerLiter        Decimal      @db.Decimal(10, 2)
+  litersCarried       Decimal      @db.Decimal(12, 2)
+  litersDelivered     Decimal?     @db.Decimal(12, 2)
+  maintenanceCost     Decimal      @default(0.00) @db.Decimal(12, 2)
+  litersLost          Decimal      @default(0.00) @db.Decimal(12, 2)
+  totalDeduction      Decimal      @default(0.00) @db.Decimal(12, 2)
+  netTransportFeePaid Decimal      @default(0.00) @db.Decimal(12, 2)
 
   comment   String?         @db.Text
   status    TransportStatus @default(IN_TRANSIT)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
-  sales        Sale[]
-  lossLogs     TransportLossLog[]
-  transactions Transaction[]
+  deliveries        Delivery[]
+  lossLogs          TransportLossLog[]
+  transactions      Transaction[]
+  transportTripLegs TransportTripLeg[]
 
   @@index([tenantId])
   @@index([orderId])
@@ -1177,7 +1239,7 @@ model TransportLossLog {
   @@map("fleet_transport_loss_logs")
 }
 
-model Sale {
+model Delivery {
   id             String        @id @default(uuid())
   tenantId       String
   tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1229,14 +1291,26 @@ model Transaction {
   paymentMethod  PaymentMethod?
   receiptUrl     String?
 
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  stationId String?
+  station   Station? @relation(fields: [stationId], references: [id], onDelete: SetNull)
+
+  expenseId String?
+  expense   Expense? @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+
+  salesLogId String?
+  salesLog   SalesLog? @relation(fields: [salesLogId], references: [id], onDelete: SetNull)
+
   bankAccountId String?
   bankAccount   BankAccount? @relation("TransactionBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
 
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
-  saleId String?
-  sale   Sale?   @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  deliveryId String?
+  delivery   Delivery? @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
 
   transporterId String?
   transporter   Transporter? @relation(fields: [transporterId], references: [id], onDelete: SetNull)
@@ -1250,15 +1324,18 @@ model Transaction {
   orderId String?
   order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
+  feeLeg TransportFeeLeg?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([tenantId])
-  @@index([saleId])
+  @@index([deliveryId])
   @@index([transporterId])
   @@index([transportId])
   @@index([truckId])
   @@index([orderId])
+  @@index([feeLeg])
   @@map("fleet_transactions")
 }
 
@@ -1314,8 +1391,8 @@ model DippingClosing {
   recordedAt DateTime @default(now())
 
   // Auto-generated sale from this closing
-  generatedSale   SalesLog? @relation(fields: [generatedSaleId], references: [id])
-  generatedSaleId String?   @unique
+  generatedSale       SalesLog? @relation(fields: [generateddeliveryId], references: [id])
+  generateddeliveryId String?   @unique
 
   @@index([sessionId])
   @@map("dipping_closings")
@@ -1345,4 +1422,166 @@ model BankAccount {
 
   @@index([tenantId])
   @@map("bank_accounts")
+}
+
+// ==========================================
+// TRIP LEG AND ASSIGNMENT ARCHITECTURE
+// ==========================================
+
+enum TripLegType {
+  ORIGIN_TO_DEPOT
+  DEPOT_TO_PRIMARY
+  PRIMARY_TO_SUBSEQUENT
+  SUBSEQUENT_TO_SUBSEQUENT
+  DESTINATION_TO_ORIGIN
+}
+
+enum TripLegStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum DriverAssignmentStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  REASSIGNED
+}
+
+model TransportTripLeg {
+  id          String @id @default(uuid())
+  tenantId    String
+  transportId String
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transport Transport @relation(fields: [transportId], references: [id], onDelete: Cascade)
+
+  type     TripLegType
+  sequence Int
+
+  origin      String? // Station ID or Depot ID preferred
+  destination String? // Station ID or Depot ID preferred
+
+  status TripLegStatus @default(PENDING)
+
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  notes String? @db.Text
+
+  driverAssignments DriverAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([transportId])
+  @@index([transportId, sequence])
+  @@map("transport_trip_legs")
+}
+
+model DriverAssignment {
+  id        String @id @default(uuid())
+  tenantId  String
+  driverId  String
+  tripLegId String
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Restrict)
+
+  tripLeg TransportTripLeg @relation(fields: [tripLegId], references: [id], onDelete: Cascade)
+
+  status DriverAssignmentStatus @default(PENDING)
+
+  assignedAt  DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  notes String? @db.Text
+
+  @@index([tenantId])
+  @@index([driverId])
+  @@index([tripLegId])
+  @@map("fleet_driver_assignments")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+model TransportInvitation {
+  id            String      @id @default(uuid())
+  tenantId      String
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orderId       String
+  order         Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  transporterId String
+  transporter   Transporter @relation(fields: [transporterId], references: [id], onDelete: Restrict)
+
+  truckId  String?
+  truck    Truck?  @relation(fields: [truckId], references: [id], onDelete: Restrict)
+  driverId String?
+  driver   Driver? @relation(fields: [driverId], references: [id], onDelete: Restrict)
+
+  destination     String
+  litersRequested Decimal  @db.Decimal(12, 2)
+  ratePerLiter    Decimal? @db.Decimal(10, 2)
+  message         String?  @db.Text
+
+  status          InvitationStatus @default(PENDING)
+  respondedAt     DateTime?
+  rejectionReason String?          @db.Text
+  createdAt       DateTime         @default(now())
+  expiresAt       DateTime?
+
+  @@index([tenantId])
+  @@index([orderId])
+  @@index([transporterId])
+  @@map("fleet_transport_invitations")
+}
+
+enum StockMovementType {
+  OPENING_BALANCE
+  DELIVERY
+  SALE
+  ADJUSTMENT
+  TRANSFER
+  RETURN
+  LOSS
+}
+
+model StockMovement {
+  id        String  @id @default(uuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stationId String
+  station   Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  tankId    String
+  tank      Tank    @relation(fields: [tankId], references: [id], onDelete: Cascade)
+
+  movementType StockMovementType
+  productType  ProductType
+
+  quantity     Decimal @db.Decimal(12, 2)
+  balanceAfter Decimal @db.Decimal(12, 2)
+
+  referenceId   String?
+  referenceType String?
+  notes         String?
+
+  recordedById String?
+  recordedBy   TenantUser? @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedAt   DateTime    @default(now())
+
+  @@index([tenantId, stationId])
+  @@index([tankId, recordedAt])
+  @@map("stock_movements")
 }

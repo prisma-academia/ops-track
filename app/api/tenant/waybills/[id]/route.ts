@@ -26,7 +26,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_READ.key, "STATION");
 
     const allocation = await prisma.waybillAllocation.findUnique({
       where: { id },
@@ -113,7 +113,7 @@ export async function PATCH(
     await requireCsrf(request);
     const { id } = await params;
     console.log("PATCH /api/tenant/waybills/[id] HIT! ID:", id);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key, "STATION");
     console.log("ACTOR:", actor);
     const body = DeliverWaybillSchema.parse(await request.json());
     console.log("BODY PARSED:", body);
@@ -183,41 +183,40 @@ export async function PATCH(
       });
     }
 
-    // Sync with corresponding Sale to ensure Distribution metrics are accurate
-    const matchingSale = allocation.saleId ? await prisma.sale.findUnique({
+    // Sync with corresponding Delivery to ensure Distribution metrics are accurate
+    const matchingSale = allocation.deliveryId ? await prisma.delivery.findUnique({
       where: {
-        id: allocation.saleId,
+        id: allocation.deliveryId,
       }
     }) : null;
 
     if (matchingSale && body.litersReceived !== undefined) {
-      await prisma.sale.update({
+      await prisma.delivery.update({
         where: { id: matchingSale.id },
         data: {
           litersReceived: body.litersReceived
         }
       });
 
-      // Recalculate transport loss if sale belongs to a transport
+      // Recalculate transport loss if Delivery belongs to a transport
       if (matchingSale.transportId) {
         const transport = await prisma.transport.findUnique({ where: { id: matchingSale.transportId } });
         if (transport) {
-          const allSales = await prisma.sale.findMany({ 
+          const allSales = await prisma.delivery.findMany({ 
             where: { transportId: transport.id },
             include: { station: true }
           });
-          let totalReceived = allSales.reduce((sum, s) => {
-            if (s.id === matchingSale.id) return sum + Number(body.litersReceived || 0);
-            return sum + Number(s.litersReceived ?? 0);
+          let totalReceived = allSales.reduce((sum, d) => {
+            if (d.id === matchingSale.id) return sum + Number(body.litersReceived || 0);
+            return sum + Number(d.litersReceived ?? 0);
           }, 0);
           
-          // Add volume from custom distributions in subsequentLocs
-          const subsequentLocs = Array.isArray(transport.subsequentLocs) ? transport.subsequentLocs : [];
-          const salesStationNames = allSales.map((s) => s.station?.name).filter(Boolean);
-          const customDistributions = subsequentLocs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || (!loc.saleId && !salesStationNames.includes(loc.location)));
-          const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
-          
-          totalReceived += locsVol;
+          // Deprecated: Add volume from custom distributions in transportTripLegs
+          // const transportTripLegs = Array.isArray(transport.transportTripLegs) ? transport.transportTripLegs : [];
+          // const salesStationNames = allSales.map((d) => d.station?.name).filter(Boolean);
+          // const customDistributions = transportTripLegs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || (!loc.deliveryId && !salesStationNames.includes(loc.location)));
+          // const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
+          // totalReceived += locsVol;
 
           const litersLost = Math.max(0, Number(transport.litersCarried) - totalReceived);
           const ratePerLiter = Number(transport.ratePerLiter);

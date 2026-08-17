@@ -61,6 +61,19 @@ import {
   ChevronsUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from 'recharts';
 
 export type StationPerformanceItem = {
   id: string;
@@ -658,6 +671,53 @@ export function StationPerformanceClient({
           </CardContent>
         </Card>
       </TooltipProvider>
+
+      {/* CHART VIEW */}
+      {filteredStations.length > 0 && (() => {
+        const stationChartConfig = {
+          currentStock: {
+            label: "Current Stock (L)",
+            color: "#10b981",
+          },
+          totalCapacity: {
+            label: "Total Capacity (L)",
+            color: "#94a3b8",
+          },
+        } satisfies ChartConfig;
+
+        return (
+          <Card className="border-border/40 shadow-xs">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-muted-foreground" />
+                Station Stock vs Capacity
+              </h3>
+              <ChartContainer config={stationChartConfig} className="h-[350px] w-full">
+                <BarChart accessibilityLayer data={filteredStations.map(s => ({ name: s.name, currentStock: s.currentStock, totalCapacity: s.totalCapacity }))} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144, 164, 174, 0.3)" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false}
+                    tickLine={false}
+                    tickMargin={10}
+                    fontSize={12}
+                  />
+                  <YAxis 
+                    axisLine={false}
+                    tickLine={false}
+                    tickMargin={10}
+                    fontSize={12}
+                    tickFormatter={(value) => `${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="currentStock" fill="var(--color-currentStock)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="totalCapacity" fill="var(--color-totalCapacity)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Reusable Data Table Component */}
       <DataTable

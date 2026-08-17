@@ -19,7 +19,7 @@ const CreateExpenseSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_EXPENSES_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_EXPENSES_READ.key, "STATION");
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
     const stationId = url.searchParams.get("stationId") || undefined;
@@ -117,7 +117,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_EXPENSES_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_EXPENSES_WRITE.key, "STATION");
     const body = CreateExpenseSchema.parse(await request.json());
     const meta = requestMeta(request);
 

@@ -14,13 +14,13 @@ const CreateTransactionSchema = z.object({
   paymentPurpose: z.string().optional().nullable(),
   reference: z.string().optional().nullable(),
   paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"]).optional().nullable(),
-  saleId: z.string().optional().nullable(),
+  deliveryId: z.string().optional().nullable(),
   bankAccountId: z.string().optional(),
 });
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET");
     const url = new URL(request.url);
     const { cursor, take } = parsePagination(url.searchParams);
     const type = url.searchParams.get("type");
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       take,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       include: {
-        sale: {
+        delivery: {
           select: {
             id: true,
             customer: { select: { id: true, name: true } },
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
     const body = CreateTransactionSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -69,24 +69,24 @@ export async function POST(request: Request) {
         paymentPurpose: body.paymentPurpose ?? null,
         reference: body.reference ?? null,
         paymentMethod: body.paymentMethod ?? null,
-        saleId: body.saleId ?? null,
+        deliveryId: body.deliveryId ?? null,
         bankAccountId: body.bankAccountId,
       },
     });
 
-    // Auto-reconcile: if this is an INFLOW linked to a sale, update the sale status
-    if (body.type === "INFLOW" && body.saleId) {
-      const sale = await prisma.sale.findUnique({ where: { id: body.saleId } });
-      if (sale) {
+    // Auto-reconcile: if this is an INFLOW linked to a delivery, update the delivery status
+    if (body.type === "INFLOW" && body.deliveryId) {
+      const delivery = await prisma.delivery.findUnique({ where: { id: body.deliveryId } });
+      if (delivery) {
         const allTx = await prisma.transaction.findMany({
-          where: { saleId: body.saleId, type: "INFLOW" },
+          where: { deliveryId: body.deliveryId, type: "INFLOW" },
         });
         const totalPaid = allTx.reduce((sum, tx) => sum + Number(tx.amount), 0);
-        const totalExpected = Number(sale.totalExpectedAmount);
+        const totalExpected = Number(delivery.totalExpectedAmount);
         const newStatus = totalPaid >= totalExpected ? "CLEARED" : "PART_PAID";
 
-        await prisma.sale.update({
-          where: { id: body.saleId },
+        await prisma.delivery.update({
+          where: { id: body.deliveryId },
           data: { paymentReceived: totalPaid, status: newStatus },
         });
       }

@@ -33,7 +33,17 @@ import {
 } from "@/components/ui/tooltip";
 
 import { Droplets, ChartColumnIncreasing, Handbag, CheckCircle2, Maximize2, Minimize2, Printer, LayoutGrid, TableProperties, Filter } from "lucide-react";
-import { addDays, format } from "date-fns";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
+import { addDays, format, parseISO } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { cn, formatHumanReadableDate, formatShortCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -251,6 +261,24 @@ export function SalesReportsManager({
     const totalBalance = totalReceived - expectedRevenue;
 
     return { totalLiters, expectedRevenue, digital, totalReceived, totalBalance, overpayment, underpayment };
+  }, [finalGroupedSales]);
+
+  // Step 5: Daily Volume Trend for Chart
+  const chartData = useMemo(() => {
+    const grouped = finalGroupedSales.reduce((acc, curr) => {
+      const date = format(new Date(curr.logDate), "MMM dd");
+      if (!acc[date]) {
+        acc[date] = { date, PMS: 0, AGO: 0, DPK: 0, LPG: 0 };
+      }
+      const type = curr.productType;
+      if (acc[date][type] !== undefined) {
+        acc[date][type] += Number(curr.litersSold);
+      }
+      return acc;
+    }, {} as Record<string, any>);
+    
+    // Sort chronologically
+    return Object.values(grouped).reverse();
   }, [finalGroupedSales]);
 
   const statCards = [
@@ -672,6 +700,47 @@ export function SalesReportsManager({
           </CardContent>
         </Card>
       </TooltipProvider>
+
+      {/* ── CHART VIEW ──────────────────────────────────────────────────── */}
+      {chartData.length > 0 && (
+        <Card className="border-border/40 shadow-xs hide-on-print">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+              <ChartColumnIncreasing className="w-5 h-5 text-muted-foreground" />
+              Daily Volume Sold (Trend)
+            </h3>
+            <div className="h-[350px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="date" 
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value) => `${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  />
+                  <RechartsTooltip 
+                    cursor={{ fill: 'hsl(var(--muted)/0.4)' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                  <Bar dataKey="PMS" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="AGO" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="DPK" stackId="a" fill="#6366f1" radius={[0, 0, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="LPG" stackId="a" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {finalGroupedSales.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground border rounded-xl border-dashed bg-card">

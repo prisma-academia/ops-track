@@ -17,7 +17,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Sheet,
   SheetContent,
@@ -27,31 +34,10 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { cn, formatShortCurrency } from "@/lib/utils";
-import { addDays, format } from "date-fns";
+import { addDays, format, parseISO } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import {
-  Truck,
-  Layers,
   TrendingUp,
   TrendingDown,
   ChevronDownIcon,
@@ -60,70 +46,54 @@ import {
   Minimize2,
   Printer,
   Filter,
-  Receipt,
   Wallet,
-  ArrowRight,
-  Check,
-  ChevronsUpDown,
+  Receipt,
+  PieChart as PieChartIcon
 } from "lucide-react";
-import Link from "next/link";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from 'recharts';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface FleetPnlTransportRow {
+interface TransactionRow {
   id: string;
-  truckNumber: string;
-  driverName: string;
-  transporterName: string;
-  ratePerLiter: number;
-  maintenanceCost: number;
-  totalDeduction: number;
-  litersCarried: number;
-  litersDelivered: number;
-  salesCount: number;
-  totalTransportCost: number;
-  amountSoldRev: number;
-  amountPaid: number;
+  createdAt: string;
+  type: "INFLOW" | "OUTFLOW";
+  category: string;
+  amount: number;
+  paymentPurpose: string | null;
+  description: string | null;
+  truckId: string | null;
+  truck?: {
+    id: string;
+    plateNumber: string;
+    name: string | null;
+  };
 }
 
-interface FleetPnlRow {
-  id: string; // The order ID
-  sn: number;
-  orderDate: string;
-  orderReference: string;
-  depot: string;
-  productType: string;
-  litersOrdered: number;
-  orderCost: number;
-  loadingCost: number;
-  priceBought: number;
-  totalTransportCost: number;
-  totalFleetExpenses: number;
-  totalLossDeduction: number;
-  totalCost: number;
-  totalAmountSoldQty: number;
-  qtyBalance: number;
-  amountSoldRev: number;
-  amountPaid: number;
-  debtRemaining: number;
-  pnl: number;
-  transports?: FleetPnlTransportRow[];
+interface Truck {
+  id: string;
+  name: string | null;
+  plateNumber: string;
 }
 
 interface Props {
-  initialRows: FleetPnlRow[];
+  initialTransactions: TransactionRow[];
+  trucks: Truck[];
 }
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
-  return format(new Date(iso), "dd/MM/yyyy");
-}
-
-function fmtQty(n: number | null) {
-  if (n === null || isNaN(n)) return "—";
-  return n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return format(new Date(iso), "dd/MM/yyyy HH:mm");
 }
 
 function fmtMoney(n: number | null) {
@@ -131,67 +101,7 @@ function fmtMoney(n: number | null) {
   return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
-
-function SearchSelect({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: string[]; placeholder: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between font-normal h-10"
-        >
-          {value ? <span className="truncate">{value}</span> : <span className="text-muted-foreground">{placeholder}</span>}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search..." />
-          <CommandList>
-            <CommandEmpty>No results found.</CommandEmpty>
-            <CommandGroup>
-              <CommandItem
-                value="--clear--"
-                onSelect={() => {
-                  onChange("");
-                  setOpen(false);
-                }}
-                className="text-muted-foreground italic justify-center text-xs"
-              >
-                Clear selection
-              </CommandItem>
-              {options.map((opt) => (
-                <CommandItem
-                  key={opt}
-                  value={opt}
-                  onSelect={(currentValue) => {
-                    // CommandItem lowercases the value by default, use original option
-                    onChange(opt);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === opt ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  {opt}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-export function FleetPnlReportManager({ initialRows }: Props) {
+export function FleetPnlReportManager({ initialTransactions, trucks }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -200,60 +110,25 @@ export function FleetPnlReportManager({ initialRows }: Props) {
     from: addDays(new Date(), -30),
     to: new Date(),
   });
-  
-  // Custom Filters
-  const [draftOrderRef, setDraftOrderRef] = useState("");
-  const [draftDepot, setDraftDepot] = useState("");
-  const [draftProduct, setDraftProduct] = useState("");
-  const [draftTransport, setDraftTransport] = useState("");
+  const [draftSelectedTruckIds, setDraftSelectedTruckIds] = useState<string[]>([]);
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(draftDateRange);
-  const [orderRefFilter, setOrderRefFilter] = useState("");
-  const [depotFilter, setDepotFilter] = useState("");
-  const [productFilter, setProductFilter] = useState("");
-  const [transportFilter, setTransportFilter] = useState("");
+  const [selectedTruckIds, setSelectedTruckIds] = useState<string[]>([]);
 
   const applyFilters = useCallback(() => {
     setDateRange(draftDateRange);
-    setOrderRefFilter(draftOrderRef);
-    setDepotFilter(draftDepot);
-    setProductFilter(draftProduct);
-    setTransportFilter(draftTransport);
+    setSelectedTruckIds(draftSelectedTruckIds);
     setIsOpen(false);
-  }, [draftDateRange, draftOrderRef, draftDepot, draftProduct, draftTransport]);
+  }, [draftDateRange, draftSelectedTruckIds]);
 
   const clearFilters = useCallback(() => {
     setDraftDateRange(undefined);
-    setDraftOrderRef("");
-    setDraftDepot("");
-    setDraftProduct("");
-    setDraftTransport("");
+    setDraftSelectedTruckIds([]);
     setDateRange(undefined);
-    setOrderRefFilter("");
-    setDepotFilter("");
-    setProductFilter("");
-    setTransportFilter("");
+    setSelectedTruckIds([]);
     setIsOpen(false);
   }, []);
 
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const toggleExpanded = (id: string) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
-
-  // Pre-calculate unique values for comboboxes
-  const uniqueOrderRefs = useMemo(() => Array.from(new Set(initialRows.map(r => r.orderReference).filter(Boolean))), [initialRows]);
-  const uniqueDepots = useMemo(() => Array.from(new Set(initialRows.map(r => r.depot).filter(Boolean))), [initialRows]);
-  const uniqueProducts = useMemo(() => Array.from(new Set(initialRows.map(r => r.productType).filter(Boolean))), [initialRows]);
-  const uniqueTransporters = useMemo(() => {
-    const transporters = new Set<string>();
-    initialRows.forEach(r => {
-      r.transports?.forEach(t => {
-        if (t.transporterName) transporters.add(t.transporterName);
-      });
-    });
-    return Array.from(transporters);
-  }, [initialRows]);
-
-  // ── Fullscreen toggle ─────────────────────────────────────────────────────
   const toggleFullscreen = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -265,27 +140,16 @@ export function FleetPnlReportManager({ initialRows }: Props) {
   }, []);
 
   useEffect(() => {
-    const handleChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
+    const handleChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", handleChange);
     return () => document.removeEventListener("fullscreenchange", handleChange);
   }, []);
 
-  // ── Filtering ─────────────────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
-    return initialRows
+    return initialTransactions
       .filter((row) => {
-        if (orderRefFilter && row.orderReference !== orderRefFilter) return false;
-        if (depotFilter && row.depot !== depotFilter) return false;
-        if (productFilter && row.productType !== productFilter) return false;
-        if (transportFilter) {
-          const match = row.transports?.some(t => 
-            t.transporterName === transportFilter
-          );
-          if (!match) return false;
-        }
-        const d = new Date(row.orderDate);
+        if (selectedTruckIds.length > 0 && (!row.truckId || !selectedTruckIds.includes(row.truckId))) return false;
+        const d = new Date(row.createdAt);
         if (dateRange?.from) {
           const s = new Date(dateRange.from);
           s.setHours(0, 0, 0, 0);
@@ -298,40 +162,46 @@ export function FleetPnlReportManager({ initialRows }: Props) {
         }
         return true;
       })
-      .map((row, i) => ({ ...row, sn: i + 1 })); // Re-number after filter
-  }, [initialRows, orderRefFilter, dateRange]);
+      .map((row, i) => ({ ...row, sn: i + 1 }));
+  }, [initialTransactions, selectedTruckIds, dateRange]);
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    let totalPnl = 0;
-    let totalSalesRevenue = 0;
-    let totalOrderCost = 0;
-    let totalTransportCost = 0;
-    let totalVolume = 0;
-    let totalBalance = 0; // mapping to debtRemaining
-    let totalLoadingCost = 0;
-    let totalFleetExpenses = 0;
-    let totalLossDeduction = 0;
-    let totalTotalCost = 0;
+    let totalRevenue = 0;
+    let totalExpense = 0;
 
     filteredRows.forEach((r) => {
-      totalPnl += r.pnl;
-      totalSalesRevenue += r.amountSoldRev;
-      totalOrderCost += r.orderCost;
-      totalTransportCost += r.totalTransportCost;
-      totalVolume += r.litersOrdered;
-      totalBalance += r.debtRemaining;
-      totalLoadingCost += r.loadingCost;
-      totalFleetExpenses += r.totalFleetExpenses;
-      totalLossDeduction += r.totalLossDeduction;
-      totalTotalCost += r.totalCost;
+      const amt = Number(r.amount);
+      if (r.type === "INFLOW" && r.category === "TRANSPORT_PAYMENT") totalRevenue += amt;
+      if (r.type === "OUTFLOW" && r.category === "FLEET_EXPENSE") totalExpense += amt;
     });
-    
-    return { count: filteredRows.length, totalPnl, totalSalesRevenue, totalOrderCost, totalTransportCost, totalVolume, totalBalance, totalLoadingCost, totalFleetExpenses, totalLossDeduction, totalTotalCost };
+
+    const netProfit = totalRevenue - totalExpense;
+
+    return { totalRevenue, totalExpense, netProfit };
   }, [filteredRows]);
 
-  // ── Column defs ───────────────────────────────────────────────────────────
-  const columns = useMemo<ColumnDef<FleetPnlRow>[]>(
+  const chartData = useMemo(() => {
+    const grouped = filteredRows.reduce((acc, curr) => {
+      const date = format(parseISO(curr.createdAt), "MMM dd");
+      if (!acc[date]) {
+        acc[date] = { date, Revenue: 0, Expenses: 0, Profit: 0 };
+      }
+      const amt = Number(curr.amount);
+      if (curr.type === "INFLOW" && curr.category === "TRANSPORT_PAYMENT") {
+        acc[date].Revenue += amt;
+      }
+      if (curr.type === "OUTFLOW" && curr.category === "FLEET_EXPENSE") {
+        acc[date].Expenses += amt;
+      }
+      acc[date].Profit = acc[date].Revenue - acc[date].Expenses;
+      return acc;
+    }, {} as Record<string, { date: string, Revenue: number, Expenses: number, Profit: number }>);
+    
+    // Sort chronologically
+    return Object.values(grouped).reverse();
+  }, [filteredRows]);
+
+  const columns = useMemo<ColumnDef<TransactionRow & { sn: number }>[]>(
     () => [
       {
         id: "sn",
@@ -345,203 +215,70 @@ export function FleetPnlReportManager({ initialRows }: Props) {
         ),
       },
       {
-        id: "orderDate",
-        accessorKey: "orderDate",
+        id: "createdAt",
+        accessorKey: "createdAt",
         header: "Date",
-        size: 100,
+        size: 140,
         cell: ({ row }) => (
           <span className="text-xs font-medium whitespace-nowrap">
-            {fmtDate(row.original.orderDate)}
+            {fmtDate(row.original.createdAt)}
           </span>
         ),
       },
       {
-        id: "depot",
-        accessorKey: "depot",
-        header: "Depot",
-        size: 110,
+        id: "truckPlate",
+        accessorKey: "truck.plateNumber",
+        header: "Truck",
+        size: 160,
         cell: ({ row }) => (
           <span className="text-xs font-semibold text-foreground whitespace-nowrap">
-            {row.original.depot}
+            {row.original.truck?.plateNumber || "—"}
           </span>
         ),
       },
       {
-        id: "orderReference",
-        accessorKey: "orderReference",
-        header: "Order Ref",
-        size: 110,
+        id: "category",
+        accessorKey: "category",
+        header: "Category",
+        size: 140,
         cell: ({ row }) => (
-          <span className="font-mono text-xs font-semibold text-foreground uppercase whitespace-nowrap">
-            {row.original.orderReference}
+          <Badge variant="outline" className={cn(
+            "text-[10px]",
+            row.original.category === "TRANSPORT_PAYMENT" ? "text-emerald-600 border-emerald-600" : "text-rose-600 border-rose-600"
+          )}>
+            {row.original.category.replace(/_/g, " ")}
+          </Badge>
+        ),
+      },
+      {
+        id: "paymentPurpose",
+        accessorKey: "paymentPurpose",
+        header: "Purpose",
+        size: 160,
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {row.original.paymentPurpose ? row.original.paymentPurpose.replace(/_/g, " ") : "—"}
           </span>
         ),
       },
       {
-        id: "productType",
-        accessorKey: "productType",
-        header: "Product",
-        size: 90,
+        id: "description",
+        accessorKey: "description",
+        header: "Description",
+        size: 250,
         cell: ({ row }) => (
-          <span className="text-xs font-semibold text-foreground whitespace-nowrap">
-            {row.original.productType}
+          <span className="text-xs text-muted-foreground line-clamp-1">
+            {row.original.description || "—"}
           </span>
         ),
       },
       {
-        id: "litersOrdered",
-        accessorKey: "litersOrdered",
-        header: () => <div className="text-right whitespace-nowrap">Liters Ordered</div>,
-        size: 110,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums text-foreground font-bold">
-            {fmtQty(row.original.litersOrdered)}
-          </div>
-        ),
-      },
-      {
-        id: "priceBought",
-        accessorKey: "priceBought",
-        header: () => <div className="text-right whitespace-nowrap">Price Bought</div>,
-        size: 110,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums text-slate-500">
-            {fmtMoney(row.original.priceBought)}
-          </div>
-        ),
-      },
-      {
-        id: "loadingCost",
-        accessorKey: "loadingCost",
-        header: () => <div className="text-right whitespace-nowrap">Loading Cost</div>,
-        size: 110,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums text-slate-500">
-            {fmtMoney(row.original.loadingCost)}
-          </div>
-        ),
-      },
-      {
-        id: "orderCost",
-        accessorKey: "orderCost",
-        header: () => <div className="text-right whitespace-nowrap">Order Cost</div>,
-        size: 120,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums text-slate-500">
-            {fmtMoney(row.original.orderCost)}
-          </div>
-        ),
-      },
-      {
-        id: "totalTransportCost",
-        accessorKey: "totalTransportCost",
-        header: () => <div className="text-right whitespace-nowrap">Transport Cost</div>,
-        size: 120,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums text-slate-500">
-            {fmtMoney(row.original.totalTransportCost)}
-          </div>
-        ),
-      },
-      {
-        id: "totalFleetExpenses",
-        accessorKey: "totalFleetExpenses",
-        header: () => <div className="text-right whitespace-nowrap">Fleet Expenses</div>,
-        size: 120,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums text-slate-500">
-            {fmtMoney(row.original.totalFleetExpenses)}
-          </div>
-        ),
-      },
-      {
-        id: "totalLossDeduction",
-        accessorKey: "totalLossDeduction",
-        header: () => <div className="text-right whitespace-nowrap">Loss Deduction</div>,
-        size: 120,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums text-rose-500">
-            {fmtMoney(row.original.totalLossDeduction)}
-          </div>
-        ),
-      },
-      {
-        id: "totalCost",
-        accessorKey: "totalCost",
-        header: () => <div className="text-right whitespace-nowrap font-bold">Total Cost</div>,
-        size: 130,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono font-bold tabular-nums h-full w-full flex items-center justify-end px-2 bg-slate-100 dark:bg-slate-800/50 -my-2 py-2">
-            {fmtMoney(row.original.totalCost)}
-          </div>
-        ),
-      },
-      {
-        id: "totalAmountSoldQty",
-        accessorKey: "totalAmountSoldQty",
-        header: () => <div className="text-right whitespace-nowrap">Qty Sold</div>,
-        size: 100,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums">
-            {fmtQty(row.original.totalAmountSoldQty)} L
-          </div>
-        ),
-      },
-      {
-        id: "qtyBalance",
-        accessorKey: "qtyBalance",
-        header: () => <div className="text-right whitespace-nowrap">Qty Balance</div>,
-        size: 100,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono tabular-nums">
-            {fmtQty(row.original.qtyBalance)} L
-          </div>
-        ),
-      },
-      {
-        id: "amountSoldRev",
-        accessorKey: "amountSoldRev",
-        header: () => <div className="text-right whitespace-nowrap">Amount Sold Rev</div>,
-        size: 130,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono font-semibold tabular-nums">
-            {fmtMoney(row.original.amountSoldRev)}
-          </div>
-        ),
-      },
-      {
-        id: "amountPaid",
-        accessorKey: "amountPaid",
-        header: () => <div className="text-right whitespace-nowrap">Amount Paid</div>,
-        size: 120,
-        cell: ({ row }) => (
-          <div className="text-right text-xs font-mono font-semibold tabular-nums text-emerald-600">
-            {fmtMoney(row.original.amountPaid)}
-          </div>
-        ),
-      },
-      {
-        id: "debtRemaining",
-        accessorKey: "debtRemaining",
-        header: () => <div className="text-right whitespace-nowrap">Debt Remaining</div>,
-        size: 120,
-        cell: ({ row }) => {
-          const v = row.original.debtRemaining;
-          return (
-            <div className={cn("text-right text-xs font-mono font-semibold tabular-nums", v > 0 ? "text-amber-600" : "text-emerald-600")}>
-              {fmtMoney(v)}
-            </div>
-          );
-        },
-      },
-      {
-        id: "pnl",
-        accessorKey: "pnl",
-        header: () => <div className="text-right">Profit/Loss</div>,
+        id: "amount",
+        accessorKey: "amount",
+        header: () => <div className="text-right whitespace-nowrap">Amount</div>,
         size: 130,
         cell: ({ row }) => {
-          const v = row.original.pnl;
-          const isPos = v >= 0;
+          const isPos = row.original.type === "INFLOW";
           return (
             <div
               className={cn(
@@ -549,123 +286,29 @@ export function FleetPnlReportManager({ initialRows }: Props) {
                 isPos ? "text-emerald-600" : "text-rose-600"
               )}
             >
-              {isPos ? "+" : ""}
-              {fmtMoney(v)}
+              {isPos ? "+" : "-"}
+              {fmtMoney(row.original.amount)}
             </div>
           );
         },
       },
-      {
-        id: "actions",
-        accessorKey: "actions",
-        header: () => <div className="text-right">Actions</div>,
-        size: 140,
-        cell: ({ row }) => {
-          return (
-            <div className="flex justify-end gap-2">
-              {row.original.transports && row.original.transports.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => toggleExpanded(row.id)}
-                  className="h-8 px-2"
-                >
-                  {expanded[row.id] ? <ChevronUpIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}
-                </Button>
-              )}
-              <Button size="sm" variant="ghost" asChild className="h-8 px-2 print:hidden">
-                <Link href={`/admin/fleet/fleet-pnl-report/${row.original.id}`}>
-                  Details <ArrowRight className="size-3.5 ml-1" />
-                </Link>
-              </Button>
-            </div>
-          );
-        }
-      }
     ],
     []
   );
 
-  // ── Table setup ───────────────────────────────────────────────────────────
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnPinning] = useState<ColumnPinningState>({
-    left: [],
-  });
 
   const table = useReactTable({
     data: filteredRows,
     columns,
-    state: { sorting, columnFilters, columnPinning },
+    state: { sorting, columnFilters },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
-
-  // ── Stat cards config ─────────────────────────────────────────────────────
-  const statCards = [
-    {
-      title: "Order Count",
-      value: stats.count.toLocaleString(),
-      fullValue: null,
-      icon: Truck,
-      badge: "Filtered",
-      badgeColor: "bg-teal-400/10 text-teal-700 dark:text-teal-400",
-    },
-    {
-      title: "Liters Ordered",
-      value: `${Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(stats.totalVolume)} L`,
-      fullValue: `${fmtQty(stats.totalVolume)} L`,
-      icon: Layers,
-      badge: "Filtered",
-      badgeColor: "bg-blue-400/10 text-blue-700 dark:text-blue-400",
-    },
-    {
-      title: "Total Order Cost",
-      value: formatShortCurrency(stats.totalOrderCost),
-      fullValue: fmtMoney(stats.totalOrderCost),
-      icon: Wallet,
-      valueColor: "text-amber-600",
-      iconColor: "text-amber-600",
-      badge: "Filtered",
-      badgeColor: "bg-amber-400/10 text-amber-700 dark:text-amber-400",
-    },
-    {
-      title: "Transport Cost",
-      value: formatShortCurrency(stats.totalTransportCost),
-      fullValue: fmtMoney(stats.totalTransportCost),
-      icon: Truck,
-      valueColor: "text-slate-600",
-      iconColor: "text-slate-600",
-      badge: "Filtered",
-      badgeColor: "bg-slate-400/10 text-slate-700 dark:text-slate-400",
-    },
-    {
-      title: "Sales Revenue",
-      value: formatShortCurrency(stats.totalSalesRevenue),
-      fullValue: fmtMoney(stats.totalSalesRevenue),
-      icon: Receipt,
-      valueColor: "text-indigo-600",
-      iconColor: "text-indigo-600",
-      badge: "Filtered",
-      badgeColor: "bg-indigo-400/10 text-indigo-700 dark:text-indigo-400",
-    },
-    {
-      title: "Profit & Loss",
-      value: formatShortCurrency(Math.abs(stats.totalPnl)),
-      fullValue: fmtMoney(Math.abs(stats.totalPnl)),
-      valueColor: stats.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600",
-      icon: stats.totalPnl >= 0 ? TrendingUp : TrendingDown,
-      iconColor: stats.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600",
-      badge: stats.totalPnl >= 0 ? "Gain" : "Loss",
-      badgeColor:
-        stats.totalPnl >= 0
-          ? "bg-emerald-400/10 text-emerald-700 dark:text-emerald-400"
-          : "bg-rose-400/10 text-rose-700 dark:text-rose-400",
-    },
-  ];
 
   return (
     <div
@@ -681,32 +324,30 @@ export function FleetPnlReportManager({ initialRows }: Props) {
           .hide-on-print { display: none; }
         }
       `}</style>
-      {/* ── Header + Filters ─────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row justify-between items-center md:items-center gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
         <div className="space-y-1">
           <h1 className="text-xl font-bold tracking-tight text-foreground print:text-black">
-            Sales Report
+            Fleet Profit & Loss
           </h1>
           <p className="hidden print:block text-[11px] text-black/80 font-medium mt-1">
             Date: {dateRange?.from ? format(dateRange.from, "d MMMM yyyy") : "All Time"} {dateRange?.to ? ` to ${format(dateRange.to, "d MMMM yyyy")}` : ""}
             <br />
-            {orderRefFilter ? `Order Ref: ${orderRefFilter}` : ""}
+            Trucks: {selectedTruckIds.length === 0 ? "All Trucks" : trucks.filter(t => selectedTruckIds.includes(t.id)).map(t => t.plateNumber).join(", ")}
           </p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto print:hidden">
           <div className="shrink-0 flex gap-2">
-            {/* Filter Sheet */}
             <div>
               <Sheet open={isOpen} onOpenChange={setIsOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" className="gap-2 rounded-sm relative h-10">
                     <Filter className="h-4 w-4" />
                     <span>Filter</span>
-                    {(!!draftOrderRef || !!draftDateRange) && (
+                    {(draftSelectedTruckIds.length > 0 || draftDateRange) && (
                       <Badge className="ml-1 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px]">
                         {[
-                          !!draftOrderRef,
+                          draftSelectedTruckIds.length > 0,
                           !!draftDateRange
                         ].filter(Boolean).length}
                       </Badge>
@@ -716,12 +357,48 @@ export function FleetPnlReportManager({ initialRows }: Props) {
                 <SheetContent side="right" className="w-[400px] sm:w-[540px] flex flex-col">
                   <SheetHeader>
                     <SheetTitle>Filter Records</SheetTitle>
-                    <SheetDescription>
-                      Apply filters to narrow down the table results.
-                    </SheetDescription>
+                    <SheetDescription>Apply filters to narrow down results.</SheetDescription>
                   </SheetHeader>
                   <div className="flex-1 overflow-y-auto py-6 space-y-3 px-4">
-                    {/* Date Range */}
+                    <div className="space-y-1 w-full">
+                      <Label className="text-xs text-muted-foreground">Truck(s)</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className={cn("w-full justify-start text-left font-normal", draftSelectedTruckIds.length === 0 && "text-muted-foreground")}>
+                            {draftSelectedTruckIds.length === 0 ? "All Trucks" : `${draftSelectedTruckIds.length} truck(s) selected`}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 p-2" align="start">
+                          <div className="space-y-2">
+                            <div className="flex items-center space-x-2 p-1">
+                              <Checkbox
+                                id="truck-all"
+                                checked={draftSelectedTruckIds.length === 0}
+                                onCheckedChange={(checked) => { if (checked) setDraftSelectedTruckIds([]); }}
+                              />
+                              <label htmlFor="truck-all" className="text-sm font-medium leading-none cursor-pointer">All Trucks</label>
+                            </div>
+                            {trucks.map((t) => (
+                              <div key={t.id} className="flex items-center space-x-2 p-1">
+                                <Checkbox
+                                  id={`truck-${t.id}`}
+                                  checked={draftSelectedTruckIds.includes(t.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setDraftSelectedTruckIds([...draftSelectedTruckIds, t.id]);
+                                    } else {
+                                      setDraftSelectedTruckIds(draftSelectedTruckIds.filter((id) => id !== t.id));
+                                    }
+                                  }}
+                                />
+                                <label htmlFor={`truck-${t.id}`} className="text-sm font-medium leading-none cursor-pointer">{t.plateNumber}</label>
+                              </div>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
                     <div className="space-y-3 w-full">
                       <Label className="text-sm font-semibold">Date Range</Label>
                       <div className="grid grid-cols-2 gap-4">
@@ -743,89 +420,20 @@ export function FleetPnlReportManager({ initialRows }: Props) {
                         </div>
                       </div>
                     </div>
-
-                    {/* Order Filter */}
-                    <div className="space-y-3 w-full pt-2">
-                      <Label className="text-sm font-semibold">Order Reference</Label>
-                      <SearchSelect 
-                        value={draftOrderRef} 
-                        onChange={setDraftOrderRef} 
-                        options={uniqueOrderRefs} 
-                        placeholder="Select order..." 
-                      />
-                    </div>
-
-                    <div className="space-y-3 w-full pt-2">
-                      <Label className="text-sm font-semibold">Depot</Label>
-                      <SearchSelect 
-                        value={draftDepot} 
-                        onChange={setDraftDepot} 
-                        options={uniqueDepots} 
-                        placeholder="Select depot..." 
-                      />
-                    </div>
-
-                    <div className="space-y-3 w-full pt-2">
-                      <Label className="text-sm font-semibold">Product Type</Label>
-                      <SearchSelect 
-                        value={draftProduct} 
-                        onChange={setDraftProduct} 
-                        options={uniqueProducts} 
-                        placeholder="Select product..." 
-                      />
-                    </div>
-
-                    <div className="space-y-3 w-full pt-2">
-                      <Label className="text-sm font-semibold">Transporter</Label>
-                      <SearchSelect 
-                        value={draftTransport} 
-                        onChange={setDraftTransport} 
-                        options={uniqueTransporters} 
-                        placeholder="Select transporter..." 
-                      />
-                    </div>
                   </div>
                   <SheetFooter className="border-t pt-4">
-                    <Button variant="outline" onClick={clearFilters} className="w-full">
-                      Reset Filters
-                    </Button>
-                    <Button onClick={applyFilters} className="w-full">
-                      Apply Filters
-                    </Button>
+                    <Button variant="outline" onClick={clearFilters} className="w-full">Reset Filters</Button>
+                    <Button onClick={applyFilters} className="w-full">Apply Filters</Button>
                   </SheetFooter>
                 </SheetContent>
               </Sheet>
             </div>
-
-            {/* Print button */}
-            <div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => window.print()}
-                title="Print report"
-                className="h-10 w-10"
-              >
-                <Printer className="size-4" />
-              </Button>
-            </div>
-
-            {/* Fullscreen toggle */}
-            <div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={toggleFullscreen}
-                title={isFullscreen ? "Exit fullscreen" : "Fullscreen view"}
-                className="h-10 w-10"
-              >
-                {isFullscreen ? (
-                  <Minimize2 className="size-4" />
-                ) : (
-                  <Maximize2 className="size-4" />
-                )}
-              </Button>
-            </div>
+            <Button variant="outline" size="icon" onClick={() => window.print()} title="Print report" className="h-10 w-10">
+              <Printer className="size-4" />
+            </Button>
+            <Button variant="outline" size="icon" onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen view"} className="h-10 w-10">
+              {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            </Button>
           </div>
         </div>
       </div>
@@ -834,92 +442,133 @@ export function FleetPnlReportManager({ initialRows }: Props) {
       <TooltipProvider delayDuration={200}>
         <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
           <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
-            {statCards.map((item, index) => (
+            {[
+              {
+                title: "Transport Revenue",
+                value: formatShortCurrency(stats.totalRevenue),
+                fullValue: fmtMoney(stats.totalRevenue),
+                icon: Wallet,
+                iconColor: "text-emerald-600",
+                valueColor: "text-emerald-600",
+              },
+              {
+                title: "Fleet Expenses",
+                value: formatShortCurrency(stats.totalExpense),
+                fullValue: fmtMoney(stats.totalExpense),
+                icon: Receipt,
+                iconColor: "text-rose-600",
+                valueColor: "text-rose-600",
+              },
+              {
+                title: "Net Profit",
+                value: formatShortCurrency(stats.netProfit),
+                fullValue: fmtMoney(stats.netProfit),
+                icon: stats.netProfit >= 0 ? TrendingUp : TrendingDown,
+                iconColor: stats.netProfit >= 0 ? "text-indigo-600" : "text-rose-600",
+                valueColor: stats.netProfit >= 0 ? "text-indigo-600" : "text-rose-600",
+              },
+            ].map((item, index, arr) => (
               <div
                 key={index}
                 className={cn(
-                  "w-full lg:w-1/6 md:w-1/3 border-border print:border-none print:w-auto",
-                  index === statCards.length - 1 ? "border-b-0" : "border-b",
-                  (index + 1) % 3 === 0 ? "md:border-e-0" : "md:border-e",
-                  index >= 3 ? "md:border-b-0" : "md:border-b",
-                  "lg:border-b-0",
-                  index === statCards.length - 1 ? "lg:border-e-0" : "lg:border-e"
+                  "w-full md:flex-1 min-w-[150px] border-border print:border-none print:w-auto",
+                  index === arr.length - 1 ? "border-b-0" : "border-b",
+                  "md:border-b-0",
+                  index === arr.length - 1 ? "md:border-e-0" : "md:border-e"
                 )}
               >
-                {item.fullValue ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="p-4 flex items-start justify-between print:p-0 cursor-default hover:bg-muted/30 transition-colors h-full">
-                        <div className="flex flex-col gap-2 print:gap-0.5">
-                          <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
-                          <div>
-                            <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", (item as any).valueColor)}>
-                              {item.value}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
-                          <item.icon
-                            size={14}
-                            className={cn("text-muted-foreground", (item as any).iconColor)}
-                          />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="p-4 flex items-start justify-between cursor-default hover:bg-muted/30 transition-colors h-full print:p-0">
+                      <div className="flex flex-col gap-2 print:gap-0.5">
+                        <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
+                        <div>
+                          <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
+                            {item.value}
+                          </p>
                         </div>
                       </div>
-                    </TooltipTrigger>
-                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
-                      {item.fullValue}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <div className="p-4 flex items-start justify-between print:p-0 h-full">
-                    <div className="flex flex-col gap-2 print:gap-0.5">
-                      <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
-                      <div>
-                        <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", (item as any).valueColor)}>
-                          {item.value}
-                        </p>
+                      <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
+                        <item.icon
+                          size={14}
+                          className={cn("text-muted-foreground", item.iconColor)}
+                        />
                       </div>
                     </div>
-                    <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
-                      <item.icon
-                        size={14}
-                        className={cn("text-muted-foreground", (item as any).iconColor)}
-                      />
-                    </div>
-                  </div>
-                )}
+                  </TooltipTrigger>
+                  <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                    {item.fullValue}
+                  </TooltipContent>
+                </Tooltip>
               </div>
             ))}
           </CardContent>
         </Card>
       </TooltipProvider>
 
-      {/* ── Table ───────────────────────────────────────────────────────── */}
+      {chartData.length > 0 && (() => {
+        const pnlChartConfig = {
+          Revenue: {
+            label: "Revenue",
+            color: "#10b981",
+          },
+          Expenses: {
+            label: "Expenses",
+            color: "#f43f5e",
+          },
+        } satisfies ChartConfig;
+
+        return (
+          <Card className="border-border/40 shadow-xs hide-on-print">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+                <PieChartIcon className="w-5 h-5 text-muted-foreground" />
+                Revenue vs Expenses (Daily Trend)
+              </h3>
+              <ChartContainer config={pnlChartConfig} className="h-[400px] w-full">
+                <BarChart accessibilityLayer data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144, 164, 174, 0.3)" />
+                  <XAxis 
+                    dataKey="date" 
+                    axisLine={false}
+                    tickLine={false}
+                    tickMargin={10}
+                    fontSize={12}
+                  />
+                  <YAxis 
+                    axisLine={false}
+                    tickLine={false}
+                    tickMargin={10}
+                    fontSize={12}
+                    tickFormatter={(value) => `₦${(value / 1000000).toFixed(1)}M`}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="Revenue" fill="var(--color-Revenue)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="Expenses" fill="var(--color-Expenses)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       <Card className="w-full py-0 overflow-hidden print:shadow-none print:border-none print:bg-transparent">
         <CardContent className="px-0">
-          {/* Scrollable table container */}
           <div className="overflow-x-auto border-t border-border/40 relative print:overflow-visible print:border-none print:w-full print:max-w-none">
             <table className="min-w-max w-full text-sm border-collapse border border-border/50 print:border-black/30 print:text-[10px] print:w-full">
               <thead className="bg-muted/50 border-b border-border/50 print:border-black/30 print:bg-transparent">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} className="border-none">
                     {headerGroup.headers.map((header) => {
-                      const isPinned = header.column.getIsPinned();
-                      const pinOffset = isPinned === "left"
-                        ? header.column.getStart("left")
-                        : undefined;
-
                       return (
                         <th
                           key={header.id}
                           style={{
                             width: header.column.getSize(),
                             minWidth: header.column.getSize(),
-                            left: isPinned === "left" ? pinOffset : undefined,
                           }}
                           className={cn(
-                            "h-9 px-2 py-1.5 text-[11px] font-bold text-foreground bg-muted/50 border border-border/50 print:border-black/30 uppercase tracking-wider whitespace-nowrap text-left print:text-[9px] print:text-black print:bg-transparent",
-                            isPinned === "left" && "sticky z-20"
+                            "h-9 px-2 py-1.5 text-[11px] font-bold text-foreground bg-muted/50 border border-border/50 print:border-black/30 uppercase tracking-wider whitespace-nowrap text-left print:text-[9px] print:text-black print:bg-transparent"
                           )}
                         >
                           {header.isPlaceholder ? null : (
@@ -952,138 +601,41 @@ export function FleetPnlReportManager({ initialRows }: Props) {
               <tbody>
                 {table.getRowModel().rows.length ? (
                   table.getRowModel().rows.map((row, index) => (
-                    <Fragment key={row.id}>
-                      <tr
-                        className={cn(
-                          "hover:bg-muted/20 transition-colors group",
-                          index % 2 === 0 ? "bg-background" : "bg-muted/5 print:bg-transparent"
-                        )}
-                      >
-                        {row.getVisibleCells().map((cell) => {
-                          const isPinned = cell.column.getIsPinned();
-                          const pinOffset =
-                            isPinned === "left"
-                              ? cell.column.getStart("left")
-                              : undefined;
-
-                          return (
-                            <td
-                              key={cell.id}
-                              style={{
-                                width: cell.column.getSize(),
-                                minWidth: cell.column.getSize(),
-                                left: isPinned === "left" ? pinOffset : undefined,
-                              }}
-                              className={cn(
-                                "h-11 px-2 py-1.5 border border-border/50 print:border-black/30",
-                                isPinned === "left" &&
-                                  "sticky z-10 bg-inherit group-hover:bg-muted/20"
-                              )}
-                            >
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext()
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                      {expanded[row.id] && row.original.transports && row.original.transports.length > 0 && (
-                        <tr>
-                          <td colSpan={columns.length} className="p-0 border border-border/50 bg-muted/10 print:border-black/30">
-                            <div className="p-4 pl-12 overflow-x-auto w-full">
-                              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                                <Truck className="size-4" /> Transports for {row.original.orderReference}
-                              </h4>
-                              <table className="w-full min-w-max text-[11px] border-collapse border border-border/50">
-                                <thead className="bg-muted/50 border-b border-border/50">
-                                  <tr>
-                                    <th className="px-2 py-1.5 text-left font-semibold">Truck</th>
-                                    <th className="px-2 py-1.5 text-left font-semibold">Driver</th>
-                                    <th className="px-2 py-1.5 text-left font-semibold">Transporter</th>
-                                    <th className="px-2 py-1.5 text-right font-semibold">Rate/L</th>
-                                    <th className="px-2 py-1.5 text-right font-semibold">Trans. Cost</th>
-                                    <th className="px-2 py-1.5 text-right font-semibold">Maintenance</th>
-                                    <th className="px-2 py-1.5 text-right font-semibold">Deduction</th>
-                                    <th className="px-2 py-1.5 text-right font-semibold">Rev. Amount</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {row.original.transports.map((t, idx) => (
-                                    <tr key={t.id || idx} className="border-b border-border/50 last:border-0 hover:bg-muted/30">
-                                      <td className="px-2 py-1.5">{t.truckNumber}</td>
-                                      <td className="px-2 py-1.5">{t.driverName}</td>
-                                      <td className="px-2 py-1.5">{t.transporterName}</td>
-                                      <td className="px-2 py-1.5 text-right tabular-nums">{fmtMoney(t.ratePerLiter)}</td>
-                                      <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{fmtMoney(t.totalTransportCost)}</td>
-                                      <td className="px-2 py-1.5 text-right tabular-nums">{fmtMoney(t.maintenanceCost)}</td>
-                                      <td className="px-2 py-1.5 text-right tabular-nums text-rose-500">{fmtMoney(t.totalDeduction)}</td>
-                                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{fmtMoney(t.amountSoldRev)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </td>
-                        </tr>
+                    <tr
+                      key={row.id}
+                      className={cn(
+                        "group border-b border-border/50 hover:bg-muted/30 transition-colors print:border-black/30",
+                        index % 2 === 0 ? "bg-transparent" : "bg-muted/10 print:bg-transparent"
                       )}
-                    </Fragment>
+                    >
+                      {row.getVisibleCells().map((cell) => {
+                        return (
+                          <td
+                            key={cell.id}
+                            className={cn(
+                              "px-2 py-1.5 align-middle border-x border-border/50 print:border-black/30"
+                            )}
+                          >
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext()
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
                   ))
                 ) : (
                   <tr>
                     <td
                       colSpan={columns.length}
-                      className="h-32 text-center text-sm text-muted-foreground"
+                      className="h-24 text-center text-muted-foreground border-x border-b border-border/50"
                     >
-                      No fleet PnL records found for the selected filters.
+                      No transactions found.
                     </td>
                   </tr>
                 )}
               </tbody>
-              <tfoot className="bg-muted/50 font-bold border border-border/50 print:border-black/30 print:bg-transparent">
-                <tr>
-                  {/* SN(1) + orderDate(2) + depot(3) + orderReference(4) + productType(5) + litersOrdered(6) */}
-                  <td colSpan={6} className="px-2 py-2 text-right text-sm border border-border/50 print:border-black/30 print:text-black">
-                    Total:
-                  </td>
-                  <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black"></td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-slate-500">
-                    {fmtMoney(stats.totalLoadingCost)}
-                  </td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-slate-500">
-                    {fmtMoney(stats.totalOrderCost)}
-                  </td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-slate-500">
-                    {fmtMoney(stats.totalTransportCost)}
-                  </td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-slate-500">
-                    {fmtMoney(stats.totalFleetExpenses)}
-                  </td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black text-rose-500">
-                    {fmtMoney(stats.totalLossDeduction)}
-                  </td>
-                  <td className="px-2 py-2 text-right text-xs font-mono font-bold tabular-nums bg-slate-100 dark:bg-slate-800/50 border border-border/50 print:border-black/30 print:text-black">
-                    {fmtMoney(stats.totalTotalCost)}
-                  </td>
-                  <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black"></td>
-                  <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black"></td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtMoney(stats.totalSalesRevenue)}
-                  </td>
-                  <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black"></td>
-                  <td className="px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black">
-                    {fmtMoney(stats.totalBalance)}
-                  </td>
-                  <td className={cn(
-                    "px-2 py-2 text-right text-xs font-mono tabular-nums border border-border/50 print:border-black/30 print:text-black",
-                    stats.totalPnl >= 0 ? "text-emerald-600 print:text-black" : "text-rose-600 print:text-black"
-                  )}>
-                    {stats.totalPnl >= 0 ? "+" : ""}
-                    {fmtMoney(stats.totalPnl)}
-                  </td>
-                  <td className="px-2 py-2 border border-border/50 print:border-black/30 print:text-black"></td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </CardContent>

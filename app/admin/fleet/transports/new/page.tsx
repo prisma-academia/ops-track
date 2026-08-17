@@ -36,6 +36,7 @@ export default async function NewTransportPage(
       reference: true, 
       productType: true,
       litersOrdered: true,
+      sourceDepot: true,
       transports: { 
         where: { status: { not: "CANCELLED" } },
         select: { litersCarried: true } 
@@ -44,17 +45,8 @@ export default async function NewTransportPage(
     orderBy: { createdAt: "desc" },
   });
 
-
-
-  // Extract selected request IDs from URL params
-  let preselectedRequestIds: string[] = [];
-  if (searchParams?.requestId) {
-    if (Array.isArray(searchParams.requestId)) {
-      preselectedRequestIds = searchParams.requestId;
-    } else {
-      preselectedRequestIds = [searchParams.requestId];
-    }
-  }
+  const preselectedOrderId =
+    typeof searchParams?.orderId === "string" ? searchParams.orderId : undefined;
 
   return (
     <div className="space-y-6">
@@ -63,6 +55,7 @@ export default async function NewTransportPage(
         trucks={JSON.parse(JSON.stringify(trucks))} 
         drivers={drivers} 
         orders={JSON.parse(JSON.stringify(orders))} 
+        preselectedOrderId={preselectedOrderId}
       />
     </div>
   );

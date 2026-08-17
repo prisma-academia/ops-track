@@ -2,14 +2,27 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { TicketsManager } from "./tickets-manager";
+import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 
 export const metadata = { title: "Tickets | Rafuel" };
 
 export default async function TicketsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_READ.key);
 
+  const activeOrgId = await resolveActiveOrgId(actor);
+
+  const ticketWhere: any = { tenantId: actor.tenantId };
+  if (activeOrgId) {
+    ticketWhere.station = { organizationId: activeOrgId };
+  }
+
+  const stationWhere: any = {
+    tenantId: actor.tenantId,
+    ...(activeOrgId ? { organizationId: activeOrgId } : {}),
+  };
+
   const tickets = await prisma.ticket.findMany({
-    where: { tenantId: actor.tenantId },
+    where: ticketWhere,
     orderBy: { createdAt: "desc" },
     include: {
       station: {
@@ -40,7 +53,7 @@ export default async function TicketsPage() {
   });
 
   const stations = await prisma.station.findMany({
-    where: { tenantId: actor.tenantId },
+    where: stationWhere,
     select: {
       id: true,
       name: true,

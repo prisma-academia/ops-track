@@ -17,7 +17,7 @@ export async function PATCH(
   try {
     await requireCsrf(request);
     const { id: waybillAllocationId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_WAYBILLS_WRITE.key, "STATION");
     const body = CancelWaybillSchema.parse(await request.json());
     const meta = requestMeta(request);
 

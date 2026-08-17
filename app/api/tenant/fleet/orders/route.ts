@@ -19,7 +19,7 @@ const CreateOrderSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET");
     const url = new URL(request.url);
     const { cursor, take } = parsePagination(url.searchParams);
     const status = url.searchParams.get("status");
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
     const body = CreateOrderSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -70,13 +70,13 @@ export async function POST(request: Request) {
       action: "order.create",
       tenantId: actor.tenantId,
       targetType: "Order",
-      targetId: order.id,
-      after: { reference: order.reference, productType: order.productType, liters: order.litersOrdered.toString() } as object,
+      targetId: result.id,
+      after: { reference: result.reference, productType: result.productType, liters: result.litersOrdered.toString() } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
 
-    return ok({ order });
+    return ok({ order: result });
   } catch (e) {
     return handleError(e);
   }

@@ -42,7 +42,7 @@ export default async function TransportsPage({
     };
   }
 
-  const [totalCount, transports, pendingInvitations, statsRaw] = await Promise.all([
+  const [totalCount, transports, statsRaw] = await Promise.all([
     prisma.transport.count({ where }),
     prisma.transport.findMany({
       where,
@@ -61,14 +61,6 @@ export default async function TransportsPage({
         },
       },
     }),
-    prisma.transportInvitation.findMany({
-      where: { tenantId: actor.tenantId, status: "PENDING" },
-      orderBy: { createdAt: "desc" },
-      include: {
-        order: { select: { reference: true, productType: true } },
-        transporter: { select: { name: true } }
-      }
-    }),
     prisma.transport.groupBy({
       by: ["status"],
       where,
@@ -84,7 +76,8 @@ export default async function TransportsPage({
     transporterName: t.transporter.name,
     truckName: t.truck?.name || "Unassigned",
     driverName: t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "Unassigned",
-    orderReference: t.order?.reference || "-",
+    orderReference: t.order?.reference || "Unlinked",
+    isUnlinked: !t.orderId,
     status: t.status,
     productType: t.productType || "-",
     salesCount: t._count.deliveries,
@@ -92,24 +85,7 @@ export default async function TransportsPage({
     createdAt: t.createdAt.toISOString(),
   }));
 
-  const invitationRows = pendingInvitations.map((inv) => ({
-    id: inv.id,
-    destination: inv.destination,
-    sourceDepot: "Depot",
-    transporterName: inv.transporter.name,
-    truckName: "Unassigned",
-    driverName: "Unassigned",
-    orderReference: inv.order?.reference || "-",
-    status: inv.status,
-    productType: inv.order?.productType || "-",
-    salesCount: 0,
-    litersCarried: Number(inv.litersRequested),
-    createdAt: inv.createdAt.toISOString(),
-    isInvitation: true,
-    invitationId: inv.id,
-  }));
-
-  const allRows = [...invitationRows, ...rows];
+  const allRows = rows;
 
   const totalPages = Math.ceil(totalCount / take);
 
@@ -156,6 +132,8 @@ export default async function TransportsPage({
       <DataTableToolbar
         title="Transports"
         description="Manage active and completed truck dispatch trips."
+        createHref="/admin/fleet/transports/new"
+        createLabel="Add Transport"
       />
 
       <TooltipProvider delayDuration={200}>

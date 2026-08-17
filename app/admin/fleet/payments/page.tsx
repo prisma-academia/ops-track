@@ -14,6 +14,7 @@ import {
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Activity } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { LogPaymentModal } from "@/components/fleet/payments/log-payment-modal";
 import { cn, formatShortCurrency } from "@/lib/utils";
 
 export default async function PaymentsPage({
@@ -143,9 +144,8 @@ export default async function PaymentsPage({
     <div className="space-y-6">
       <DataTableToolbar
         title="Payments Module"
-        createHref="/admin/fleet/payments/new"
-        createLabel="Log Payment"
         description="View and manage all incoming and outgoing fleet payments."
+        action={<LogPaymentModal />}
       />
 
       {/* Stats Cards */}

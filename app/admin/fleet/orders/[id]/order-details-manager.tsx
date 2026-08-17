@@ -9,7 +9,7 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { formatHumanReadableDate } from "@/lib/utils";
-import { apiPatch, apiPost } from "@/lib/client/api";
+import { apiPatch } from "@/lib/client/api";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardAction, CardFooter } from "@/components/ui/card";
@@ -20,7 +20,6 @@ import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TransportInvitationModal } from "./invitation-modal";
 import {
   ArrowLeft,
   FileText,
@@ -89,7 +88,6 @@ export function OrderDetailsManager({
   
   // Modals & Tabs
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isInvitationModalOpen, setIsInvitationModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   
@@ -152,19 +150,6 @@ export function OrderDetailsManager({
       router.refresh();
     }
   });
-
-  const onAcceptInvitation = async (invId: string) => {
-    try {
-      const res = await apiPost(`/api/tenant/fleet/orders/${order.id}/invitations/${invId}/accept`, {});
-      if (res.error) toast.error(res.error.message);
-      else {
-        toast.success("Invitation accepted. Transport created.");
-        router.refresh();
-      }
-    } catch (e: any) {
-      toast.error(e.message || "Failed to accept invitation");
-    }
-  };
 
   const getStatusBadgeVariant = (status: string) => {
     switch(status) {
@@ -431,14 +416,11 @@ export function OrderDetailsManager({
               <Truck className="h-5 w-5 text-primary" />
               Dispatched Transports
             </h3>
-            <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsInvitationModalOpen(true)}>
-              <CheckCircle2 className="h-4 w-4" /> 
-              Send Invitation
-              {order.transportInvitations && order.transportInvitations.length > 0 && (
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 rounded-full text-[10px]">
-                  {order.transportInvitations.length}
-                </Badge>
-              )}
+            <Button variant="outline" size="sm" className="gap-2" asChild>
+              <Link href={`/admin/fleet/transports/new?orderId=${order.id}`}>
+                <Truck className="h-4 w-4" />
+                Assign Trucks
+              </Link>
             </Button>
           </div>
 
@@ -447,8 +429,14 @@ export function OrderDetailsManager({
             <Card className="border-dashed border-2 bg-muted/20">
               <CardContent className="p-8 text-center text-muted-foreground flex flex-col items-center justify-center">
                 <Truck size={40} className="mb-4 text-stone-300 dark:text-stone-700" />
-                <p className="text-sm font-medium mb-1">No transports assigned yet</p>
-                <p className="text-xs opacity-80">Send an invitation or manually assign a company truck to begin.</p>
+                <p className="text-sm font-medium mb-1">No trucks assigned yet</p>
+                <p className="text-xs opacity-80 mb-4">Assign trucks to this order to begin dispatch.</p>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/admin/fleet/transports/new?orderId=${order.id}`}>
+                    <Truck className="h-4 w-4 mr-2" />
+                    Assign Trucks
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
           ) : (
@@ -520,13 +508,18 @@ export function OrderDetailsManager({
                         <Truck size={20} />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-foreground">{t.truck?.plateNumber || "Unknown Truck"}</p>
+                        <p className="text-sm font-semibold text-foreground">{t.truck?.plateNumber || t.truck?.name || "Unknown Truck"}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">Truck Assigned</p>
                       </div>
                     </div>
-                    <div className="text-right flex flex-col justify-center">
-                      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Volume</p>
-                      <p className="text-sm font-bold text-foreground">{Number(t.litersCarried).toLocaleString()} L</p>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right flex flex-col justify-center">
+                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Volume</p>
+                        <p className="text-sm font-bold text-foreground">{Number(t.litersCarried).toLocaleString()} L</p>
+                      </div>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/admin/fleet/transports/${t.id}`}>View</Link>
+                      </Button>
                     </div>
                   </CardFooter>
                 </Card>
@@ -722,19 +715,6 @@ export function OrderDetailsManager({
           </form>
         </DialogContent>
       </Dialog>
-      
-      {/* ---------------- INVITATION MODAL ---------------- */}
-      <TransportInvitationModal 
-        orderId={order.id}
-        isOpen={isInvitationModalOpen}
-        onOpenChange={setIsInvitationModalOpen}
-        maxLiters={order.litersOrdered - totalTransportedLiters}
-        sourceDepotName={
-          lookups.depots.find((d: any) => d.id === order.sourceDepot || d.name === order.sourceDepot)?.name 
-          || order.sourceDepot
-        }
-        invitations={order.transportInvitations || []}
-      />
     </div>
   );
 }

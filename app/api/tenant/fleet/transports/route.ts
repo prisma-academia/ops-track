@@ -6,9 +6,10 @@ import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
+import { assertOrderLinkCapacity, asOrderLookupClient } from "@/lib/fleet/transport-order";
 
 const CreateTransportSchema = z.object({
-  orderId: z.string().min(1),
+  orderId: z.string().optional().nullable(),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional().nullable(),
   assignments: z.array(z.object({
     transporterId: z.string().min(1),
@@ -58,23 +59,10 @@ export async function POST(request: Request) {
     const meta = requestMeta(request);
 
     const transports = await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { id: body.orderId, tenantId: actor.tenantId },
-        include: { transports: { 
-          where: { status: { not: "CANCELLED" } },
-          select: { litersCarried: true } 
-        } }
-      });
-
-      if (!order) {
-        throw new Error("Order not found");
-      }
-
-      const existingLiters = order.transports.reduce((sum, t) => sum + Number(t.litersCarried), 0);
       const newLiters = body.assignments.reduce((sum, a) => sum + a.litersCarried, 0);
 
-      if (existingLiters + newLiters > Number(order.litersOrdered)) {
-        throw new Error("Total dispatched liters cannot exceed the ordered quantity.");
+      if (body.orderId) {
+        await assertOrderLinkCapacity(asOrderLookupClient(tx), actor.tenantId, body.orderId, newLiters);
       }
 
       const results = [];
@@ -82,7 +70,7 @@ export async function POST(request: Request) {
         const t = await tx.transport.create({
           data: {
             tenantId: actor.tenantId,
-            orderId: body.orderId,
+            orderId: body.orderId ?? null,
             transporterId: assignment.transporterId,
             truckId: assignment.truckId,
             driverId: assignment.driverId,

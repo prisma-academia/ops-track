@@ -20,9 +20,8 @@ import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 
 
 const Schema = z.object({
-  orderId: z.string().min(1, "Order is required"),
+  orderId: z.string().optional().nullable(),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional().nullable(),
-  invitationId: z.string().optional().nullable(),
   assignments: z.array(z.object({
     transporterId: z.string().min(1, "Please select a transporter"),
     truckId: z.string().min(1, "Please select a truck"),
@@ -47,13 +46,13 @@ export function CreateTransportForm({
   trucks,
   drivers,
   orders,
-  preselectedInvitation,
+  preselectedOrderId,
 }: {
   transporters: { id: string; name: string }[];
   trucks: { id: string; name: string; transporterId: string; capacityLiters?: any }[];
   drivers: { id: string; firstName: string; lastName: string; transporterId: string }[];
   orders: { id: string; reference: string | null; productType: any; litersOrdered: number | string; sourceDepot?: string | null; transports: { litersCarried: number | string }[] }[];
-  preselectedInvitation?: any;
+  preselectedOrderId?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -69,16 +68,15 @@ export function CreateTransportForm({
   const { register, handleSubmit, formState, setValue, watch, control } = useForm<Values>({
     resolver: zodResolver(Schema) as any,
     defaultValues: {
-      orderId: preselectedInvitation?.orderId || "",
-      productType: (preselectedInvitation?.order?.productType as any) || "PMS",
-      invitationId: preselectedInvitation?.id || null,
+      orderId: preselectedOrderId || "",
+      productType: "PMS",
       assignments: [{
-        transporterId: preselectedInvitation?.transporterId || "",
+        transporterId: "",
         truckId: "",
         driverId: "",
-        destination: preselectedInvitation?.destination || "",
+        destination: "",
         ratePerLiter: "" as any,
-        litersCarried: preselectedInvitation?.litersRequested || ("" as any),
+        litersCarried: "" as any,
       }],
     },
   });
@@ -94,17 +92,15 @@ export function CreateTransportForm({
 
   const assignmentsWatch = watch("assignments");
   
-  const targetVolume = preselectedInvitation 
-    ? Number(preselectedInvitation.litersRequested || 0) 
-    : (selectedOrder ? Number(selectedOrder.litersOrdered || 0) : 0);
+  const targetVolume = selectedOrder ? Number(selectedOrder.litersOrdered || 0) : 0;
 
-  const previouslyTransported = preselectedInvitation 
-    ? 0 
-    : (selectedOrder ? selectedOrder.transports.reduce((sum, t) => sum + Number(t.litersCarried), 0) : 0);
+  const previouslyTransported = selectedOrder
+    ? selectedOrder.transports.reduce((sum, t) => sum + Number(t.litersCarried), 0)
+    : 0;
 
   const currentlyAllocated = assignmentsWatch.reduce((sum, a) => sum + (Number(a.litersCarried) || 0), 0);
   const totalRequested = previouslyTransported + currentlyAllocated;
-  const isOverAllocated = (selectedOrderId || preselectedInvitation) ? totalRequested > targetVolume : false;
+  const isOverAllocated = selectedOrderId ? totalRequested > targetVolume : false;
   const remainingVolume = Math.max(0, targetVolume - totalRequested);
 
   const availableOrders = orders.filter((o) => {
@@ -122,7 +118,11 @@ export function CreateTransportForm({
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
-    const res = await apiPost<{ transports: { id: string }[] }>("/api/tenant/fleet/transports/fulfill", values);
+    const payload = {
+      ...values,
+      orderId: values.orderId || null,
+    };
+    const res = await apiPost<{ transports: { id: string }[] }>("/api/tenant/fleet/transports/fulfill", payload);
     if (res.error) {
       setError(res.error.message);
       return;
@@ -142,9 +142,9 @@ export function CreateTransportForm({
             </Button>
             <div>
               <CardTitle className="text-xl flex items-center gap-3">
-                Dispatch Transport
+                New Transport
               </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Assign trucks and optionally fulfill station requests.</p>
+              <p className="text-sm text-muted-foreground mt-1">Create a transport trip and optionally link it to a procurement order.</p>
             </div>
           </div>
         </CardHeader>
@@ -160,21 +160,19 @@ export function CreateTransportForm({
           )}
 
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Source Order</CardTitle>
+            <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Link to Order (Optional)</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="orderId" className={formState.errors.orderId ? "text-destructive" : ""}>Link to Order*</Label>
+                <Label htmlFor="orderId">Procurement Order</Label>
                 <Popover open={openOrderSelect} onOpenChange={setOpenOrderSelect}>
                   <PopoverTrigger asChild>
-                    <Button disabled={!!preselectedInvitation} type="button" variant="outline" id="orderId" className={`w-full justify-between font-normal ${formState.errors.orderId ? "border-destructive" : ""}`}>
+                    <Button type="button" variant="outline" id="orderId" className="w-full justify-between font-normal">
                       <span className="truncate">
                         {selectedOrder 
                           ? `${selectedOrder.sourceDepot || "Depot"} - ${selectedOrder.reference || "Unnamed Order"}` 
-                          : preselectedInvitation?.order
-                            ? `${preselectedInvitation.order.sourceDepot || "Depot"} - ${preselectedInvitation.order.reference || "Unnamed Order"}`
-                            : "Select order..."}
+                          : "Select order (optional)..."}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -185,6 +183,15 @@ export function CreateTransportForm({
                       <CommandList className="max-h-[200px] overflow-y-auto">
                         <CommandEmpty>No order found.</CommandEmpty>
                         <CommandGroup>
+                          <CommandItem
+                            value="none"
+                            onSelect={() => {
+                              setValue("orderId", "", { shouldValidate: true });
+                              setOpenOrderSelect(false);
+                            }}
+                          >
+                            No order linked
+                          </CommandItem>
                           {availableOrders.map((o) => (
                             <CommandItem key={o.id} value={o.reference?.toLowerCase() || o.id} onSelect={() => { setValue("orderId", o.id, { shouldValidate: true }); setOpenOrderSelect(false); }}>
                               {o.sourceDepot || "Depot"} - {o.reference || "Unnamed Order"} ({Number(o.litersOrdered).toLocaleString()}L) - {o.productType}
@@ -195,7 +202,9 @@ export function CreateTransportForm({
                     </Command>
                   </PopoverContent>
                 </Popover>
-                {formState.errors.orderId && <p className="text-xs text-destructive">{formState.errors.orderId.message}</p>}
+                {!selectedOrderId && (
+                  <p className="text-xs text-muted-foreground">You can link this transport to an order later from the transport details page.</p>
+                )}
               </div>
 
               <div className="space-y-2 md:col-span-1">
@@ -246,7 +255,7 @@ export function CreateTransportForm({
                     <Label className={fieldErrors?.transporterId ? "text-destructive" : ""}>Transporter*</Label>
                     <Popover open={openStates[`transporter-${index}`]} onOpenChange={(val) => togglePopover(`transporter-${index}`, val)}>
                       <PopoverTrigger asChild>
-                        <Button disabled={!!preselectedInvitation} type="button" variant="outline" className={`w-full justify-between font-normal ${fieldErrors?.transporterId ? "border-destructive" : ""}`}>
+                        <Button type="button" variant="outline" className={`w-full justify-between font-normal ${fieldErrors?.transporterId ? "border-destructive" : ""}`}>
                           <span className="truncate">{transporters.find(t => t.id === transporterId)?.name || "Select..."}</span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -337,7 +346,7 @@ export function CreateTransportForm({
                     <Label className={fieldErrors?.destination ? "text-destructive" : ""}>Primary Destination State*</Label>
                     <Popover open={openStates[`dest-${index}`]} onOpenChange={(val) => togglePopover(`dest-${index}`, val)}>
                       <PopoverTrigger asChild>
-                        <Button disabled={!!preselectedInvitation} type="button" variant="outline" className={`w-full justify-between font-normal ${fieldErrors?.destination ? "border-destructive" : ""}`}>
+                        <Button type="button" variant="outline" className={`w-full justify-between font-normal ${fieldErrors?.destination ? "border-destructive" : ""}`}>
                           <span className="truncate">{destination || "Select state..."}</span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -420,12 +429,11 @@ export function CreateTransportForm({
           );
         })}
 
-        {!preselectedInvitation && (
-          <Button 
-            type="button" 
-            variant="secondary" 
-            className="w-full py-6 font-semibold shadow-sm"
-            onClick={() => {
+        <Button 
+          type="button" 
+          variant="secondary" 
+          className="w-full py-6 font-semibold shadow-sm"
+          onClick={() => {
               if (selectedOrderId && remainingVolume <= 0) {
                 toast.error("Cannot add another truck: Order volume has been fully allocated.");
                 return;
@@ -443,14 +451,13 @@ export function CreateTransportForm({
             <Plus className="h-5 w-5 mr-2" />
             Add Another Truck Assignment
           </Button>
-        )}
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           {formState.errors.assignments?.root && <p className="text-sm text-red-600">{formState.errors.assignments.root.message}</p>}
         </div>
         
         {/* Right Sidebar for Stats */}
         <div className="xl:col-span-1 space-y-6">
-          {(selectedOrderId || preselectedInvitation) && (
+          {selectedOrderId && (
             <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs sticky top-6 shadow-sm">
               <CardHeader className="pb-3 border-b border-border/30 flex flex-row items-center justify-between">
                 <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Order Volume Tracker</CardTitle>
@@ -468,7 +475,7 @@ export function CreateTransportForm({
                     <div className="flex items-center gap-2">
                       <div className="h-2.5 w-2.5 bg-blue-500 rounded-xs shrink-0" />
                       <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        {preselectedInvitation ? "Requested Volume" : "Total Order Target"}
+                        Total Order Target
                       </span>
                     </div>
                     <span className="font-mono font-bold text-sm text-foreground">
@@ -555,7 +562,7 @@ export function CreateTransportForm({
           {formState.isSubmitting ? (
             <><SpinnerEllipsis /><span>Saving...</span></>
           ) : (
-            <><Save className="h-4 w-4" /><span>Dispatch {fields.length} {fields.length === 1 ? 'Truck' : 'Trucks'}</span></>
+            <><Save className="h-4 w-4" /><span>Create {fields.length === 1 ? 'Transport' : `${fields.length} Transports`}</span></>
           )}
         </Button>
       </div>

@@ -23,27 +23,8 @@ export default async function OrderDetailPage({
           transporter: { select: { id: true, name: true } },
           truck: { select: { id: true, name: true, plateNumber: true } },
           driver: { select: { id: true, firstName: true, lastName: true } },
-          transportTripLegs: {
-            orderBy: { sequence: 'asc' },
-            include: {
-              driverAssignments: {
-                orderBy: { assignedAt: 'desc' },
-                include: {
-                  driver: { select: { id: true, firstName: true, lastName: true } }
-                }
-              }
-            }
-          }
         },
       },
-      transportInvitations: {
-        orderBy: { createdAt: 'desc' },
-        include: {
-          transporter: { select: { id: true, name: true } },
-          truck: { select: { id: true, plateNumber: true } },
-          driver: { select: { id: true, firstName: true, lastName: true } }
-        }
-      }
     },
   });
 
@@ -51,7 +32,6 @@ export default async function OrderDetailPage({
     redirect("/admin/fleet/orders");
   }
 
-  // Lookups for the Edit modal and Map
   const suppliers = await prisma.supplier.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
   const depots = await prisma.depot.findMany({ 
     select: { id: true, name: true, latitude: true, longitude: true }, 

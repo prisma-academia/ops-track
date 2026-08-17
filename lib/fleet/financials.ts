@@ -55,7 +55,7 @@ export async function calculateTripPnL(transportId: string): Promise<TripPnLSumm
   const Deliveries = transport.deliveries;
   const expenses = transport.transactions;
 
-  const costPerLiter = Number(order.pricePerLitre || 0);
+  const costPerLiter = Number(order?.pricePerLitre || 0);
   const primaryRate = Number(transport.ratePerLiter || 0);
   const primaryDelivered = Number(transport.litersDelivered || 0);
   const litersLost = Number(transport.litersLost || 0);

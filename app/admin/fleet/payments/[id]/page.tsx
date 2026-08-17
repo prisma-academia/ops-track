@@ -2,12 +2,10 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { redirect } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Link as LinkIcon, FileText, Download } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { InvoiceReceipt } from "./invoice-receipt";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 
 export default async function PaymentDetailsPage({
@@ -22,8 +20,10 @@ export default async function PaymentDetailsPage({
     where: { id },
     include: {
       delivery: {
-        include: { customer: true, station: true }
+        include: { customer: true, station: true },
       },
+      customer: true,
+      station: true,
       transporter: true,
       truck: true,
       order: true,
@@ -54,17 +54,38 @@ export default async function PaymentDetailsPage({
     type: transaction.type,
     reference: transaction.reference,
     category: transaction.category,
+    paymentType: transaction.paymentType,
+    paymentPurpose: transaction.paymentPurpose,
+    feeLeg: transaction.feeLeg,
     amount: Number(transaction.amount),
     createdAt: transaction.createdAt,
+    updatedAt: transaction.updatedAt,
     description: transaction.description,
     paymentMethod: transaction.paymentMethod,
-    delivery: transaction.delivery ? {
-      customer: transaction.delivery.customer ? { name: transaction.delivery.customer.name } : null,
-      station: transaction.delivery.station ? { name: transaction.delivery.station.name } : null,
-    } : null,
-    transporter: transaction.transporter ? { name: transaction.transporter.name } : null,
+    receiptUrl: transaction.receiptUrl,
+    customer: transaction.customer ? { name: transaction.customer.name } : null,
+    station: transaction.station ? { name: transaction.station.name, code: transaction.station.code } : null,
+    delivery: transaction.delivery
+      ? {
+          id: transaction.delivery.id,
+          customer: transaction.delivery.customer ? { name: transaction.delivery.customer.name } : null,
+          station: transaction.delivery.station ? { name: transaction.delivery.station.name } : null,
+        }
+      : null,
+    order: transaction.order ? { id: transaction.order.id, reference: transaction.order.reference } : null,
+    transport: transaction.transport ? { id: transaction.transport.id, destination: transaction.transport.destination } : null,
+    transporter: transaction.transporter ? { id: transaction.transporter.id, name: transaction.transporter.name } : null,
+    truck: transaction.truck
+      ? { id: transaction.truck.id, name: transaction.truck.name, plateNumber: transaction.truck.plateNumber }
+      : null,
     tenant: transaction.tenant ? { name: transaction.tenant.name, logoUrl } : null,
-    bankAccount: transaction.bankAccount ? { bankName: transaction.bankAccount.bankName, accountNumber: transaction.bankAccount.accountNumber } : null,
+    bankAccount: transaction.bankAccount
+      ? {
+          bankName: transaction.bankAccount.bankName,
+          accountNumber: transaction.bankAccount.accountNumber,
+          accountName: transaction.bankAccount.accountName,
+        }
+      : null,
   };
 
   return (
@@ -81,108 +102,7 @@ export default async function PaymentDetailsPage({
         </div>
       </div>
 
-      <Tabs defaultValue="receipt" className="w-full">
-        <TabsList className="mb-4 print:hidden">
-          <TabsTrigger value="receipt">Invoice / Receipt</TabsTrigger>
-          <TabsTrigger value="details">System Details</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="receipt" className="mt-0">
-          <InvoiceReceipt transaction={safeTransactionForClient} />
-        </TabsContent>
-
-        <TabsContent value="details" className="mt-0 space-y-6 print:hidden">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <LinkIcon className="h-4 w-4" />
-                  Related Entities
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 text-sm">
-                  {transaction.delivery && (
-                    <div className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-                      <span className="text-muted-foreground">delivery</span>
-                      <Link href={`/admin/fleet/sales/${transaction.delivery.id}`} className="font-medium text-primary hover:underline">
-                        View delivery {transaction.delivery.id.substring(0, 8)}
-                      </Link>
-                    </div>
-                  )}
-                  {transaction.order && (
-                    <div className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-                      <span className="text-muted-foreground">Order</span>
-                      <Link href={`/admin/fleet/orders/${transaction.order.id}`} className="font-medium text-primary hover:underline">
-                        {transaction.order.reference || transaction.order.id.substring(0, 8)}
-                      </Link>
-                    </div>
-                  )}
-                  {transaction.transport && (
-                    <div className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-                      <span className="text-muted-foreground">Transport Trip</span>
-                      <Link href={`/admin/fleet/transports/${transaction.transport.id}`} className="font-medium text-primary hover:underline">
-                        Trip {transaction.transport.id.substring(0, 8)}
-                      </Link>
-                    </div>
-                  )}
-                  {transaction.transporter && (
-                    <div className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-                      <span className="text-muted-foreground">Transporter</span>
-                      <Link href={`/admin/fleet/transporters/${transaction.transporter.id}`} className="font-medium text-primary hover:underline">
-                        {transaction.transporter.name}
-                      </Link>
-                    </div>
-                  )}
-                  {transaction.truck && (
-                    <div className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-                      <span className="text-muted-foreground">Truck</span>
-                      <span className="font-medium">{transaction.truck.name}</span>
-                    </div>
-                  )}
-                  {!transaction.delivery && !transaction.order && !transaction.transport && !transaction.transporter && !transaction.truck && (
-                    <div className="text-muted-foreground italic text-center py-4">No related entities found.</div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {transaction.receiptUrl && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Attachment Document
-                    </div>
-                    <Button variant="ghost" size="sm" asChild>
-                      <a href={transaction.receiptUrl} target="_blank" rel="noopener noreferrer">
-                        <Download className="h-4 w-4" />
-                      </a>
-                    </Button>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="rounded-lg overflow-hidden border border-border bg-muted/50 p-2 flex items-center justify-center">
-                    <img 
-                      src={transaction.receiptUrl} 
-                      alt="Transaction Receipt" 
-                      className="max-h-[300px] object-contain rounded-md"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                    <div className="text-sm font-medium hover:underline text-primary mt-2">
-                      <a href={transaction.receiptUrl} target="_blank" rel="noopener noreferrer">View Full Document</a>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
+      <InvoiceReceipt transaction={safeTransactionForClient} />
     </div>
   );
 }
-

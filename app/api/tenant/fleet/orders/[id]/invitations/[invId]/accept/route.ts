@@ -34,37 +34,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           destination: invitation.destination,
           litersCarried: invitation.litersRequested,
           ratePerLiter: invitation.ratePerLiter || 0,
-          status: "IN_TRANSIT", // Initial transport status
-          // Note: creating TripLegs could be done here if the Transporter accepts it with a specific origin
+          status: "IN_TRANSIT",
         }
       });
 
-      // If they assigned a driver right from the invite, we can create the initial DriverAssignment
-      if (invitation.driverId) {
-        // Create an initial TripLeg for ORIGIN_TO_DEPOT or DEPOT_TO_PRIMARY
-        const leg = await prisma.transportTripLeg.create({
-          data: {
-            tenantId: actor.tenantId,
-            transportId: transport.id,
-            type: "ORIGIN_TO_DEPOT", // Or whatever default makes sense
-            sequence: 1,
-            origin: invitation.order.sourceDepot || "Unknown Origin",
-            destination: invitation.destination,
-            status: "ASSIGNED",
-          }
-        });
-
-        await prisma.driverAssignment.create({
-          data: {
-            tenantId: actor.tenantId,
-            tripLegId: leg.id,
-            driverId: invitation.driverId,
-            status: "ACTIVE",
-          }
-        });
-      }
-
-      // Update Invitation Status
       await prisma.transportInvitation.update({
         where: { id: invId },
         data: {

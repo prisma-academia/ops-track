@@ -6,8 +6,10 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { assertOrderLinkCapacity, asOrderLookupClient } from "@/lib/fleet/transport-order";
 
 const UpdateTransportSchema = z.object({
+  orderId: z.string().nullable().optional(),
   litersDelivered: z.number().min(0).optional(),
   addMaintenanceCost: z.number().min(0).optional(),
   addLitersLost: z.number().min(0).optional(),
@@ -67,6 +69,18 @@ export async function PATCH(
     });
     if (!existing) throw new DomainError(404, "not_found", "Transport not found.");
 
+    if (body.orderId !== undefined && body.orderId !== existing.orderId) {
+      if (body.orderId) {
+        await assertOrderLinkCapacity(
+          asOrderLookupClient(prisma),
+          actor.tenantId,
+          body.orderId,
+          Number(existing.litersCarried),
+          existing.id
+        );
+      }
+    }
+
     // Calculate financials
     const ratePerLiter = Number(existing.ratePerLiter);
     const litersCarried = Number(existing.litersCarried);
@@ -86,6 +100,7 @@ export async function PATCH(
     const transport = await prisma.transport.update({
       where: { id },
       data: {
+        ...(body.orderId !== undefined && { orderId: body.orderId }),
         ...(body.litersDelivered !== undefined && { litersDelivered: body.litersDelivered }),
         maintenanceCost: currentMaintenance,
         litersLost: currentLitersLost,

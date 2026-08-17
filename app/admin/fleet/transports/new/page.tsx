@@ -45,37 +45,8 @@ export default async function NewTransportPage(
     orderBy: { createdAt: "desc" },
   });
 
-
-
-  // Extract selected request IDs from URL params
-  let preselectedRequestIds: string[] = [];
-  if (searchParams?.requestId) {
-    if (Array.isArray(searchParams.requestId)) {
-      preselectedRequestIds = searchParams.requestId;
-    } else {
-      preselectedRequestIds = [searchParams.requestId];
-    }
-  }
-
-  let invitation = null;
-  if (searchParams?.invitationId && typeof searchParams.invitationId === "string") {
-    invitation = await prisma.transportInvitation.findFirst({
-      where: {
-        id: searchParams.invitationId,
-        tenantId: actor.tenantId,
-        status: "PENDING"
-      },
-      include: {
-        order: {
-          select: {
-            reference: true,
-            sourceDepot: true,
-            productType: true
-          }
-        }
-      }
-    });
-  }
+  const preselectedOrderId =
+    typeof searchParams?.orderId === "string" ? searchParams.orderId : undefined;
 
   return (
     <div className="space-y-6">
@@ -84,7 +55,7 @@ export default async function NewTransportPage(
         trucks={JSON.parse(JSON.stringify(trucks))} 
         drivers={drivers} 
         orders={JSON.parse(JSON.stringify(orders))} 
-        preselectedInvitation={invitation ? JSON.parse(JSON.stringify(invitation)) : null}
+        preselectedOrderId={preselectedOrderId}
       />
     </div>
   );

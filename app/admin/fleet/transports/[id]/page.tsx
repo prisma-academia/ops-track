@@ -3,6 +3,7 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { notFound } from "next/navigation";
 import { TransportDetailsManager } from "./transport-details-manager";
+import { parseTenantSettings } from "@/lib/tenant/settings";
 
 
 export default async function TransportDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -23,17 +24,13 @@ export default async function TransportDetailsPage({ params }: { params: Promise
         include: { customer: true, station: true }
       },
       transactions: {
-        orderBy: { createdAt: "desc" }
-      },
-      transportTripLegs: {
-        orderBy: { sequence: "asc" },
+        orderBy: { createdAt: "desc" },
         include: {
-          driverAssignments: {
-            include: { driver: true },
-            orderBy: { assignedAt: "desc" }
-          }
-        }
-      }
+          delivery: {
+            include: { customer: true, station: true },
+          },
+        },
+      },
     },
   });
 
@@ -46,36 +43,51 @@ export default async function TransportDetailsPage({ params }: { params: Promise
       tenantId: actor.tenantId,
       category: "EXPENSE",
       transportId: null,
-      orderId: transport.orderId,
+      ...(transport.orderId ? { orderId: transport.orderId } : {}),
       truckId: transport.truckId,
     },
     orderBy: { createdAt: "desc" }
   });
 
   if (additionalTransactions.length > 0) {
-    transport.transactions = [...transport.transactions, ...additionalTransactions].sort(
+    transport.transactions = [
+      ...transport.transactions,
+      ...additionalTransactions.map((t) => ({ ...t, delivery: null })),
+    ].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
   }
 
-  const stations = await prisma.station.findMany({
-    where: { tenantId: actor.tenantId },
-    orderBy: { name: "asc" }
-  });
+  const [orders, tenant] = await Promise.all([
+    prisma.order.findMany({
+      where: { tenantId: actor.tenantId, status: { in: ["PENDING", "CONFIRMED"] } },
+      select: {
+        id: true,
+        reference: true,
+        sourceDepot: true,
+        litersOrdered: true,
+        transports: {
+          where: { status: { not: "CANCELLED" } },
+          select: { litersCarried: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.tenant.findUnique({
+      where: { id: actor.tenantId },
+      select: { settingsJson: true },
+    }),
+  ]);
 
-  const drivers = await prisma.driver.findMany({
-    where: { tenantId: actor.tenantId, status: "ACTIVE" },
-    orderBy: { firstName: "asc" }
-  });
+  const settings = parseTenantSettings(tenant?.settingsJson);
 
   return (
     <div className="space-y-6">
       <TransportDetailsManager 
         transport={JSON.parse(JSON.stringify(transport))} 
-        stations={JSON.parse(JSON.stringify(stations))}
-        drivers={JSON.parse(JSON.stringify(drivers))}
+        orders={JSON.parse(JSON.stringify(orders))}
+        originToDepotFee={settings.originToDepotFee}
       />
     </div>
   );
 }
-

@@ -14,20 +14,33 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, MapPin, Truck, AlertTriangle, CheckCircle, PackageOpen, MoreVertical, Droplets, Wallet, Coins, FileText } from "lucide-react";
+import { ArrowLeft, Truck, AlertTriangle, CheckCircle, Droplets, Wallet, Coins, FileText, Link2, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
 import { AssetTank } from "@/components/asset-tank";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Droplet } from "lucide-react";
-import { TripLegsManager } from "./trip-legs-manager";
+import { TransportFeeBreakdown, getTransactionFeeLegLabel } from "@/components/fleet/transport-fee-breakdown";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
-export function TransportDetailsManager({ transport, stations = [], drivers = [] }: { transport: any, stations?: any[], drivers?: any[] }) {
+export function TransportDetailsManager({
+  transport,
+  orders = [],
+  originToDepotFee = 0,
+}: {
+  transport: any;
+  orders?: any[];
+  originToDepotFee?: number;
+}) {
   const router = useRouter();
   
   const [openStatusDialog, setOpenStatusDialog] = useState(false);
   const [openIncidentDialog, setOpenIncidentDialog] = useState(false);
+  const [openLinkOrderDialog, setOpenLinkOrderDialog] = useState(false);
+  const [openOrderSelect, setOpenOrderSelect] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState(transport.orderId || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +72,21 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
   };
 
 
+
+  const handleLinkOrder = async () => {
+    setIsSubmitting(true);
+    setError(null);
+    const res = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, {
+      orderId: selectedOrderId || null,
+    });
+    setIsSubmitting(false);
+    if (res.error) {
+      setError(res.error.message);
+    } else {
+      setOpenLinkOrderDialog(false);
+      router.refresh();
+    }
+  };
 
   const handleLogIncident = async () => {
     setIsSubmitting(true);
@@ -134,7 +162,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
               </Badge>
             </h2>
             <p className="text-xs text-muted-foreground mt-1">
-              {transport.transporter.name} • {transport.truck.name} • {transport.productType}
+              {transport.transporter?.name} • {transport.truck?.name || "No truck"} • {transport.productType || "—"}
             </p>
           </div>
         </div>
@@ -152,7 +180,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Truck</p>
-          <p className="text-sm font-medium text-foreground mt-0.5">{transport.truck.name}</p>
+          <p className="text-sm font-medium text-foreground mt-0.5">{transport.truck?.name || "Unassigned"}</p>
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Driver</p>
@@ -164,13 +192,21 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Order Reference</p>
-          <p className="text-sm font-medium text-foreground mt-0.5">
+          <div className="flex items-center gap-2 mt-0.5">
             {transport.order?.reference ? (
-              <Link href={`/admin/fleet/orders/${transport.order.id}`} className="text-primary hover:underline">
+              <Link href={`/admin/fleet/orders/${transport.order.id}`} className="text-sm font-medium text-primary hover:underline">
                 {transport.order.reference}
               </Link>
-            ) : "No Order Linked"}
-          </p>
+            ) : (
+              <>
+                <span className="text-sm font-medium text-muted-foreground">No order linked</span>
+                <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => setOpenLinkOrderDialog(true)}>
+                  <Link2 className="h-3 w-3 mr-1" />
+                  Link
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -179,7 +215,6 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
           <Tabs defaultValue="overview" className="w-full">
             <TabsList className="w-full justify-start h-14 bg-muted/50 backdrop-blur-xs rounded-3xl border border-border">
               <TabsTrigger value="overview" className="text-[15px] font-semibold">Overview</TabsTrigger>
-              <TabsTrigger value="destinations" className="text-[15px] font-semibold">Route & Trip Legs</TabsTrigger>
               <TabsTrigger value="distribution" className="text-[15px] font-semibold">Distribution ({transport.deliveries?.length || 0})</TabsTrigger>
               <TabsTrigger value="losses" className="text-[15px] font-semibold text-red-600 dark:text-red-400">Loss Logs ({lossLogs.length})</TabsTrigger>
               <TabsTrigger value="payments" className="text-[15px] font-semibold">Payments & Expenses ({(transport.transactions || []).length})</TabsTrigger>
@@ -354,10 +389,10 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
                   </div>
                 </>
               )}
-            </TabsContent>
 
-            <TabsContent value="destinations" className="mt-6 space-y-4">
-              <TripLegsManager transport={transport} drivers={drivers} stations={stations} />
+              <Separator />
+
+              <TransportFeeBreakdown transport={transport} originToDepotFee={originToDepotFee} />
             </TabsContent>
 
             <TabsContent value="distribution" className="mt-6 space-y-4">
@@ -543,6 +578,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
                       <tr className="border-b border-border/50 bg-muted/50">
                         <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Date</th>
                         <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Category</th>
+                        <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Fee Leg</th>
                         <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Description</th>
                         <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Method & Ref</th>
                         <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Receipt</th>
@@ -557,8 +593,11 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
                           </td>
                           <td className="py-3 px-4">
                             <div className="font-medium text-foreground">
-                              {txn.category === "FLEET_EXPENSE" ? "Fleet Expense" : txn.category === "TRANSPORT_FEE" ? "Transport Fee" : txn.category}
+                              {txn.category === "FLEET_EXPENSE" ? "Fleet Expense" : txn.category === "TRANSPORT_PAYMENT" ? "Transport Fee" : txn.category}
                             </div>
+                          </td>
+                          <td className="py-3 px-4 text-foreground/90 text-xs">
+                            {txn.category === "TRANSPORT_PAYMENT" ? getTransactionFeeLegLabel(txn) : "—"}
                           </td>
                           <td className="py-3 px-4 text-foreground/90 max-w-[200px] truncate" title={txn.description || ""}>
                             {txn.description || "—"}
@@ -582,7 +621,7 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
                     </tbody>
                     <tfoot>
                       <tr className="bg-muted/30 border-t border-border/50 font-bold">
-                        <td colSpan={5} className="text-right py-3 px-4 text-foreground">Total Payments & Expenses:</td>
+                        <td colSpan={6} className="text-right py-3 px-4 text-foreground">Total Payments & Expenses:</td>
                         <td className="text-right py-3 px-4 text-destructive font-mono text-base">
                           {(() => {
                              const totalAmount = transport.transactions.reduce((sum: number, txn: any) => sum + Number(txn.amount || 0), 0);
@@ -694,6 +733,66 @@ export function TransportDetailsManager({ transport, stations = [], drivers = []
             <Button variant="outline" onClick={() => setOpenIncidentDialog(false)}>Cancel</Button>
             <Button onClick={handleLogIncident} disabled={isSubmitting} variant="destructive">
               {isSubmitting ? <SpinnerEllipsis /> : "Submit Incident"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openLinkOrderDialog} onOpenChange={setOpenLinkOrderDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Link to Order</DialogTitle>
+            <DialogDescription>
+              Associate this transport with a procurement order for volume tracking.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Procurement Order</Label>
+              <Popover open={openOrderSelect} onOpenChange={setOpenOrderSelect}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="w-full justify-between font-normal">
+                    <span className="truncate">
+                      {selectedOrderId
+                        ? (() => {
+                            const o = orders.find((x: any) => x.id === selectedOrderId);
+                            return o ? `${o.sourceDepot || "Depot"} - ${o.reference || "Unnamed"}` : "Select order...";
+                          })()
+                        : "Select order..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search order..." />
+                    <CommandList>
+                      <CommandEmpty>No order found.</CommandEmpty>
+                      <CommandGroup>
+                        {orders.map((o: any) => (
+                          <CommandItem
+                            key={o.id}
+                            value={`${o.reference || o.id} ${o.sourceDepot || ""}`}
+                            onSelect={() => {
+                              setSelectedOrderId(o.id);
+                              setOpenOrderSelect(false);
+                            }}
+                          >
+                            {o.sourceDepot || "Depot"} - {o.reference || "Unnamed"}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenLinkOrderDialog(false)}>Cancel</Button>
+            <Button onClick={handleLinkOrder} disabled={isSubmitting || !selectedOrderId}>
+              {isSubmitting ? <SpinnerEllipsis /> : "Link Order"}
             </Button>
           </DialogFooter>
         </DialogContent>

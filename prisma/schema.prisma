@@ -1012,6 +1012,13 @@ enum TransactionType {
   OUTFLOW
 }
 
+enum TransportFeeLeg {
+  ORIGIN_TO_DEPOT
+  DEPOT_TO_PRIMARY
+  PRIMARY_TO_SUBSEQUENT
+  FULL_TRIP
+}
+
 enum TransactionCategory {
   TRANSPORT_PAYMENT
   CLIENT_PAYMENT
@@ -1169,8 +1176,8 @@ model Transport {
   id            String      @id @default(uuid())
   tenantId      String
   tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  orderId       String
-  order         Order       @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderId       String?
+  order         Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
   transporterId String
   transporter   Transporter @relation(fields: [transporterId], references: [id], onDelete: Restrict)
   truckId       String?
@@ -1317,6 +1324,8 @@ model Transaction {
   orderId String?
   order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
+  feeLeg TransportFeeLeg?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1326,6 +1335,7 @@ model Transaction {
   @@index([transportId])
   @@index([truckId])
   @@index([orderId])
+  @@index([feeLeg])
   @@map("fleet_transactions")
 }
 

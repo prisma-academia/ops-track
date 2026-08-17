@@ -16,13 +16,12 @@ export type TransportRow = {
   truckName: string;
   driverName: string;
   orderReference: string;
+  isUnlinked?: boolean;
   status: string;
   productType: string;
   salesCount: number;
   litersCarried: number;
   createdAt: string;
-  isInvitation?: boolean;
-  invitationId?: string;
 };
 
 const columns: ColumnDef<TransportRow>[] = [
@@ -85,10 +84,22 @@ const columns: ColumnDef<TransportRow>[] = [
       );
     }
   },
+  {
+    accessorKey: "orderReference",
+    header: "Order",
+    cell: ({ row }) => (
+      <div className="flex items-center gap-2">
+        <span className="text-sm">{row.original.orderReference}</span>
+        {row.original.isUnlinked && (
+          <Badge variant="outline" className="text-[10px]">Unlinked</Badge>
+        )}
+      </div>
+    ),
+  },
   { 
     accessorKey: "salesCount", 
     header: "Sales Logged",
-    cell: ({ row }) => row.original.isInvitation ? "-" : row.original.salesCount
+    cell: ({ row }) => row.original.salesCount
   },
   { 
     accessorKey: "createdAt", 
@@ -106,26 +117,6 @@ const columns: ColumnDef<TransportRow>[] = [
       );
     }
   },
-  {
-    id: "actions",
-    cell: ({ row }) => {
-      const inv = row.original;
-      if (!inv.isInvitation) return null;
-      
-      return (
-        <div className="flex items-center justify-end gap-2">
-          <form action={`/api/tenant/fleet/transports/invitations/${inv.invitationId}/reject`} method="POST">
-            <button type="submit" className="px-3 py-1.5 text-xs font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 rounded-md transition-colors">
-              Reject
-            </button>
-          </form>
-          <a href={`/admin/fleet/transports/new?invitationId=${inv.invitationId}`} className="px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors">
-            Accept
-          </a>
-        </div>
-      );
-    }
-  }
 ];
 
 export function TransportsTable({ data, filterNode, serverPagination }: { data: TransportRow[], filterNode?: React.ReactNode, serverPagination?: any }) {
@@ -149,7 +140,7 @@ export function TransportsTable({ data, filterNode, serverPagination }: { data: 
     <DataTable
       columns={columns}
       data={data}
-      rowHref={(s) => s.isInvitation ? null : `/admin/fleet/transports/${s.id}`}
+      rowHref={(s) => `/admin/fleet/transports/${s.id}`}
       filterColumnId="destination"
       searchPlaceholder="Search by destination…"
       filterNode={filterNode}

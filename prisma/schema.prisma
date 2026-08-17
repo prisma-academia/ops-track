@@ -1096,7 +1096,7 @@ model Order {
   supplier      String?
   sourceDepot   String?
   pricePerLitre Decimal     @default(0.00) @db.Decimal(12, 2)
-  loadingCost   Decimal     @default(0.00) @db.Decimal(12, 2)
+  loadingCostPerLitre   Decimal     @default(0.00) @db.Decimal(12, 2)
   status        OrderStatus @default(PENDING)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt

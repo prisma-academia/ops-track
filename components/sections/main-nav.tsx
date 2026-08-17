@@ -69,6 +69,7 @@ import {
   IconUsersGroup,
   IconBuildingStore,
   IconGasStation,
+  IconTicket,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -115,6 +116,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   IconShield,
   IconTruck,
   IconShoppingCart,
+  IconGasStation,
   IconMapPin,
   IconReceiptDollar,
   IconCreditCard,
@@ -125,7 +127,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   IconActivity,
   IconSettings,
   IconBuildingStore,
-  IconGasStation,
+  IconTicket,
 };
 
 export type NavItem = {

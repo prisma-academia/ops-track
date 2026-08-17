@@ -46,7 +46,7 @@ const FLEET_NAV = [
         href: "/admin/fleet/organizations",
         key: "organizations",
         title: "Managed Stations",
-        icon: "IconBuilding",
+        icon: "IconGasStation",
         permission: PERMISSIONS.TENANT_ORGS_READ.key,
       },
       {

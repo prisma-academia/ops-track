@@ -12,46 +12,46 @@ import { UnauthorizedToast } from "@/components/unauthorized-toast";
 interface NavItemConfig {
   href?: string;
   key: string;
+  title: string;
   module: ModuleKey | null;
   icon?: string;
   permission: string | null;
-  children?: { href: string; key: string; module: ModuleKey | null; permission: string | null }[];
+  children?: { href: string; key: string; title: string; module: ModuleKey | null; permission: string | null }[];
 }
 
 // `module: null` = always shown (Overview, Settings).
 const NAV: NavItemConfig[] = [
-  { href: "/admin/dashboard", key: "overview", module: null, icon: "PieChart", permission: null },
-  // {
-  //   key: "analytics",
-  //   module: null,
-  //   icon: "TrendingUp",
-  //   permission: null,
-  //   children: [
-  //     { href: "/admin/dashboard/commercial", key: "commercial", module: null, permission: null },
-  //     { href: "/admin/dashboard/inventory", key: "inventory", module: null, permission: null },
-  //     { href: "/admin/dashboard/operations", key: "operations", module: null, permission: null },
-  //   ],
-  // },
-  { href: "/admin/users", key: "users", module: "users" as ModuleKey, icon: "CircleUserRound", permission: PERMISSIONS.TENANT_USERS_READ.key },
-  { href: "/admin/stations", key: "stations", module: "stations" as ModuleKey, icon: "MapPin", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
-  { href: "/admin/waybills", key: "waybills", module: "operations" as ModuleKey, icon: "Truck", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
-  { href: "/admin/expenses", key: "expenses", module: "operations" as ModuleKey, icon: "Coins", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },
-  { href: "/admin/prices", key: "prices", module: "operations" as ModuleKey, icon: "ChartNoAxesCombined", permission: PERMISSIONS.TENANT_PRICES_READ.key },
-  { href: "/admin/tickets", key: "tickets", module: "operations" as ModuleKey, icon: "Ticket", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+  { href: "/admin/dashboard", key: "overview", title: "Overview", module: null, icon: "IconLayoutDashboard", permission: null },
   {
-    key: "reports",
-    module: "operations" as ModuleKey,
-    icon: "FileText",
+    key: "userManagement",
+    title: "User Management",
+    module: "users" as ModuleKey,
+    icon: "IconUsersGroup",
     permission: null,
     children: [
-      { href: "/admin/sales-reports", key: "salesReports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_SHIFTS_READ.key },
-      { href: "/admin/stock-report", key: "stockReport", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
-      { href: "/admin/pnl-report", key: "pnlReport", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+      { href: "/admin/users", key: "users", title: "Users", module: "users" as ModuleKey, permission: PERMISSIONS.TENANT_USERS_READ.key },
+      { href: "/admin/role-templates", key: "roles", title: "Role & Permissions", module: "roles" as ModuleKey, permission: PERMISSIONS.TENANT_ROLES_READ.key },
+    ]
+  },
+  { href: "/admin/stations", key: "stations", title: "Stations", module: "stations" as ModuleKey, icon: "IconGasStation", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
+  { href: "/admin/waybills", key: "waybills", title: "Waybills", module: "operations" as ModuleKey, icon: "IconTruck", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+  { href: "/admin/expenses", key: "expenses", title: "Expenses", module: "operations" as ModuleKey, icon: "IconReceiptDollar", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },
+  { href: "/admin/prices", key: "prices", title: "Prices", module: "operations" as ModuleKey, icon: "IconReportAnalytics", permission: PERMISSIONS.TENANT_PRICES_READ.key },
+  { href: "/admin/tickets", key: "tickets", title: "Tickets", module: "operations" as ModuleKey, icon: "IconTicket", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+  {
+    key: "reports",
+    title: "Reports & Analytics",
+    module: "operations" as ModuleKey,
+    icon: "IconFileText",
+    permission: null,
+    children: [
+      { href: "/admin/sales-reports", key: "salesReports", title: "Sales Reports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_SHIFTS_READ.key },
+      { href: "/admin/stock-report", key: "stockReport", title: "Stock Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+      { href: "/admin/pnl-report", key: "pnlReport", title: "PnL Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
     ],
   },
-  { href: "/admin/bank-accounts", key: "bankAccounts", module: null, icon: "CreditCard", permission: PERMISSIONS.TENANT_SETTINGS_READ.key },
-  { href: "/admin/role-templates", key: "roles", module: "roles" as ModuleKey, icon: "Shield", permission: PERMISSIONS.TENANT_ROLES_READ.key },
-  { href: "/admin/activity", key: "activity", module: "activity" as ModuleKey, icon: "Activity", permission: PERMISSIONS.TENANT_ACTIVITY_READ.key },
+  { href: "/admin/bank-accounts", key: "bankAccounts", title: "Bank Accounts", module: null, icon: "IconBuildingBank", permission: PERMISSIONS.TENANT_SETTINGS_READ.key },
+  { href: "/admin/activity", key: "activity", title: "Activity Logs", module: "activity" as ModuleKey, icon: "IconActivity", permission: PERMISSIONS.TENANT_ACTIVITY_READ.key },
 ];
 
 export default async function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
@@ -197,14 +197,14 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
   const mapNavItem = (n: NavItemConfig): any => {
     return {
       href: n.href,
-      title: tNav(n.key),
+      title: n.title,
       icon: n.icon,
       children: n.children
         ? n.children
             .filter((c) => (c.module === null || enabled.includes(c.module)) && (!c.permission || hasPermission(actor, c.permission as any)))
             .map((c) => ({
               href: c.href,
-              title: tNav(c.key),
+              title: c.title,
             }))
         : undefined,
     };

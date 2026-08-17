@@ -40,7 +40,7 @@ export function AdminLoginForm() {
   return (
     <form onSubmit={onSubmit}>
       <FieldGroup className="gap-6">
-        <Field className="grid md:grid-cols-2 md:gap-6 gap-3">
+        {/* <Field className="grid md:grid-cols-2 md:gap-6 gap-3">
           <Button
             variant="outline"
             type="button"
@@ -75,7 +75,7 @@ export function AdminLoginForm() {
         </Field>
         <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card text-sm text-muted-foreground bg-transparent">
           <span className="px-4">or sign in with</span>
-        </FieldSeparator>
+        </FieldSeparator> */}
 
         <div className="flex flex-col gap-4">
           <FormField label={t("email")} htmlFor="email" required error={formState.errors.email?.message}>

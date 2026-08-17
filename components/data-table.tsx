@@ -86,6 +86,7 @@ export interface DataTableProps<TData, TValue> {
   isLoading?: boolean;
   onSearchChange?: (value: string) => void;
   searchValue?: string;
+  renderSubRow?: (row: TData) => React.ReactNode | null;
 }
 
 export function DataTable<TData, TValue>({
@@ -106,6 +107,7 @@ export function DataTable<TData, TValue>({
   isLoading = false,
   onSearchChange,
   searchValue,
+  renderSubRow,
 }: DataTableProps<TData, TValue>) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -237,24 +239,33 @@ export function DataTable<TData, TValue>({
                 ) : table.getRowModel().rows?.length ? (
                   table.getRowModel().rows.map((row) => {
                     const href = rowHref ? rowHref(row.original) : null;
+                    const subRowContent = renderSubRow ? renderSubRow(row.original) : null;
                     return (
-                      <TableRow
-                        key={row.id}
-                        className={cn(
-                          "group hover:bg-muted/20 transition-colors",
-                          href && "cursor-pointer",
-                          getRowClassName && getRowClassName(row.original)
+                      <React.Fragment key={row.id}>
+                        <TableRow
+                          className={cn(
+                            "group hover:bg-muted/20 transition-colors",
+                            href && "cursor-pointer",
+                            getRowClassName && getRowClassName(row.original)
+                          )}
+                          onClick={() => {
+                            if (href) router.push(href);
+                          }}
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell key={cell.id} className="whitespace-nowrap px-4 py-3 first:ps-6 last:pe-6 text-sm">
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                        {subRowContent && (
+                          <TableRow className="hover:bg-transparent">
+                            <TableCell colSpan={columns.length} className="p-0">
+                              {subRowContent}
+                            </TableCell>
+                          </TableRow>
                         )}
-                        onClick={() => {
-                          if (href) router.push(href);
-                        }}
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id} className="whitespace-nowrap px-4 py-3 first:ps-6 last:pe-6 text-sm">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        ))}
-                      </TableRow>
+                      </React.Fragment>
                     );
                   })
                 ) : (

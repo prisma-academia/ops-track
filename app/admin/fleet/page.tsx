@@ -14,7 +14,7 @@ export default async function FleetOverviewPage() {
   const data = await getFleetOverviewData(actor.tenantId)
 
   return (
-    <section className="grid gap-3 p-4 md:grid-cols-2 space-y-3">
+    <section className="grid gap-3 md:grid-cols-2 space-y-3">
       <Overview data={data} />
       <div className="col-span-full grid gap-4 md:grid-cols-3">
         <div className="md:col-span-2">

@@ -31,7 +31,7 @@ const Schema = z.object({
   supplier: z.string().optional().nullable(),
   sourceDepot: z.string().optional().nullable(),
   pricePerLitre: z.coerce.number().min(0).default(0),
-  loadingCost: z.coerce.number().min(0).default(0),
+  loadingCostPerLitre: z.coerce.number().min(0).default(0),
 });
 
 type Values = z.infer<typeof Schema>;
@@ -65,14 +65,14 @@ export function CreateOrderForm() {
       supplier: null as string | null,
       sourceDepot: null as string | null,
       pricePerLitre: 0,
-      loadingCost: 0,
+      loadingCostPerLitre: 0,
     },
   });
 
   const watchProductType = watch("productType");
   const watchLitersOrdered = watch("litersOrdered") || 0;
   const watchPricePerLitre = watch("pricePerLitre") || 0;
-  const watchLoadingCost = watch("loadingCost") || 0;
+  const watchLoadingCostPerLitre = watch("loadingCostPerLitre") || 0;
   const watchSupplier = watch("supplier");
   const watchDepot = watch("sourceDepot");
   const watchReference = watch("reference");
@@ -210,7 +210,7 @@ export function CreateOrderForm() {
   );
 
   const productTotal = Number(watchPricePerLitre || 0) * Number(watchLitersOrdered || 0);
-  const loadingTotal = Number(watchLoadingCost || 0);
+  const loadingTotal = Number(watchLoadingCostPerLitre || 0) * Number(watchLitersOrdered || 0);
   const grandTotal = productTotal + loadingTotal;
 
   return (
@@ -340,6 +340,7 @@ export function CreateOrderForm() {
                         <FormattedNumberInput 
                           id="pricePerLitre" 
                           placeholder="e.g. 950"
+                          maxLength={4}
                           {...field}
                           className={formState.errors.pricePerLitre ? "border-destructive" : ""}
                           prefixText="₦"
@@ -348,16 +349,17 @@ export function CreateOrderForm() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="loadingCost" className={formState.errors.loadingCost ? "text-destructive" : ""}>Flat Loading Fee (₦)</Label>
+                    <Label htmlFor="loadingCostPerLitre" className={formState.errors.loadingCostPerLitre ? "text-destructive" : ""}>Loading Cost Per Litre (₦)</Label>
                     <Controller
                       control={control}
-                      name="loadingCost"
+                      name="loadingCostPerLitre"
                       render={({ field }) => (
                         <FormattedNumberInput 
-                          id="loadingCost" 
-                          placeholder="e.g. 15000"
+                          id="loadingCostPerLitre" 
+                          placeholder="e.g. 15"
+                          maxLength={4}
                           {...field}
-                          className={formState.errors.loadingCost ? "border-destructive" : ""}
+                          className={formState.errors.loadingCostPerLitre ? "border-destructive" : ""}
                           prefixText="₦"
                         />
                       )}

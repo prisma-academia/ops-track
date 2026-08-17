@@ -2,26 +2,21 @@ import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
-import { Rubik, Source_Serif_4, Fira_Code, Public_Sans, Geist_Mono, Inter, Geist } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-const interHeading = Inter({subsets:['latin'],variable:'--font-heading'});
-
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
-
-const fontSerif = Source_Serif_4({
-  subsets: ["latin"],
-  variable: "--font-serif",
-});
-
-const geistMono = Geist_Mono({subsets:['latin'],variable:'--font-mono'});
+// Body copy
+const fontSansVariable = "font-sans";
+// Headings
+const fontHeadingVariable = "font-heading";
+// Monospace
+const fontMonoVariable = "font-mono";
 
 export const metadata: Metadata = {
-  title: "Forge",
-  description: "Manage your filling station with ease.",
+  title: "Oil",
+  description: "Manage",
 };
 
 export default async function RootLayout({
@@ -35,18 +30,25 @@ export default async function RootLayout({
     <html
       lang={locale}
       className={cn(
-                    "h-full antialiased font-sans",
-                    fontSerif.variable
-                  , geistMono.variable, "font-sans", geist.variable, interHeading.variable)}
+        "h-full antialiased font-sans",
+        fontSansVariable,
+        fontHeadingVariable,
+        fontMonoVariable
+      )}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-stone-50 text-stone-900">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+      </head>
+      <body className="min-h-full flex flex-col bg-background text-foreground">
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
             <TooltipProvider>
               {children}
             </TooltipProvider>
-            <Toaster position="top-center"/>
+            <Toaster position="top-center" />
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

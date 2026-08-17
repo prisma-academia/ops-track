@@ -14,7 +14,7 @@ const CreateOrderSchema = z.object({
   supplier: z.string().optional().nullable(),
   sourceDepot: z.string().optional().nullable(),
   pricePerLitre: z.number().min(0).default(0),
-  loadingCost: z.number().min(0).default(0),
+  loadingCostPerLitre: z.number().min(0).default(0),
 });
 
 export async function GET(request: Request) {
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
         supplier: body.supplier ?? null,
         sourceDepot: body.sourceDepot ?? null,
         pricePerLitre: body.pricePerLitre,
-        loadingCost: body.loadingCost,
+        loadingCostPerLitre: body.loadingCostPerLitre,
       },
     });
 

@@ -70,10 +70,32 @@ import {
   IconBuildingStore,
   IconGasStation,
   IconTicket,
+  IconTable,
+  IconAlertTriangle,
 } from "@tabler/icons-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import * as React from "react";
+
+function hrefMatchesNav(
+  href: string | undefined,
+  pathname: string | null,
+  searchParams: URLSearchParams
+): boolean {
+  if (!href || !pathname || href === "#") return false;
+
+  const [path, query] = href.split("?");
+  const pathMatches = pathname === path || pathname.startsWith(`${path}/`);
+  if (!pathMatches) return false;
+
+  if (!query) return true;
+
+  const expected = new URLSearchParams(query);
+  for (const [key, value] of expected.entries()) {
+    if (searchParams.get(key) !== value) return false;
+  }
+  return true;
+}
 
 const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   PieChart,
@@ -128,6 +150,8 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   IconSettings,
   IconBuildingStore,
   IconTicket,
+  IconTable,
+  IconAlertTriangle,
 };
 
 export type NavItem = {
@@ -141,6 +165,7 @@ export type NavItem = {
 
 export function NavMain({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [activeParent, setActiveParent] = React.useState<string | null>(null);
   const [activeChild, setActiveChild] = React.useState<string | null>(null);
@@ -148,18 +173,18 @@ export function NavMain({ items }: { items: NavItem[] }) {
   // Update active states based on pathname
   React.useEffect(() => {
     items.forEach((item) => {
-      if (item.href === pathname) {
+      if (hrefMatchesNav(item.href, pathname, searchParams)) {
         setActiveParent(item.title || null);
         setActiveChild(null);
       }
       item.children?.forEach((child) => {
-        if (child.href === pathname) {
+        if (hrefMatchesNav(child.href, pathname, searchParams)) {
           setActiveParent(item.title || null);
           setActiveChild(child.title || null);
         }
       });
     });
-  }, [pathname, items]);
+  }, [pathname, searchParams, items]);
 
   return (
     <div className="flex flex-col gap-2">

@@ -5,8 +5,7 @@ import { BankAccountsTable } from "@/components/bank-accounts/bank-accounts-tabl
 import { PageHeader } from "@/components/shell";
 
 export default async function FleetBankAccountsPage({ params }: { params: { tenant: string } }) {
-  // It's possible we might want a different permission for Fleet, but for now we use settings
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_SETTINGS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key);
 
   const take = 25;
   const skip = 0;

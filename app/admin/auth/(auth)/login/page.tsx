@@ -5,6 +5,7 @@ import { loadTenantPageContext } from "@/lib/db/page-context";
 import { AuthLayoutWrapper } from "@/components/auth-layout-wrapper";
 import { parseTenantSettings } from "@/lib/tenant/settings";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
+import { UnauthorizedToast } from "@/components/unauthorized-toast";
 
 export default async function AdminLoginPage() {
   const { tenant } = await loadTenantPageContext();
@@ -18,6 +19,7 @@ export default async function AdminLoginPage() {
 
   return (
     <AuthLayoutWrapper logoUrl={logoUrl} tenantName={tenant?.name}>
+      <UnauthorizedToast />
       <Card className="w-full max-w-lg px-6 py-8 sm:p-12 relative gap-6">
         <CardHeader className="text-center gap-6 p-0">
           <div className="flex flex-col gap-1">

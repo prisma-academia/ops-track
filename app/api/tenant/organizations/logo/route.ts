@@ -13,7 +13,7 @@ const Body = z.object({
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_ORGS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_ORGANIZATIONS_WRITE.key);
     const { contentType } = Body.parse(await request.json());
 
     if (!isAllowedImageType(contentType)) {

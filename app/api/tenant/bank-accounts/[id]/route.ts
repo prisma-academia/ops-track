@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
-import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
+import { requireTenantActor, PERMISSIONS, AuthError } from "@/lib/auth/guards";
+import { hasPermission } from "@/lib/auth/permissions";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
@@ -20,7 +21,7 @@ export async function PATCH(
 ) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_SETTINGS_WRITE.key);
+    const actor = await requireTenantActor();
     const body = UpdateBankAccountSchema.parse(await request.json());
     const meta = requestMeta(request);
     const { id } = await params;
@@ -31,6 +32,14 @@ export async function PATCH(
 
     if (!existingAccount || existingAccount.tenantId !== actor.tenantId) {
       throw new DomainError(404, "not_found", "Bank account not found.");
+    }
+
+    const requiredPermission =
+      existingAccount.scope === "STATION"
+        ? PERMISSIONS.TENANT_BANK_ACCOUNTS_WRITE.key
+        : PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_WRITE.key;
+    if (!hasPermission(actor, requiredPermission)) {
+      throw new AuthError(403, "Forbidden.");
     }
 
     if (body.accountNumber || body.bankName) {
@@ -84,7 +93,7 @@ export async function DELETE(
 ) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_SETTINGS_WRITE.key);
+    const actor = await requireTenantActor();
     const meta = requestMeta(request);
     const { id } = await params;
 
@@ -94,6 +103,14 @@ export async function DELETE(
 
     if (!existingAccount || existingAccount.tenantId !== actor.tenantId) {
       throw new DomainError(404, "not_found", "Bank account not found.");
+    }
+
+    const requiredPermission =
+      existingAccount.scope === "STATION"
+        ? PERMISSIONS.TENANT_BANK_ACCOUNTS_WRITE.key
+        : PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_WRITE.key;
+    if (!hasPermission(actor, requiredPermission)) {
+      throw new AuthError(403, "Forbidden.");
     }
 
     await prisma.bankAccount.delete({

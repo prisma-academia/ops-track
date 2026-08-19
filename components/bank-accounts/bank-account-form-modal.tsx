@@ -88,24 +88,22 @@ export function BankAccountFormModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {!fixedScope && (
-            <div className="space-y-2">
-              <Label>Scope</Label>
-              <Select 
-                value={watch("scope")} 
-                onValueChange={(value: "STATION" | "FLEET") => setValue("scope", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Scope" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="STATION">Station</SelectItem>
-                  <SelectItem value="FLEET">Fleet</SelectItem>
-                </SelectContent>
-              </Select>
-              {errors.scope && <p className="text-sm text-red-500">{errors.scope.message}</p>}
-            </div>
-          )}
+          <div className="space-y-2">
+            <Label>Scope</Label>
+            <Select 
+              value={watch("scope")} 
+              onValueChange={(value: "STATION" | "FLEET") => setValue("scope", value)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Scope" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="STATION">Station</SelectItem>
+                <SelectItem value="FLEET">Fleet</SelectItem>
+              </SelectContent>
+            </Select>
+            {errors.scope && <p className="text-sm text-red-500">{errors.scope.message}</p>}
+          </div>
 
           <div className="space-y-2">
             <Label>Bank Name</Label>

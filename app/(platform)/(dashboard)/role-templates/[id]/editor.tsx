@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { apiPatch } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { Save, ArrowLeft, Loader2, AlertCircle } from "lucide-react";
+import { Save, ArrowLeft, Loader2, AlertCircle, Pencil } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function RoleDetailEditor({
@@ -21,6 +22,9 @@ export function RoleDetailEditor({
   allPermissions,
   endpoint,
   moduleContext,
+  readOnly = false,
+  canEdit = true,
+  editHref,
 }: {
   id: string;
   name: string;
@@ -29,6 +33,9 @@ export function RoleDetailEditor({
   allPermissions: readonly string[];
   endpoint: string;
   moduleContext?: "STATION" | "FLEET";
+  readOnly?: boolean;
+  canEdit?: boolean;
+  editHref?: string;
 }) {
   void id;
   const [n, setN] = useState(name);
@@ -38,6 +45,7 @@ export function RoleDetailEditor({
   const [error, setError] = useState<string | null>(null);
 
   const togglePermission = (p: string) => {
+    if (readOnly) return;
     if (isSystem && initial.includes(p)) return;
     const next = new Set(selected);
     if (next.has(p)) next.delete(p);
@@ -130,7 +138,7 @@ export function RoleDetailEditor({
                           <label key={op.key} className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer">
                             <Checkbox
                               checked={selected.has(op.key)}
-                              disabled={isSystem && initial.includes(op.key)}
+                              disabled={readOnly || (isSystem && initial.includes(op.key))}
                               onCheckedChange={() => togglePermission(op.key)}
                               className="size-4"
                             />
@@ -145,7 +153,7 @@ export function RoleDetailEditor({
                       <Checkbox
                         id={`perm-${readPerm.key}`}
                         checked={selected.has(readPerm.key)}
-                        disabled={isSystem && initial.includes(readPerm.key)}
+                        disabled={readOnly || (isSystem && initial.includes(readPerm.key))}
                         onCheckedChange={() => togglePermission(readPerm.key)}
                         className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
                       />
@@ -158,7 +166,7 @@ export function RoleDetailEditor({
                       <Checkbox
                         id={`perm-${writePerm.key}`}
                         checked={selected.has(writePerm.key)}
-                        disabled={isSystem && initial.includes(writePerm.key)}
+                        disabled={readOnly || (isSystem && initial.includes(writePerm.key))}
                         onCheckedChange={() => togglePermission(writePerm.key)}
                         className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
                       />
@@ -171,7 +179,7 @@ export function RoleDetailEditor({
                       <Checkbox
                         id={`perm-${approvePerm.key}`}
                         checked={selected.has(approvePerm.key)}
-                        disabled={isSystem && initial.includes(approvePerm.key)}
+                        disabled={readOnly || (isSystem && initial.includes(approvePerm.key))}
                         onCheckedChange={() => togglePermission(approvePerm.key)}
                         className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
                       />
@@ -219,9 +227,11 @@ export function RoleDetailEditor({
             )}
           </div>
           <CardDescription className="text-xs">
-            {isSystem
-              ? "System roles cannot be renamed. Built-in permissions are pre-configured."
-              : "Update the role template name and permissions."}
+            {readOnly
+              ? "View role template permissions. Editing requires write access."
+              : isSystem
+                ? "System roles cannot be renamed. Built-in permissions are pre-configured."
+                : "Update the role template name and permissions."}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-4 space-y-4">
@@ -233,7 +243,7 @@ export function RoleDetailEditor({
               id="rn"
               value={n}
               onChange={(e) => setN(e.target.value)}
-              disabled={isSystem}
+              disabled={readOnly || isSystem}
               className="h-10 text-xs"
             />
           </div>
@@ -270,24 +280,34 @@ export function RoleDetailEditor({
           <ArrowLeft className="mr-1.5 size-3.5" />
           Back
         </Button>
-        <Button
-          type="button"
-          onClick={save}
-          disabled={pending}
-          className="text-xs h-9 font-semibold min-w-24 gap-2"
-        >
-          {pending ? (
-            <>
-              <Loader2 className="size-3.5 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Save className="size-3.5" />
-              Save Changes
-            </>
-          )}
-        </Button>
+        {readOnly && canEdit && editHref ? (
+          <Button type="button" className="text-xs h-9 gap-2" asChild>
+            <Link href={editHref}>
+              <Pencil className="size-3.5" />
+              Edit
+            </Link>
+          </Button>
+        ) : null}
+        {!readOnly ? (
+          <Button
+            type="button"
+            onClick={save}
+            disabled={pending}
+            className="text-xs h-9 font-semibold min-w-24 gap-2"
+          >
+            {pending ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="size-3.5" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        ) : null}
       </div>
     </div>
   );

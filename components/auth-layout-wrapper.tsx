@@ -124,9 +124,9 @@ export function LeftInfoSection({ logoUrl, tenantName }: { logoUrl?: string | nu
         </div>
         
         {/* Quote */}
-        <h2 className="text-xl font-bold tracking-tight text-white lg:text-2xl text-center leading-[1.35] max-w-lg">
+        {/* <h2 className="text-xl font-bold tracking-tight text-white lg:text-2xl text-center leading-[1.35] max-w-lg">
           &ldquo;The best login pages disappear.<br />This one already feels fast.&rdquo;
-        </h2>
+        </h2> */}
         
         {/* Author */}
         {/* <div className="flex items-center gap-3 mt-6">

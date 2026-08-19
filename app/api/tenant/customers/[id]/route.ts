@@ -17,7 +17,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_CUSTOMERS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_CUSTOMERS_READ.key);
 
     const customer = await prisma.customer.findUnique({
       where: { id },
@@ -40,7 +40,7 @@ export async function PATCH(
   try {
     await requireCsrf(request);
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_CUSTOMERS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_CUSTOMERS_WRITE.key);
     const body = UpdateCustomerSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -83,7 +83,7 @@ export async function DELETE(
   try {
     await requireCsrf(request);
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_CUSTOMERS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_CUSTOMERS_WRITE.key);
     const meta = requestMeta(request);
 
     const customer = await prisma.customer.findUnique({ where: { id } });

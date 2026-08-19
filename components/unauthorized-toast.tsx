@@ -10,15 +10,22 @@ function UnauthorizedToastInner() {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (searchParams.get("error") === "unauthorized") {
+    const error = searchParams.get("error");
+    if (!error) return;
+
+    if (error === "unauthorized") {
       toast.error("No permission to access");
-      
-      // Remove the query parameter from the URL without reloading the page
-      const newParams = new URLSearchParams(searchParams.toString());
-      newParams.delete("error");
-      const newUrl = pathname + (newParams.toString() ? `?${newParams.toString()}` : "");
-      router.replace(newUrl, { scroll: false });
+    } else if (error === "no_access") {
+      toast.error("You don't have access to any modules. Contact your administrator.");
+    } else {
+      return;
     }
+
+    // Remove the query parameter from the URL without reloading the page
+    const newParams = new URLSearchParams(searchParams.toString());
+    newParams.delete("error");
+    const newUrl = pathname + (newParams.toString() ? `?${newParams.toString()}` : "");
+    router.replace(newUrl, { scroll: false });
   }, [searchParams, pathname, router]);
 
   return null;

@@ -6,7 +6,7 @@ import { parseTenantSettings } from "@/lib/tenant/settings";
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_PAYMENTS_READ.key, "FLEET");
     
     const [customers, transporters, trucks, orders, transports, sales, stations, bankAccounts, tenant] = await Promise.all([
       prisma.customer.findMany({ where: { tenantId: actor.tenantId } }),

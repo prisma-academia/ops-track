@@ -8,7 +8,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, LabelList } from "recharts";
-import type { FleetOverviewData } from "@/app/admin/fleet/types";
+import type { FleetOverviewData } from "@/app/admin/(fleet)/types";
 
 const chartConfig = {
   payment: {

@@ -9,6 +9,7 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 const InflowSchema = z.object({
   customerId: z.string(),
   deliveryId: z.string().optional().nullable(),
+  saleId: z.string().optional().nullable(),
   amount: z.number().positive(),
   paymentType: z.enum(["ADVANCE_DEPOSIT", "PART_PAYMENT", "FULL_SETTLEMENT", "DEBT_CLEARANCE"]),
   paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"]),
@@ -20,7 +21,7 @@ const InflowSchema = z.object({
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_PAYMENTS_WRITE.key, "FLEET");
     const body = InflowSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -29,9 +30,24 @@ export async function POST(request: Request) {
     }
 
     const transaction = await prisma.$transaction(async (tx) => {
+      const deliveryId = body.deliveryId ?? body.saleId ?? null;
+
       const customer = await tx.customer.findFirst({
-        where: { id: body.customerId, tenantId: actor.tenantId }
+        where: { id: body.customerId, tenantId: actor.tenantId },
       });
+
+      const station = !customer
+        ? await tx.station.findFirst({
+            where: { id: body.customerId, tenantId: actor.tenantId },
+          })
+        : null;
+
+      let delivery = deliveryId
+        ? await tx.delivery.findFirst({
+            where: { id: deliveryId, tenantId: actor.tenantId },
+            include: { station: true, organization: true },
+          })
+        : null;
 
       // If paying with a deposit, deduct from deposit balance first
       if (body.paymentMethod === "DEPOSIT") {
@@ -41,7 +57,7 @@ export async function POST(request: Request) {
         }
         await tx.customer.update({
           where: { id: body.customerId },
-          data: { depositBalance: { decrement: body.amount } }
+          data: { depositBalance: { decrement: body.amount } },
         });
       }
 
@@ -55,41 +71,40 @@ export async function POST(request: Request) {
           paymentMethod: body.paymentMethod,
           reference: body.reference,
           receiptUrl: body.receiptUrl,
-          deliveryId: body.deliveryId,
+          deliveryId,
           customerId: customer ? body.customerId : undefined,
+          stationId: station?.id ?? delivery?.stationId ?? undefined,
+          organizationId:
+            delivery?.organizationId ?? station?.organizationId ?? undefined,
           bankAccountId: body.bankAccountId,
         },
       });
 
-      // If advance deposit without a delivery, increment the customer's deposit balance
-      if (customer && body.paymentType === "ADVANCE_DEPOSIT" && !body.deliveryId && body.paymentMethod !== "DEPOSIT") {
+      if (customer && body.paymentType === "ADVANCE_DEPOSIT" && !deliveryId && body.paymentMethod !== "DEPOSIT") {
         await tx.customer.update({
           where: { id: body.customerId },
-          data: { depositBalance: { increment: body.amount } }
+          data: { depositBalance: { increment: body.amount } },
         });
       }
 
-      if (body.deliveryId) {
-        const delivery = await tx.delivery.findFirst({ where: { id: body.deliveryId, tenantId: actor.tenantId } });
-        if (delivery) {
-          const newPaymentReceived = Number(delivery.paymentReceived) + body.amount;
-          const transportFee = delivery.transportCostBorneBy === "CLIENT" ? Number(delivery.transportCost || 0) : 0;
-          const totalSaleAmount = Number(delivery.totalExpectedAmount) + transportFee;
-          let status = delivery.status;
-          if (newPaymentReceived >= totalSaleAmount) {
-            status = "CLEARED";
-          } else if (newPaymentReceived > 0) {
-            status = "PART_PAID";
-          }
-
-          await tx.delivery.update({
-            where: { id: body.deliveryId },
-            data: {
-              paymentReceived: newPaymentReceived,
-              status,
-            },
-          });
+      if (delivery) {
+        const newPaymentReceived = Number(delivery.paymentReceived) + body.amount;
+        const transportFee = delivery.transportCostBorneBy === "CLIENT" ? Number(delivery.transportCost || 0) : 0;
+        const totalSaleAmount = Number(delivery.totalExpectedAmount) + transportFee;
+        let status = delivery.status;
+        if (newPaymentReceived >= totalSaleAmount) {
+          status = "CLEARED";
+        } else if (newPaymentReceived > 0) {
+          status = "PART_PAID";
         }
+
+        await tx.delivery.update({
+          where: { id: delivery.id },
+          data: {
+            paymentReceived: newPaymentReceived,
+            status,
+          },
+        });
       }
 
       return trx;

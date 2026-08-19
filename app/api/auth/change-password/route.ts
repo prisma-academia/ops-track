@@ -127,7 +127,18 @@ export async function POST(request: Request) {
         ip: meta.ip,
         userAgent: meta.userAgent,
       });
-      return ok({ redirect: "/admin/dashboard" });
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { activeModules: true },
+      });
+      const modules = user.activeModules.filter((m) => tenant?.activeModules.includes(m));
+      const redirect =
+        modules.includes("FLEET")
+          ? "/admin"
+          : modules.includes("STATION")
+            ? "/admin/station"
+            : "/admin/auth/login?error=no_access";
+      return ok({ redirect });
     }
 
     if (session.userType === "CLIENT") {

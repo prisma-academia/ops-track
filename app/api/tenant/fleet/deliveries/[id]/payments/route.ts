@@ -46,6 +46,7 @@ export async function POST(
         deliveryId: existingSale.id,
         organizationId: existingSale.organizationId,
         customerId: existingSale.customerId,
+        stationId: existingSale.stationId,
         amount: body.amount,
         bankAccountId: body.bankAccountId,
         description: body.description || `Payment for Fleet Delivery`,

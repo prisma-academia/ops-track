@@ -34,20 +34,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
+    const normalizedName = name.trim().toUpperCase();
+    if (!normalizedName) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
     if (type === "supplier") {
       const created = await prisma.supplier.upsert({
-        where: { name: name.trim() },
+        where: { name: normalizedName },
         update: {},
-        create: { name: name.trim() }
+        create: { name: normalizedName }
       });
       return NextResponse.json({ data: created });
     } else if (type === "depot") {
       let created = await prisma.depot.findFirst({
-        where: { name: name.trim() }
+        where: { name: normalizedName }
       });
       if (!created) {
         created = await prisma.depot.create({
-          data: { name: name.trim(), tenantId: actor.tenantId }
+          data: { name: normalizedName, tenantId: actor.tenantId }
         });
       }
       return NextResponse.json({ data: created });

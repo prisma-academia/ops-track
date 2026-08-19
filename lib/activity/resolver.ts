@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/client";
+import { getActivityStatus } from "@/lib/activity/status";
 
 export async function resolveActivityLogRows(rows: any[]) {
   if (!rows || rows.length === 0) return [];
@@ -115,6 +116,7 @@ export async function resolveActivityLogRows(rows: any[]) {
       tenantDisplay: r.tenant?.name || r.tenantId,
       actorDisplay,
       targetDisplay,
+      status: getActivityStatus(r.action),
     };
   });
 }

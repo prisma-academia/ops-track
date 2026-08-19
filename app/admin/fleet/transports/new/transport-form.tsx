@@ -343,7 +343,7 @@ export function CreateTransportForm({
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label className={fieldErrors?.destination ? "text-destructive" : ""}>Primary Destination State*</Label>
+                    <Label className={fieldErrors?.destination ? "text-destructive" : ""}>Primary Destination*</Label>
                     <Popover open={openStates[`dest-${index}`]} onOpenChange={(val) => togglePopover(`dest-${index}`, val)}>
                       <PopoverTrigger asChild>
                         <Button type="button" variant="outline" className={`w-full justify-between font-normal ${fieldErrors?.destination ? "border-destructive" : ""}`}>

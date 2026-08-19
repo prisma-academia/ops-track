@@ -5,12 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { cn, formatHumanReadableDate, formatShortCurrency } from "@/lib/utils";
+import { cn, formatHumanReadableDate } from "@/lib/utils";
 import { z } from "zod";
-import { apiPost, apiPatch } from "@/lib/client/api";
-import { DataTable } from "@/components/data-table";
-import type { ColumnDef } from "@tanstack/react-table";
-import { usePaginatedQuery } from "@/hooks/use-paginated-query";
+import { apiGet, apiPost, apiPatch } from "@/lib/client/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -38,14 +35,12 @@ import {
   MapPin,
   Store,
   User,
-  CheckCircle2,
-  AlertCircle,
   Truck,
   Flame,
   Fuel,
   Wallet,
-  Clock,
   Settings,
+  TrendingUp,
   Plus,
   Droplet,
   Cloud,
@@ -98,6 +93,16 @@ const PRODUCT_NAMES: Record<string, string> = {
   LPG: "LPG (Gas)",
 };
 
+function isToday(dateInput: string | Date): boolean {
+  const d = new Date(dateInput);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
 const StatusBadge = ({ status }: { status: string }) => {
   switch (status) {
     case "ACTIVE":
@@ -120,16 +125,18 @@ export function StationDetailsManager({
   station: any;
   users: any[];
 }) {
-  console.log("Station Details Data:", station);
-
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("overview");
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [nozzleCount, setNozzleCount] = useState<number>(1);
   const [selectedManagerId, setSelectedManagerId] = useState<string>("");
   const [openManagerSelect, setOpenManagerSelect] = useState(false);
   const [isAssigningManager, setIsAssigningManager] = useState(false);
+
+  const [recentSales, setRecentSales] = useState<any[]>([]);
+  const [todayExpenses, setTodayExpenses] = useState<any[]>([]);
+  const [lastWaybill, setLastWaybill] = useState<any | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(true);
 
   const tankForm = useForm({
     resolver: zodResolver(AddTankSchema),
@@ -292,392 +299,35 @@ export function StationDetailsManager({
     setActiveDialog("config");
   };
 
-  const openAddPumpDialogForTank = (tankId: string) => {
-    const nextPumpIndex = (station.pumps?.length || 0) + 1;
-    pumpForm.reset({
-      name: `PUMP ${nextPumpIndex}`,
-      tankId: tankId,
-      nozzles: [{ name: "Nozzle A" }]
-    });
-    setConfigTab("addPump");
-    setActiveDialog("config");
-  };
-
   const openConfigDialog = () => {
     openAddTankDialog();
   };
 
-  // ── Server-paginated queries for each tab ──
-  const dippingsQuery = usePaginatedQuery<any>({
-    baseUrl: `/api/tenant/stations/${station.id}/dippings`,
-    syncWithUrl: false,
-    enabled: activeTab === "dippings",
-  });
-  const shiftsQuery = usePaginatedQuery<any>({
-    baseUrl: `/api/tenant/stations/${station.id}/shifts`,
-    syncWithUrl: false,
-    enabled: activeTab === "shifts",
-  });
-  const waybillsQuery = usePaginatedQuery<any>({
-    baseUrl: `/api/tenant/stations/${station.id}/waybills`,
-    syncWithUrl: false,
-    enabled: activeTab === "waybills",
-  });
-  const expensesQuery = usePaginatedQuery<any>({
-    baseUrl: `/api/tenant/stations/${station.id}/expenses`,
-    syncWithUrl: false,
-    enabled: activeTab === "expenses",
-  });
-  const salesQuery = usePaginatedQuery<any>({
-    baseUrl: `/api/tenant/stations/${station.id}/sales-logs`,
-    syncWithUrl: false,
-    enabled: activeTab === "sales",
-  });
+  useEffect(() => {
+    let cancelled = false;
 
-  // ── Column definitions ──
-  const dippingsColumns: ColumnDef<any>[] = [
-    {
-      accessorKey: "recorded_at",
-      header: "Date & Time",
-      cell: ({ row }) => (
-        <span className="text-foreground/90">{formatHumanReadableDate(row.original.recorded_at || row.original.recordedAt)}</span>
-      ),
-    },
-    {
-      id: "tank_name",
-      header: "Tank",
-      cell: ({ row }) => (
-        <span className="font-medium text-foreground">{row.original.tank_name || row.original.tank?.name || "—"}</span>
-      ),
-    },
-    {
-      id: "product_type",
-      header: "Product",
-      cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">{row.original.product_type || row.original.tank?.productType || "—"}</span>
-      ),
-    },
-    {
-      id: "reason",
-      header: () => <div className="text-center">Reason / Type</div>,
-      cell: ({ row }) => {
-        const o = row.original;
-        const reason = o.reason || "ROUTINE";
-        const isPriceChange = reason === "PRICE_CHANGE";
-        const isEod = reason === "END_OF_DAY";
+    async function loadOverview() {
+      setOverviewLoading(true);
+      const base = `/api/tenant/stations/${station.id}`;
+      const [salesRes, expensesRes, waybillRes] = await Promise.all([
+        apiGet<any[]>(`${base}/sales-logs?page=1&take=5`),
+        apiGet<any[]>(`${base}/expenses?page=1&take=50`),
+        apiGet<any[]>(`${base}/waybills?page=1&take=1`),
+      ]);
 
-        return (
-          <div className="flex flex-col items-center gap-1">
-            <Badge
-              variant="outline"
-              className={cn(
-                "text-[10px] font-semibold uppercase tracking-wider",
-                isPriceChange
-                  ? "text-indigo-600 border-indigo-200 bg-indigo-50 dark:bg-indigo-950/30"
-                  : isEod
-                  ? "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30"
-                  : "text-slate-600 border-slate-200 bg-slate-50 dark:bg-slate-900/30"
-              )}
-            >
-              {reason.replace(/_/g, " ")}
-            </Badge>
-            {o.closingIndex > 0 && (
-              <span className="text-[9px] text-muted-foreground font-mono">Closing #{o.closingIndex}</span>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      id: "price",
-      header: () => <div className="text-right whitespace-nowrap">Unit Price</div>,
-      cell: ({ row }) => {
-        const o = row.original;
-        if (o.pricePerLiter != null) {
-          return (
-            <div className="text-right font-mono text-xs text-foreground whitespace-nowrap">
-              <div>₦{Number(o.pricePerLiter).toLocaleString()}/L</div>
-              {o.newPricePerLiter != null && (
-                <div className="text-[10px] text-indigo-600 font-semibold">New: ₦{Number(o.newPricePerLiter).toLocaleString()}/L</div>
-              )}
-            </div>
-          );
-        }
-        return <div className="text-right text-muted-foreground text-xs">—</div>;
-      },
-    },
-    {
-      id: "dip_levels",
-      header: () => <div className="text-right whitespace-nowrap">Dip Levels (Op / Cl)</div>,
-      cell: ({ row }) => {
-        const o = row.original;
-        const productType = o.product_type || o.tank?.productType;
-        const unit = productType === "LPG" ? "KG" : "L";
+      if (cancelled) return;
 
-        if (o.openingLiters != null) {
-          return (
-            <div className="text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
-              <div>Op: {Number(o.openingLiters).toLocaleString()} {unit}</div>
-              {o.closingLiters != null ? (
-                <div>Cl: {Number(o.closingLiters).toLocaleString()} {unit}</div>
-              ) : (
-                <div className="text-amber-600 font-semibold">Active Open</div>
-              )}
-            </div>
-          );
-        }
+      setRecentSales(Array.isArray(salesRes.data) ? salesRes.data : []);
+      const expenses = Array.isArray(expensesRes.data) ? expensesRes.data : [];
+      setTodayExpenses(expenses.filter((e) => isToday(e.createdAt)));
+      const waybills = Array.isArray(waybillRes.data) ? waybillRes.data : [];
+      setLastWaybill(waybills[0] ?? null);
+      setOverviewLoading(false);
+    }
 
-        const liters = Number(o.dipping_liters ?? o.dippingLiters ?? 0);
-        return <div className="text-right font-mono text-xs text-foreground">{liters.toLocaleString()} {unit}</div>;
-      },
-    },
-    {
-      id: "volume_and_revenue",
-      header: () => <div className="text-right whitespace-nowrap">Sold & Revenue</div>,
-      cell: ({ row }) => {
-        const o = row.original;
-        const productType = o.product_type || o.tank?.productType;
-        const unit = productType === "LPG" ? "KG" : "L";
-
-        if (o.litersSold != null) {
-          return (
-            <div className="text-right whitespace-nowrap">
-              <div className="text-xs font-semibold text-emerald-600 font-mono">
-                {Number(o.litersSold).toLocaleString()} {unit}
-              </div>
-              {o.revenue != null && (
-                <div className="text-xs font-bold text-foreground font-mono">
-                  {formatShortCurrency(Number(o.revenue))}
-                </div>
-              )}
-            </div>
-          );
-        }
-
-        return <div className="text-right text-muted-foreground text-xs">—</div>;
-      },
-    },
-  ];
-
-  const shiftsColumns: ColumnDef<any>[] = [
-    {
-      accessorKey: "shiftDate",
-      header: "Date",
-      cell: ({ row }) => <span className="text-foreground/90">{formatHumanReadableDate(row.original.shiftDate)}</span>,
-    },
-    {
-      id: "attendant",
-      header: "Attendant",
-      cell: ({ row }) => {
-        const a = row.original.attendant;
-        return <span className="font-medium text-foreground">{a ? `${a.firstName ?? ""} ${a.lastName ?? ""}`.trim() : "Unknown"}</span>;
-      },
-    },
-    {
-      id: "dispenser",
-      header: "Dispenser",
-      cell: ({ row }) => {
-        const nozzle = row.original.nozzle;
-        const pump = nozzle?.pump;
-        return <span className="text-muted-foreground">{pump?.name ?? "—"} - {nozzle?.name ?? "—"}</span>;
-      },
-    },
-    {
-      id: "meters",
-      header: () => <div className="text-right">Meters (Op / Cl)</div>,
-      cell: ({ row }) => {
-        const active = row.original.closingMeter === null;
-        return (
-          <div className="text-right font-mono text-xs text-muted-foreground">
-            {Number(row.original.openingMeter).toLocaleString()} / {active ? "—" : Number(row.original.closingMeter).toLocaleString()}
-          </div>
-        );
-      },
-    },
-    {
-      id: "volume_sold",
-      header: () => <div className="text-right">Volume Sold</div>,
-      cell: ({ row }) => {
-        const active = row.original.closingMeter === null;
-        return <div className="text-right font-semibold text-foreground">{active ? "—" : `${Number(row.original.litersSold).toLocaleString()} L`}</div>;
-      },
-    },
-    {
-      id: "status",
-      header: () => <div className="text-center">Status</div>,
-      cell: ({ row }) => {
-        const active = row.original.closingMeter === null;
-        const reconciled = !!row.original.reconciledAt;
-        return (
-          <div className="text-center">
-            {active ? (
-              <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900">Active</Badge>
-            ) : reconciled ? (
-              <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900">Reconciled</Badge>
-            ) : (
-              <Badge variant="outline" className="text-stone-600 border-stone-200 bg-stone-50 dark:bg-stone-900/30 dark:border-stone-800">Closed</Badge>
-            )}
-          </div>
-        );
-      },
-    },
-  ];
-
-  const waybillsColumns: ColumnDef<any>[] = [
-    {
-      id: "date",
-      header: "Date",
-      cell: ({ row }) => <span className="text-foreground/90">{formatHumanReadableDate(row.original.waybill?.dispatchedAt)}</span>,
-    },
-    {
-      id: "number",
-      header: "Waybill No.",
-      cell: ({ row }) => <span className="font-mono text-xs font-semibold">{row.original.waybill?.number}</span>,
-    },
-    {
-      id: "driver",
-      header: "Driver / Truck",
-      cell: ({ row }) => <span className="text-muted-foreground text-xs">{row.original.waybill?.driverName} • {row.original.waybill?.truckPlate}</span>,
-    },
-    {
-      id: "volume_dispatched",
-      header: () => <div className="text-right">Volume Dispatched</div>,
-      cell: ({ row }) => <div className="text-right font-mono font-medium">{Number(row.original.litersToDispense || 0).toLocaleString()} L</div>,
-    },
-    {
-      id: "variance",
-      header: () => <div className="text-right">Variance</div>,
-      cell: ({ row }) => {
-        const dispatched = Number(row.original.litersToDispense) || 0;
-        const received = row.original.litersReceived ? Number(row.original.litersReceived) : null;
-        const variance = received !== null ? received - dispatched : null;
-        return (
-          <div className="text-right font-mono font-medium">
-            {variance === null ? <span className="text-muted-foreground">—</span> : (
-              <span className={variance < 0 ? "text-rose-600" : "text-emerald-600"}>
-                {variance > 0 ? "+" : ""}{variance.toLocaleString()} L
-              </span>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      id: "status",
-      header: () => <div className="text-center">Status</div>,
-      cell: ({ row }) => (
-        <div className="text-center">
-          <Badge variant="outline" className={
-            row.original.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" :
-            row.original.status === "IN_TRANSIT" ? "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/30" : ""
-          }>{row.original.status}</Badge>
-        </div>
-      ),
-    },
-  ];
-
-  const expensesColumns: ColumnDef<any>[] = [
-    {
-      accessorKey: "createdAt",
-      header: "Date",
-      cell: ({ row }) => <span className="text-foreground/90">{formatHumanReadableDate(row.original.createdAt)}</span>,
-    },
-    {
-      accessorKey: "category",
-      header: "Category",
-      cell: ({ row }) => <Badge variant="secondary" className="text-[10px] font-medium">{row.original.category}</Badge>,
-    },
-    {
-      accessorKey: "description",
-      header: "Description",
-      cell: ({ row }) => <span className="text-muted-foreground truncate max-w-xs block">{row.original.description}</span>,
-    },
-    {
-      id: "amount",
-      header: () => <div className="text-right">Amount</div>,
-      cell: ({ row }) => <div className="text-right font-medium">₦{Number(row.original.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>,
-    },
-    {
-      accessorKey: "status",
-      header: () => <div className="text-center">Status</div>,
-      cell: ({ row }) => (
-        <div className="text-center">
-          <Badge variant="outline" className={
-            row.original.status === "APPROVED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" :
-            row.original.status === "REJECTED" ? "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30" :
-            "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30"
-          }>{row.original.status}</Badge>
-        </div>
-      ),
-    },
-  ];
-
-  const salesColumns: ColumnDef<any>[] = [
-    {
-      accessorKey: "logDate",
-      header: "Date",
-      cell: ({ row }) => {
-        const parts = formatHumanReadableDate(row.original.logDate).split(" ");
-        return <span className="text-foreground/90">{parts.slice(0, 3).join(" ")}</span>;
-      },
-    },
-    {
-      accessorKey: "productType",
-      header: "Product",
-      cell: ({ row }) => <Badge variant="secondary" className="text-[10px] font-medium font-mono">{row.original.productType}</Badge>,
-    },
-    {
-      id: "volume_sold",
-      header: () => <div className="text-right">Volume Sold</div>,
-      cell: ({ row }) => <div className="text-right font-medium">{Number(row.original.litersSold).toLocaleString()} L</div>,
-    },
-
-    {
-      id: "digital",
-      header: () => <div className="text-right">POS / Transfer</div>,
-      cell: ({ row }) => {
-        const digital = Number(row.original.amountPos) + Number(row.original.amountTransfer);
-        return <div className="text-right text-muted-foreground">₦{digital.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>;
-      },
-    },
-    {
-      id: "total",
-      header: () => <div className="text-right">Total Revenue</div>,
-      cell: ({ row }) => {
-        const total = Number(row.original.amountPos) + Number(row.original.amountTransfer);
-        return <div className="text-right font-bold text-foreground">₦{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>;
-      },
-    },
-    {
-      accessorKey: "status",
-      header: () => <div className="text-center">Status</div>,
-      cell: ({ row }) => {
-        const flags: string[] = [];
-
-        return (
-          <div className="flex flex-col items-center gap-1">
-            {row.original.status === "APPROVED" ? (
-              <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 text-[10px] font-semibold">Approved</Badge>
-            ) : row.original.status === "REJECTED" ? (
-              <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50 text-[10px] font-semibold">Rejected</Badge>
-            ) : (
-              <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 text-[10px] font-semibold">Pending</Badge>
-            )}
-
-          </div>
-        );
-      },
-    },
-    {
-      id: "recorded_by",
-      header: () => <div className="text-center">Recorded By</div>,
-      cell: ({ row }) => {
-        const r = row.original.recordedBy;
-        const recorder = r ? `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() : "Unknown";
-        return <div className="text-center text-muted-foreground">{recorder}</div>;
-      },
-    },
-  ];
+    loadOverview();
+    return () => { cancelled = true; };
+  }, [station.id]);
 
   // Derive manager from staff (take first or show none)
   const manager = station.staff && station.staff.length > 0 ? station.staff[0] : null;
@@ -695,6 +345,8 @@ export function StationDetailsManager({
     });
   }
 
+  const todayExpensesTotal = todayExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
   return (
     <div className="space-y-6">
       {/* ---------------- FULL WIDTH HEADER CARD ---------------- */}
@@ -707,7 +359,8 @@ export function StationDetailsManager({
               </Link>
             </Button>
             <div>
-              <CardTitle className="text-xl">Station Overview</CardTitle>
+              <CardTitle className="text-xl">{station.name}</CardTitle>
+              <CardDescription className="text-xs mt-0.5">Station overview · {station.code}</CardDescription>
             </div>
           </div>
           <CardAction className="flex flex-wrap items-center gap-2">
@@ -829,270 +482,249 @@ export function StationDetailsManager({
         </Card>
       </div>
 
-      {/* ---------------- TABS NAVIGATION ---------------- */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex items-center justify-between mb-4">
-          <TabsList className="h-4 px-1.5 py-2 justify-start md:w-auto gap-1">
-            <TabsTrigger value="overview" className="px-6 py-4 text-[15px] font-semibold">Overview</TabsTrigger>
-            <TabsTrigger value="dippings" className="px-6 py-4 text-[15px] font-semibold">Dippings</TabsTrigger>
-            <TabsTrigger value="shifts" className="px-6 py-4 text-[15px] font-semibold">Shift Logs</TabsTrigger>
-            <TabsTrigger value="waybills" className="px-6 py-4 text-[15px] font-semibold">Waybills</TabsTrigger>
-            <TabsTrigger value="expenses" className="px-6 py-4 text-[15px] font-semibold">Expenses</TabsTrigger>
-            <TabsTrigger value="sales" className="px-6 py-4 text-[15px] font-semibold">Sales</TabsTrigger>
-          </TabsList>
-        </div>
+      {/* ---------------- ACTIVITY SNAPSHOT ---------------- */}
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Recent Sales */}
+        <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <TrendingUp size={15} className="text-emerald-500" />
+              Recent Sales
+            </CardTitle>
+            <CardDescription className="text-xs">Latest recorded sales logs</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {overviewLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground text-xs">
+                <SpinnerEllipsis />
+              </div>
+            ) : recentSales.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">No sales recorded yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {recentSales.map((sale) => {
+                  const revenue = Number(sale.amountPos) + Number(sale.amountTransfer);
+                  return (
+                    <div key={sale.id} className="flex items-center justify-between gap-3 py-2 border-b border-border/40 last:border-0">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-[9px] font-mono">{sale.productType}</Badge>
+                          <span className="text-[10px] text-muted-foreground truncate">
+                            {formatHumanReadableDate(sale.logDate).split(" ").slice(0, 3).join(" ")}
+                          </span>
+                        </div>
+                        <p className="text-xs font-mono text-muted-foreground mt-0.5">
+                          {Number(sale.litersSold).toLocaleString()} L
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold font-mono text-foreground">
+                          ₦{revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </p>
+                        <Badge variant="outline" className={cn(
+                          "text-[8px] mt-0.5",
+                          sale.status === "APPROVED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" :
+                          sale.status === "REJECTED" ? "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30" :
+                          "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30"
+                        )}>
+                          {sale.status ?? "PENDING"}
+                        </Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* ---------------- OVERVIEW TAB ---------------- */}
-        <TabsContent value="overview" className="mt-0 space-y-6 animate-in fade-in duration-500">
-          
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 dark:border-stone-800 pb-3">
-            <div>
-              <h2 className="text-base font-bold text-foreground">Infrastructure Overview</h2>
-              <p className="text-xs text-muted-foreground">Storage tanks and dispensing pumps layout mapping</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={openAddTankDialog} className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800 text-foreground">
-                <Plus size={14} className="text-primary" />
-                Add Tank
-              </Button>
-              <Button size="sm" variant="outline" onClick={openAddPumpDialog} className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800 text-foreground">
-                <Plus size={14} className="text-primary" />
-                Add Pump / Dispenser
-              </Button>
-            </div>
-          </div>
-          
-          <div className="flex flex-col gap-12 lg:gap-16">
-            {station.tanks.length === 0 ? (
-              <div className="w-full flex flex-col items-center justify-center py-16 px-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-2xl bg-stone-50/50 dark:bg-stone-900/10 text-center">
-                <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-4">
-                  <Droplet size={24} />
+        {/* Today's Expenses */}
+        <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Wallet size={15} className="text-amber-500" />
+              Today&apos;s Expenses
+            </CardTitle>
+            <CardDescription className="text-xs">Expenses recorded today only</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {overviewLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground text-xs">
+                <SpinnerEllipsis />
+              </div>
+            ) : todayExpenses.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">No expenses recorded today.</p>
+            ) : (
+              <>
+                <div className="mb-4 p-3 rounded-lg bg-amber-500/5 border border-amber-500/15">
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Total Today</p>
+                  <p className="text-xl font-bold font-mono text-foreground mt-0.5">
+                    ₦{todayExpensesTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{todayExpenses.length} expense{todayExpenses.length !== 1 ? "s" : ""}</p>
                 </div>
-                <h3 className="text-base font-bold text-foreground mb-1">No Infrastructure Configured</h3>
-                <p className="text-xs text-muted-foreground max-w-sm mb-6">
-                  Get started by adding storage fuel tanks and pump dispensers to map out this retail station's physical layout.
-                </p>
-                <div className="flex items-center gap-3">
-                  <Button onClick={openAddTankDialog} className="gap-2 shadow-xs text-xs h-9">
-                    <Plus size={15} />
-                    Add Storage Tank
-                  </Button>
-                  <Button variant="outline" onClick={openAddPumpDialog} className="gap-2 text-xs h-9 bg-white dark:bg-stone-950 border-stone-200 dark:border-stone-800 text-foreground">
-                    <Plus size={15} />
-                    Add Pump / Dispenser
-                  </Button>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {todayExpenses.map((expense) => (
+                    <div key={expense.id} className="flex items-start justify-between gap-2 py-2 border-b border-border/40 last:border-0">
+                      <div className="min-w-0">
+                        <Badge variant="secondary" className="text-[9px]">{expense.category.replace(/_/g, " ")}</Badge>
+                        <p className="text-xs text-muted-foreground truncate mt-1">{expense.description}</p>
+                      </div>
+                      <p className="text-xs font-mono font-semibold text-foreground shrink-0">
+                        ₦{Number(expense.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Last Waybill */}
+        <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Truck size={15} className="text-blue-500" />
+              Last Waybill
+            </CardTitle>
+            <CardDescription className="text-xs">Most recent fuel delivery</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {overviewLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground text-xs">
+                <SpinnerEllipsis />
+              </div>
+            ) : !lastWaybill ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">No waybill deliveries yet.</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-sm font-bold text-foreground">{lastWaybill.waybill?.number ?? "—"}</span>
+                  <Badge variant="outline" className={cn(
+                    "text-[9px]",
+                    lastWaybill.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" :
+                    lastWaybill.status === "IN_TRANSIT" ? "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/30" :
+                    "text-stone-600 border-stone-200 bg-stone-50 dark:bg-stone-900/30"
+                  )}>
+                    {lastWaybill.status}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Dispatched</p>
+                    <p className="font-medium text-foreground mt-0.5">
+                      {formatHumanReadableDate(lastWaybill.waybill?.dispatchedAt).split(" ").slice(0, 3).join(" ")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Volume</p>
+                    <p className="font-mono font-semibold text-foreground mt-0.5">
+                      {Number(lastWaybill.litersToDispense || 0).toLocaleString()} L
+                    </p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Driver / Truck</p>
+                    <p className="text-muted-foreground mt-0.5">
+                      {lastWaybill.waybill?.driverName ?? "—"} • {lastWaybill.waybill?.truckPlate ?? "—"}
+                    </p>
+                  </div>
+                  {lastWaybill.litersReceived != null && (
+                    <div className="col-span-2 pt-2 border-t border-border/40">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Variance</span>
+                        {(() => {
+                          const dispatched = Number(lastWaybill.litersToDispense) || 0;
+                          const received = Number(lastWaybill.litersReceived);
+                          const variance = received - dispatched;
+                          return (
+                            <span className={cn("font-mono font-semibold text-sm", variance < 0 ? "text-rose-600" : "text-emerald-600")}>
+                              {variance > 0 ? "+" : ""}{variance.toLocaleString()} L
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            ) : (
-              station.tanks.map((tank: any) => {
-                const currentLitres = Number(tank.currentLiters || 0);
-
-                const capacity = Number(tank.capacity);
-                const tankPumps = station.pumps.filter((p: any) => p.tankId === tank.id);
-
-                return (
-                  <div key={tank.id} className="flex flex-col lg:flex-row items-center lg:items-stretch w-full relative">
-                    
-                    {/* TANK CONTAINER */}
-                    <div className="w-full lg:w-[320px] xl:w-[380px] shrink-0 relative flex flex-col justify-center">
-                       <div className="mb-3 flex items-center justify-between px-1">
-                         <div className="flex items-center gap-2">
-                           <Link href={`/admin/stations/${station.id}/tanks/${tank.id}`}>
-                             <span className="text-sm font-bold text-foreground hover:underline cursor-pointer">{tank.name}</span>
-                           </Link>
-                           <StatusBadge status={tank.status || "ACTIVE"} />
-                         </div>
-                         <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">{tank.productType}</Badge>
-                       </div>
-                       
-                       <div className="relative z-10 w-full">
-                         <AssetTank 
-                           currentLitres={currentLitres} 
-                           maxCapacity={capacity} 
-                           label={tank.name} 
-                           type={tank.productType === "LPG" ? "gas" : "fuel"} 
-                         />
-                       </div>
-
-                       {/* Tank horizontal connector (Desktop) */}
-                       {tankPumps.length > 0 && (
-                         <div className="hidden lg:block absolute top-1/2 -right-8 w-8 border-t-2 border-dashed border-border/60 -translate-y-[1px]" />
-                       )}
-                    </div>
-
-                    {/* PUMPS CONTAINER */}
-                    <div className="flex-1 w-full relative ml-4 lg:ml-8 pt-6 lg:pt-0 flex flex-col justify-center">
-                      {tankPumps.length === 0 ? (
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-2xl bg-stone-50/50 dark:bg-stone-900/10 lg:ml-8">
-                          <p className="text-xs text-muted-foreground italic">No dispensers connected to this tank</p>
-                          <Button 
-                            type="button" 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => openAddPumpDialogForTank(tank.id)}
-                            className="h-8 gap-1.5 text-xs bg-white dark:bg-stone-950 border-stone-200 dark:border-stone-800 text-foreground"
-                          >
-                            <Plus size={13} className="text-primary" />
-                            Connect Pump
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="space-y-5">
-                          {tankPumps.map((pump: any, index: number) => {
-                            const isFirst = index === 0;
-                            const isLast = index === tankPumps.length - 1;
-                            return (
-                              <div key={pump.id} className="relative pl-8 lg:pl-10">
-                                {/* Vertical tree line */}
-                                <div 
-                                  className={`absolute left-0 border-l-2 border-dashed border-border/60 
-                                    ${isFirst ? 'top-[-24px] lg:top-[50%]' : 'top-0'} 
-                                    ${isLast ? 'bottom-auto' : 'bottom-[-20px]'} 
-                                    ${isLast ? (isFirst ? 'h-[calc(50%+24px)] lg:h-0' : 'h-[50%]') : 'h-auto'}
-                                  `}
-                                />
-                                {/* Horizontal connector to pump */}
-                                <div className="absolute w-8 lg:w-10 border-t-2 border-dashed border-border/60 left-0 top-1/2 -translate-y-[1px]" />
-                                
-                                <Card className="border-border/40 shadow-sm relative z-10 bg-card/80 backdrop-blur-sm py-2">
-                                  <CardHeader className="px-4 py-0">
-                                    <CardTitle className="font-semibold text-sm flex items-center justify-between">
-                                      <span className="flex items-center gap-2">
-                                        <div className="p-1.5 bg-primary/10 text-primary rounded-md">
-                                          <Fuel size={14} />
-                                        </div>
-                                        {pump.name}
-                                      </span>
-                                      <StatusBadge status={pump.status || "ACTIVE"} />
-                                    </CardTitle>
-                                  </CardHeader>
-                                  <CardContent className="px-4 pb-4 pt-0">
-                                    <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider block mb-2 mt-1">Nozzles ({pump.nozzles.length})</div>
-                                    
-                                    {/* Connecting Lines to Nozzles inside Pump */}
-                                    <div className="space-y-3">
-                                      {pump.nozzles.map((noz: any, nIndex: number) => {
-                                        const isLastNoz = nIndex === pump.nozzles.length - 1;
-                                        return (
-                                          <div key={noz.id} className="relative pl-6">
-                                            {/* Vertical tree line for nozzle */}
-                                            <div 
-                                              className="absolute left-1 border-l-2 border-dashed border-border/40"
-                                              style={{
-                                                top: nIndex === 0 ? '-12px' : '0',
-                                                bottom: isLastNoz ? 'auto' : '-12px',
-                                                height: isLastNoz ? (nIndex === 0 ? '28px' : '16px') : 'auto'
-                                              }}
-                                            />
-                                            {/* Horizontal connector to nozzle */}
-                                            <div className="absolute w-5 border-t-2 border-dashed border-border/40 left-1 top-[16px]" />
-                                            
-                                            <div className="flex items-center justify-between w-full text-xs bg-background text-foreground px-3 py-2 rounded-md font-medium border border-border/50 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                                              <span className="flex items-center gap-2">
-                                                <div className={`size-2 rounded-full ${
-                                                  noz.status === 'ACTIVE' || !noz.status ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]' :
-                                                  noz.status === 'ISSUE' ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.3)]' :
-                                                  noz.status === 'MAINTENANCE' ? 'bg-amber-500' : 'bg-stone-500'
-                                                }`} />
-                                                {noz.name}
-                                              </span>
-                                              <span className="text-[10px] text-muted-foreground uppercase tracking-widest">{noz.status || 'ACTIVE'}</span>
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })
             )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ---------------- TANK OVERVIEW ---------------- */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 dark:border-stone-800 pb-3">
+          <div>
+            <h2 className="text-base font-bold text-foreground">Tank Overview</h2>
+            <p className="text-xs text-muted-foreground">Live storage levels across all tanks</p>
           </div>
-        </TabsContent>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={openAddTankDialog} className="h-8 gap-1.5 text-xs">
+              <Plus size={14} className="text-primary" />
+              Add Tank
+            </Button>
+            <Button size="sm" variant="outline" onClick={openAddPumpDialog} className="h-8 gap-1.5 text-xs">
+              <Plus size={14} className="text-primary" />
+              Add Pump
+            </Button>
+          </div>
+        </div>
 
-        {/* ---------------- DIPPINGS TAB ---------------- */}
-        <TabsContent value="dippings" className="mt-0 animate-in fade-in duration-500">
-          <DataTable
-            columns={dippingsColumns}
-            data={(dippingsQuery.data ?? [])}
-            isLoading={dippingsQuery.isLoading}
-            serverPagination={{
-              ...dippingsQuery.meta,
-              onPageChange: dippingsQuery.setPage,
-              onPageSizeChange: dippingsQuery.setPageSize,
-            }}
-            empty="No dipping records found."
-          />
-        </TabsContent>
+        {station.tanks.length === 0 ? (
+          <div className="w-full flex flex-col items-center justify-center py-16 px-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-2xl bg-stone-50/50 dark:bg-stone-900/10 text-center">
+            <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-4">
+              <Droplet size={24} />
+            </div>
+            <h3 className="text-base font-bold text-foreground mb-1">No Tanks Configured</h3>
+            <p className="text-xs text-muted-foreground max-w-sm mb-6">
+              Add storage tanks to start tracking fuel levels at this station.
+            </p>
+            <Button onClick={openAddTankDialog} className="gap-2 shadow-xs text-xs h-9">
+              <Plus size={15} />
+              Add Storage Tank
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {station.tanks.map((tank: any) => {
+              const currentLitres = Number(tank.currentLiters || 0);
+              const capacity = Number(tank.capacity);
+              const tankPumps = station.pumps.filter((p: any) => p.tankId === tank.id);
+              const nozzleCount = tankPumps.reduce((sum: number, p: any) => sum + (p.nozzles?.length ?? 0), 0);
 
-        {/* ---------------- SHIFTS TAB ---------------- */}
-        <TabsContent value="shifts" className="mt-0 animate-in fade-in duration-500">
-          <DataTable
-            columns={shiftsColumns}
-            data={(shiftsQuery.data ?? [])}
-            isLoading={shiftsQuery.isLoading}
-            serverPagination={{
-              ...shiftsQuery.meta,
-              onPageChange: shiftsQuery.setPage,
-              onPageSizeChange: shiftsQuery.setPageSize,
-            }}
-            empty="No shift logs found."
-          />
-        </TabsContent>
-
-        {/* ---------------- WAYBILLS TAB ---------------- */}
-        <TabsContent value="waybills" className="mt-0 animate-in fade-in duration-500">
-          <DataTable
-            columns={waybillsColumns}
-            data={(waybillsQuery.data ?? [])}
-            isLoading={waybillsQuery.isLoading}
-            serverPagination={{
-              ...waybillsQuery.meta,
-              onPageChange: waybillsQuery.setPage,
-              onPageSizeChange: waybillsQuery.setPageSize,
-            }}
-            empty="No waybill records found."
-          />
-        </TabsContent>
-
-        {/* ---------------- EXPENSES TAB ---------------- */}
-        <TabsContent value="expenses" className="mt-0 animate-in fade-in duration-500">
-          <DataTable
-            columns={expensesColumns}
-            data={(expensesQuery.data ?? [])}
-            isLoading={expensesQuery.isLoading}
-            serverPagination={{
-              ...expensesQuery.meta,
-              onPageChange: expensesQuery.setPage,
-              onPageSizeChange: expensesQuery.setPageSize,
-            }}
-            empty="No expense records found."
-          />
-        </TabsContent>
-
-        {/* ---------------- SALES TAB ---------------- */}
-        <TabsContent value="sales" className="mt-0 animate-in fade-in duration-500">
-          <DataTable
-            columns={salesColumns}
-            data={(salesQuery.data ?? [])}
-            isLoading={salesQuery.isLoading}
-            serverPagination={{
-              ...salesQuery.meta,
-              onPageChange: salesQuery.setPage,
-              onPageSizeChange: salesQuery.setPageSize,
-            }}
-            empty="No sales records found."
-          />
-        </TabsContent>
-
-      </Tabs>
+              return (
+                <div key={tank.id} className="flex flex-col gap-2">
+                  <Link href={`/admin/stations/${station.id}/tanks/${tank.id}`} className="group">
+                    <div className="relative">
+                      <AssetTank
+                        variant="compact"
+                        currentLitres={currentLitres}
+                        maxCapacity={capacity}
+                        label={tank.name}
+                        type={tank.productType === "LPG" ? "gas" : "fuel"}
+                        className="group-hover:border-primary/40 group-hover:shadow-md transition-all duration-200 pt-8"
+                      />
+                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-1">
+                        <Badge variant="outline" className="font-mono text-[9px] bg-background/80 backdrop-blur-sm">
+                          {tank.productType}
+                        </Badge>
+                        <StatusBadge status={tank.status || "ACTIVE"} />
+                      </div>
+                    </div>
+                  </Link>
+                  {(tankPumps.length > 0 || nozzleCount > 0) && (
+                    <p className="text-[10px] text-center text-muted-foreground">
+                      {tankPumps.length} pump{tankPumps.length !== 1 ? "s" : ""} · {nozzleCount} nozzle{nozzleCount !== 1 ? "s" : ""}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Edit Station & Assign Manager Dialog */}
       {activeDialog === "edit-station" && (

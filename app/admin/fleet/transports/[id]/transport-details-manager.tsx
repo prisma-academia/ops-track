@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Truck, AlertTriangle, CheckCircle, Droplets, Wallet, Coins, FileText, Link2, ChevronsUpDown } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { ArrowLeft, Truck, AlertTriangle, CheckCircle, Droplets, Wallet, FileText, Link2, ChevronsUpDown, Coins, CircleCheck, Receipt, CircleDollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
@@ -22,6 +23,7 @@ import { AssetTank } from "@/components/asset-tank";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Droplet } from "lucide-react";
 import { TransportFeeBreakdown, getTransactionFeeLegLabel } from "@/components/fleet/transport-fee-breakdown";
+import { getFeeLegBreakdown } from "@/lib/fleet/transport-fees";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
@@ -325,53 +327,137 @@ export function TransportDetailsManager({
                       Financial Overview
                     </h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Breakdown of transport fees, deductions, and net earnings for this trip.
+                      High-level summary of trip finances. See the fee breakdown below for leg-by-leg detail.
                     </p>
                   </div>
                 </div>
 
                 {(() => {
-                  const expectedFee = Number(transport.ratePerLiter || 0) * Number(transport.litersCarried || 0);
-                  const totalLossDeductions = lossLogs.reduce((sum: number, log: any) => sum + Number(log.expensesIncurred || 0), 0);
-                  const totalExpenses = (transport.transactions || []).reduce((sum: number, txn: any) => sum + Number(txn.amount || 0), 0);
-                  const netFee = expectedFee - totalLossDeductions - totalExpenses;
+                  const feeTransactions = (transport.transactions || []).filter(
+                    (txn: any) => txn.category === "TRANSPORT_PAYMENT"
+                  );
+                  const feeBreakdown = getFeeLegBreakdown(transport, feeTransactions, { originToDepotFee });
+                  const fullTripRow = feeBreakdown.find((row) => row.feeLeg === "FULL_TRIP");
+                  const grossTransportFee = fullTripRow?.expected ?? 0;
+                  const transportFeesPaid = feeTransactions.reduce(
+                    (sum: number, txn: any) => sum + Number(txn.amount || 0),
+                    0
+                  );
+                  const totalLossDeductions = lossLogs.reduce(
+                    (sum: number, log: any) => sum + Number(log.expensesIncurred || 0),
+                    0
+                  );
+                  const fleetExpenses = (transport.transactions || [])
+                    .filter((txn: any) => txn.category === "EXPENSE")
+                    .reduce((sum: number, txn: any) => sum + Number(txn.amount || 0), 0);
+                  const netOutstanding = grossTransportFee - transportFeesPaid - totalLossDeductions - fleetExpenses;
+                  const paymentProgress = grossTransportFee > 0
+                    ? Math.min(100, Math.round((transportFeesPaid / grossTransportFee) * 100))
+                    : 0;
+
+                  const fmt = (amount: number) => `₦${amount.toLocaleString()}`;
 
                   return (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="sm:col-span-2 p-4 rounded-xl border bg-blue-50/30 dark:bg-blue-950/10 flex items-center justify-between">
+                    <div className="space-y-4">
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        <Card>
+                          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                            <CardDescription className="text-sm font-medium">Gross Transport Fee</CardDescription>
+                            <Coins className="h-4 w-4 text-muted-foreground" />
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold tabular-nums">{fmt(grossTransportFee)}</div>
+                            <p className="text-xs text-muted-foreground mt-1">Total expected transporter payout</p>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                            <CardDescription className="text-sm font-medium">Transport Fees Paid</CardDescription>
+                            <CircleCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-500">
+                              {fmt(transportFeesPaid)}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {paymentProgress}% of gross fee settled
+                            </p>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                            <CardDescription className="text-sm font-medium">Loss Deductions</CardDescription>
+                            <AlertTriangle className="h-4 w-4 text-destructive" />
+                          </CardHeader>
+                          <CardContent>
+                            <div className={cn(
+                              "text-2xl font-bold tabular-nums",
+                              totalLossDeductions > 0 ? "text-destructive" : "text-foreground"
+                            )}>
+                              {fmt(totalLossDeductions)}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {lossLogs.length} incident{lossLogs.length === 1 ? "" : "s"} logged
+                            </p>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                            <CardDescription className="text-sm font-medium">Fleet Expenses</CardDescription>
+                            <Receipt className="h-4 w-4 text-muted-foreground" />
+                          </CardHeader>
+                          <CardContent>
+                            <div className={cn(
+                              "text-2xl font-bold tabular-nums",
+                              fleetExpenses > 0 ? "text-amber-600 dark:text-amber-500" : "text-foreground"
+                            )}>
+                              {fmt(fleetExpenses)}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">Operational costs on this trip</p>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      <Card className="border-primary/20 bg-primary/5 dark:bg-primary/10">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                           <div>
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Expected Transport Fee</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">Total earnings before deductions and expenses</p>
+                            <CardDescription className="text-sm font-medium">Net Outstanding</CardDescription>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Remaining balance after payments, losses, and fleet expenses
+                            </p>
                           </div>
-                          <p className="text-2xl font-bold text-blue-600 dark:text-blue-500">₦{expectedFee.toLocaleString()}</p>
-                        </div>
-                        
-                        <div className="p-4 rounded-xl border bg-red-50/30 dark:bg-red-950/10 flex flex-col justify-center">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Loss Deductions</p>
-                          <p className="text-xl font-bold text-destructive">₦{totalLossDeductions.toLocaleString()}</p>
-                          <p className="text-[10px] text-muted-foreground mt-2">Shortages or damages penalty</p>
-                        </div>
-
-                        <div className="p-4 rounded-xl border bg-amber-50/30 dark:bg-amber-950/10 flex flex-col justify-center">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Fleet Expenses</p>
-                          <p className="text-xl font-bold text-amber-600 dark:text-amber-500">₦{totalExpenses.toLocaleString()}</p>
-                          <p className="text-[10px] text-muted-foreground mt-2">Trip-related operational costs</p>
-                        </div>
-                      </div>
-
-                      <div className="p-6 rounded-2xl border bg-gradient-to-br from-emerald-50 to-green-100 dark:from-emerald-950/30 dark:to-green-900/20 shadow-sm flex flex-col justify-center items-center text-center">
-                        <div className="p-3 bg-emerald-100 dark:bg-emerald-900/50 rounded-full mb-4">
-                          <Coins className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-                        </div>
-                        <p className="text-sm font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-widest mb-2">Net Transport Fee</p>
-                        <p className="text-4xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
-                          ₦{netFee.toLocaleString()}
-                        </p>
-                        <p className="text-xs font-medium text-emerald-600/80 dark:text-emerald-500/80 mt-4 px-4">
-                          Final earnings after deducting losses and expenses from all fees.
-                        </p>
-                      </div>
+                          <CircleDollarSign className="h-5 w-5 text-primary" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className={cn(
+                            "text-3xl font-bold tabular-nums",
+                            netOutstanding > 0
+                              ? "text-primary"
+                              : netOutstanding < 0
+                                ? "text-destructive"
+                                : "text-emerald-600 dark:text-emerald-500"
+                          )}>
+                            {fmt(netOutstanding)}
+                          </div>
+                          {grossTransportFee > 0 && (
+                            <div className="mt-4 space-y-2">
+                              <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>Payment progress</span>
+                                <span className="font-medium">{paymentProgress}%</span>
+                              </div>
+                              <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-primary transition-all duration-500"
+                                  style={{ width: `${paymentProgress}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
                     </div>
                   );
                 })()}
@@ -597,7 +683,7 @@ export function TransportDetailsManager({
                             </div>
                           </td>
                           <td className="py-3 px-4 text-foreground/90 text-xs">
-                            {txn.category === "TRANSPORT_PAYMENT" ? getTransactionFeeLegLabel(txn) : "—"}
+                            {txn.category === "TRANSPORT_PAYMENT" ? getTransactionFeeLegLabel(txn, transport) : "—"}
                           </td>
                           <td className="py-3 px-4 text-foreground/90 max-w-[200px] truncate" title={txn.description || ""}>
                             {txn.description || "—"}

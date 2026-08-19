@@ -1,9 +1,17 @@
 import type { TransportFeeLeg } from "@/lib/generated/prisma/client";
 
+export type TransportFeeLegContext = {
+  destination?: string | null;
+  sourceDepot?: string | null;
+  supplier?: string | null;
+};
+
 export type TransportFeeTransport = {
   id: string;
+  destination?: string | null;
   litersCarried: number | string | { toString(): string };
   ratePerLiter: number | string | { toString(): string };
+  order?: { sourceDepot?: string | null; supplier?: string | null } | null;
   deliveries?: TransportFeeDelivery[];
 };
 
@@ -67,14 +75,37 @@ function deliveryLabel(delivery: TransportFeeDelivery): string {
   return delivery.station?.name || delivery.customer?.name || "Secondary stop";
 }
 
+export function getTransportLegContext(transport?: TransportFeeTransport | null): TransportFeeLegContext {
+  return {
+    destination: transport?.destination,
+    sourceDepot: transport?.order?.sourceDepot,
+    supplier: transport?.order?.supplier,
+  };
+}
+
 export function getFeeLegLabel(
   feeLeg: TransportFeeLeg,
-  delivery?: TransportFeeDelivery | null
+  delivery?: TransportFeeDelivery | null,
+  context?: TransportFeeLegContext | null
 ): string {
-  if (feeLeg === "PRIMARY_TO_SUBSEQUENT" && delivery) {
-    return `${FEE_LEG_LABELS[feeLeg]} (${deliveryLabel(delivery)})`;
+  const depot = context?.sourceDepot || "Depot";
+  const primary = context?.destination || "Primary";
+  const origin = context?.supplier || "Origin";
+
+  switch (feeLeg) {
+    case "ORIGIN_TO_DEPOT":
+      return `${origin} → ${depot}`;
+    case "DEPOT_TO_PRIMARY":
+      return `${depot} → ${primary}`;
+    case "PRIMARY_TO_SUBSEQUENT": {
+      const secondary = delivery ? deliveryLabel(delivery) : "Secondary";
+      return `${primary} → ${secondary}`;
+    }
+    case "FULL_TRIP":
+      return FEE_LEG_LABELS[feeLeg];
+    default:
+      return FEE_LEG_LABELS[feeLeg];
   }
-  return FEE_LEG_LABELS[feeLeg];
 }
 
 export function getExpectedFeeForLeg(
@@ -200,11 +231,13 @@ export function getFeeLegBreakdown(
     });
   };
 
+  const legContext = getTransportLegContext(transport);
+
   const originExpected = getExpectedFeeForLeg(transport, "ORIGIN_TO_DEPOT", options);
-  addRow("ORIGIN_TO_DEPOT", originExpected, "ORIGIN_TO_DEPOT", getFeeLegLabel("ORIGIN_TO_DEPOT"));
+  addRow("ORIGIN_TO_DEPOT", originExpected, "ORIGIN_TO_DEPOT", getFeeLegLabel("ORIGIN_TO_DEPOT", null, legContext));
 
   const depotExpected = getExpectedFeeForLeg(transport, "DEPOT_TO_PRIMARY", options);
-  addRow("DEPOT_TO_PRIMARY", depotExpected, "DEPOT_TO_PRIMARY", getFeeLegLabel("DEPOT_TO_PRIMARY"));
+  addRow("DEPOT_TO_PRIMARY", depotExpected, "DEPOT_TO_PRIMARY", getFeeLegLabel("DEPOT_TO_PRIMARY", null, legContext));
 
   const deliveries = transport.deliveries ?? [];
   if (deliveries.length === 0) {
@@ -212,7 +245,7 @@ export function getFeeLegBreakdown(
       "PRIMARY_TO_SUBSEQUENT",
       0,
       "PRIMARY_TO_SUBSEQUENT",
-      getFeeLegLabel("PRIMARY_TO_SUBSEQUENT")
+      getFeeLegLabel("PRIMARY_TO_SUBSEQUENT", null, legContext)
     );
   } else {
     for (const delivery of deliveries) {
@@ -221,7 +254,7 @@ export function getFeeLegBreakdown(
         "PRIMARY_TO_SUBSEQUENT",
         expected,
         `PRIMARY_TO_SUBSEQUENT:${delivery.id}`,
-        getFeeLegLabel("PRIMARY_TO_SUBSEQUENT", delivery),
+        getFeeLegLabel("PRIMARY_TO_SUBSEQUENT", delivery, legContext),
         delivery.id
       );
     }
@@ -243,7 +276,7 @@ export function getFeeLegBreakdown(
 
   breakdown.push({
     feeLeg: "FULL_TRIP",
-    label: getFeeLegLabel("FULL_TRIP"),
+    label: getFeeLegLabel("FULL_TRIP", null, legContext),
     expected: fullExpected,
     paid: fullTripPaid ? fullPaid : partialPaidTotal,
     remaining: fullRemaining,

@@ -7,12 +7,19 @@ import { handleError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
 
+const toUppercaseOrNull = (val: string | null | undefined) => {
+  if (val == null) return null;
+  const trimmed = val.trim();
+  if (trimmed === "") return null;
+  return trimmed.toUpperCase();
+};
+
 const CreateOrderSchema = z.object({
   reference: z.string().max(50).optional().nullable(),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   litersOrdered: z.number().positive(),
-  supplier: z.string().optional().nullable(),
-  sourceDepot: z.string().optional().nullable(),
+  supplier: z.string().optional().nullable().transform(toUppercaseOrNull),
+  sourceDepot: z.string().optional().nullable().transform(toUppercaseOrNull),
   pricePerLitre: z.number().min(0).default(0),
   loadingCostPerLitre: z.number().min(0).default(0),
 });
@@ -70,13 +77,13 @@ export async function POST(request: Request) {
       action: "order.create",
       tenantId: actor.tenantId,
       targetType: "Order",
-      targetId: result.id,
-      after: { reference: result.reference, productType: result.productType, liters: result.litersOrdered.toString() } as object,
+      targetId: order.id,
+      after: { reference: order.reference, productType: order.productType, liters: order.litersOrdered.toString() } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
 
-    return ok({ order: result });
+    return ok({ order });
   } catch (e) {
     return handleError(e);
   }

@@ -48,21 +48,8 @@ import {
   Filter,
   Wallet,
   Receipt,
-  PieChart as PieChartIcon
 } from "lucide-react";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from 'recharts';
+import { StatSparkline } from "@/components/charts/stat-sparkline";
 
 interface TransactionRow {
   id: string;
@@ -439,118 +426,93 @@ export function FleetPnlReportManager({ initialTransactions, trucks }: Props) {
       </div>
 
       {/* ── Stat Cards ──────────────────────────────────────────────────── */}
-      <TooltipProvider delayDuration={200}>
-        <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
-          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
-            {[
-              {
-                title: "Transport Revenue",
-                value: formatShortCurrency(stats.totalRevenue),
-                fullValue: fmtMoney(stats.totalRevenue),
-                icon: Wallet,
-                iconColor: "text-emerald-600",
-                valueColor: "text-emerald-600",
-              },
-              {
-                title: "Fleet Expenses",
-                value: formatShortCurrency(stats.totalExpense),
-                fullValue: fmtMoney(stats.totalExpense),
-                icon: Receipt,
-                iconColor: "text-rose-600",
-                valueColor: "text-rose-600",
-              },
-              {
-                title: "Net Profit",
-                value: formatShortCurrency(stats.netProfit),
-                fullValue: fmtMoney(stats.netProfit),
-                icon: stats.netProfit >= 0 ? TrendingUp : TrendingDown,
-                iconColor: stats.netProfit >= 0 ? "text-indigo-600" : "text-rose-600",
-                valueColor: stats.netProfit >= 0 ? "text-indigo-600" : "text-rose-600",
-              },
-            ].map((item, index, arr) => (
-              <div
-                key={index}
-                className={cn(
-                  "w-full md:flex-1 min-w-[150px] border-border print:border-none print:w-auto",
-                  index === arr.length - 1 ? "border-b-0" : "border-b",
-                  "md:border-b-0",
-                  index === arr.length - 1 ? "md:border-e-0" : "md:border-e"
-                )}
-              >
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="p-4 flex items-start justify-between cursor-default hover:bg-muted/30 transition-colors h-full print:p-0">
-                      <div className="flex flex-col gap-2 print:gap-0.5">
-                        <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
-                        <div>
-                          <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
-                            {item.value}
-                          </p>
-                        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 hide-on-print">
+        {[
+          {
+            title: "Transport Revenue",
+            value: formatShortCurrency(stats.totalRevenue),
+            fullValue: fmtMoney(stats.totalRevenue),
+            icon: Wallet,
+            iconColor: "text-emerald-600",
+            valueColor: "text-emerald-600",
+            sparkColor: "#10b981",
+            sparkKey: "Revenue",
+            sparkType: "line" as const,
+          },
+          {
+            title: "Fleet Expenses",
+            value: formatShortCurrency(stats.totalExpense),
+            fullValue: fmtMoney(stats.totalExpense),
+            icon: Receipt,
+            iconColor: "text-rose-600",
+            valueColor: "text-rose-600",
+            sparkColor: "#f43f5e",
+            sparkKey: "Expenses",
+            sparkType: "bar" as const,
+          },
+          {
+            title: "Net Profit",
+            value: formatShortCurrency(stats.netProfit),
+            fullValue: fmtMoney(stats.netProfit),
+            icon: stats.netProfit >= 0 ? TrendingUp : TrendingDown,
+            iconColor: stats.netProfit >= 0 ? "text-indigo-600" : "text-rose-600",
+            valueColor: stats.netProfit >= 0 ? "text-indigo-600" : "text-rose-600",
+            sparkColor: stats.netProfit >= 0 ? "#6366f1" : "#f43f5e",
+            sparkKey: "Profit",
+            sparkType: "line" as const,
+          },
+        ].map((item, index) => (
+          <TooltipProvider key={index} delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Card className="border-border/40 shadow-xs cursor-default hover:bg-muted/30 transition-colors print:shadow-none print:border-none">
+                  <CardContent className="p-4 flex flex-col gap-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.title}</p>
+                        <p className={cn("text-lg font-semibold text-card-foreground", item.valueColor)}>
+                          {item.value}
+                        </p>
                       </div>
                       <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
-                        <item.icon
-                          size={14}
-                          className={cn("text-muted-foreground", item.iconColor)}
-                        />
+                        <item.icon size={14} className={cn("text-muted-foreground", item.iconColor)} />
                       </div>
                     </div>
-                  </TooltipTrigger>
-                  <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
-                    {item.fullValue}
-                  </TooltipContent>
-                </Tooltip>
+                    <StatSparkline
+                      data={chartData}
+                      dataKey={item.sparkKey}
+                      type={item.sparkType}
+                      color={item.sparkColor}
+                      height={40}
+                    />
+                  </CardContent>
+                </Card>
+              </TooltipTrigger>
+              <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                {item.fullValue}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ))}
+      </div>
+
+      {/* Print-friendly compact stat cards (no charts) */}
+      <TooltipProvider delayDuration={200}>
+        <Card className="p-0 shadow-xs border-border/40 hidden print:flex print:border-none print:shadow-none print:bg-transparent">
+          <CardContent className="flex items-center w-full print:gap-4 print:justify-between px-0">
+            {[
+              { title: "Transport Revenue", value: fmtMoney(stats.totalRevenue), valueColor: "text-emerald-600" },
+              { title: "Fleet Expenses", value: fmtMoney(stats.totalExpense), valueColor: "text-rose-600" },
+              { title: "Net Profit", value: fmtMoney(stats.netProfit), valueColor: stats.netProfit >= 0 ? "text-indigo-600" : "text-rose-600" },
+            ].map((item, index) => (
+              <div key={index} className="flex flex-col gap-0.5">
+                <p className="text-[10px] text-black/60 uppercase tracking-wider font-medium">{item.title}</p>
+                <p className={cn("text-[13px] font-semibold text-black")}>{item.value}</p>
               </div>
             ))}
           </CardContent>
         </Card>
       </TooltipProvider>
-
-      {chartData.length > 0 && (() => {
-        const pnlChartConfig = {
-          Revenue: {
-            label: "Revenue",
-            color: "#10b981",
-          },
-          Expenses: {
-            label: "Expenses",
-            color: "#f43f5e",
-          },
-        } satisfies ChartConfig;
-
-        return (
-          <Card className="border-border/40 shadow-xs hide-on-print">
-            <CardContent className="p-6">
-              <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                <PieChartIcon className="w-5 h-5 text-muted-foreground" />
-                Revenue vs Expenses (Daily Trend)
-              </h3>
-              <ChartContainer config={pnlChartConfig} className="h-[400px] w-full">
-                <BarChart accessibilityLayer data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144, 164, 174, 0.3)" />
-                  <XAxis 
-                    dataKey="date" 
-                    axisLine={false}
-                    tickLine={false}
-                    tickMargin={10}
-                    fontSize={12}
-                  />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    tickMargin={10}
-                    fontSize={12}
-                    tickFormatter={(value) => `₦${(value / 1000000).toFixed(1)}M`}
-                  />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="Revenue" fill="var(--color-Revenue)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="Expenses" fill="var(--color-Expenses)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        );
-      })()}
 
       <Card className="w-full py-0 overflow-hidden print:shadow-none print:border-none print:bg-transparent">
         <CardContent className="px-0">

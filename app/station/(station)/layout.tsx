@@ -40,7 +40,7 @@ const NAV: NavItemConfig[] = [
   { href: "/admin/tickets", key: "tickets", title: "Tickets", module: "operations" as ModuleKey, icon: "IconTicket", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   {
     key: "reports",
-    title: "Reports & Analytics",
+    title: "Reports",
     module: "operations" as ModuleKey,
     icon: "IconFileText",
     permission: null,

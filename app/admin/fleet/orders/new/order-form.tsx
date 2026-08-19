@@ -10,13 +10,12 @@ import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ArrowLeft, Save, ChevronsUpDown, Check, Plus, Calculator, FileText, Droplet, Send, Truck } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowLeft, Save, ChevronsUpDown, Check, Plus, Calculator, FileText, Droplet } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -25,19 +24,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const NIGERIAN_STATES = [
-  "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
-  "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT - Abuja", "Gombe", "Imo",
-  "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa",
-  "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara"
-];
+const toUppercaseOrNull = (val: string | null | undefined) => {
+  if (val == null) return null;
+  const trimmed = val.trim();
+  if (trimmed === "") return null;
+  return trimmed.toUpperCase();
+};
 
 const Schema = z.object({
   reference: z.string().max(50).optional().or(z.literal("")),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   litersOrdered: z.coerce.number().positive("Liters ordered must be greater than 0"),
-  supplier: z.string().optional().nullable(),
-  sourceDepot: z.string().optional().nullable(),
+  supplier: z
+    .string()
+    .optional()
+    .nullable()
+    .transform(toUppercaseOrNull),
+  sourceDepot: z
+    .string()
+    .optional()
+    .nullable()
+    .transform(toUppercaseOrNull),
   pricePerLitre: z.coerce.number().min(0).default(0),
   loadingCostPerLitre: z.coerce.number().min(0).default(0),
 });
@@ -45,15 +52,7 @@ const Schema = z.object({
 type Values = z.infer<typeof Schema>;
 type LookupItem = { id: string; name: string };
 
-type TransporterData = {
-  id: string;
-  name: string;
-  totalTrucks: number;
-  inTransit: number;
-  available: number;
-};
-
-export function CreateOrderForm({ transporters = [] }: { transporters?: TransporterData[] }) {
+export function CreateOrderForm() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   
@@ -64,15 +63,13 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
   // Popover States
   const [openSupplierSelect, setOpenSupplierSelect] = useState(false);
   const [openDepotSelect, setOpenDepotSelect] = useState(false);
-  const [openTransporterSelect, setOpenTransporterSelect] = useState(false);
-  const [openDestinationSelect, setOpenDestinationSelect] = useState(false);
 
   // Modal State
   const [lookupDialog, setLookupDialog] = useState<{ type: "supplier" | "depot"; title: string } | null>(null);
   const [newLookupName, setNewLookupName] = useState("");
   const [isAddingLookup, setIsAddingLookup] = useState(false);
 
-  const { register, handleSubmit, formState, setValue, watch, control } = useForm<Values>({
+  const { handleSubmit, formState, setValue, watch, control } = useForm<Values>({
     resolver: zodResolver(Schema) as any,
     defaultValues: {
       reference: "",
@@ -92,9 +89,6 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
   const watchSupplier = watch("supplier");
   const watchDepot = watch("sourceDepot");
   const watchReference = watch("reference");
-  const watchSendInvitation = watch("sendInvitation");
-  const watchTransporterId = watch("transporterId");
-  const watchDestination = watch("destination");
 
   // Fetch Lookups
   useEffect(() => {
@@ -103,8 +97,8 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
         const res = await fetch("/api/tenant/waybills/lookups");
         if (res.ok) {
           const data = await res.json();
-          setSuppliers(data.suppliers || []);
-          setDepots(data.depots || []);
+          setSuppliers((data.suppliers || []).map((s: LookupItem) => ({ ...s, name: s.name.toUpperCase() })));
+          setDepots((data.depots || []).map((d: LookupItem) => ({ ...d, name: d.name.toUpperCase() })));
         }
       } catch (e) {
         console.error("Failed to fetch lookups", e);
@@ -129,17 +123,17 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
       const res = await fetch("/api/tenant/waybills/lookups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: lookupDialog.type, name: newLookupName.trim() }),
+        body: JSON.stringify({ type: lookupDialog.type, name: newLookupName.trim().toUpperCase() }),
       });
       if (res.ok) {
         const result = await res.json();
         const created = result.data;
         if (lookupDialog.type === "supplier") {
-          setSuppliers([...suppliers, created]);
-          setValue("supplier", created.name, { shouldValidate: true });
+          setSuppliers([...suppliers, { ...created, name: created.name.toUpperCase() }]);
+          setValue("supplier", created.name.toUpperCase(), { shouldValidate: true });
         } else if (lookupDialog.type === "depot") {
-          setDepots([...depots, created]);
-          setValue("sourceDepot", created.name, { shouldValidate: true });
+          setDepots([...depots, { ...created, name: created.name.toUpperCase() }]);
+          setValue("sourceDepot", created.name.toUpperCase(), { shouldValidate: true });
         }
         setLookupDialog(null);
         setNewLookupName("");
@@ -181,7 +175,7 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
           variant="outline"
           className={`w-full justify-between font-normal ${!fieldValue ? "text-muted-foreground" : ""}`}
         >
-          <span className="truncate">{fieldValue || placeholder}</span>
+          <span className="truncate uppercase">{fieldValue || placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -198,29 +192,33 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
                   key={opt.id}
                   value={opt.name}
                   onSelect={(val) => {
-                    const actualName = options.find((o) => o.name.toLowerCase() === val.toLowerCase())?.name || val;
+                    const actualName =
+                      options.find((o) => o.name.toUpperCase() === val.toUpperCase())?.name.toUpperCase() ||
+                      val.toUpperCase();
                     onValueChange(actualName);
                     setOpenState(false);
                   }}
-                  className="flex items-center justify-between"
+                  className="flex items-center justify-between uppercase"
                 >
-                  {opt.name}
-                  {fieldValue === opt.name && <Check className="h-4 w-4" />}
+                  {opt.name.toUpperCase()}
+                  {fieldValue?.toUpperCase() === opt.name.toUpperCase() && <Check className="h-4 w-4" />}
                 </CommandItem>
               ))}
             </CommandGroup>
           </CommandList>
-          <div className="border-t p-1">
+          <div className="border-t p-2">
             <Button
               type="button"
-              variant="ghost"
-              className="w-full justify-start text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-8 px-2 text-sm font-medium"
+              variant="outline"
+              size="sm"
+              className="w-full gap-2"
               onClick={() => {
                 setLookupDialog({ type, title: `Add New ${label}` });
                 setOpenState(false);
               }}
             >
-              <Plus className="mr-2 h-4 w-4" /> Add New {label}
+              <Plus className="h-4 w-4" />
+              Add New {label}
             </Button>
           </div>
         </Command>
@@ -231,8 +229,6 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
   const productTotal = Number(watchPricePerLitre || 0) * Number(watchLitersOrdered || 0);
   const loadingTotal = Number(watchLoadingCostPerLitre || 0) * Number(watchLitersOrdered || 0);
   const grandTotal = productTotal + loadingTotal;
-
-  const selectedTransporter = transporters.find(t => t.id === watchTransporterId);
 
   return (
     <>
@@ -361,7 +357,6 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
                         <FormattedNumberInput 
                           id="pricePerLitre" 
                           placeholder="e.g. 950"
-                          maxLength={4}
                           {...field}
                           className={formState.errors.pricePerLitre ? "border-destructive" : ""}
                           prefixText="₦"
@@ -379,7 +374,6 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
                         <FormattedNumberInput 
                           id="loadingCostPerLitre" 
                           placeholder="e.g. 15"
-                          maxLength={4}
                           {...field}
                           className={formState.errors.loadingCostPerLitre ? "border-destructive" : ""}
                           prefixText="₦"
@@ -390,144 +384,6 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
                   </div>
                 </div>
               </CardContent>
-            </Card>
-
-            <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
-              <CardHeader className="pb-4 border-b border-border/30 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <Send size={16} />
-                  Transport Invitation
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="sendInvitation" className="text-sm cursor-pointer">Send Invitation Now</Label>
-                  <Controller
-                    control={control}
-                    name="sendInvitation"
-                    render={({ field }) => (
-                      <Switch 
-                        id="sendInvitation"
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    )}
-                  />
-                </div>
-              </CardHeader>
-              
-              {watchSendInvitation && (
-                <CardContent className="space-y-6 pt-6 animate-in slide-in-from-top-2 duration-300">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2 col-span-2 md:col-span-1">
-                      <Label className={formState.errors.transporterId ? "text-destructive" : ""}>Transporter*</Label>
-                      <Popover open={openTransporterSelect} onOpenChange={setOpenTransporterSelect}>
-                        <PopoverTrigger asChild>
-                          <Button type="button" variant="outline" className={`w-full justify-between font-normal ${formState.errors.transporterId ? "border-destructive" : ""}`}>
-                            <span className="truncate">{transporters.find(t => t.id === watchTransporterId)?.name || "Select Transporter..."}</span>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                          <Command>
-                            <CommandInput placeholder="Search transporter..." />
-                            <CommandList className="max-h-[200px] overflow-y-auto">
-                              <CommandEmpty>No transporter found.</CommandEmpty>
-                              <CommandGroup>
-                                {transporters.map((t) => (
-                                  <CommandItem key={t.id} value={t.name.toLowerCase()} onSelect={() => { 
-                                    setValue("transporterId", t.id, { shouldValidate: true }); 
-                                    setOpenTransporterSelect(false); 
-                                  }}>
-                                    {t.name}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                      {formState.errors.transporterId && <p className="text-xs text-destructive">{formState.errors.transporterId.message}</p>}
-                    </div>
-
-                    <div className="space-y-2 col-span-2 md:col-span-1">
-                      <Label className={formState.errors.destination ? "text-destructive" : ""}>Destination State/Station*</Label>
-                      <Popover open={openDestinationSelect} onOpenChange={setOpenDestinationSelect}>
-                        <PopoverTrigger asChild>
-                          <Button type="button" variant="outline" className={`w-full justify-between font-normal ${formState.errors.destination ? "border-destructive" : ""}`}>
-                            <span className="truncate">{watchDestination || "Select destination..."}</span>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                          <Command>
-                            <CommandInput placeholder="Search destination..." />
-                            <CommandList className="max-h-[200px] overflow-y-auto">
-                              <CommandEmpty>No destination found.</CommandEmpty>
-                              <CommandGroup>
-                                {NIGERIAN_STATES.map((state) => (
-                                  <CommandItem key={state} value={state.toLowerCase()} onSelect={() => { 
-                                    setValue("destination", state, { shouldValidate: true }); 
-                                    setOpenDestinationSelect(false); 
-                                  }}>
-                                    {state}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                      {formState.errors.destination && <p className="text-xs text-destructive">{formState.errors.destination.message}</p>}
-                    </div>
-
-                    <div className="space-y-2 col-span-2 md:col-span-1">
-                      <Label className={formState.errors.litersRequested ? "text-destructive" : ""}>Requested Volume (Liters)*</Label>
-                      <Controller
-                        control={control}
-                        name="litersRequested"
-                        render={({ field }) => (
-                          <FormattedNumberInput 
-                            placeholder="e.g. 45000" 
-                            {...field}
-                            value={field.value ?? ""}
-                            className={formState.errors.litersRequested ? "border-destructive" : ""}
-                            prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
-                          />
-                        )}
-                      />
-                      {formState.errors.litersRequested && <p className="text-xs text-destructive">{formState.errors.litersRequested.message}</p>}
-                    </div>
-                  </div>
-
-                  {selectedTransporter && (
-                    <div className="mt-4 p-4 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/50 flex flex-col sm:flex-row items-center gap-4 sm:gap-8 text-center sm:text-left animate-in fade-in duration-300">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-full text-blue-600 dark:text-blue-400">
-                          <Truck className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Fleet Status</p>
-                          <p className="font-semibold text-sm">{selectedTransporter.name}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-1 justify-center sm:justify-end gap-6 sm:gap-8">
-                        <div>
-                          <p className="text-2xl font-bold text-foreground font-mono">{selectedTransporter.totalTrucks}</p>
-                          <p className="text-xs text-muted-foreground">Total Trucks</p>
-                        </div>
-                        <div>
-                          <p className="text-2xl font-bold text-amber-600 dark:text-amber-500 font-mono">{selectedTransporter.inTransit}</p>
-                          <p className="text-xs text-muted-foreground">In Transit</p>
-                        </div>
-                        <div>
-                          <p className="text-2xl font-bold text-green-600 dark:text-green-500 font-mono">{selectedTransporter.available}</p>
-                          <p className="text-xs text-muted-foreground">Available</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              )}
             </Card>
 
             {error ? <p className="text-sm text-red-600 px-2">{error}</p> : null}
@@ -554,7 +410,7 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
                 ) : (
                   <>
                     <Save className="h-4 w-4" />
-                    <span>Create Order {watchSendInvitation ? "& Invite" : ""}</span>
+                    <span>Create Order</span>
                   </>
                 )}
               </Button>
@@ -577,6 +433,18 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
                   <span>Volume Ordered:</span>
                   <span className="font-bold text-foreground">{Number(watchLitersOrdered).toLocaleString()} L</span>
                 </div>
+                {watchSupplier && (
+                  <div className="flex justify-between">
+                    <span>Supplier:</span>
+                    <span className="font-bold text-foreground uppercase">{watchSupplier}</span>
+                  </div>
+                )}
+                {watchDepot && (
+                  <div className="flex justify-between">
+                    <span>Source Depot:</span>
+                    <span className="font-bold text-foreground uppercase">{watchDepot}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>Product Total:</span>
                   <span className="font-bold text-foreground">₦{productTotal.toLocaleString()}</span>
@@ -613,8 +481,9 @@ export function CreateOrderForm({ transporters = [] }: { transporters?: Transpor
                 <Input
                   id="lookupName"
                   value={newLookupName}
-                  onChange={(e) => setNewLookupName(e.target.value)}
+                  onChange={(e) => setNewLookupName(e.target.value.toUpperCase())}
                   placeholder={`Enter ${lookupDialog.type} name`}
+                  className="uppercase"
                   autoFocus
                 />
               </div>

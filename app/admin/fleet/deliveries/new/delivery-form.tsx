@@ -462,7 +462,7 @@ export function CreateSaleForm({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="transportCostPerLiter" className={formState.errors.transportCostPerLiter ? "text-destructive" : ""}>Transport Fee (₦/L)</Label>
+                  <Label htmlFor="transportCostPerLiter" className={formState.errors.transportCostPerLiter ? "text-destructive" : ""}>Transport Rate per Litre (₦)</Label>
                   <Controller
                     control={control}
                     name="transportCostPerLiter"
@@ -473,6 +473,7 @@ export function CreateSaleForm({
                         {...field}
                         className={formState.errors.transportCostPerLiter ? "border-destructive" : ""}
                         prefixText="₦"
+                        maxLength={4}
                       />
                     )}
                   />

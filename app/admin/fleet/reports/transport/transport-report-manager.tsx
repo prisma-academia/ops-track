@@ -44,22 +44,9 @@ import {
   Minimize2,
   Printer,
   Filter,
-  BarChart3,
   ListOrdered
 } from "lucide-react";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from 'recharts';
+import { StatSparkline } from "@/components/charts/stat-sparkline";
 
 interface TransportRow {
   id: string;
@@ -187,21 +174,25 @@ export function TransportReportManager({ initialTransports }: Props) {
     const grouped = filteredRows.reduce((acc, curr) => {
       const date = format(parseISO(curr.createdAt), "MMM dd");
       if (!acc[date]) {
-        acc[date] = { date, Carried: 0, Delivered: 0 };
+        acc[date] = { date, Trips: 0, Carried: 0, Delivered: 0, Shortage: 0 };
       }
+      acc[date].Trips += 1;
       acc[date].Carried += Number(curr.litersCarried || 0);
-      
+
       let tDel = 0;
+      let tShort = 0;
       curr.deliveries.forEach(d => {
         const des = Number(d.litersDespatched || 0);
         const rec = d.litersReceived !== null ? Number(d.litersReceived) : des;
         tDel += rec;
+        tShort += (des - rec);
       });
-      
+
       acc[date].Delivered += tDel;
+      acc[date].Shortage += tShort;
       return acc;
-    }, {} as Record<string, { date: string, Carried: number, Delivered: number }>);
-    
+    }, {} as Record<string, { date: string, Trips: number, Carried: number, Delivered: number, Shortage: number }>);
+
     return Object.values(grouped).reverse();
   }, [filteredRows]);
 
@@ -424,144 +415,106 @@ export function TransportReportManager({ initialTransports }: Props) {
       </div>
 
       {/* ── Stat Cards ──────────────────────────────────────────────────── */}
-      <TooltipProvider delayDuration={200}>
-        <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
-          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
-            {[
-              {
-                title: "Total Trips",
-                value: stats.totalTrips.toString(),
-                fullValue: null,
-                icon: Truck,
-                iconColor: "text-slate-600",
-              },
-              {
-                title: "Total Allocated",
-                value: `${stats.totalCarried.toLocaleString()} L`,
-                fullValue: `${stats.totalCarried.toLocaleString()} Liters`,
-                icon: ListOrdered,
-                iconColor: "text-blue-600",
-                valueColor: "text-blue-600",
-              },
-              {
-                title: "Total Delivered",
-                value: `${stats.totalDelivered.toLocaleString()} L`,
-                fullValue: `${stats.totalDelivered.toLocaleString()} Liters`,
-                icon: Droplets,
-                iconColor: "text-emerald-600",
-                valueColor: "text-emerald-600",
-              },
-              {
-                title: "Total Shortage",
-                value: `${stats.totalShortage.toLocaleString()} L`,
-                fullValue: `${stats.totalShortage.toLocaleString()} Liters`,
-                icon: Droplets,
-                iconColor: "text-rose-600",
-                valueColor: "text-rose-600",
-              },
-            ].map((item, index, arr) => (
-              <div
-                key={index}
-                className={cn(
-                  "w-full md:flex-1 min-w-[150px] border-border print:border-none print:w-auto",
-                  index === arr.length - 1 ? "border-b-0" : "border-b",
-                  "md:border-b-0",
-                  index === arr.length - 1 ? "md:border-e-0" : "md:border-e"
-                )}
-              >
-                {item.fullValue ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="p-4 flex items-start justify-between cursor-default hover:bg-muted/30 transition-colors h-full print:p-0">
-                        <div className="flex flex-col gap-2 print:gap-0.5">
-                          <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
-                          <div>
-                            <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
-                              {item.value}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
-                          <item.icon
-                            size={14}
-                            className={cn("text-muted-foreground", item.iconColor)}
-                          />
-                        </div>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
-                      {item.fullValue}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <div className="p-4 flex items-start justify-between h-full print:p-0">
-                    <div className="flex flex-col gap-2 print:gap-0.5">
-                      <p className="text-xs font-medium text-muted-foreground print:text-[10px] print:text-black/60 uppercase tracking-wider">{item.title}</p>
-                      <div>
-                        <p className={cn("text-md font-semibold text-card-foreground print:text-[13px] print:text-black", item.valueColor)}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 hide-on-print">
+        {[
+          {
+            title: "Total Trips",
+            value: stats.totalTrips.toString(),
+            fullValue: null as string | null,
+            icon: Truck,
+            iconColor: "text-slate-600",
+            sparkKey: "Trips",
+            sparkColor: "#475569",
+            sparkType: "bar" as const,
+          },
+          {
+            title: "Total Allocated",
+            value: `${stats.totalCarried.toLocaleString()} L`,
+            fullValue: `${stats.totalCarried.toLocaleString()} Liters`,
+            icon: ListOrdered,
+            iconColor: "text-blue-600",
+            valueColor: "text-blue-600",
+            sparkKey: "Carried",
+            sparkColor: "#3b82f6",
+            sparkType: "line" as const,
+          },
+          {
+            title: "Total Delivered",
+            value: `${stats.totalDelivered.toLocaleString()} L`,
+            fullValue: `${stats.totalDelivered.toLocaleString()} Liters`,
+            icon: Droplets,
+            iconColor: "text-emerald-600",
+            valueColor: "text-emerald-600",
+            sparkKey: "Delivered",
+            sparkColor: "#10b981",
+            sparkType: "line" as const,
+          },
+          {
+            title: "Total Shortage",
+            value: `${stats.totalShortage.toLocaleString()} L`,
+            fullValue: `${stats.totalShortage.toLocaleString()} Liters`,
+            icon: Droplets,
+            iconColor: "text-rose-600",
+            valueColor: "text-rose-600",
+            sparkKey: "Shortage",
+            sparkColor: "#f43f5e",
+            sparkType: "bar" as const,
+          },
+        ].map((item, index) => (
+          <TooltipProvider key={index} delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Card className="border-border/40 shadow-xs cursor-default hover:bg-muted/30 transition-colors">
+                  <CardContent className="p-4 flex flex-col gap-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.title}</p>
+                        <p className={cn("text-lg font-semibold text-card-foreground", item.valueColor)}>
                           {item.value}
                         </p>
                       </div>
+                      <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
+                        <item.icon size={14} className={cn("text-muted-foreground", item.iconColor)} />
+                      </div>
                     </div>
-                    <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50 print:hidden">
-                      <item.icon
-                        size={14}
-                        className={cn("text-muted-foreground", item.iconColor)}
-                      />
-                    </div>
-                  </div>
-                )}
+                    <StatSparkline
+                      data={chartData}
+                      dataKey={item.sparkKey}
+                      type={item.sparkType}
+                      color={item.sparkColor}
+                      height={40}
+                    />
+                  </CardContent>
+                </Card>
+              </TooltipTrigger>
+              {item.fullValue && (
+                <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                  {item.fullValue}
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+        ))}
+      </div>
+
+      {/* Print-friendly compact stat cards (no charts) */}
+      <TooltipProvider delayDuration={200}>
+        <Card className="p-0 shadow-xs border-border/40 hidden print:flex print:border-none print:shadow-none print:bg-transparent">
+          <CardContent className="flex items-center w-full print:gap-4 print:justify-between px-0">
+            {[
+              { title: "Total Trips", value: stats.totalTrips.toString() },
+              { title: "Total Allocated", value: `${stats.totalCarried.toLocaleString()} Liters` },
+              { title: "Total Delivered", value: `${stats.totalDelivered.toLocaleString()} Liters` },
+              { title: "Total Shortage", value: `${stats.totalShortage.toLocaleString()} Liters` },
+            ].map((item, index) => (
+              <div key={index} className="flex flex-col gap-0.5">
+                <p className="text-[10px] text-black/60 uppercase tracking-wider font-medium">{item.title}</p>
+                <p className="text-[13px] font-semibold text-black">{item.value}</p>
               </div>
             ))}
           </CardContent>
         </Card>
       </TooltipProvider>
-
-      {chartData.length > 0 && (() => {
-        const transportChartConfig = {
-          Carried: {
-            label: "Carried",
-            color: "#3b82f6",
-          },
-          Delivered: {
-            label: "Delivered",
-            color: "#10b981",
-          },
-        } satisfies ChartConfig;
-
-        return (
-          <Card className="border-border/40 shadow-xs hide-on-print">
-            <CardContent className="p-6">
-              <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-muted-foreground" />
-                Volume Allocated vs Delivered (Daily Trend)
-              </h3>
-              <ChartContainer config={transportChartConfig} className="h-[400px] w-full">
-                <BarChart accessibilityLayer data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144, 164, 174, 0.3)" />
-                  <XAxis 
-                    dataKey="date" 
-                    axisLine={false}
-                    tickLine={false}
-                    tickMargin={10}
-                    fontSize={12}
-                  />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    tickMargin={10}
-                    fontSize={12}
-                    tickFormatter={(value) => `${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`}
-                  />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="Carried" fill="var(--color-Carried)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="Delivered" fill="var(--color-Delivered)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        );
-      })()}
 
       <Card className="w-full py-0 overflow-hidden print:shadow-none print:border-none print:bg-transparent">
         <CardContent className="px-0">

@@ -61,19 +61,7 @@ import {
   ChevronsUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from 'recharts';
+import { StatSparkline } from "@/components/charts/stat-sparkline";
 
 export type StationPerformanceItem = {
   id: string;
@@ -258,6 +246,31 @@ export function StationPerformanceClient({
 
   const totalRecommendedResupply = initialStations.reduce((sum, s) => sum + s.recommendedAllocation, 0);
 
+  // Per-station series used to render small meaningful sparklines inside each stat card
+  const priorityCountSpark = useMemo(
+    () =>
+      (["CRITICAL", "HIGH", "MEDIUM", "ADEQUATE"] as const).map((p) => ({
+        name: p,
+        value: initialStations.filter((s) => s.priority === p).length,
+      })),
+    [initialStations]
+  );
+  const stockByStationSpark = useMemo(
+    () => initialStations.map((s) => ({ name: s.code, value: s.fillPercentage })),
+    [initialStations]
+  );
+  const soldByStationSpark = useMemo(
+    () => initialStations.map((s) => ({ name: s.code, value: s.litersSold })),
+    [initialStations]
+  );
+  const allocationByStationSpark = useMemo(
+    () =>
+      initialStations
+        .filter((s) => s.recommendedAllocation > 0)
+        .map((s) => ({ name: s.code, value: s.recommendedAllocation })),
+    [initialStations]
+  );
+
   const statCards = [
     {
       title: "MANAGED STATIONS",
@@ -265,6 +278,9 @@ export function StationPerformanceClient({
       fullValue: `${totalStations} active stations (${resupplyUrgentCount} needing stock resupply)`,
       icon: Building2,
       iconColor: "text-blue-500",
+      sparkData: priorityCountSpark,
+      sparkColor: "#3b82f6",
+      sparkType: "bar" as const,
     },
     {
       title: "NETWORK STOCK LEVEL",
@@ -272,6 +288,9 @@ export function StationPerformanceClient({
       fullValue: `${totalStock.toLocaleString()} L of ${totalCapacity.toLocaleString()} L combined capacity (${totalCapacity > 0 ? Math.round((totalStock / totalCapacity) * 100) : 0}% filled)`,
       icon: Droplets,
       iconColor: "text-amber-500",
+      sparkData: stockByStationSpark,
+      sparkColor: "#f59e0b",
+      sparkType: "line" as const,
     },
     {
       title: "TOTAL VOLUME SOLD",
@@ -280,6 +299,9 @@ export function StationPerformanceClient({
       icon: TrendingUp,
       iconColor: "text-emerald-500",
       valueColor: "text-emerald-500",
+      sparkData: soldByStationSpark,
+      sparkColor: "#10b981",
+      sparkType: "line" as const,
     },
     {
       title: "TARGET ALLOCATION NEED",
@@ -288,6 +310,9 @@ export function StationPerformanceClient({
       icon: Fuel,
       iconColor: "text-purple-500",
       valueColor: "text-purple-500",
+      sparkData: allocationByStationSpark,
+      sparkColor: "#a855f7",
+      sparkType: "bar" as const,
     },
   ];
 
@@ -609,115 +634,41 @@ export function StationPerformanceClient({
       </div>
 
       {/* KPI Stats Cards */}
-      <TooltipProvider delayDuration={200}>
-        <Card className="p-0 shadow-xs border-border/40">
-          <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0">
-            {statCards.map((item, index) => (
-              <div
-                key={index}
-                className={cn(
-                  "w-full lg:w-1/4 md:w-1/2 border-border",
-                  index === statCards.length - 1 ? "border-b-0" : "border-b",
-                  (index + 1) % 2 === 0 ? "md:border-e-0" : "md:border-e",
-                  index >= 2 ? "md:border-b-0" : "md:border-b",
-                  "lg:border-b-0",
-                  index === statCards.length - 1 ? "lg:border-e-0" : "lg:border-e"
-                )}
-              >
-                {item.fullValue ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="p-4 flex items-start justify-between cursor-default hover:bg-muted/30 transition-colors h-full">
-                        <div className="flex flex-col gap-2">
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.title}</p>
-                          <div>
-                            <p className={cn("text-md font-semibold text-card-foreground", item.valueColor)}>
-                              {item.value}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
-                          <item.icon
-                            size={14}
-                            className={cn("text-muted-foreground", item.iconColor)}
-                          />
-                        </div>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
-                      {item.fullValue}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <div className="p-4 flex items-start justify-between h-full">
-                    <div className="flex flex-col gap-2">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.title}</p>
-                      <div>
-                        <p className={cn("text-md font-semibold text-card-foreground", item.valueColor)}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {statCards.map((item, index) => (
+          <TooltipProvider key={index} delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Card className="border-border/40 shadow-xs cursor-default hover:bg-muted/30 transition-colors">
+                  <CardContent className="p-4 flex flex-col gap-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.title}</p>
+                        <p className={cn("text-lg font-semibold text-card-foreground", item.valueColor)}>
                           {item.value}
                         </p>
                       </div>
+                      <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
+                        <item.icon size={14} className={cn("text-muted-foreground", item.iconColor)} />
+                      </div>
                     </div>
-                    <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
-                      <item.icon
-                        size={14}
-                        className={cn("text-muted-foreground", item.iconColor)}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </TooltipProvider>
-
-      {/* CHART VIEW */}
-      {filteredStations.length > 0 && (() => {
-        const stationChartConfig = {
-          currentStock: {
-            label: "Current Stock (L)",
-            color: "#10b981",
-          },
-          totalCapacity: {
-            label: "Total Capacity (L)",
-            color: "#94a3b8",
-          },
-        } satisfies ChartConfig;
-
-        return (
-          <Card className="border-border/40 shadow-xs">
-            <CardContent className="p-6">
-              <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-muted-foreground" />
-                Station Stock vs Capacity
-              </h3>
-              <ChartContainer config={stationChartConfig} className="h-[350px] w-full">
-                <BarChart accessibilityLayer data={filteredStations.map(s => ({ name: s.name, currentStock: s.currentStock, totalCapacity: s.totalCapacity }))} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144, 164, 174, 0.3)" />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false}
-                    tickLine={false}
-                    tickMargin={10}
-                    fontSize={12}
-                  />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    tickMargin={10}
-                    fontSize={12}
-                    tickFormatter={(value) => `${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`}
-                  />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="currentStock" fill="var(--color-currentStock)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="totalCapacity" fill="var(--color-totalCapacity)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        );
-      })()}
+                    <StatSparkline
+                      data={item.sparkData}
+                      dataKey="value"
+                      type={item.sparkType}
+                      color={item.sparkColor}
+                      height={40}
+                    />
+                  </CardContent>
+                </Card>
+              </TooltipTrigger>
+              <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                {item.fullValue}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ))}
+      </div>
 
       {/* Reusable Data Table Component */}
       <DataTable

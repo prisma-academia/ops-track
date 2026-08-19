@@ -5,7 +5,7 @@ import { OrganizationForm } from "./form";
 import { prisma } from "@/lib/db/client";
 
 export default async function NewOrganizationPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_ORGS_WRITE.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_ORGANIZATIONS_WRITE.key);
 
   if (actor.organizationId) {
     redirect("/admin/organizations"); // Only fleet-wide admins can create orgs

@@ -12,7 +12,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default async function PnlReportDetailsPage({ params }: { params: { id: string } }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_PNL_REPORTS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_PROFIT_REPORTS_READ.key);
 
   const allocation = await prisma.waybillAllocation.findFirst({
     where: { id: params.id, tenantId: actor.tenantId },

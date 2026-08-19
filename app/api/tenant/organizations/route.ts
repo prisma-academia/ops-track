@@ -26,7 +26,7 @@ const CreateOrgSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_ORGS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_ORGANIZATIONS_READ.key);
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
 
@@ -78,7 +78,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_ORGS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_ORGANIZATIONS_WRITE.key);
     
     // Only fleet-wide users can create organizations
     if (actor.organizationId) {

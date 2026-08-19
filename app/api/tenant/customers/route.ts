@@ -22,7 +22,7 @@ const CreateCustomerSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_CUSTOMERS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_CUSTOMERS_READ.key);
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
 
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_CUSTOMERS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_CUSTOMERS_WRITE.key);
     const body = CreateCustomerSchema.parse(await request.json());
     const meta = requestMeta(request);
 

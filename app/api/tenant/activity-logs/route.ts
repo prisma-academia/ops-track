@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/client";
-import { requireTenantActor, AuthError } from "@/lib/auth/guards";
-import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
+import { requireTenantActor } from "@/lib/auth/guards";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
@@ -9,13 +9,7 @@ import { failedActivityWhere } from "@/lib/activity/status";
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor();
-    if (
-      !hasPermission(actor, PERMISSIONS.TENANT_ACTIVITY_READ.key) &&
-      !hasPermission(actor, PERMISSIONS.TENANT_FLEET_ACTIVITY_READ.key)
-    ) {
-      throw new AuthError(403, "Forbidden.");
-    }
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_ACTIVITY_READ.key);
 
     const url = new URL(request.url);
     const action = url.searchParams.get("action");

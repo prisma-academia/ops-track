@@ -25,7 +25,7 @@ const UpdateOrgSchema = z.object({
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_ORGS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_ORGANIZATIONS_READ.key);
     const { id } = await params;
 
     const org = await prisma.organization.findUnique({
@@ -53,7 +53,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_ORGS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_ORGANIZATIONS_WRITE.key);
     const { id } = await params;
     
     // Only fleet-wide admins can edit organizations

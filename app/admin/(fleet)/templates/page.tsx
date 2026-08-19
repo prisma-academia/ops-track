@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { PageHeader, Card } from "@/components/shell";
 
 export default async function TemplatesPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_TEMPLATES_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_TEMPLATES_READ.key, "FLEET");
   const templates = await prisma.template.findMany({
     where: { tenantId: actor.tenantId },
     orderBy: { createdAt: "desc" },

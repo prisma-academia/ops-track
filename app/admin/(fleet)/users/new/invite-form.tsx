@@ -130,28 +130,14 @@ export function InviteTenantUserForm({
     return module.replace("mobile.tenant.", "").replace("tenant.", "").split(".").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
   };
 
-  const getActionKeys = (list: PermModule[], action: (typeof allActions)[number]) =>
-    list
-      .map((mod) => mod.perms.find((p) => p.key.endsWith(`:${action}`))?.key)
-      .filter((k): k is string => Boolean(k));
-
-  const toggleColumn = (list: PermModule[], action: (typeof allActions)[number]) => {
-    const keys = getActionKeys(list, action);
-    const allSelected = keys.length > 0 && keys.every((k) => selectedPermissions.has(k));
-    const next = allSelected
-      ? currentPermissions.filter((p) => !keys.includes(p))
-      : Array.from(new Set([...currentPermissions, ...keys]));
-    setValue("permissions", next, { shouldDirty: true });
-  };
-
   const renderPermissionsCard = (list: PermModule[], title: string) => {
     const isOpen = openCards[title] ?? true;
     return (
       <Card className="border-border/40 shadow-sm overflow-hidden p-0 gap-0">
         <Collapsible open={isOpen} onOpenChange={() => toggleCard(title)}>
           <CollapsibleTrigger asChild>
-            <CardHeader className="bg-muted/10 border-b border-border/40 py-3 cursor-pointer select-none flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-lg font-semibold text-foreground">
+            <CardHeader style={{"paddingBottom": "8px"}} className="pt-2 cursor-pointer select-none flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="font-semibold">
                 {title}
               </CardTitle>
               <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
@@ -163,22 +149,9 @@ export function InviteTenantUserForm({
                 {/* Column headers */}
                 <div className="grid grid-cols-6 border-b border-border/40 bg-muted/30 px-6 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">
                   <div className="col-span-3">Permissions Module</div>
-                  {allActions.map((action) => {
-                    const keys = getActionKeys(list, action);
-                    const allSelected = keys.length > 0 && keys.every((k) => selectedPermissions.has(k));
-                    return (
-                      <div key={action} className="flex flex-col items-center gap-1">
-                        <span>{action}</span>
-                        <Checkbox
-                          checked={allSelected}
-                          disabled={keys.length === 0}
-                          onCheckedChange={() => toggleColumn(list, action)}
-                          className="size-4 rounded cursor-pointer"
-                          title={`Select all ${action}`}
-                        />
-                      </div>
-                    );
-                  })}
+                  {allActions.map((action) => (
+                    <div key={action} className="text-center">{action}</div>
+                  ))}
                 </div>
 
                 {/* Rows */}
@@ -249,12 +222,12 @@ export function InviteTenantUserForm({
       {/* User Details - Left Column */}
       <div className="lg:col-span-1 space-y-6">
         <Card className="border-border/40 shadow-sm">
-          <CardHeader className="pb-4">
+          <CardHeader className="pb-0">
             <CardTitle className="text-lg font-semibold text-foreground">
               User Details
             </CardTitle>
             <CardDescription className="text-xs">
-              Provide the details and role for the new team member.
+              Provide the details of the new team member.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

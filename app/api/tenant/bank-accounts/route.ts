@@ -47,8 +47,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_SETTINGS_WRITE.key);
     const body = CreateBankAccountSchema.parse(await request.json());
+    const actor = await requireTenantActor(
+      body.scope === "STATION"
+        ? PERMISSIONS.TENANT_BANK_ACCOUNTS_WRITE.key
+        : PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_WRITE.key
+    );
     const meta = requestMeta(request);
 
     const existing = await prisma.bankAccount.findFirst({

@@ -15,7 +15,7 @@ export default async function OrganizationDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_ORGS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_ORGANIZATIONS_READ.key);
   
   const org = await prisma.organization.findUnique({ 
     where: { id, tenantId: actor.tenantId },

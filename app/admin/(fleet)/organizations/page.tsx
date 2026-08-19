@@ -6,7 +6,7 @@ import { OrganizationsTable } from "./table";
 import { fleetModuleFilter } from "@/lib/auth/org-scope";
 
 export default async function OrganizationsPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_ORGS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_ORGANIZATIONS_READ.key);
   
   const take = 25;
   const skip = 0;

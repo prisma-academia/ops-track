@@ -34,7 +34,7 @@ function withUrls(settings: ReturnType<typeof parseTenantSettings>) {
 
 export async function GET() {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_SETTINGS_READ.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_SETTINGS_READ.key);
     const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId } });
     if (!tenant) throw new DomainError(404, "not_found", "Tenant not found.");
     const settings = parseTenantSettings(tenant.settingsJson);
@@ -63,7 +63,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_SETTINGS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_SETTINGS_WRITE.key);
     const body = PatchBody.parse(await request.json());
     const meta = requestMeta(request);
 

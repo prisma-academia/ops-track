@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { PnlReportManager } from "./pnl-report-manager";
 
 export default async function PnlReportPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_PNL_REPORTS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_PROFIT_REPORTS_READ.key);
 
   const transactions = await prisma.transaction.findMany({
     where: { 

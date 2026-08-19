@@ -205,10 +205,10 @@ export function CreateTruckForm({
                   value={watch("truckType")}
                   onValueChange={(val) => setValue("truckType", val, { shouldValidate: true })}
                 >
-                  <SelectTrigger id="truckType" className={formState.errors.truckType ? "border-destructive" : ""}>
+                  <SelectTrigger id="truckType" className={`w-full ${formState.errors.truckType ? "border-destructive" : ""}`}>
                     <SelectValue placeholder="Select Truck Type" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="w-full" position="popper">
                     <SelectItem value="Bridger">Bridger (Super Tanker)</SelectItem>
                     <SelectItem value="Articulated Tanker">Articulated Tanker</SelectItem>
                     <SelectItem value="Rigid Tanker">Rigid Tanker</SelectItem>
@@ -241,15 +241,14 @@ export function CreateTruckForm({
                   value={watch("fuelType")}
                   onValueChange={(val) => setValue("fuelType", val, { shouldValidate: true })}
                 >
-                  <SelectTrigger id="fuelType" className={formState.errors.fuelType ? "border-destructive" : ""}>
+                  <SelectTrigger id="fuelType" className={`w-full ${formState.errors.fuelType ? "border-destructive" : ""}`}>
                     <SelectValue placeholder="Select Fuel Type" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="w-full" position="popper">
                     <SelectItem value="AGO">AGO (Diesel)</SelectItem>
                     <SelectItem value="PMS">PMS (Petrol)</SelectItem>
                     <SelectItem value="DPK">DPK (Kerosene)</SelectItem>
                     <SelectItem value="LPG">LPG (Gas)</SelectItem>
-                    {/* <SelectItem value="ATK">ATK (Aviation Fuel)</SelectItem> */}
                   </SelectContent>
                 </Select>
                 <input type="hidden" {...register("fuelType")} />

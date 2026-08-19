@@ -43,6 +43,7 @@ interface OrderPnlRow {
   totalCost: number;
   totalAmountSoldQty: number;
   amountSoldRev: number;
+  amountPaid: number;
   debtRemaining: number;
   pnl: number;
   truckIds: string[];
@@ -119,14 +120,20 @@ export function FleetPnlReportManager({
 
   const metrics = React.useMemo(() => {
     let totalRevenue = 0;
+    let totalCollected = 0;
     let totalExpense = 0;
+    let totalTransportCost = 0;
+    let totalFleetExpenses = 0;
     let debtOutstanding = 0;
     let profitable = 0;
     let lossMaking = 0;
 
     filteredRows.forEach((r) => {
       totalRevenue += r.amountSoldRev;
+      totalCollected += r.amountPaid;
       totalExpense += r.totalCost;
+      totalTransportCost += r.totalTransportCost;
+      totalFleetExpenses += r.totalFleetExpenses;
       debtOutstanding += r.debtRemaining;
       if (r.pnl >= 0) profitable += 1;
       else lossMaking += 1;
@@ -134,7 +141,10 @@ export function FleetPnlReportManager({
 
     return {
       totalRevenue,
+      totalCollected,
       totalExpense,
+      totalTransportCost,
+      totalFleetExpenses,
       netProfit: totalRevenue - totalExpense,
       debtOutstanding,
       profitable,
@@ -286,9 +296,37 @@ export function FleetPnlReportManager({
           ),
       },
       {
+        accessorKey: "totalTransportCost",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Transport Cost" />,
+        meta: { label: "Transport Cost" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums">{fmtMoney(row.original.totalTransportCost)}</span>
+        ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table
+              .getFilteredRowModel()
+              .rows.reduce((sum, row) => sum + row.original.totalTransportCost, 0)
+          ),
+      },
+      {
+        accessorKey: "totalFleetExpenses",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Fleet Cost" />,
+        meta: { label: "Fleet Cost" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums">{fmtMoney(row.original.totalFleetExpenses)}</span>
+        ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table
+              .getFilteredRowModel()
+              .rows.reduce((sum, row) => sum + row.original.totalFleetExpenses, 0)
+          ),
+      },
+      {
         accessorKey: "amountSoldRev",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Revenue" />,
-        meta: { label: "Revenue" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Sales Revenue" />,
+        meta: { label: "Sales Revenue" },
         cell: ({ row }) => (
           <span className="font-mono text-indigo-600 tabular-nums dark:text-indigo-400">
             {fmtMoney(row.original.amountSoldRev)}
@@ -297,6 +335,20 @@ export function FleetPnlReportManager({
         footer: ({ table }) =>
           fmtMoney(
             table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.amountSoldRev, 0)
+          ),
+      },
+      {
+        accessorKey: "amountPaid",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Sales Collected" />,
+        meta: { label: "Sales Collected" },
+        cell: ({ row }) => (
+          <span className="font-mono text-emerald-600 tabular-nums dark:text-emerald-400">
+            {fmtMoney(row.original.amountPaid)}
+          </span>
+        ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.amountPaid, 0)
           ),
       },
       {

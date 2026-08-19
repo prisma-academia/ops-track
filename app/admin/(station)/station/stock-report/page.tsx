@@ -49,7 +49,6 @@ export default async function StockReportPage() {
       const productPrice = Number(a.costPerLiter);
       const transportationCost = Number(a.transportationCost);
       const deliveryCost = deliveryQty > 0 ? transportationCost / deliveryQty : 0; // transport cost per liter
-      const stockValue = deliveryQty * productPrice;
 
       // Total delivery for this waybill = sum of all allocations on same waybill
       const totalDelivery = a.waybill.allocations.reduce(
@@ -59,6 +58,9 @@ export default async function StockReportPage() {
 
       // Reconciliation computed values
       const reconciledQty = a.litersReceived ? Number(a.litersReceived) : null;
+      // Stock value reflects what was actually received; falls back to the
+      // dispatched quantity until the delivery has been reconciled.
+      const stockValue = (reconciledQty ?? deliveryQty) * productPrice;
       let reconciledDate = a.deliveredAt ? a.deliveredAt.toISOString() : null;
       let reconciledDeposit: number | null = null;
       let totalExpense: number = 0;

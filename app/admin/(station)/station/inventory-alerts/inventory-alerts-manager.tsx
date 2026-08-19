@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -24,13 +25,95 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-import { CheckCircle2, Maximize2, Minimize2, Printer, LayoutGrid, TableProperties, Filter, AlertTriangle, Calendar, Gauge, Droplets } from "lucide-react";
+import { CheckCircle2, Maximize2, Minimize2, Printer, LayoutGrid, TableProperties, Filter, AlertTriangle, Calendar, Gauge, Droplets, TrendingDown, TrendingUp, MapPin, ClipboardList } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
 import { apiPost } from "@/lib/client/api";
+
+function VarianceBadge({ varianceVolume }: { varianceVolume: number }) {
+  const isShortage = varianceVolume < 0;
+  const isNeutral = varianceVolume === 0;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-mono font-bold whitespace-nowrap",
+        isNeutral
+          ? "bg-slate-100 text-slate-600"
+          : isShortage
+          ? "bg-rose-50 text-rose-600"
+          : "bg-emerald-50 text-emerald-600"
+      )}
+    >
+      {!isNeutral && (isShortage ? <TrendingDown className="size-3" /> : <TrendingUp className="size-3" />)}
+      {isShortage ? "-" : isNeutral ? "" : "+"}
+      {Math.abs(varianceVolume).toLocaleString()} L
+    </span>
+  );
+}
+
+function VarianceMeter({ expected, actual }: { expected: number; actual: number }) {
+  const max = Math.max(expected, actual, 1);
+  const expectedPct = Math.min(100, (expected / max) * 100);
+  const actualPct = Math.min(100, (actual / max) * 100);
+  const variance = actual - expected;
+  const isShortage = variance < 0;
+  const isNeutral = variance === 0;
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">Expected Volume</span>
+          <span className="font-mono font-semibold">{expected.toLocaleString()} L</span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-slate-400" style={{ width: `${expectedPct}%` }} />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">Actual Volume</span>
+          <span className="font-mono font-semibold">{actual.toLocaleString()} L</span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className={cn("h-full rounded-full", isShortage ? "bg-rose-500" : "bg-emerald-500")}
+            style={{ width: `${actualPct}%` }}
+          />
+        </div>
+      </div>
+      <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          {isNeutral ? null : isShortage ? (
+            <TrendingDown className="size-3.5 text-rose-600" />
+          ) : (
+            <TrendingUp className="size-3.5 text-emerald-600" />
+          )}
+          {isNeutral ? "No Variance" : isShortage ? "Shortage" : "Surplus"}
+        </span>
+        <span
+          className={cn(
+            "font-mono text-sm font-bold",
+            isNeutral ? "text-muted-foreground" : isShortage ? "text-rose-600" : "text-emerald-600"
+          )}
+        >
+          {isNeutral ? "0 L" : `${isShortage ? "-" : "+"}${Math.abs(variance).toLocaleString()} L`}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export function InventoryAlertsManager({
   initialAlerts,
@@ -47,6 +130,7 @@ export function InventoryAlertsManager({
   const [alertList, setAlertList] = useState(initialAlerts);
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
+  const [activeAlertId, setActiveAlertId] = useState<string | null>(null);
 
   // Draft States (Bound to UI inputs)
   const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>({
@@ -191,6 +275,12 @@ export function InventoryAlertsManager({
     );
   };
 
+  const activeAlert = useMemo(
+    () => alertList.find((a) => a.id === activeAlertId) ?? null,
+    [alertList, activeAlertId]
+  );
+  const isActiveResolved = activeAlert?.status === "RESOLVED" || activeAlert?.status === "CLOSED";
+
   async function resolveAlert(id: string, action: "APPROVE" | "REJECT") {
     const remark = remarks[id] || "";
     if (!remark && action === "APPROVE") {
@@ -213,6 +303,7 @@ export function InventoryAlertsManager({
     if (res.data) {
       setAlertList(prev => prev.map(a => a.id === id ? { ...a, ...res.data!.ticket, status: res.data!.ticket.status } : a));
       setRemarks(prev => ({ ...prev, [id]: "" }));
+      setActiveAlertId(null);
     }
   }
 
@@ -524,64 +615,31 @@ export function InventoryAlertsManager({
                       {getStatusBadge(a.status)}
                     </div>
                   </CardHeader>
-                  <CardContent className="p-4 space-y-4">
+                  <CardContent className="p-4 space-y-3">
                     <div>
                       <h4 className="font-semibold text-sm">{a.title}</h4>
-                      <p className="text-xs text-muted-foreground mt-1">{a.description}</p>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.description}</p>
                     </div>
 
                     {variance && (
-                      <div className="bg-slate-50 border rounded-lg p-3">
-                        <h4 className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground mb-2">Variance Log Details</h4>
-                        <div className="flex gap-4">
-                          <div className="flex flex-col">
-                            <span className="text-[10px] text-muted-foreground">Expected</span>
-                            <span className="text-xs font-mono">{Number(variance.expectedVolume).toLocaleString()} L</span>
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-[10px] text-muted-foreground">Actual</span>
-                            <span className="text-xs font-mono">{Number(variance.actualVolume).toLocaleString()} L</span>
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-[10px] text-muted-foreground">Variance</span>
-                            <span className="text-xs font-mono font-bold text-rose-600">{Number(variance.varianceVolume).toLocaleString()} L</span>
-                          </div>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground">Variance:</span>
+                        <VarianceBadge varianceVolume={Number(variance.varianceVolume)} />
                       </div>
                     )}
 
-                    {!(a.status === "RESOLVED" || a.status === "CLOSED") && (
-                      <div className="flex gap-2 items-center pt-2 border-t">
-                        <Input
-                          placeholder="Reason / Remark"
-                          value={remarks[a.id] || ""}
-                          onChange={(e) => setRemarks(prev => ({ ...prev, [a.id]: e.target.value }))}
-                          className="h-9 flex-1 text-xs"
-                        />
-                        <Button
-                          size="sm"
-                          variant="default"
-                          onClick={() => resolveAlert(a.id, "APPROVE")}
-                          disabled={processing === a.id}
-                        >
-                          Acknowledge
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => resolveAlert(a.id, "REJECT")}
-                          disabled={processing === a.id}
-                        >
-                          Dismiss
-                        </Button>
-                      </div>
-                    )}
-                    {(a.status === "RESOLVED" || a.status === "CLOSED") && (
-                      <div className="flex flex-col items-start gap-1 pt-2 border-t">
-                        <span className="text-[11px] font-semibold text-emerald-700">Acknowledged by {a.approvedBy?.firstName || a.approvedBy?.email || "Admin"}</span>
-                        <span className="text-xs text-muted-foreground">"{a.remark}"</span>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      {a.status === "RESOLVED" || a.status === "CLOSED" ? (
+                        <span className="text-[11px] text-muted-foreground truncate">
+                          Ack. by <span className="font-semibold text-emerald-700">{a.approvedBy?.firstName || a.approvedBy?.email || "Admin"}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">Awaiting review</span>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => setActiveAlertId(a.id)}>
+                        {a.status === "RESOLVED" || a.status === "CLOSED" ? "View Details" : "Resolve"}
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               );
@@ -628,16 +686,14 @@ export function InventoryAlertsManager({
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-2 border-r border-border/50 print:border-black/30 align-top max-w-sm">
-                          <div className="font-medium text-sm print:text-xs">{a.title}</div>
-                          <div className="text-xs text-muted-foreground mt-0.5 print:text-[10px]">{a.description}</div>
+                        <td className="px-3 py-2 border-r border-border/50 print:border-black/30 align-top max-w-xs">
+                          <div className="font-medium text-sm print:text-xs truncate" title={a.title}>{a.title}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5 print:text-[10px] truncate" title={a.description}>
+                            {a.description}
+                          </div>
                           {variance && (
-                            <div className="mt-2 flex gap-2 text-[10px] font-mono p-2 bg-slate-50 border rounded print:bg-transparent print:p-0 print:border-none">
-                              <span>Exp: {Number(variance.expectedVolume).toLocaleString()}L</span>
-                              <span className="text-border">|</span>
-                              <span>Act: {Number(variance.actualVolume).toLocaleString()}L</span>
-                              <span className="text-border">|</span>
-                              <span className="text-rose-600 font-bold">Var: {Number(variance.varianceVolume).toLocaleString()}L</span>
+                            <div className="mt-1.5">
+                              <VarianceBadge varianceVolume={Number(variance.varianceVolume)} />
                             </div>
                           )}
                         </td>
@@ -646,37 +702,18 @@ export function InventoryAlertsManager({
                         </td>
                         <td className="px-3 py-2 text-center border-l hide-on-print align-top">
                           {isResolved ? (
-                            <div className="flex flex-col items-start gap-1">
-                              <span className="text-[11px] font-semibold text-emerald-700">Ack. by {a.approvedBy?.firstName || a.approvedBy?.email || "Admin"}</span>
-                              <span className="text-xs text-muted-foreground text-left max-w-[200px] truncate" title={a.remark}>"{a.remark}"</span>
+                            <div className="flex flex-col items-start gap-0.5">
+                              <span className="text-[11px] font-semibold text-emerald-700 truncate max-w-[160px]">
+                                Ack. by {a.approvedBy?.firstName || a.approvedBy?.email || "Admin"}
+                              </span>
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setActiveAlertId(a.id)}>
+                                View Details
+                              </Button>
                             </div>
                           ) : (
-                            <div className="flex gap-2 items-start justify-end flex-wrap w-full max-w-[220px]">
-                              <Input
-                                placeholder="Reason / Remark"
-                                value={remarks[a.id] || ""}
-                                onChange={(e) => setRemarks(prev => ({ ...prev, [a.id]: e.target.value }))}
-                                className="h-8 w-full text-xs"
-                              />
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => resolveAlert(a.id, "APPROVE")}
-                                disabled={processing === a.id}
-                                className="h-8 flex-1"
-                              >
-                                Ack
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => resolveAlert(a.id, "REJECT")}
-                                disabled={processing === a.id}
-                                className="h-8"
-                              >
-                                Dismiss
-                              </Button>
-                            </div>
+                            <Button size="sm" variant="outline" className="h-8" onClick={() => setActiveAlertId(a.id)}>
+                              Resolve
+                            </Button>
                           )}
                         </td>
                       </tr>
@@ -688,6 +725,111 @@ export function InventoryAlertsManager({
           </div>
         </>
       )}
+
+      {/* ── Resolve / Details Modal ───────────────────────────────────── */}
+      <Dialog open={!!activeAlertId} onOpenChange={(open) => !open && setActiveAlertId(null)}>
+        <DialogContent className="sm:max-w-lg">
+          {activeAlert && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-base">
+                  <AlertTriangle className="size-4 shrink-0 text-amber-500" />
+                  {activeAlert.title}
+                </DialogTitle>
+                <DialogDescription>{activeAlert.description}</DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-3 text-sm">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Station</p>
+                      <p className="truncate font-medium">{activeAlert.station?.name || "Global"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Calendar className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Date Raised</p>
+                      <p className="truncate font-medium">{formatHumanReadableDate(activeAlert.createdAt)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <ClipboardList className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Source</p>
+                      <p className="truncate font-medium">
+                        {activeAlert.varianceLog?.varianceType?.replace("_", " ") || "—"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Gauge className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Status</p>
+                      <div className="mt-0.5">{getStatusBadge(activeAlert.status)}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {activeAlert.varianceLog && (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Volume Variance
+                    </p>
+                    <VarianceMeter
+                      expected={Number(activeAlert.varianceLog.expectedVolume)}
+                      actual={Number(activeAlert.varianceLog.actualVolume)}
+                    />
+                  </div>
+                )}
+
+                {isActiveResolved ? (
+                  <div className="space-y-1 rounded-lg border bg-emerald-50 p-3">
+                    <p className="text-xs font-semibold text-emerald-700">
+                      Acknowledged by {activeAlert.approvedBy?.firstName || activeAlert.approvedBy?.email || "Admin"}
+                    </p>
+                    {activeAlert.remark && (
+                      <p className="text-sm italic text-muted-foreground">&ldquo;{activeAlert.remark}&rdquo;</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground">Remark / Reason</Label>
+                    <Textarea
+                      placeholder="Explain the cause or the action taken to resolve this alert..."
+                      value={remarks[activeAlert.id] || ""}
+                      onChange={(e) =>
+                        setRemarks((prev) => ({ ...prev, [activeAlert.id]: e.target.value }))
+                      }
+                      rows={3}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {!isActiveResolved && (
+                <DialogFooter>
+                  <Button
+                    variant="destructive"
+                    onClick={() => resolveAlert(activeAlert.id, "REJECT")}
+                    disabled={processing === activeAlert.id}
+                  >
+                    Dismiss
+                  </Button>
+                  <Button
+                    onClick={() => resolveAlert(activeAlert.id, "APPROVE")}
+                    disabled={processing === activeAlert.id}
+                  >
+                    Acknowledge
+                  </Button>
+                </DialogFooter>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

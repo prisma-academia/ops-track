@@ -252,8 +252,6 @@ export function PricesManager({
     <DataTable
       columns={columns}
       data={stationsData}
-      title="Network Stations"
-      description="Current fuel prices by station. Expand rows to view history."
       searchKey="name"
       searchPlaceholder="Search stations..."
       pageSize={15}

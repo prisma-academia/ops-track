@@ -5,6 +5,11 @@ function toNum(value: Numeric): number {
   return Number(value) || 0;
 }
 
+export type OrderPnlDeliveryTransaction = {
+  type: string;
+  amount: Numeric;
+};
+
 export type OrderPnlDelivery = {
   id: string;
   litersDespatched: Numeric;
@@ -18,7 +23,17 @@ export type OrderPnlDelivery = {
   createdAt: Date | string;
   customer?: { name: string | null } | null;
   station?: { name: string | null } | null;
+  transactions?: OrderPnlDeliveryTransaction[];
 };
+
+function resolveDeliveryPaymentReceived(delivery: OrderPnlDelivery): number {
+  const fromField = toNum(delivery.paymentReceived);
+  const fromTransactions = (delivery.transactions ?? [])
+    .filter((transaction) => transaction.type === "INFLOW")
+    .reduce((sum, transaction) => sum + toNum(transaction.amount), 0);
+
+  return Math.max(fromField, fromTransactions);
+}
 
 export type OrderPnlTransport = {
   id: string;
@@ -165,7 +180,7 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
       transportStationLossAmount += saleLossAmount;
 
       const saleRev = toNum(delivery.totalExpectedAmount) + clientTransportFee;
-      const salePaid = toNum(delivery.paymentReceived);
+      const salePaid = resolveDeliveryPaymentReceived(delivery);
 
       transportTotalQty += saleQty;
       transportTotalRev += saleRev;

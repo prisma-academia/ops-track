@@ -68,6 +68,13 @@ interface ExpenseStation {
   code: string;
 }
 
+interface BankAccountOption {
+  id: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+}
+
 interface ExpenseRow {
   id: string;
   tenantId: string;
@@ -87,14 +94,25 @@ interface ExpenseRow {
   approvedBy: ExpenseUser | null;
 }
 
-const RecordExpenseSchema = z.object({
-  stationId: z.string().min(1, "Station is required"),
-  category: z.enum(["FUEL_FOR_GEN", "MAINTENANCE", "UTILITIES", "STATIONERY", "OTHER"]),
-  paymentMethod: z.string(),
-  amount: z.coerce.number().positive("Amount must be a positive number"),
-  description: z.string().min(2, "Description must be at least 2 characters").max(500),
-  receiptUrl: z.string().optional().or(z.literal("")),
-});
+const RecordExpenseSchema = z
+  .object({
+    stationId: z.string().min(1, "Station is required"),
+    category: z.enum(["FUEL_FOR_GEN", "MAINTENANCE", "UTILITIES", "STATIONERY", "OTHER"]),
+    paymentMethod: z.string(),
+    bankAccountId: z.string().optional().or(z.literal("")),
+    amount: z.coerce.number().positive("Amount must be a positive number"),
+    description: z.string().min(2, "Description must be at least 2 characters").max(500),
+    receiptUrl: z.string().optional().or(z.literal("")),
+  })
+  .superRefine((values, ctx) => {
+    if (values.paymentMethod !== "CASH" && !values.bankAccountId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["bankAccountId"],
+        message: "Bank account is required for non-cash payments.",
+      });
+    }
+  });
 
 const CATEGORY_MAP = {
   FUEL_FOR_GEN: "Generator Fuel",
@@ -115,10 +133,12 @@ export function ExpensesManager({
   initialExpenses,
   initialMeta,
   stations,
+  bankAccounts,
 }: {
   initialExpenses: ExpenseRow[];
   initialMeta: any;
   stations: { id: string; name: string; code: string }[];
+  bankAccounts: BankAccountOption[];
 }) {
   const router = useRouter();
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
@@ -151,14 +171,18 @@ export function ExpensesManager({
 
   const form = useForm({
     resolver: zodResolver(RecordExpenseSchema),
-    defaultValues: { paymentMethod: "CASH", stationId: "", category: "OTHER", amount: undefined, description: "", receiptUrl: "" },
+    defaultValues: { paymentMethod: "CASH", stationId: "", category: "OTHER", bankAccountId: "", amount: undefined, description: "", receiptUrl: "" },
   });
 
-  const { register, formState: { errors, isSubmitting }, control } = form;
+  const { register, formState: { errors, isSubmitting }, control, watch } = form;
+  const watchPaymentMethod = watch("paymentMethod");
 
   const handleRecordExpense = form.handleSubmit(async (values) => {
     setApiError(null);
-    const res = await apiPost("/api/tenant/expenses", values);
+    const res = await apiPost("/api/tenant/expenses", {
+      ...values,
+      bankAccountId: values.paymentMethod === "CASH" ? undefined : values.bankAccountId,
+    });
     if (res.error) {
       setApiError(res.error.message);
     } else {
@@ -183,7 +207,7 @@ export function ExpensesManager({
     setActiveDialog(null);
     setSelectedExpense(null);
     setApiError(null);
-    form.reset({ paymentMethod: "CASH", stationId: "", category: "OTHER", amount: undefined, description: "", receiptUrl: "" });
+    form.reset({ paymentMethod: "CASH", stationId: "", category: "OTHER", bankAccountId: "", amount: undefined, description: "", receiptUrl: "" });
     router.refresh();
   };
 
@@ -520,6 +544,8 @@ export function ExpensesManager({
                         <SelectContent>
                           <SelectItem value="CASH">Cash</SelectItem>
                           <SelectItem value="POS">POS Machine</SelectItem>
+                          <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+                          <SelectItem value="CHEQUE">Cheque</SelectItem>
                         </SelectContent>
                       </Select>
                     )}
@@ -529,6 +555,41 @@ export function ExpensesManager({
                   )}
                 </div>
               </div>
+
+              {watchPaymentMethod !== "CASH" && (
+                <div className="space-y-2">
+                  <Label htmlFor="e_bank" className={errors.bankAccountId ? "text-destructive" : ""}>
+                    Bank Account *
+                  </Label>
+                  <Controller
+                    control={control}
+                    name="bankAccountId"
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger id="e_bank" className={errors.bankAccountId ? "border-destructive w-full" : "w-full"}>
+                          <SelectValue placeholder="Select Bank Account..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {bankAccounts.length === 0 ? (
+                            <div className="px-3 py-2 text-xs text-muted-foreground">
+                              No station bank accounts configured.
+                            </div>
+                          ) : (
+                            bankAccounts.map((account) => (
+                              <SelectItem key={account.id} value={account.id}>
+                                {account.bankName} - {account.accountNumber}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {errors.bankAccountId && (
+                    <p className="text-xs text-destructive">{errors.bankAccountId.message}</p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="e_amt" className={errors.amount ? "text-destructive" : ""}>

@@ -51,6 +51,7 @@ interface SalesReportRow {
   logDate: string | Date;
   status: "PENDING" | "APPROVED" | "REJECTED";
   station: { id: string; name: string; code: string };
+  stationManagerName?: string;
   isDebtRepayment?: boolean;
   parentSaleId?: string | null;
 }
@@ -287,6 +288,15 @@ export function SalesReportsManager({
         header: ({ column }) => <DataTableColumnHeader column={column} title="Station" />,
         meta: { label: "Station" },
         cell: ({ row }) => <span className="font-medium">{row.original.station?.name}</span>,
+      },
+      {
+        id: "stationManagerName",
+        accessorFn: (row) => row.stationManagerName ?? "—",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Station Manager" />,
+        meta: { label: "Station Manager" },
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">{row.original.stationManagerName || "—"}</span>
+        ),
       },
       {
         accessorKey: "productType",

@@ -3,7 +3,7 @@ import { PrismaClient } from "../lib/generated/prisma/client";
 import argon2 from "argon2";
 import "dotenv/config";
 
-import { ALL_PERMISSIONS, ALL_PLATFORM_PERMISSION_KEYS, TENANT_BUILTIN_ROLES } from "../lib/auth/permissions";
+import { ALL_PERMISSIONS, ALL_PLATFORM_PERMISSION_KEYS } from "../lib/auth/permissions";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -50,63 +50,7 @@ async function main() {
     },
   });
 
-  console.log("Seeding Demo Tenants...");
-
-  const tenants = [
-    { slug: "fleet-only", name: "Acme Logistics", modules: ["FLEET"], email: "owner@fleetonly.com" },
-    { slug: "station-only", name: "Acme Retail", modules: ["STATION"], email: "owner@stationonly.com" },
-    { slug: "hybrid-co", name: "Acme Energy Corp", modules: ["FLEET", "STATION"], email: "owner@hybridco.com" }
-  ];
-
-  for (const t of tenants) {
-    let tenant = await prisma.tenant.findUnique({ where: { slug: t.slug } });
-    if (!tenant) {
-      tenant = await prisma.tenant.create({
-        data: {
-          slug: t.slug,
-          name: t.name,
-          activeModules: t.modules,
-          companyEmail: t.email,
-        }
-      });
-      console.log(`Created tenant: ${t.name}`);
-
-      const user = await prisma.tenantUser.create({
-        data: {
-          tenantId: tenant.id,
-          email: t.email,
-          passwordHash: passwordHash,
-          firstName: "Demo",
-          lastName: "Owner",
-          isOwner: true,
-          mustChangePassword: false,
-        }
-      });
-
-      await prisma.tenant.update({
-        where: { id: tenant.id },
-        data: { ownerUserId: user.id }
-      });
-      
-      // Ensure role templates are present
-      for (const role of Object.values(TENANT_BUILTIN_ROLES)) {
-        if (t.modules.includes(role.module as any)) {
-          await prisma.roleTemplate.create({
-             data: {
-               scope: "TENANT",
-               tenantId: tenant.id,
-               name: role.name,
-               module: role.module as any,
-               permissions: role.permissions,
-               isSystem: true
-             }
-          });
-        }
-      }
-    } else {
-      console.log(`Tenant ${t.name} already exists.`);
-    }
-  }
+  console.log("Platform admin seeded. No demo tenants seeded.");
 }
 
 async function ensurePlatformRole(name: string, permissions: string[]) {

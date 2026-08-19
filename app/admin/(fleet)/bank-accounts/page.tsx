@@ -13,10 +13,10 @@ export default async function FleetBankAccountsPage({ params }: { params: { tena
 
   const [totalCount, rawRows] = await Promise.all([
     prisma.bankAccount.count({
-      where: { tenantId: actor.tenantId, scope: "FLEET" },
+      where: { tenantId: actor.tenantId },
     }),
     prisma.bankAccount.findMany({
-      where: { tenantId: actor.tenantId, scope: "FLEET" },
+      where: { tenantId: actor.tenantId },
       orderBy: { createdAt: "desc" },
       take,
       skip,
@@ -49,7 +49,6 @@ export default async function FleetBankAccountsPage({ params }: { params: { tena
           tenantSlug={actor.tenantId} // changed params.tenant to actor.tenantId since admin routes don't have [tenant]
           initialData={rows}
           initialMeta={initialMeta}
-          scopeFilter="FLEET"
         />
       </div>
     </div>

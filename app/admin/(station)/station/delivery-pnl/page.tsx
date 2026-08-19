@@ -86,6 +86,7 @@ export default async function DeliveryPnlPage() {
         truckPlate: a.waybill.truckPlate,
         productType: a.waybill.productType,
         deliveryQty,
+        purchasePrice: costPerLiter,
         deliveryCost,
         cycleRevenue,
         cycleExpenses,

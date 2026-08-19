@@ -183,15 +183,17 @@ export function StockReportManager({
         cell: ({ row }) => <span className="font-medium">{row.original.stationName}</span>,
       },
       {
-        accessorKey: "totalDelivery",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Delivery (L)" />,
-        meta: { label: "Delivery (L)" },
+        accessorKey: "reconciledQty",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Received (L)" />,
+        meta: { label: "Received (L)" },
         cell: ({ row }) => (
-          <span className="font-mono tabular-nums">{fmtQty(row.original.totalDelivery)}</span>
+          <span className="font-mono tabular-nums">{fmtQty(row.original.reconciledQty)}</span>
         ),
         footer: ({ table }) =>
           fmtQty(
-            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.deliveryQty, 0)
+            table
+              .getFilteredRowModel()
+              .rows.reduce((sum, row) => sum + (row.original.reconciledQty ?? 0), 0)
           ),
       },
       {
@@ -204,20 +206,6 @@ export function StockReportManager({
         footer: ({ table }) =>
           fmtMoney(
             table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.stockValue, 0)
-          ),
-      },
-      {
-        accessorKey: "reconciledQty",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Received (L)" />,
-        meta: { label: "Received (L)" },
-        cell: ({ row }) => (
-          <span className="font-mono tabular-nums">{fmtQty(row.original.reconciledQty)}</span>
-        ),
-        footer: ({ table }) =>
-          fmtQty(
-            table
-              .getFilteredRowModel()
-              .rows.reduce((sum, row) => sum + (row.original.reconciledQty ?? 0), 0)
           ),
       },
       {
@@ -241,6 +229,18 @@ export function StockReportManager({
             </span>
           );
         },
+      },
+      {
+        accessorKey: "reconciledDate",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Reconciled Date" />,
+        meta: { label: "Reconciled Date" },
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.reconciledDate
+              ? format(new Date(row.original.reconciledDate), "LLL dd, y")
+              : "—"}
+          </span>
+        ),
       },
       {
         accessorKey: "reconciledDeposit",

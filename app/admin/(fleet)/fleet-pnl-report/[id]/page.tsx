@@ -24,7 +24,11 @@ export default async function OrderPnlDetailsPage(props: {
           deliveries: {
             include: {
               customer: { select: { name: true } },
-              station: { select: { name: true } }
+              station: { select: { name: true } },
+              transactions: {
+                where: { type: "INFLOW" },
+                select: { type: true, amount: true },
+              },
             },
             orderBy: { createdAt: "desc" }
           },

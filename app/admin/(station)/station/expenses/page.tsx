@@ -68,8 +68,20 @@ export default async function ExpensesPage() {
     orderBy: { name: "asc" },
   });
 
+  const bankAccounts = await prisma.bankAccount.findMany({
+    where: { tenantId: actor.tenantId, scope: "STATION", isActive: true },
+    select: {
+      id: true,
+      bankName: true,
+      accountName: true,
+      accountNumber: true,
+    },
+    orderBy: { bankName: "asc" },
+  });
+
   const serializedExpenses = JSON.parse(JSON.stringify(expenses));
   const serializedStations = JSON.parse(JSON.stringify(stations));
+  const serializedBankAccounts = JSON.parse(JSON.stringify(bankAccounts));
 
   const totalPages = Math.ceil(totalCount / take);
   const initialMeta = {
@@ -85,6 +97,7 @@ export default async function ExpensesPage() {
     <ExpensesManager
       initialExpenses={serializedExpenses}
       stations={serializedStations}
+      bankAccounts={serializedBankAccounts}
       initialMeta={initialMeta}
     />
   );

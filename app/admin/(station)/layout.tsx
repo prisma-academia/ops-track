@@ -42,7 +42,7 @@ const NAV: NavItemConfig[] = [
       { href: "/admin/station/pnl-report", key: "pnlReport", title: "Profit Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_PROFIT_REPORTS_READ.key },
     ],
   },
-  { href: "/admin/station/table-demo", key: "tableDemo", title: "Table Demo", module: null, icon: "IconTable", permission: null },
+  // { href: "/admin/station/table-demo", key: "tableDemo", title: "Table Demo", module: null, icon: "IconTable", permission: null },
 ];
 
 export default async function StationDashboardLayout({ children }: { children: React.ReactNode }) {

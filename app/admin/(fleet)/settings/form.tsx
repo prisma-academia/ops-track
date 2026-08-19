@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { apiPatch, apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,8 +68,6 @@ export function SettingsForm({
   const [backgroundKey, setBackgroundKey] = useState<string | undefined>(initial.settings.backgroundKey);
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(initial.backgroundUrl);
 
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -95,12 +94,11 @@ export function SettingsForm({
     onFilesAdded: async (addedFiles) => {
       const file = addedFiles[0]?.file;
       if (!file || !(file instanceof File)) return;
-      setError(null);
       setUploadingLogo(true);
       try {
         const res = await apiPost<any>("/api/tenant/settings/logo", { contentType: file.type });
         if (res.error || !res.data) {
-          setError(res.error?.message ?? "Upload could not be started.");
+          toast.error(res.error?.message ?? "Upload could not be started.");
           return;
         }
 
@@ -116,7 +114,7 @@ export function SettingsForm({
 
           const uploadRes = await fetch(res.data.url, { method: "POST", body: formData });
           if (!uploadRes.ok) {
-            setError("Cloudinary upload failed.");
+            toast.error("Cloudinary upload failed.");
             return;
           }
           const cloudinaryData = await uploadRes.json();
@@ -129,7 +127,7 @@ export function SettingsForm({
             body: file,
           });
           if (!put.ok) {
-            setError("S3 Upload failed.");
+            toast.error("S3 Upload failed.");
             return;
           }
           publicId = res.data.key;
@@ -138,7 +136,7 @@ export function SettingsForm({
 
         setLogoKey(publicId);
         setLogoUrl(publicUrl);
-        setInfo("Logo uploaded. Remember to Save.");
+        toast.success("Logo uploaded. Remember to Save.");
       } finally {
         setUploadingLogo(false);
       }
@@ -154,12 +152,11 @@ export function SettingsForm({
     onFilesAdded: async (addedFiles) => {
       const file = addedFiles[0]?.file;
       if (!file || !(file instanceof File)) return;
-      setError(null);
       setUploadingBg(true);
       try {
         const res = await apiPost<any>("/api/tenant/settings/logo", { contentType: file.type });
         if (res.error || !res.data) {
-          setError(res.error?.message ?? "Upload could not be started.");
+          toast.error(res.error?.message ?? "Upload could not be started.");
           return;
         }
 
@@ -175,7 +172,7 @@ export function SettingsForm({
 
           const uploadRes = await fetch(res.data.url, { method: "POST", body: formData });
           if (!uploadRes.ok) {
-            setError("Cloudinary upload failed.");
+            toast.error("Cloudinary upload failed.");
             return;
           }
           const cloudinaryData = await uploadRes.json();
@@ -188,7 +185,7 @@ export function SettingsForm({
             body: file,
           });
           if (!put.ok) {
-            setError("S3 Upload failed.");
+            toast.error("S3 Upload failed.");
             return;
           }
           publicId = res.data.key;
@@ -197,7 +194,7 @@ export function SettingsForm({
 
         setBackgroundKey(publicId);
         setBackgroundUrl(publicUrl);
-        setInfo("Background uploaded. Remember to Save.");
+        toast.success("Background uploaded. Remember to Save.");
       } finally {
         setUploadingBg(false);
       }
@@ -208,8 +205,6 @@ export function SettingsForm({
   const bgPreviewUrl = backgroundUrl || (bgFiles[0]?.preview || null);
 
   async function submit() {
-    setError(null);
-    setInfo(null);
     setPending(true);
     const res = await apiPatch("/api/tenant/settings", {
       name,
@@ -236,10 +231,10 @@ export function SettingsForm({
     });
     setPending(false);
     if (res.error) {
-      setError(res.error.message);
+      toast.error(res.error.message);
       return;
     }
-    setInfo("Saved.");
+    toast.success("Saved.");
   }
 
   return (
@@ -494,9 +489,6 @@ export function SettingsForm({
           </div>
         </div>
 
-        {error ? <p className="text-sm font-medium text-destructive mt-4">{error}</p> : null}
-        {info ? <p className="text-sm font-medium text-emerald-600 mt-4">{info}</p> : null}
-        
         <div className="pt-4 pb-10">
           <Button onClick={submit} disabled={pending || uploadingBg || uploadingLogo}>
             {pending ? "Saving…" : "Save All Changes"}

@@ -19,6 +19,10 @@ export default async function FleetPnlReportPage() {
             include: {
               customer: { select: { name: true } },
               station: { select: { name: true } },
+              transactions: {
+                where: { type: "INFLOW" },
+                select: { type: true, amount: true },
+              },
             },
           },
         },

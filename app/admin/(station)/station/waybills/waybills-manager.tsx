@@ -110,8 +110,6 @@ export function WaybillsManager({
       <DataTableToolbar
         title="Waybills"
         description="Monitor incoming and completed waybills across your stations."
-        createHref={canCreate ? "/admin/station/waybills/create" : undefined}
-        createLabel="Create Waybill"
       />
 
       <div className="flex items-center gap-6 text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg border mb-4">

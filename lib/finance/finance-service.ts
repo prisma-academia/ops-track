@@ -66,6 +66,7 @@ export const FinanceService = {
     deliveryId: string;
     organizationId?: string | null;
     customerId?: string | null;
+    stationId?: string | null;
     amount: Prisma.Decimal | number;
     bankAccountId?: string | null;
     description?: string;
@@ -78,6 +79,7 @@ export const FinanceService = {
         deliveryId: params.deliveryId,
         organizationId: params.organizationId || null,
         customerId: params.customerId || null,
+        stationId: params.stationId || null,
         type: TransactionType.INFLOW,
         category: TransactionCategory.PRODUCT_SUPPLY,
         amount: params.amount,

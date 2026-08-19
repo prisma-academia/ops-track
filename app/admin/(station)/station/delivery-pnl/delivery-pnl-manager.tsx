@@ -1,23 +1,23 @@
 "use client";
 
-import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import {
-  type ColumnDef,
-  type SortingState,
-  type ColumnFiltersState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
-import { Card, CardContent } from "@/components/ui/card";
+import * as React from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { format } from "date-fns";
+import { type DateRange } from "react-day-picker";
+import { Filter } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -27,35 +27,15 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
-import { cn, formatShortCurrency } from "@/lib/utils";
-import { format, parseISO } from "date-fns";
-import { type DateRange } from "react-day-picker";
 import {
-  Truck,
-  TrendingUp,
-  TrendingDown,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  Maximize2,
-  Minimize2,
-  Printer,
-  Filter,
-  BarChart3,
-  Wallet
-} from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  ResponsiveContainer
-} from 'recharts';
+  DataTable,
+  DataTableColumnHeader,
+  TableInsightCards,
+  buildPctStats,
+} from "@/components/tables";
+import { cn } from "@/lib/utils";
 
 interface DeliveryPnlRow {
-  sn: number;
   id: string;
   stationId: string;
   stationName: string;
@@ -64,6 +44,7 @@ interface DeliveryPnlRow {
   truckPlate: string;
   productType: string;
   deliveryQty: number;
+  purchasePrice: number;
   deliveryCost: number;
   cycleRevenue: number;
   cycleExpenses: number;
@@ -77,217 +58,272 @@ interface Station {
   code: string;
 }
 
-interface Props {
-  initialRows: DeliveryPnlRow[];
-  stations: Station[];
-}
-
-function fmtDate(iso: string | null) {
-  if (!iso) return "—";
-  return format(new Date(iso), "dd/MM/yyyy");
-}
-
 function fmtMoney(n: number | null) {
   if (n === null || isNaN(n)) return "—";
   return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function fmtQty(n: number | null) {
-  if (n === null || isNaN(n)) return "0 L";
-  return `${n.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} L`;
+  if (n === null || isNaN(n)) return "—";
+  return `${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L`;
 }
 
-export function DeliveryPnlManager({ initialRows, stations }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
+export function DeliveryPnlManager({
+  initialRows,
+  stations,
+}: {
+  initialRows: DeliveryPnlRow[];
+  stations: Station[];
+}) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [draftDateRange, setDraftDateRange] = React.useState<DateRange | undefined>(undefined);
+  const [draftStationIds, setDraftStationIds] = React.useState<string[]>([]);
+  const [draftProduct, setDraftProduct] = React.useState<string>("ALL");
 
-  const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>(undefined);
-  const [draftSelectedStationIds, setDraftSelectedStationIds] = useState<string[]>([]);
+  const [appliedDateRange, setAppliedDateRange] = React.useState<DateRange | undefined>(undefined);
+  const [appliedStationIds, setAppliedStationIds] = React.useState<string[]>([]);
+  const [appliedProduct, setAppliedProduct] = React.useState<string>("ALL");
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(draftDateRange);
-  const [selectedStationIds, setSelectedStationIds] = useState<string[]>([]);
-
-  const applyFilters = useCallback(() => {
-    setDateRange(draftDateRange);
-    setSelectedStationIds(draftSelectedStationIds);
+  const applyFilters = React.useCallback(() => {
+    setAppliedDateRange(draftDateRange);
+    setAppliedStationIds(draftStationIds);
+    setAppliedProduct(draftProduct);
     setIsOpen(false);
-  }, [draftDateRange, draftSelectedStationIds]);
+  }, [draftDateRange, draftStationIds, draftProduct]);
 
-  const clearFilters = useCallback(() => {
+  const clearFilters = React.useCallback(() => {
     setDraftDateRange(undefined);
-    setDraftSelectedStationIds([]);
-    setDateRange(undefined);
-    setSelectedStationIds([]);
+    setDraftStationIds([]);
+    setDraftProduct("ALL");
+    setAppliedDateRange(undefined);
+    setAppliedStationIds([]);
+    setAppliedProduct("ALL");
     setIsOpen(false);
   }, []);
 
-  const toggleFullscreen = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (!document.fullscreenElement) {
-      el.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
-    } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
-    }
-  }, []);
+  const filteredRows = React.useMemo(() => {
+    return initialRows.filter((row) => {
+      if (appliedStationIds.length > 0 && !appliedStationIds.includes(row.stationId)) return false;
+      if (appliedProduct !== "ALL" && row.productType !== appliedProduct) return false;
 
-  useEffect(() => {
-    const handleChange = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", handleChange);
-    return () => document.removeEventListener("fullscreenchange", handleChange);
-  }, []);
+      const d = new Date(row.deliveryDate);
+      if (appliedDateRange?.from) {
+        const s = new Date(appliedDateRange.from);
+        s.setHours(0, 0, 0, 0);
+        if (d < s) return false;
+      }
+      if (appliedDateRange?.to) {
+        const e = new Date(appliedDateRange.to);
+        e.setHours(23, 59, 59, 999);
+        if (d > e) return false;
+      }
+      return true;
+    });
+  }, [initialRows, appliedStationIds, appliedProduct, appliedDateRange]);
 
-  const filteredRows = useMemo(() => {
-    return initialRows
-      .filter((row) => {
-        if (selectedStationIds.length > 0 && !selectedStationIds.includes(row.stationId)) return false;
-        const d = new Date(row.deliveryDate);
-        if (dateRange?.from) {
-          const s = new Date(dateRange.from);
-          s.setHours(0, 0, 0, 0);
-          if (d < s) return false;
-        }
-        if (dateRange?.to) {
-          const e = new Date(dateRange.to);
-          e.setHours(23, 59, 59, 999);
-          if (d > e) return false;
-        }
-        return true;
-      })
-      .map((row, i) => ({ ...row, sn: i + 1 }));
-  }, [initialRows, selectedStationIds, dateRange]);
-
-  const stats = useMemo(() => {
+  const metrics = React.useMemo(() => {
+    let totalVolume = 0;
     let totalRevenue = 0;
     let totalExpenses = 0;
     let totalProfit = 0;
 
     filteredRows.forEach((r) => {
+      totalVolume += r.deliveryQty;
       totalRevenue += r.cycleRevenue;
       totalExpenses += r.cycleExpenses;
       totalProfit += r.netProfit;
     });
 
-    return { totalRevenue, totalExpenses, totalProfit };
+    return { count: filteredRows.length, totalVolume, totalRevenue, totalExpenses, totalProfit };
   }, [filteredRows]);
 
-  const chartData = useMemo(() => {
-    const grouped = filteredRows.reduce((acc, curr) => {
-      const dateStr = format(parseISO(curr.deliveryDate), "MMM dd");
-      if (!acc[dateStr]) {
-        acc[dateStr] = { date: dateStr, Profit: 0 };
-      }
-      acc[dateStr].Profit += curr.netProfit;
-      return acc;
-    }, {} as Record<string, { date: string, Profit: number }>);
-    return Object.values(grouped).reverse().slice(-14); // Last 14 deliveries
-  }, [filteredRows]);
+  const insightStats = React.useMemo(
+    () =>
+      buildPctStats([
+        { key: "deliveries", label: "Deliveries", value: metrics.count, color: "#0d9488" },
+        {
+          key: "volume",
+          label: "Volume Delivered",
+          value: metrics.totalVolume,
+          color: "#3b82f6",
+          format: (n) => fmtQty(n),
+        },
+        {
+          key: "revenue",
+          label: "Cycle Revenue",
+          value: metrics.totalRevenue,
+          color: "#6366f1",
+          format: (n) => fmtMoney(n),
+        },
+        {
+          key: "profit",
+          label: "Net Profit",
+          value: metrics.totalProfit,
+          color: metrics.totalProfit >= 0 ? "#10b981" : "#ef4444",
+          format: (n) => fmtMoney(n),
+        },
+      ]),
+    [metrics]
+  );
 
-  const columns = useMemo<ColumnDef<DeliveryPnlRow>[]>(
+  const columns = React.useMemo<ColumnDef<DeliveryPnlRow>[]>(
     () => [
       {
-        id: "sn",
-        accessorKey: "sn",
-        header: "S/N",
-        size: 56,
+        accessorKey: "deliveryDate",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Cycle Start" />,
+        meta: { label: "Cycle Start" },
+        enableHiding: false,
+        footer: () => "Total",
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground tabular-nums">
-            {row.original.sn}
+          <span className="text-muted-foreground">
+            {format(new Date(row.original.deliveryDate), "LLL dd, y")}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "cycleEndDate",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Cycle End" />,
+        meta: { label: "Cycle End" },
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {format(new Date(row.original.cycleEndDate), "LLL dd, y")}
           </span>
         ),
       },
       {
         id: "stationName",
-        accessorKey: "stationName",
-        header: "Station",
-        size: 150,
+        accessorFn: (row) => row.stationName,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Station" />,
+        meta: { label: "Station" },
+        cell: ({ row }) => <span className="font-medium">{row.original.stationName}</span>,
+      },
+      {
+        accessorKey: "truckPlate",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Truck" />,
+        meta: { label: "Truck" },
         cell: ({ row }) => (
-          <span className="text-xs font-semibold whitespace-nowrap">
-            {row.original.stationName}
-          </span>
+          <span className="font-mono text-xs font-semibold uppercase">{row.original.truckPlate}</span>
         ),
       },
       {
-        id: "deliveryDate",
-        accessorKey: "deliveryDate",
-        header: "Cycle Start (Delivery)",
-        size: 140,
+        accessorKey: "productType",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Product" />,
+        meta: { label: "Product" },
         cell: ({ row }) => (
-          <span className="text-xs text-foreground font-mono">
-            {fmtDate(row.original.deliveryDate)}
+          <span className="rounded-md border px-2 py-0.5 text-xs font-medium">
+            {row.original.productType}
           </span>
         ),
+        filterFn: (row, id, value) => {
+          if (!Array.isArray(value)) return true;
+          return value.includes(row.getValue(id));
+        },
       },
       {
-        id: "cycleEndDate",
-        accessorKey: "cycleEndDate",
-        header: "Cycle End",
-        size: 140,
-        cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground font-mono">
-            {fmtDate(row.original.cycleEndDate)}
-          </span>
-        ),
-      },
-      {
-        id: "deliveryQty",
         accessorKey: "deliveryQty",
-        header: () => <div className="text-right whitespace-nowrap">Volume</div>,
-        size: 100,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Volume (L)" />,
+        meta: { label: "Volume (L)" },
         cell: ({ row }) => (
-          <div className="text-right text-xs font-mono font-semibold text-blue-600 tabular-nums">
-            {fmtQty(row.original.deliveryQty)}
-          </div>
+          <span className="font-mono tabular-nums">{fmtQty(row.original.deliveryQty)}</span>
+        ),
+        footer: ({ table }) =>
+          fmtQty(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.deliveryQty, 0)
+          ),
+      },
+      {
+        accessorKey: "purchasePrice",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Purchase Price" />,
+        meta: { label: "Purchase Price" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums text-muted-foreground">
+            {fmtMoney(row.original.purchasePrice)}/L
+          </span>
         ),
       },
       {
-        id: "cycleRevenue",
+        accessorKey: "deliveryCost",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Delivery Cost" />,
+        meta: { label: "Delivery Cost" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums text-muted-foreground">
+            {fmtMoney(row.original.deliveryCost)}
+          </span>
+        ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.deliveryCost, 0)
+          ),
+      },
+      {
         accessorKey: "cycleRevenue",
-        header: () => <div className="text-right whitespace-nowrap">Cycle Revenue</div>,
-        size: 140,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Cycle Revenue" />,
+        meta: { label: "Cycle Revenue" },
         cell: ({ row }) => (
-          <div className="text-right text-xs font-mono font-bold tabular-nums">
-            {fmtMoney(row.original.cycleRevenue)}
-          </div>
+          <span className="font-mono tabular-nums">{fmtMoney(row.original.cycleRevenue)}</span>
         ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.cycleRevenue, 0)
+          ),
       },
       {
-        id: "cycleExpenses",
         accessorKey: "cycleExpenses",
-        header: () => <div className="text-right whitespace-nowrap">Cycle Expenses</div>,
-        size: 140,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Cycle Expenses" />,
+        meta: { label: "Cycle Expenses" },
         cell: ({ row }) => (
-          <div className="text-right text-xs font-mono font-bold text-rose-600 tabular-nums">
+          <span className="font-mono tabular-nums text-rose-600">
             {fmtMoney(row.original.cycleExpenses)}
-          </div>
+          </span>
         ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.cycleExpenses, 0)
+          ),
       },
       {
-        id: "netProfit",
         accessorKey: "netProfit",
-        header: () => <div className="text-right whitespace-nowrap">Net Profit</div>,
-        size: 140,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Net Profit" />,
+        meta: { label: "Net Profit" },
         cell: ({ row }) => {
           const val = row.original.netProfit;
           return (
-            <div className={cn("text-right text-xs font-mono font-bold tabular-nums", val >= 0 ? "text-emerald-600" : "text-rose-600")}>
+            <span
+              className={cn(
+                "font-mono font-semibold tabular-nums",
+                val >= 0 ? "text-emerald-600" : "text-rose-600"
+              )}
+            >
               {fmtMoney(val)}
-            </div>
+            </span>
+          );
+        },
+        footer: ({ table }) => {
+          const total = table
+            .getFilteredRowModel()
+            .rows.reduce((sum, row) => sum + row.original.netProfit, 0);
+          return (
+            <span className={cn("font-mono", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
+              {fmtMoney(total)}
+            </span>
           );
         },
       },
       {
-        id: "margin",
         accessorKey: "margin",
-        header: () => <div className="text-right whitespace-nowrap">Margin</div>,
-        size: 100,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Margin" />,
+        meta: { label: "Margin" },
         cell: ({ row }) => {
           const val = row.original.margin;
           return (
-            <div className={cn("text-right text-[11px] font-bold", val >= 0 ? "text-emerald-600" : "text-rose-600")}>
+            <span
+              className={cn(
+                "font-mono font-semibold tabular-nums",
+                val >= 0 ? "text-emerald-600" : "text-rose-600"
+              )}
+            >
               {val.toFixed(2)}%
-            </div>
+            </span>
           );
         },
       },
@@ -295,313 +331,152 @@ export function DeliveryPnlManager({ initialRows, stations }: Props) {
     []
   );
 
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const filterSheet = (
+    <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      <SheetTrigger asChild>
+        <Button variant="outline" className="gap-2 h-9">
+          <Filter className="h-4 w-4" />
+          Filter
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right" className="flex w-[400px] flex-col sm:w-[540px]">
+        <SheetHeader>
+          <SheetTitle>Filter Records</SheetTitle>
+          <SheetDescription>Apply filters to narrow down the table results.</SheetDescription>
+        </SheetHeader>
+        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-6">
+          <div className="space-y-1 w-full">
+            <Label className="text-xs text-muted-foreground font-medium">Station</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal h-9",
+                    draftStationIds.length === 0 && "text-muted-foreground"
+                  )}
+                >
+                  {draftStationIds.length === 0
+                    ? "All Stations"
+                    : `${draftStationIds.length} station(s)`}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-2" align="start">
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2 p-1">
+                    <Checkbox
+                      id="station-all"
+                      checked={draftStationIds.length === 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) setDraftStationIds([]);
+                      }}
+                    />
+                    <label htmlFor="station-all" className="text-sm font-medium leading-none cursor-pointer">
+                      All Stations
+                    </label>
+                  </div>
+                  {stations.map((s) => (
+                    <div key={s.id} className="flex items-center space-x-2 p-1">
+                      <Checkbox
+                        id={`station-${s.id}`}
+                        checked={draftStationIds.includes(s.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setDraftStationIds([...draftStationIds, s.id]);
+                          } else {
+                            setDraftStationIds(draftStationIds.filter((id) => id !== s.id));
+                          }
+                        }}
+                      />
+                      <label htmlFor={`station-${s.id}`} className="text-sm font-medium leading-none cursor-pointer">
+                        {s.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
 
-  const table = useReactTable({
-    data: filteredRows,
-    columns,
-    state: { sorting, columnFilters },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
+          <div className="space-y-3 w-full">
+            <Label className="text-sm font-semibold">Delivery Date Range</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">From</Label>
+                <Input
+                  type="date"
+                  value={draftDateRange?.from ? format(draftDateRange.from, "yyyy-MM-dd") : ""}
+                  onChange={(e) =>
+                    setDraftDateRange((prev) => ({
+                      from: e.target.value ? new Date(e.target.value) : undefined,
+                      to: prev?.to,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">To</Label>
+                <Input
+                  type="date"
+                  value={draftDateRange?.to ? format(draftDateRange.to, "yyyy-MM-dd") : ""}
+                  onChange={(e) =>
+                    setDraftDateRange((prev) => ({
+                      from: prev?.from,
+                      to: e.target.value ? new Date(e.target.value) : undefined,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-1 w-full">
+            <Label className="text-xs text-muted-foreground font-medium">Product</Label>
+            <Select value={draftProduct} onValueChange={setDraftProduct}>
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue placeholder="All Products" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Products</SelectItem>
+                <SelectItem value="PMS">PMS</SelectItem>
+                <SelectItem value="AGO">AGO</SelectItem>
+                <SelectItem value="DPK">DPK</SelectItem>
+                <SelectItem value="LPG">LPG</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <SheetFooter className="border-t pt-4">
+          <Button variant="outline" onClick={clearFilters} className="w-full">
+            Reset Filters
+          </Button>
+          <Button onClick={applyFilters} className="w-full">
+            Apply Filters
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
 
   return (
-    <div
-      ref={containerRef}
-      className={cn(
-        "space-y-6 transition-all print:m-0 print:p-0 print:bg-white print:text-black print:space-y-3",
-        isFullscreen && "bg-background p-6 overflow-auto h-full"
-      )}
-    >
-      <style>{`
-        @media print {
-          @page { size: landscape; margin: 10mm; }
-          .hide-on-print { display: none; }
-        }
-      `}</style>
-      <div className="flex flex-col md:flex-row justify-between items-center md:items-center gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
-        <div className="space-y-1">
-          <h1 className="text-xl font-bold tracking-tight text-foreground print:text-black">
-            Per-Delivery Profitability
-          </h1>
-          <p className="hidden print:block text-[11px] text-black/80 font-medium mt-1">
-            Date: {dateRange?.from ? format(dateRange.from, "d MMMM yyyy") : "All Time"} {dateRange?.to ? ` to ${format(dateRange.to, "d MMMM yyyy")}` : ""}
-          </p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto print:hidden">
-          <div className="shrink-0 flex gap-2">
-            <div>
-              <Sheet open={isOpen} onOpenChange={setIsOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="outline" className="gap-2 rounded-sm relative h-10">
-                    <Filter className="h-4 w-4" />
-                    <span>Filter</span>
-                    {(draftSelectedStationIds.length > 0 || draftDateRange) && (
-                      <Badge className="ml-1 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px]">
-                        {[
-                          draftSelectedStationIds.length > 0,
-                          !!draftDateRange
-                        ].filter(Boolean).length}
-                      </Badge>
-                    )}
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-[400px] sm:w-[540px] flex flex-col">
-                  <SheetHeader>
-                    <SheetTitle>Filter Records</SheetTitle>
-                    <SheetDescription>Apply filters to narrow down results.</SheetDescription>
-                  </SheetHeader>
-                  <div className="flex-1 overflow-y-auto py-6 space-y-3 px-4">
-                    <div className="space-y-1 w-full">
-                      <Label className="text-xs text-muted-foreground">Station(s)</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" className={cn("w-full justify-start text-left font-normal", draftSelectedStationIds.length === 0 && "text-muted-foreground")}>
-                            {draftSelectedStationIds.length === 0 ? "All Stations" : `${draftSelectedStationIds.length} station(s) selected`}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-56 p-2" align="start">
-                          <div className="space-y-2">
-                            <div className="flex items-center space-x-2 p-1">
-                              <Checkbox
-                                id="station-all"
-                                checked={draftSelectedStationIds.length === 0}
-                                onCheckedChange={(checked) => { if (checked) setDraftSelectedStationIds([]); }}
-                              />
-                              <label htmlFor="station-all" className="text-sm font-medium leading-none cursor-pointer">All Stations</label>
-                            </div>
-                            {stations.map((t) => (
-                              <div key={t.id} className="flex items-center space-x-2 p-1">
-                                <Checkbox
-                                  id={`station-${t.id}`}
-                                  checked={draftSelectedStationIds.includes(t.id)}
-                                  onCheckedChange={(checked) => {
-                                    if (checked) {
-                                      setDraftSelectedStationIds([...draftSelectedStationIds, t.id]);
-                                    } else {
-                                      setDraftSelectedStationIds(draftSelectedStationIds.filter((id) => id !== t.id));
-                                    }
-                                  }}
-                                />
-                                <label htmlFor={`station-${t.id}`} className="text-sm font-medium leading-none cursor-pointer">{t.name}</label>
-                              </div>
-                            ))}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-
-                    <div className="space-y-3 w-full">
-                      <Label className="text-sm font-semibold">Delivery Date Range</Label>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs text-muted-foreground">From</Label>
-                          <Input
-                            type="date"
-                            value={draftDateRange?.from ? format(draftDateRange.from, "yyyy-MM-dd") : ""}
-                            onChange={(e) => setDraftDateRange(prev => ({ from: e.target.value ? new Date(e.target.value) : undefined, to: prev?.to }))}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs text-muted-foreground">To</Label>
-                          <Input
-                            type="date"
-                            value={draftDateRange?.to ? format(draftDateRange.to, "yyyy-MM-dd") : ""}
-                            onChange={(e) => setDraftDateRange(prev => ({ from: prev?.from, to: e.target.value ? new Date(e.target.value) : undefined }))}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <SheetFooter className="border-t pt-4">
-                    <Button variant="outline" onClick={clearFilters} className="w-full">Reset Filters</Button>
-                    <Button onClick={applyFilters} className="w-full">Apply Filters</Button>
-                  </SheetFooter>
-                </SheetContent>
-              </Sheet>
-            </div>
-            <Button variant="outline" size="icon" onClick={() => window.print()} title="Print report" className="h-10 w-10">
-              <Printer className="size-4" />
-            </Button>
-            <Button variant="outline" size="icon" onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen view"} className="h-10 w-10">
-              {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-            </Button>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold text-foreground">Delivery Profit &amp; Loss</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Per-delivery cycle revenue, expenses, and profitability by station.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-border/40 shadow-xs">
-          <CardContent className="p-6 flex flex-col justify-center items-start h-full">
-             <div className="flex items-center gap-2 mb-4">
-               <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-full">
-                 <Wallet className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-               </div>
-               <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Cycle Revenue</p>
-             </div>
-             <p className="text-3xl font-bold text-emerald-600">{formatShortCurrency(stats.totalRevenue)}</p>
-             <p className="text-xs text-muted-foreground mt-2">{fmtMoney(stats.totalRevenue)}</p>
-          </CardContent>
-        </Card>
+      <TableInsightCards stats={insightStats} />
 
-        <Card className="border-border/40 shadow-xs">
-          <CardContent className="p-6 flex flex-col justify-center items-start h-full">
-             <div className="flex items-center gap-2 mb-4">
-               <div className="p-2 bg-rose-100 dark:bg-rose-900 rounded-full">
-                 <TrendingDown className="h-5 w-5 text-rose-600 dark:text-rose-400" />
-               </div>
-               <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Cycle Expenses</p>
-             </div>
-             <p className="text-3xl font-bold text-rose-600">{formatShortCurrency(stats.totalExpenses)}</p>
-             <p className="text-xs text-muted-foreground mt-2">{fmtMoney(stats.totalExpenses)}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/40 shadow-xs">
-          <CardContent className="p-6 flex flex-col justify-center items-start h-full">
-             <div className="flex items-center gap-2 mb-4">
-               <div className={cn("p-2 rounded-full", stats.totalProfit >= 0 ? "bg-indigo-100 dark:bg-indigo-900" : "bg-red-100 dark:bg-red-900")}>
-                 {stats.totalProfit >= 0 ? <TrendingUp className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> : <TrendingDown className="h-5 w-5 text-red-600 dark:text-red-400" />}
-               </div>
-               <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Total Profit</p>
-             </div>
-             <p className={cn("text-3xl font-bold", stats.totalProfit >= 0 ? "text-indigo-600" : "text-red-600")}>{formatShortCurrency(stats.totalProfit)}</p>
-             <p className="text-xs text-muted-foreground mt-2">{fmtMoney(stats.totalProfit)}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {chartData.length > 0 && (
-        <Card className="border-border/40 shadow-xs hide-on-print">
-          <CardContent className="p-6">
-            <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-muted-foreground" />
-              Per-Delivery Net Profit Trend
-            </h3>
-            <div className="h-[350px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis 
-                    dataKey="date" 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                    dy={10}
-                  />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(value) => `₦${(value / 1000).toFixed(1)}k`}
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                  />
-                  <RechartsTooltip 
-                    cursor={{ fill: 'hsl(var(--muted)/0.4)' }}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    formatter={(value: any) => [fmtMoney(Number(value)), undefined]}
-                  />
-                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                  <Bar dataKey="Profit" name="Net Profit" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="w-full py-0 overflow-hidden print:shadow-none print:border-none print:bg-transparent">
-        <CardContent className="px-0">
-          <div className="overflow-x-auto border-t border-border/40 relative print:overflow-visible print:border-none print:w-full print:max-w-none">
-            <table className="min-w-max w-full text-sm border-collapse border border-border/50 print:border-black/30 print:text-[10px] print:w-full">
-              <thead className="bg-muted/50 border-b border-border/50 print:border-black/30 print:bg-transparent">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id} className="border-none">
-                    {headerGroup.headers.map((header) => {
-                      return (
-                        <th
-                          key={header.id}
-                          style={{
-                            width: header.column.getSize(),
-                            minWidth: header.column.getSize(),
-                          }}
-                          className={cn(
-                            "h-9 px-2 py-1.5 text-[11px] font-bold text-foreground bg-muted/50 border border-border/50 print:border-black/30 uppercase tracking-wider whitespace-nowrap text-left print:text-[9px] print:text-black print:bg-transparent"
-                          )}
-                        >
-                          {header.isPlaceholder ? null : (
-                            <div
-                              className={cn(
-                                header.column.getCanSort() &&
-                                  "flex cursor-pointer select-none items-center gap-1.5 hover:text-foreground transition-colors"
-                              )}
-                              onClick={header.column.getToggleSortingHandler()}
-                            >
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                              {
-                                {
-                                  asc: <ChevronUpIcon size={13} />,
-                                  desc: <ChevronDownIcon size={13} />,
-                                }[header.column.getIsSorted() as string] ?? null
-                              }
-                            </div>
-                          )}
-                        </th>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </thead>
-
-              <tbody>
-                {table.getRowModel().rows.length ? (
-                  table.getRowModel().rows.map((row, index) => (
-                    <tr
-                      key={row.id}
-                      className={cn(
-                        "group border-b border-border/50 hover:bg-muted/30 transition-colors print:border-black/30",
-                        index % 2 === 0 ? "bg-transparent" : "bg-muted/10 print:bg-transparent"
-                      )}
-                    >
-                      {row.getVisibleCells().map((cell) => {
-                        return (
-                          <td
-                            key={cell.id}
-                            className={cn(
-                              "px-2 py-1.5 align-middle border-x border-border/50 print:border-black/30"
-                            )}
-                          >
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={columns.length}
-                      className="h-24 text-center text-muted-foreground border-x border-b border-border/50"
-                    >
-                      No delivery records found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        tableId="station-delivery-pnl"
+        searchPlaceholder="Search station, truck..."
+        toolbarActions={filterSheet}
+        emptyMessage="No delivery records found for the selected filters."
+      />
     </div>
   );
 }

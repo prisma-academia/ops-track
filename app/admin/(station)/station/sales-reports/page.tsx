@@ -232,11 +232,17 @@ export default async function SalesReportsPage() {
       });
     }
 
+    const manager = report.recordedBy;
+    const stationManagerName = manager
+      ? `${manager.firstName ?? ""} ${manager.lastName ?? ""}`.trim() || manager.email
+      : "—";
+
     return {
       ...report,
       openingDip,
       closingDip,
       pricePerLiter,
+      stationManagerName,
     };
   });
 

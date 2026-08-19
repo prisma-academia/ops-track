@@ -96,7 +96,6 @@ async function main() {
                scope: "TENANT",
                tenantId: tenant.id,
                name: role.name,
-               description: role.description,
                module: role.module as any,
                permissions: role.permissions,
                isSystem: true

@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { TransportReportManager } from "./transport-report-manager";
 
 export default async function TransportReportPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_ORDERS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_REPORTS_READ.key);
 
   const transports = await prisma.transport.findMany({
     where: { tenantId: actor.tenantId },

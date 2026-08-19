@@ -9,7 +9,7 @@ export default async function OrderPnlDetailsPage(props: {
   params: Promise<{ id: string }>;
 }) {
   const params = await props.params;
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_ORDERS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_REPORTS_READ.key);
 
   const order = await prisma.order.findFirst({
     where: { 

@@ -14,7 +14,7 @@ export default async function PaymentDetailsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_PAYMENTS_READ.key);
 
   const transaction = await prisma.transaction.findUnique({
     where: { id },

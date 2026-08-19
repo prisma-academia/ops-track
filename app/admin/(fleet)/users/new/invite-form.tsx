@@ -127,7 +127,13 @@ export function InviteTenantUserForm({
   const mobileModulesList = modulesList.filter((m) => m.moduleName.startsWith("mobile."));
 
   const getModuleName = (module: string) => {
-    return module.replace("mobile.tenant.", "").replace("tenant.", "").split(".").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
+    return module
+      .replace("mobile.tenant.", "")
+      .replace("tenant.", "")
+      .split(".")
+      .map((s) => s.replace(/-/g, " "))
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+      .join(" ");
   };
 
   const renderPermissionsCard = (list: PermModule[], title: string) => {

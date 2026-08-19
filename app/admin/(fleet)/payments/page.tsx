@@ -22,7 +22,7 @@ export default async function PaymentsPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; type?: string; category?: string; bankAccountId?: string; minAmt?: string; maxAmt?: string; page?: string; take?: string }>;
 }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_PAYMENTS_READ.key);
   const { from, to, type, category, bankAccountId, minAmt, maxAmt, page: pageParam, take: takeParam } = await searchParams;
 
   const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);

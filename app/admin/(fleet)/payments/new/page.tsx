@@ -3,8 +3,12 @@ import { ArrowDownLeft, ArrowRight, ArrowUpRight, ChevronLeft } from "lucide-rea
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { requireTenantPage } from "@/lib/auth/page-guards";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
-export default function NewPaymentPage() {
+export default async function NewPaymentPage() {
+  await requireTenantPage(PERMISSIONS.TENANT_FLEET_PAYMENTS_WRITE.key);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">

@@ -48,7 +48,7 @@ const FLEET_NAV = [
         key: "payments",
         title: "Payments",
         icon: "IconCreditCard",
-        permission: PERMISSIONS.TENANT_FLEET_READ.key,
+        permission: PERMISSIONS.TENANT_FLEET_PAYMENTS_READ.key,
       },
     ],
   },

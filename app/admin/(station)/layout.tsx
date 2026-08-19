@@ -28,6 +28,7 @@ const NAV: NavItemConfig[] = [
   { href: "/admin/station/prices", key: "prices", title: "Prices", module: "operations" as ModuleKey, icon: "IconReportAnalytics", permission: PERMISSIONS.TENANT_PRICES_READ.key },
   { href: "/admin/station/tickets", key: "tickets", title: "Tickets", module: "operations" as ModuleKey, icon: "IconTicket", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   { href: "/admin/station/inventory-alerts", key: "inventoryAlerts", title: "Inventory Alerts", module: "operations" as ModuleKey, icon: "IconAlertTriangle", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+  { href: "/admin/station/clients", key: "clients", title: "Clients", module: "operations" as ModuleKey, icon: "IconUsers", permission: PERMISSIONS.TENANT_CLIENTS_READ.key },
   {
     key: "reports",
     title: "Reports",
@@ -35,9 +36,10 @@ const NAV: NavItemConfig[] = [
     icon: "IconFileText",
     permission: null,
     children: [
-      { href: "/admin/station/sales-reports", key: "salesReports", title: "Sales Reports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_SHIFTS_READ.key },
-      { href: "/admin/station/stock-report", key: "stockReport", title: "Stock Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
-      { href: "/admin/station/pnl-report", key: "pnlReport", title: "PnL Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+      { href: "/admin/station/sales-reports", key: "salesReports", title: "Sales Reports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_SALES_REPORTS_READ.key },
+      { href: "/admin/station/stock-report", key: "stockReport", title: "Stock Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
+      { href: "/admin/station/delivery-pnl", key: "deliveryPnl", title: "Delivery PnL", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
+      { href: "/admin/station/pnl-report", key: "pnlReport", title: "Profit Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_PROFIT_REPORTS_READ.key },
     ],
   },
   { href: "/admin/station/table-demo", key: "tableDemo", title: "Table Demo", module: null, icon: "IconTable", permission: null },

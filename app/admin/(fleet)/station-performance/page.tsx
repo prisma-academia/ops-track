@@ -5,7 +5,7 @@ import { StationPerformanceClient } from "./station-performance-client";
 import { s3Configured, publicUrlForKey } from "@/lib/storage/s3";
 
 export default async function StationPerformancePage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_ORDERS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_REPORTS_READ.key);
 
   const stations = await prisma.station.findMany({
     where: { tenantId: actor.tenantId },

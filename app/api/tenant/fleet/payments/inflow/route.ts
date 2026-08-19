@@ -20,7 +20,7 @@ const InflowSchema = z.object({
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_PAYMENTS_WRITE.key, "FLEET");
     const body = InflowSchema.parse(await request.json());
     const meta = requestMeta(request);
 

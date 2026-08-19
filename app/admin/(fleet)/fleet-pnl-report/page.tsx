@@ -5,7 +5,7 @@ import { calculateOrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
 import { FleetPnlReportManager } from "./fleet-pnl-report-manager";
 
 export default async function FleetPnlReportPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_ORDERS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_REPORTS_READ.key);
 
   const orders = await prisma.order.findMany({
     where: { tenantId: actor.tenantId },

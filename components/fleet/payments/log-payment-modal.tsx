@@ -16,14 +16,14 @@ import { cn } from "@/lib/utils";
 
 const OPTIONS = [
   {
-    href: "/admin/fleet/payments/new/incoming",
+    href: "/admin/payments/new/incoming",
     title: "Incoming Payment",
     description: "Record a payment received from a customer or station.",
     icon: ArrowDownLeft,
     tone: "text-emerald-600 bg-emerald-500/10 group-hover:bg-emerald-500/15",
   },
   {
-    href: "/admin/fleet/payments/new/outgoing",
+    href: "/admin/payments/new/outgoing",
     title: "Outgoing Payment",
     description: "Record a transport fee payout or fleet expense.",
     icon: ArrowUpRight,

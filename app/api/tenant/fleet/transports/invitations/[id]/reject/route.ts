@@ -41,7 +41,7 @@ export async function POST(
       userAgent: meta.userAgent,
     });
 
-    return redirect("/admin/fleet/transports");
+    return redirect("/admin/transports");
   } catch (e) {
     return handleError(e);
   }

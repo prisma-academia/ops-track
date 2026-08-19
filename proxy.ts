@@ -85,11 +85,6 @@ function handleAdmin(request: NextRequest) {
   const path = url.pathname;
   const hasSession = !!request.cookies.get(COOKIE_NAMES.tenant)?.value;
 
-  if (path === "/admin" || path === "/admin/") {
-    const u = url.clone();
-    u.pathname = hasSession ? "/admin/dashboard" : "/admin/auth/login";
-    return NextResponse.redirect(u);
-  }
   if (inList(path, PUBLIC_ADMIN)) {
     return NextResponse.next();
   }

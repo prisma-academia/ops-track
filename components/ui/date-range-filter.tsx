@@ -5,8 +5,10 @@ import { subDays, format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
+import type { VariantProps } from "class-variance-authority";
+
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -15,17 +17,30 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface DateRangeFilterProps {
   className?: string;
+  buttonClassName?: string;
   date: DateRange | undefined;
   setDate: (date: DateRange | undefined) => void;
+  /** Tooltip text shown on hover. Set to `null` to disable the tooltip. */
+  tooltip?: string | null;
+  /** Trigger button size — defaults to `lg` to match other toolbar buttons. */
+  size?: VariantProps<typeof buttonVariants>["size"];
 }
 
 export function DateRangeFilter({
   className,
+  buttonClassName,
   date,
   setDate,
+  tooltip = "Filter by date range",
+  size = "lg",
 }: DateRangeFilterProps) {
   const [isOpen, setIsOpen] = React.useState(false);
 
@@ -80,33 +95,46 @@ export function DateRangeFilter({
     setIsOpen(false);
   };
 
+  const trigger = (
+    <PopoverTrigger asChild>
+      <Button
+        id="date"
+        variant="outline"
+        size={size}
+        className={cn(
+          "cursor-pointer justify-start text-left font-normal",
+          !date && "text-muted-foreground",
+          buttonClassName
+        )}
+      >
+        <CalendarIcon className="size-4" />
+        {date?.from ? (
+          date.to ? (
+            <>
+              {format(date.from, "MMM dd, yyyy")} - {format(date.to, "MMM dd, yyyy")}
+            </>
+          ) : (
+            format(date.from, "MMM dd, yyyy")
+          )
+        ) : (
+          <span>Date range</span>
+        )}
+      </Button>
+    </PopoverTrigger>
+  );
+
   return (
     <div className={cn("grid gap-2", className)}>
       <Popover open={isOpen} onOpenChange={setIsOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            id="date"
-            variant={"outline"}
-            className={cn(
-              "w-[280px] justify-start text-left font-normal",
-              !date && "text-muted-foreground"
-            )}
-          >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {date?.from ? (
-              date.to ? (
-                <>
-                  {format(date.from, "MMM dd, yyyy")} - {format(date.to, "MMM dd, yyyy")}
-                </>
-              ) : (
-                format(date.from, "MMM dd, yyyy")
-              )
-            ) : (
-              <span>Pick a date range</span>
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[280px] p-4" align="start">
+        {tooltip ? (
+          <Tooltip>
+            <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+            <TooltipContent>{tooltip}</TooltipContent>
+          </Tooltip>
+        ) : (
+          trigger
+        )}
+        <PopoverContent className="w-[380px] p-4" align="start">
           <div className="flex flex-col space-y-4">
             <div className="text-sm font-medium text-muted-foreground">Custom range</div>
             

@@ -693,7 +693,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
     primaryLabel={result.status === "success" ? "Go to Payments" : "Try Again"}
     onPrimaryAction={() => {
       if (result.status === "success") {
-        router.push("/admin/fleet/payments");
+        router.push("/admin/payments");
       } else {
         setResult(null);
       }

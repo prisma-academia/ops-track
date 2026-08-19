@@ -19,6 +19,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+function isStationAdminPath(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return pathname === "/admin/station" || pathname.startsWith("/admin/station/");
+}
+
 
 interface AppSidebarProps {
   items: NavItem[];
@@ -37,7 +42,10 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
   const { isMobile } = useSidebar();
   const [openCommand, setOpenCommand] = useState(false);
   const pathname = usePathname();
-  const isFleet = pathname?.startsWith("/admin/fleet");
+  const isFleet =
+    !!pathname?.startsWith("/admin") &&
+    !pathname.startsWith("/admin/auth") &&
+    !isStationAdminPath(pathname);
   const moduleName = isFleet ? "Fleet Management" : "Station Management";
 
   const showStationSwitch = context !== "platform" && (!enabledModules || enabledModules.includes("operations") || enabledModules.includes("stations") || enabledModules.includes("station"));
@@ -111,7 +119,7 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                         {showFleetSwitch && (
                           <CommandGroup heading="Fleet Organisation">
                             <CommandItem 
-                              onSelect={() => { setOpenCommand(false); window.location.href = "/admin/fleet"; }}
+                              onSelect={() => { setOpenCommand(false); window.location.href = "/admin"; }}
                               className="flex items-center gap-2.5 py-2 cursor-pointer"
                             >
                               {tenant?.logoUrl ? (
@@ -141,7 +149,7 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                                     // Setting active-org-id or if it expects a station, we just pass the ID.
                                     // The dashboard layout will handle if the ID belongs to an org.
                                     document.cookie = `active-station-id=${org.id}; path=/;`;
-                                    window.location.href = "/admin/dashboard";
+                                    window.location.href = "/admin/station";
                                   }}
                                   className="flex items-center gap-2.5 py-2 cursor-pointer"
                                 >

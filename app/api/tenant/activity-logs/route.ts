@@ -5,6 +5,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 import { resolveActivityLogRows } from "@/lib/activity/resolver";
+import { failedActivityWhere } from "@/lib/activity/status";
 
 export async function GET(request: Request) {
   try {
@@ -22,6 +23,7 @@ export async function GET(request: Request) {
     const userId = url.searchParams.get("userId");
     const name = url.searchParams.get("name");
     const moduleFilter = url.searchParams.get("module") as "STATION" | "FLEET" | null;
+    const statusFilter = url.searchParams.get("status") as "SUCCESS" | "FAILED" | null;
     const useOffset = url.searchParams.has("page");
     
     let actorIdsToFilter: string[] | undefined;
@@ -45,22 +47,32 @@ export async function GET(request: Request) {
       actorIdsToFilter = matchingUsers.map((u) => u.id);
     }
 
-    const whereClause: any = {
+    const baseWhere: Record<string, unknown> = {
       tenantId: actor.tenantId,
-      ...(moduleFilter ? { module: moduleFilter } : {})
+      ...(moduleFilter ? { module: moduleFilter } : {}),
     };
     if (action) {
-      whereClause.action = { contains: action, mode: "insensitive" };
+      baseWhere.action = { contains: action, mode: "insensitive" };
     }
     if (date) {
-      whereClause.createdAt = {
+      baseWhere.createdAt = {
         gte: new Date(`${date}T00:00:00.000Z`),
         lte: new Date(`${date}T23:59:59.999Z`),
       };
     }
     if (actorIdsToFilter) {
-      whereClause.actorId = { in: actorIdsToFilter };
+      baseWhere.actorId = { in: actorIdsToFilter };
     }
+
+    const whereClause: Record<string, unknown> = { ...baseWhere };
+    if (statusFilter === "FAILED") {
+      whereClause.AND = [failedActivityWhere()];
+    } else if (statusFilter === "SUCCESS") {
+      whereClause.NOT = failedActivityWhere();
+    }
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
 
     let rows: any[] = [];
     let meta: any = {};
@@ -80,7 +92,24 @@ export async function GET(request: Request) {
         }),
       ]);
       rows = rawRows;
-      meta = buildOffsetPageMeta(totalCount, page, take);
+      const [statsTotal, failedCount, todayCount] = await Promise.all([
+        prisma.activityLog.count({ where: baseWhere }),
+        prisma.activityLog.count({
+          where: { ...baseWhere, ...failedActivityWhere() },
+        }),
+        prisma.activityLog.count({
+          where: { ...baseWhere, createdAt: { gte: startOfToday } },
+        }),
+      ]);
+      meta = {
+        ...buildOffsetPageMeta(totalCount, page, take),
+        stats: {
+          total: statsTotal,
+          success: statsTotal - failedCount,
+          failed: failedCount,
+          today: todayCount,
+        },
+      };
     } else {
       const { cursor, take } = parsePagination(url.searchParams);
       rows = await prisma.activityLog.findMany({

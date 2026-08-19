@@ -184,7 +184,7 @@ export async function calculateOrderPnL(orderId: string): Promise<OrderPnLSummar
     totalTripExpenses += tripPnL.totalExpenses;
   }
 
-  const totalLoadingCost = Number(order.loadingCost || 0);
+  const totalLoadingCost = Number(order.loadingCostPerLitre || 0) * Number(order.litersOrdered || 0);
   const totalOrderExpenses = orderExpensesList.reduce((sum, exp) => sum + Number(exp.amount), 0);
 
   const netProfit = totalRevenue - totalCogs - totalLoadingCost - totalTransportFeesPaid - totalTripExpenses - totalOrderExpenses;

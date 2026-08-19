@@ -70,6 +70,7 @@ import {
   IconBuildingStore,
   IconGasStation,
   IconTicket,
+  IconTable,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -128,6 +129,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   IconSettings,
   IconBuildingStore,
   IconTicket,
+  IconTable,
 };
 
 export type NavItem = {

@@ -77,7 +77,14 @@ export async function requireTenantPage(
   if (tenant.status !== "ACTIVE") redirect("/maintenance");
 
   if (module && !tenant.activeModules.includes(module)) {
-    redirect("/admin/modules");
+    // The module this page belongs to isn't enabled for this tenant/user.
+    // Bounce to whichever other module area is available, or back to login
+    // (which surfaces a "no access" message) if neither is.
+    if (module === "FLEET") {
+      redirect(tenant.activeModules.includes("STATION") ? "/admin/station" : "/admin/auth/login?error=no_access");
+    } else {
+      redirect(tenant.activeModules.includes("FLEET") ? "/admin" : "/admin/auth/login?error=no_access");
+    }
   }
 
   const actor: TenantActor = {
@@ -89,7 +96,10 @@ export async function requireTenantPage(
     permissions: new Set([...user.stationPermissions, ...user.fleetPermissions]),
   };
   if (permission && !hasPermission(actor, permission)) {
-    redirect("/admin/dashboard?error=unauthorized");
+    // Fleet-only pages know their area; other pages default to the Fleet
+    // home (the primary /admin surface) since we can't cheaply resolve
+    // which module the caller belongs to at this layer.
+    redirect(module === "STATION" ? "/admin/station?error=unauthorized" : "/admin?error=unauthorized");
   }
   return actor;
 }
@@ -118,7 +128,7 @@ export async function requireClientPage(): Promise<ClientActor> {
 
 const DASHBOARD_BY_AREA = {
   platform: { type: "PLATFORM", dest: "/dashboard" },
-  admin: { type: "TENANT", dest: "/admin/dashboard" },
+  admin: { type: "TENANT", dest: "/admin" },
   client: { type: "CLIENT", dest: "/dashboard" },
 } as const;
 

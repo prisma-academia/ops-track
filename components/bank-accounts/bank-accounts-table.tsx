@@ -130,7 +130,7 @@ export function BankAccountsTable({
         filterColumnId="bankName"
         searchPlaceholder="Search by bank name..."
         rowHref={(row) => scopeFilter === "FLEET" 
-          ? `/admin/fleet/bank-accounts/${row.id}`
+          ? `/admin/bank-accounts/${row.id}`
           : `/admin/bank-accounts/${row.id}`
         }
         headerAction={

@@ -2,7 +2,10 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { prisma } from "@/lib/db/client";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { SalesTable } from "./deliveries-table";
-import { DataTableFilterDrawer, FilterConfig } from "@/components/data-table-filter-drawer";
+import type { FilterConfig } from "@/components/data-table-filter-drawer";
+import {
+  buildDeliveryInsightStats,
+} from "../_components/ledger-insight-stats";
 const PAYMENT_METHODS = ["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"];
 
 export default async function SalesLedgerPage(props: {
@@ -62,7 +65,7 @@ export default async function SalesLedgerPage(props: {
     }
   }
 
-  const [totalCount, rows, customers, stations] = await Promise.all([
+  const [totalCount, rows, aggregate, posAgg, transferAgg, cashAgg, customers, stations] = await Promise.all([
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({
       where,
@@ -75,10 +78,31 @@ export default async function SalesLedgerPage(props: {
         },
       },
     }),
+    prisma.transaction.aggregate({ where, _sum: { amount: true } }),
+    prisma.transaction.aggregate({
+      where: { ...where, paymentMethod: "POS" },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { ...where, paymentMethod: "BANK_TRANSFER" },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { ...where, paymentMethod: "CASH" },
+      _sum: { amount: true },
+    }),
     prisma.customer.findMany({ where: { tenantId: actor.tenantId }, select: { id: true, name: true } }),
     prisma.station.findMany({ where: { tenantId: actor.tenantId }, select: { id: true, name: true } }),
   ]);
 
+  const serializedRows = JSON.parse(JSON.stringify(rows));
+  const insightStats = buildDeliveryInsightStats({
+    totalCount,
+    totalAmount: Number(aggregate._sum.amount ?? 0),
+    posTotal: Number(posAgg._sum.amount ?? 0),
+    transferTotal: Number(transferAgg._sum.amount ?? 0),
+    cashTotal: Number(cashAgg._sum.amount ?? 0),
+  });
   const totalPages = Math.ceil(totalCount / pageSize);
 
   const filters: FilterConfig[] = [
@@ -104,14 +128,13 @@ export default async function SalesLedgerPage(props: {
       </div>
 
       <SalesTable 
-        data={JSON.parse(JSON.stringify(rows))} 
+        data={serializedRows} 
         totalCount={totalCount} 
         totalPages={totalPages} 
         currentPage={page} 
         pageSize={pageSize}
-        filterNode={
-          <DataTableFilterDrawer filters={filters} />
-        }
+        insightStats={insightStats}
+        filters={filters}
       />
     </div>
   );

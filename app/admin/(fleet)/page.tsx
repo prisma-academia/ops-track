@@ -1,17 +1,24 @@
 import { requireTenantPage } from "@/lib/auth/page-guards"
 import { PERMISSIONS } from "@/lib/auth/permissions"
+import { parseOverviewPeriod } from "@/lib/overview-period"
 
 import { getFleetOverviewData } from "./_data/fleet-overview"
 
 import { Overview } from "./_components/overview"
 import SalesOverviewChart from "@/components/charts/sales-overview"
 import EarningReportChart from "@/components/charts/earn-report"
-import PaymentStatusChart from "@/components/charts/payment-status-chart"
-import { TopPerformers } from "./_components/top-performers"
+import { PerformersSection } from "./_components/performers-section"
 
-export default async function FleetOverviewPage() {
+export default async function FleetOverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>
+}) {
+  const { period: periodParam } = await searchParams
+  const period = parseOverviewPeriod(periodParam)
+
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key)
-  const data = await getFleetOverviewData(actor.tenantId)
+  const data = await getFleetOverviewData(actor.tenantId, period)
 
   return (
     <section className="grid gap-3 md:grid-cols-2 space-y-3">
@@ -24,15 +31,9 @@ export default async function FleetOverviewPage() {
           <EarningReportChart data={data} />
         </div>
       </div>
-      <div className="col-span-full grid gap-4 md:grid-cols-2">
-        <div className="flex flex-col gap-4">
-          <TopPerformers data={data} />
-        </div>
-        <div>
-          <PaymentStatusChart data={data} />
-        </div>
+      <div className="col-span-full">
+        <PerformersSection data={data} period={period} />
       </div>
     </section>
   )
 }
-

@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/db/client"
 
-import type { FleetOverviewData } from "../types"
+import type { FleetOverviewData, StationPerformanceData } from "../types"
+import {
+  getDateRangeForOverviewPeriod,
+  getOverviewPeriodLabel,
+  parseOverviewPeriod,
+  type OverviewPeriod,
+} from "@/lib/overview-period"
 
 function formatCurrency(val: number): string {
   return `₦${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -11,9 +17,80 @@ function calcChange(curr: number, prev: number): number {
   return (curr - prev) / prev
 }
 
+function formatCategoryLabel(category: string): string {
+  return category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+async function getStationSnapshots(
+  tenantId: string,
+  stationIds: string[]
+): Promise<Map<string, Pick<StationPerformanceData, "lastSales" | "lastClosingStock">>> {
+  const map = new Map<string, Pick<StationPerformanceData, "lastSales" | "lastClosingStock">>();
+
+  await Promise.all(
+    stationIds.map(async (stationId) => {
+      const lastSale = await prisma.salesLog.findFirst({
+        where: { tenantId, stationId, status: "APPROVED" },
+        orderBy: { logDate: "desc" },
+        select: { logDate: true, litersSold: true, amountPos: true, amountTransfer: true },
+      });
+
+      const latestClosing = await prisma.tankDipping.findFirst({
+        where: {
+          tenantId,
+          dippingType: "CLOSING",
+          tank: { stationId },
+        },
+        orderBy: { recordedAt: "desc" },
+        select: { recordedAt: true },
+      });
+
+      let closingStockLiters = 0;
+      let closingDate: string | null = null;
+
+      if (latestClosing) {
+        closingDate = latestClosing.recordedAt.toISOString();
+        const sessionEnd = latestClosing.recordedAt;
+        const sessionStart = new Date(sessionEnd);
+        sessionStart.setHours(sessionStart.getHours() - 2);
+
+        const dips = await prisma.tankDipping.findMany({
+          where: {
+            tenantId,
+            dippingType: "CLOSING",
+            tank: { stationId },
+            recordedAt: { gte: sessionStart, lte: sessionEnd },
+          },
+          select: { dippingLiters: true },
+        });
+
+        closingStockLiters = dips.reduce((sum, dip) => sum + Number(dip.dippingLiters), 0);
+      }
+
+      map.set(stationId, {
+        lastSales: lastSale
+          ? {
+              date: lastSale.logDate.toISOString(),
+              liters: Number(lastSale.litersSold),
+              amount: Number(lastSale.amountPos) + Number(lastSale.amountTransfer),
+            }
+          : null,
+        lastClosingStock: closingDate
+          ? { date: closingDate, liters: closingStockLiters }
+          : null,
+      });
+    })
+  );
+
+  return map;
+}
+
 export async function getFleetOverviewData(
-  tenantId: string
+  tenantId: string,
+  periodInput?: string
 ): Promise<FleetOverviewData> {
+  const period = parseOverviewPeriod(periodInput)
+  const { from: periodFrom, to: periodTo } = getDateRangeForOverviewPeriod(period)
   // ── Entity counts ─────────────────────────────────────────────────────
   const [transportersCount, trucksCount, driversCount, activeTransports] =
     await Promise.all([
@@ -174,37 +251,54 @@ export async function getFleetOverviewData(
   })
 
   // ── Grouped queries ───────────────────────────────────────────────────
-  const [volumeRaw, statusRaw, transporterGroupRaw, saleGroupRaw, salesPaymentGroupRaw] = await Promise.all([
+  const [volumeRaw, statusRaw, transporterGroupRaw, stationGroupRaw, clientGroupRaw, salesPaymentGroupRaw, spendingRaw] = await Promise.all([
     prisma.transport.groupBy({
       by: ["productType"],
-      where: { tenantId, productType: { not: null } },
+      where: { tenantId, productType: { not: null }, createdAt: { gte: periodFrom, lte: periodTo } },
       _sum: { litersCarried: true },
     }),
     prisma.transport.groupBy({
       by: ["status"],
-      where: { tenantId },
+      where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
       _count: { _all: true },
     }),
     prisma.transport.groupBy({
       by: ["transporterId"],
-      where: { tenantId },
+      where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
       _sum: { litersDelivered: true, litersCarried: true, netTransportFeePaid: true },
       _count: { id: true },
       orderBy: { _sum: { litersCarried: "desc" } },
       take: 5,
     }),
     prisma.delivery.groupBy({
-      by: ["stationId", "customerId"],
-      where: { tenantId },
+      by: ["stationId"],
+      where: { tenantId, stationId: { not: null }, createdAt: { gte: periodFrom, lte: periodTo } },
       _sum: { litersDespatched: true, totalExpectedAmount: true },
       _count: { id: true },
       orderBy: { _sum: { litersDespatched: "desc" } },
-      take: 10,
+      take: 5,
+    }),
+    prisma.delivery.groupBy({
+      by: ["customerId"],
+      where: { tenantId, customerId: { not: null }, createdAt: { gte: periodFrom, lte: periodTo } },
+      _sum: { litersDespatched: true, totalExpectedAmount: true },
+      _count: { id: true },
+      orderBy: { _sum: { litersDespatched: "desc" } },
+      take: 5,
     }),
     prisma.delivery.groupBy({
       by: ["status"],
-      where: { tenantId },
+      where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
       _sum: { totalExpectedAmount: true, paymentReceived: true },
+    }),
+    prisma.transaction.groupBy({
+      by: ["category"],
+      where: {
+        tenantId,
+        type: "OUTFLOW",
+        createdAt: { gte: periodFrom, lte: periodTo },
+      },
+      _sum: { amount: true },
     }),
   ])
 
@@ -247,6 +341,15 @@ export async function getFleetOverviewData(
     { name: "Debt", value: debt },
   ]
 
+  const spendingBreakdown = spendingRaw
+    .map((row) => ({
+      label: formatCategoryLabel(row.category),
+      amount: Number(row._sum.amount) || 0,
+    }))
+    .filter((row) => row.amount > 0)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5)
+
   // ── Top transporters with names ───────────────────────────────────────
   const topTransporterIds = transporterGroupRaw.map((t) => t.transporterId)
   const transporters = await prisma.transporter.findMany({
@@ -265,29 +368,47 @@ export async function getFleetOverviewData(
     }
   })
 
-  // ── Top Stations / Clients with names ─────────────────────────────────
-  const stationIds = saleGroupRaw.map(s => s.stationId).filter(Boolean) as string[]
-  const customerIds = saleGroupRaw.map(s => s.customerId).filter(Boolean) as string[]
-  
-  const [stations, customers] = await Promise.all([
-    prisma.station.findMany({ where: { id: { in: stationIds } }, select: { id: true, name: true } }),
-    prisma.customer.findMany({ where: { id: { in: customerIds } }, select: { id: true, name: true } }),
-  ])
-  
-  const clientPerformance = saleGroupRaw.map(s => {
-    let name = "Unknown"
-    if (s.stationId) {
-      name = stations.find(x => x.id === s.stationId)?.name || name
-    } else if (s.customerId) {
-      name = customers.find(x => x.id === s.customerId)?.name || name
+  // ── Top stations with last sales / closing stock ──────────────────────
+  const topStationIds = stationGroupRaw
+    .map((s) => s.stationId)
+    .filter(Boolean) as string[]
+
+  const stationRecords = await prisma.station.findMany({
+    where: { id: { in: topStationIds } },
+    select: { id: true, name: true },
+  })
+
+  const stationSnapshots = await getStationSnapshots(tenantId, topStationIds)
+
+  const stationPerformance: StationPerformanceData[] = stationGroupRaw.map((s) => {
+    const station = stationRecords.find((x) => x.id === s.stationId)
+    const snapshot = stationSnapshots.get(s.stationId!) ?? {
+      lastSales: null,
+      lastClosingStock: null,
     }
     return {
-      name,
+      name: station?.name || "Unknown",
       volume: Number(s._sum.litersDespatched) || 0,
       trips: s._count.id,
       amount: Number(s._sum.totalExpectedAmount) || 0,
+      ...snapshot,
     }
-  }).slice(0, 5)
+  })
+
+  // ── Top B2B clients ───────────────────────────────────────────────────
+  const customerIds = clientGroupRaw.map((s) => s.customerId).filter(Boolean) as string[]
+
+  const customers = await prisma.customer.findMany({
+    where: { id: { in: customerIds } },
+    select: { id: true, name: true },
+  })
+
+  const clientPerformance = clientGroupRaw.map((s) => ({
+    name: customers.find((x) => x.id === s.customerId)?.name || "Unknown",
+    volume: Number(s._sum.litersDespatched) || 0,
+    trips: s._count.id,
+    amount: Number(s._sum.totalExpectedAmount) || 0,
+  }))
 
   // ── Assemble result ───────────────────────────────────────────────────
   return {
@@ -350,10 +471,12 @@ export async function getFleetOverviewData(
     },
     comparativeVolume,
     transporterPerformance,
+    stationPerformance,
     clientPerformance,
     transportStatus,
     productVolume,
     paymentStatus,
+    spendingBreakdown,
+    period: getOverviewPeriodLabel(period),
   }
-
 }

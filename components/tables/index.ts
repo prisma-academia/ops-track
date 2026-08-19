@@ -10,3 +10,10 @@ export { DataTableToolbar } from "./data-table-toolbar";
 export { DataTableProvider, useDataTable } from "./data-table-context";
 export { exportTableToCsv, exportTableToExcel, printElement } from "./table-export";
 export type { DataTableFilterField, FacetedOption } from "./types";
+export { TableInsightCards, type TableInsightCardsProps } from "./table-insight-cards";
+export {
+  buildPctStats,
+  buildDailyTrend,
+  type TableInsightStat,
+  type TableInsightTrendPoint,
+} from "./table-insight-utils";

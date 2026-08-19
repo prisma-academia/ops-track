@@ -3,19 +3,12 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
-import {
-  Bar,
-  BarChart,
-  RadialBar,
-  RadialBarChart,
-  ResponsiveContainer,
-} from "recharts";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   DataTable,
   DataTableColumnHeader,
+  TableInsightCards,
   type DataTableFilterField,
 } from "@/components/tables";
 
@@ -35,7 +28,6 @@ const PRODUCTS: SampleRow["product"][] = ["PMS", "AGO", "LPG"];
 const STATUSES: SampleRow["status"][] = ["APPROVED", "PENDING", "REJECTED"];
 const ATTENDANTS = ["Chidi Okafor", "Amina Bello", "Tunde Adekunle", "Ngozi Eze", "Fatima Sani"];
 
-/** Deterministic PRNG (mulberry32) so server/client renders match exactly. */
 function createRandom(seed: number) {
   let state = seed;
   return () => {
@@ -117,8 +109,6 @@ const columns: ColumnDef<SampleRow>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Volume (L)" />,
     meta: { label: "Volume (L)" },
     cell: ({ row }) => row.original.volume.toLocaleString(),
-    // REMINDER: sums the *currently filtered* rows, so the total updates live
-    // as the user searches/filters — not just the sum of the full dataset.
     footer: ({ table }) =>
       table
         .getFilteredRowModel()
@@ -161,23 +151,10 @@ const filterFields: DataTableFilterField<SampleRow>[] = [
   },
 ];
 
-/** Last 7 days of total volume, collapsed to one bar per day for the mini sparkline chart. */
-function useMiniTrendData(data: SampleRow[]) {
-  return React.useMemo(() => {
-    const byDay = new Map<string, number>();
-    for (const row of data) {
-      const key = format(new Date(row.date), "MMM dd");
-      byDay.set(key, (byDay.get(key) ?? 0) + row.volume);
-    }
-    return Array.from(byDay.entries())
-      .map(([date, total]) => ({ date, total }))
-      .slice(-7);
-  }, [data]);
-}
+export function TableDemoClient() {
+  const data = React.useMemo(() => generateSampleRows(60), []);
 
-/** Status / product-mix breakdown - same underlying numbers, reshaped as percentages. */
-function useInsightStats(data: SampleRow[]) {
-  return React.useMemo(() => {
+  const insightStats = React.useMemo(() => {
     const total = data.length || 1;
     const approved = data.filter((r) => r.status === "APPROVED").length;
     const pending = data.filter((r) => r.status === "PENDING").length;
@@ -213,92 +190,12 @@ function useInsightStats(data: SampleRow[]) {
         pct: Math.round((pms / total) * 100),
         color: "#4f46e5",
       },
-    ].map((item) => ({ ...item, fill: item.color }));
+    ];
   }, [data]);
-}
-
-function TableInsightCards({ data }: { data: SampleRow[] }) {
-  const miniTrendData = useMiniTrendData(data);
-  const insightStats = useInsightStats(data);
-
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <Card className="border-border/40 p-0 shadow-xs">
-        <CardContent className="flex items-center gap-4 p-4">
-          <div className="hidden h-20 w-32 shrink-0 sm:block">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={miniTrendData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-                <Bar dataKey="total" radius={[3, 3, 0, 0]} fill="#0d9488" maxBarSize={14} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-3">
-            {insightStats.map((item) => (
-              <div key={item.key} className="flex min-w-0 items-center gap-2">
-                {/* Cylinder-shaped color indicator */}
-                <span
-                  className="h-6 w-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: item.color }}
-                />
-                <div className="flex min-w-0 flex-col">
-                  <span className="font-mono text-sm font-semibold text-card-foreground">
-                    {item.value}
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">{item.label}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/40 p-0 shadow-xs">
-        <CardContent className="p-4">
-          <p className="mb-2 text-sm font-semibold text-card-foreground">
-            {format(new Date(), "MMMM")}
-          </p>
-          <div className="flex items-center gap-4">
-            <div className="h-24 w-24 shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadialBarChart
-                  data={insightStats}
-                  innerRadius="30%"
-                  outerRadius="100%"
-                  startAngle={90}
-                  endAngle={-270}
-                  barSize={6}
-                >
-                  <RadialBar background dataKey="pct" cornerRadius={4} />
-                </RadialBarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid flex-1 gap-1.5">
-              {insightStats.map((item) => (
-                <div key={item.key} className="flex items-center justify-between gap-3 text-xs">
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <span
-                      className="size-2 shrink-0 rounded-full"
-                      style={{ backgroundColor: item.color }}
-                    />
-                    {item.label}
-                  </span>
-                  <span className="font-mono font-medium text-card-foreground">{item.pct}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-export function TableDemoClient() {
-  const data = React.useMemo(() => generateSampleRows(60), []);
 
   return (
     <div className="flex flex-col gap-4">
-      <TableInsightCards data={data} />
+      <TableInsightCards stats={insightStats} />
       <DataTable
         columns={columns}
         data={data}

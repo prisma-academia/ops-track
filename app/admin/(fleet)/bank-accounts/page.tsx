@@ -40,9 +40,9 @@ export default async function FleetBankAccountsPage({ params }: { params: { tena
   }));
 
   return (
-    <div className="p-6">
+    <div>
       <PageHeader 
-        title="Fleet Bank Accounts" 
+        title="Bank Accounts" 
       />
       <div className="mt-6">
         <BankAccountsTable

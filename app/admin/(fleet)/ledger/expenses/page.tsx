@@ -2,7 +2,10 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { prisma } from "@/lib/db/client";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { ExpensesTable } from "./expenses-table";
-import { DataTableFilterDrawer, FilterConfig } from "@/components/data-table-filter-drawer";
+import type { FilterConfig } from "@/components/data-table-filter-drawer";
+import {
+  buildExpenseInsightStats,
+} from "../_components/ledger-insight-stats";
 const PAYMENT_METHODS = ["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"];
 const TRANSACTION_TYPES = ["INFLOW", "OUTFLOW"];
 const TRANSACTION_CATEGORIES = ["TRANSPORT_PAYMENT", "CLIENT_PAYMENT", "EXPENSE", "OTHER"];
@@ -66,7 +69,7 @@ export default async function ExpensesLedgerPage(props: {
     }
   }
 
-  const [totalCount, rows, transporters] = await Promise.all([
+  const [totalCount, rows, aggregate, cashAgg, transferAgg, transporters] = await Promise.all([
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({
       where,
@@ -79,9 +82,29 @@ export default async function ExpensesLedgerPage(props: {
         order: true,
       },
     }),
+    prisma.transaction.aggregate({ where, _sum: { amount: true } }),
+    prisma.transaction.aggregate({
+      where: { ...where, paymentMethod: "CASH" },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { ...where, paymentMethod: "BANK_TRANSFER" },
+      _sum: { amount: true },
+    }),
     prisma.transporter.findMany({ where: { tenantId: actor.tenantId }, select: { id: true, name: true } }),
   ]);
 
+  const totalAmount = Number(aggregate._sum.amount ?? 0);
+  const cashTotal = Number(cashAgg._sum.amount ?? 0);
+  const transferTotal = Number(transferAgg._sum.amount ?? 0);
+  const serializedRows = JSON.parse(JSON.stringify(rows));
+  const insightStats = buildExpenseInsightStats({
+    totalCount,
+    totalAmount,
+    cashTotal,
+    transferTotal,
+    otherTotal: Math.max(0, totalAmount - cashTotal - transferTotal),
+  });
   const totalPages = Math.ceil(totalCount / pageSize);
 
   const filters: FilterConfig[] = [
@@ -101,14 +124,13 @@ export default async function ExpensesLedgerPage(props: {
       </div>
 
       <ExpensesTable 
-        data={JSON.parse(JSON.stringify(rows))} 
+        data={serializedRows} 
         totalCount={totalCount} 
         totalPages={totalPages} 
         currentPage={page} 
         pageSize={pageSize}
-        filterNode={
-          <DataTableFilterDrawer filters={filters} />
-        }
+        insightStats={insightStats}
+        filters={filters}
       />
     </div>
   );

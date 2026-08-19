@@ -24,11 +24,13 @@ export async function getBankAccountDetailsData({
   bankAccountId,
   page = 1,
   pageSize = 25,
+  paginateTransactions = true,
 }: {
   tenantId: string;
   bankAccountId: string;
   page?: number;
   pageSize?: number;
+  paginateTransactions?: boolean;
 }) {
   const account = await prisma.bankAccount.findFirst({
     where: { id: bankAccountId, tenantId },
@@ -153,14 +155,13 @@ export async function getBankAccountDetailsData({
       netFlow: data.credited - data.debited,
     }));
 
-  // Pagination for transactions table
+  // Pagination for transactions table (optional — detail UIs load all rows for client-side table)
   const totalCount = rawTransactions.length;
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
-  const startIndex = (page - 1) * pageSize;
-  const paginatedTransactions = rawTransactions.slice(
-    startIndex,
-    startIndex + pageSize
-  );
+  const startIndex = paginateTransactions ? (page - 1) * pageSize : 0;
+  const paginatedTransactions = paginateTransactions
+    ? rawTransactions.slice(startIndex, startIndex + pageSize)
+    : rawTransactions;
 
   return {
     account: {

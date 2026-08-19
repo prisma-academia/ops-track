@@ -1,8 +1,13 @@
 "use client";
 
-import { ColumnDef } from "@tanstack/react-table";
-import { LedgerTableShell } from "../_components/ledger-table-shell";
+import type { ColumnDef } from "@tanstack/react-table";
+import { format } from "date-fns";
+
 import { Badge } from "@/components/ui/badge";
+import { DataTableColumnHeader } from "@/components/tables";
+import { LedgerReportTable } from "../_components/ledger-report-table";
+import type { TableInsightStat } from "@/components/tables";
+import type { FilterConfig } from "@/components/data-table-filter-drawer";
 
 export type SalesLedgerRow = {
   id: string;
@@ -20,45 +25,74 @@ export type SalesLedgerRow = {
 
 export const salesColumns: ColumnDef<SalesLedgerRow>[] = [
   {
-    accessorKey: "clientName",
-    header: "Client / Station Name",
+    id: "clientName",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Client / Station" />,
+    meta: { label: "Client / Station" },
+    enableHiding: false,
+    footer: () => "Total",
+    accessorFn: (row) =>
+      row.delivery?.customer?.name || row.delivery?.station?.name || "-",
     cell: ({ row }) => {
-      const name = row.original.delivery?.customer?.name || row.original.delivery?.station?.name || "-";
+      const name =
+        row.original.delivery?.customer?.name || row.original.delivery?.station?.name || "-";
       return <span className="font-medium">{name}</span>;
     },
   },
   {
     accessorKey: "createdAt",
-    header: "Date",
-    cell: ({ row }) => new Date(row.original.createdAt).toLocaleDateString(),
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
+    meta: { label: "Date" },
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">
+        {format(new Date(row.original.createdAt), "LLL dd, y")}
+      </span>
+    ),
   },
   {
     accessorKey: "paymentType",
-    header: "Type",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+    meta: { label: "Type" },
     cell: ({ row }) => {
-      const type = row.original.paymentType?.replace(/_/g, ' ') || "-";
+      const type = row.original.paymentType?.replace(/_/g, " ") || "-";
       return <Badge variant="outline">{type}</Badge>;
+    },
+    filterFn: (row, id, value) => {
+      if (!Array.isArray(value)) return true;
+      return value.includes(row.getValue(id));
     },
   },
   {
     accessorKey: "amount",
-    header: "Amount (₦)",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Amount" />,
+    meta: { label: "Amount" },
     cell: ({ row }) => {
       const amount = Number(row.original.amount);
-      return <span className="text-green-600 font-semibold">₦{amount.toLocaleString()}</span>;
+      return <span className="font-mono font-semibold text-green-600">₦{amount.toLocaleString()}</span>;
     },
+    footer: ({ table }) =>
+      `₦${table
+        .getFilteredRowModel()
+        .rows.reduce((sum, row) => sum + Number(row.original.amount), 0)
+        .toLocaleString()}`,
   },
   {
     accessorKey: "paymentMethod",
-    header: "Method",
-    cell: ({ row }) => row.original.paymentMethod || "-",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Method" />,
+    meta: { label: "Method" },
+    cell: ({ row }) => row.original.paymentMethod?.replace(/_/g, " ") || "-",
+    filterFn: (row, id, value) => {
+      if (!Array.isArray(value)) return true;
+      return value.includes(row.getValue(id));
+    },
   },
   {
-    accessorKey: "saleRef",
-    header: "Delivery Ref",
+    id: "saleRef",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Delivery Ref" />,
+    meta: { label: "Delivery Ref" },
+    accessorFn: (row) => row.delivery?.id?.substring(0, 8) || "-",
     cell: ({ row }) => {
       const ref = row.original.delivery?.id?.substring(0, 8) || "-";
-      return <span className="text-muted-foreground text-xs font-mono">{ref}</span>;
+      return <span className="font-mono text-xs text-muted-foreground">{ref}</span>;
     },
   },
 ];
@@ -69,15 +103,25 @@ interface SalesTableProps {
   totalPages: number;
   currentPage: number;
   pageSize: number;
-  filterNode?: React.ReactNode;
+  filters?: FilterConfig[];
+  insightStats: TableInsightStat[];
 }
 
 export function SalesTable(props: SalesTableProps) {
   return (
-    <LedgerTableShell
-      title="Client deliveries & Inflows"
+    <LedgerReportTable
+      tableId="fleet-ledger-deliveries"
+      data={props.data}
       columns={salesColumns}
-      {...props}
+      searchPlaceholder="Search client, station, method..."
+      filters={props.filters}
+      insightStats={props.insightStats}
+      breakdownTitle="Inflow breakdown"
+      totalCount={props.totalCount}
+      totalPages={props.totalPages}
+      currentPage={props.currentPage}
+      pageSize={props.pageSize}
+      emptyMessage="No delivery payment records found."
     />
   );
 }

@@ -24,34 +24,27 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-import { Ticket, CheckCircle2, Maximize2, Minimize2, Printer, LayoutGrid, TableProperties, Filter, AlertCircle, Calendar, Wrench } from "lucide-react";
+import { CheckCircle2, Maximize2, Minimize2, Printer, LayoutGrid, TableProperties, Filter, AlertTriangle, Calendar, Gauge, Droplets } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
-import { useRouter } from "next/navigation";
 import { apiPost } from "@/lib/client/api";
 
-export function TicketsManager({
-  initialTickets,
+export function InventoryAlertsManager({
+  initialAlerts,
   stations,
 }: {
-  initialTickets: any[];
+  initialAlerts: any[];
   stations: { id: string; name: string; code: string }[];
 }) {
-  const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [viewMode, setViewMode] = useState<"card" | "table">("table");
   const [isOpen, setIsOpen] = useState(false);
 
-  const [ticketList, setTicketList] = useState(initialTickets);
+  const [alertList, setAlertList] = useState(initialAlerts);
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
 
@@ -62,31 +55,31 @@ export function TicketsManager({
   });
   const [draftStationIds, setDraftStationIds] = useState<string[]>([]);
   const [draftStatus, setDraftStatus] = useState<string>("ALL");
-  const [draftCategory, setDraftCategory] = useState<string>("ALL");
+  const [draftVarianceType, setDraftVarianceType] = useState<string>("ALL");
 
   // Applied States (Used for filtering logic)
   const [appliedDateRange, setAppliedDateRange] = useState<DateRange | undefined>(draftDateRange);
   const [appliedStationIds, setAppliedStationIds] = useState<string[]>(draftStationIds);
   const [appliedStatus, setAppliedStatus] = useState<string>(draftStatus);
-  const [appliedCategory, setAppliedCategory] = useState<string>(draftCategory);
+  const [appliedVarianceType, setAppliedVarianceType] = useState<string>(draftVarianceType);
 
   const applyFilters = useCallback(() => {
     setAppliedDateRange(draftDateRange);
     setAppliedStationIds(draftStationIds);
     setAppliedStatus(draftStatus);
-    setAppliedCategory(draftCategory);
+    setAppliedVarianceType(draftVarianceType);
     setIsOpen(false);
-  }, [draftDateRange, draftStationIds, draftStatus, draftCategory]);
+  }, [draftDateRange, draftStationIds, draftStatus, draftVarianceType]);
 
   const clearFilters = useCallback(() => {
     setDraftDateRange(undefined);
     setDraftStationIds([]);
     setDraftStatus("ALL");
-    setDraftCategory("ALL");
+    setDraftVarianceType("ALL");
     setAppliedDateRange(undefined);
     setAppliedStationIds([]);
     setAppliedStatus("ALL");
-    setAppliedCategory("ALL");
+    setAppliedVarianceType("ALL");
     setIsOpen(false);
   }, []);
 
@@ -111,19 +104,19 @@ export function TicketsManager({
     }
   }, [handleFullscreenChange]);
 
-  const filteredTickets = useMemo(() => {
-    return ticketList.filter((ticket) => {
-      if (appliedStationIds.length > 0 && (!ticket.stationId || !appliedStationIds.includes(ticket.stationId))) {
+  const filteredAlerts = useMemo(() => {
+    return alertList.filter((alert) => {
+      if (appliedStationIds.length > 0 && (!alert.stationId || !appliedStationIds.includes(alert.stationId))) {
         return false;
       }
-      if (appliedStatus !== "ALL" && ticket.status !== appliedStatus) {
+      if (appliedStatus !== "ALL" && alert.status !== appliedStatus) {
         return false;
       }
-      if (appliedCategory !== "ALL" && ticket.category !== appliedCategory) {
+      if (appliedVarianceType !== "ALL" && alert.varianceLog?.varianceType !== appliedVarianceType) {
         return false;
       }
-      
-      const logDate = new Date(ticket.createdAt);
+
+      const logDate = new Date(alert.createdAt);
       if (appliedDateRange?.from) {
         const sDate = new Date(appliedDateRange.from);
         sDate.setHours(0, 0, 0, 0);
@@ -136,51 +129,47 @@ export function TicketsManager({
       }
       return true;
     });
-  }, [ticketList, appliedDateRange, appliedStationIds, appliedStatus, appliedCategory]);
+  }, [alertList, appliedDateRange, appliedStationIds, appliedStatus, appliedVarianceType]);
 
   const stats = useMemo(() => {
     let openCount = 0;
     let resolvedCount = 0;
-    let maintenanceCount = 0;
+    let totalVarianceVolume = 0;
 
-    filteredTickets.forEach((t) => {
-      if (t.status === "OPEN" || t.status === "PENDING_APPROVAL") openCount++;
-      if (t.status === "RESOLVED" || t.status === "CLOSED") resolvedCount++;
-      if (t.category === "EQUIPMENT_FAULT" || t.category === "MAINTENANCE") maintenanceCount++;
+    filteredAlerts.forEach((a) => {
+      if (a.status === "OPEN" || a.status === "PENDING_APPROVAL") openCount++;
+      if (a.status === "RESOLVED" || a.status === "CLOSED") resolvedCount++;
+      if (a.varianceLog?.varianceVolume) totalVarianceVolume += Number(a.varianceLog.varianceVolume);
     });
 
-    return { total: filteredTickets.length, openCount, resolvedCount, maintenanceCount };
-  }, [filteredTickets]);
+    return { total: filteredAlerts.length, openCount, resolvedCount, totalVarianceVolume };
+  }, [filteredAlerts]);
 
   const statCards = [
     {
-      title: "Total Tickets",
+      title: "Total Alerts",
       value: stats.total.toString(),
-      fullValue: null,
-      icon: Ticket,
+      icon: AlertTriangle,
       valueColor: "",
       iconColor: "text-slate-600",
     },
     {
-      title: "Action Required",
+      title: "Needs Review",
       value: stats.openCount.toString(),
-      fullValue: null,
-      icon: AlertCircle,
+      icon: Gauge,
       valueColor: "text-rose-600",
       iconColor: "text-rose-600",
     },
     {
-      title: "Maintenance / Equipment",
-      value: stats.maintenanceCount.toString(),
-      fullValue: null,
-      icon: Wrench,
+      title: "Total Variance Volume",
+      value: `${stats.totalVarianceVolume.toLocaleString()} L`,
+      icon: Droplets,
       valueColor: "text-indigo-600",
       iconColor: "text-indigo-600",
     },
     {
       title: "Resolved",
       value: stats.resolvedCount.toString(),
-      fullValue: null,
       icon: CheckCircle2,
       valueColor: "text-emerald-600",
       iconColor: "text-emerald-600",
@@ -202,10 +191,10 @@ export function TicketsManager({
     );
   };
 
-  async function resolveTicket(id: string, action: "APPROVE" | "REJECT") {
+  async function resolveAlert(id: string, action: "APPROVE" | "REJECT") {
     const remark = remarks[id] || "";
     if (!remark && action === "APPROVE") {
-      alert("Please provide a remark/reason before approving.");
+      alert("Please provide a remark/reason before acknowledging.");
       return;
     }
 
@@ -222,7 +211,7 @@ export function TicketsManager({
     }
 
     if (res.data) {
-      setTicketList(prev => prev.map(t => t.id === id ? { ...t, ...res.data!.ticket, status: res.data!.ticket.status } : t));
+      setAlertList(prev => prev.map(a => a.id === id ? { ...a, ...res.data!.ticket, status: res.data!.ticket.status } : a));
       setRemarks(prev => ({ ...prev, [id]: "" }));
     }
   }
@@ -243,15 +232,18 @@ export function TicketsManager({
           .force-table-print { display: table !important; }
         }
       `}</style>
-      
+
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row justify-between items-center md:items-center gap-4 bg-card text-card-foreground p-3 rounded-xl border print:border-none print:shadow-none print:p-0 print:gap-2">
         <div className="space-y-1">
           <h1 className="text-xl font-bold tracking-tight text-foreground print:text-black">
-            Tickets Management
+            Inventory Alerts
           </h1>
+          <p className="text-xs text-muted-foreground print:hidden">
+            System-detected stock variances from dipping and waybill deliveries.
+          </p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="flex bg-muted p-1 rounded-md">
             <Button
@@ -281,12 +273,12 @@ export function TicketsManager({
                   <Button variant="outline" className="gap-2 rounded-sm relative h-10">
                     <Filter className="h-4 w-4" />
                     <span>Filter</span>
-                    {(appliedStationIds.length > 0 || appliedStatus !== "ALL" || appliedCategory !== "ALL" || appliedDateRange) && (
+                    {(appliedStationIds.length > 0 || appliedStatus !== "ALL" || appliedVarianceType !== "ALL" || appliedDateRange) && (
                       <Badge className="ml-1 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px]">
                         {[
                           appliedStationIds.length > 0,
                           appliedStatus !== "ALL",
-                          appliedCategory !== "ALL",
+                          appliedVarianceType !== "ALL",
                           !!appliedDateRange,
                         ].filter(Boolean).length}
                       </Badge>
@@ -297,7 +289,7 @@ export function TicketsManager({
                   <SheetHeader>
                     <SheetTitle>Filter Records</SheetTitle>
                     <SheetDescription>
-                      Apply filters to narrow down the ticket list.
+                      Apply filters to narrow down the inventory alert list.
                     </SheetDescription>
                   </SheetHeader>
                   <div className="flex-1 overflow-y-auto py-6 space-y-3 px-4">
@@ -396,22 +388,20 @@ export function TicketsManager({
                           <SelectItem value="PENDING_APPROVAL">Pending Approval</SelectItem>
                           <SelectItem value="RESOLVED">Resolved</SelectItem>
                           <SelectItem value="CLOSED">Closed</SelectItem>
-                          <SelectItem value="REJECTED">Rejected</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-1 w-full">
-                      <Label className="text-xs text-muted-foreground font-medium">Category</Label>
-                      <Select value={draftCategory} onValueChange={setDraftCategory}>
+                      <Label className="text-xs text-muted-foreground font-medium">Variance Source</Label>
+                      <Select value={draftVarianceType} onValueChange={setDraftVarianceType}>
                         <SelectTrigger className="h-9 w-full">
-                          <SelectValue placeholder="All Categories" />
+                          <SelectValue placeholder="All Sources" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="ALL">All Categories</SelectItem>
-                          <SelectItem value="EQUIPMENT_FAULT">Equipment Fault</SelectItem>
-                          <SelectItem value="CASH_DISCREPANCY">Cash Discrepancy</SelectItem>
-                          <SelectItem value="OTHER">Other</SelectItem>
+                          <SelectItem value="ALL">All Sources</SelectItem>
+                          <SelectItem value="TANK_DIPPING">Tank Dipping</SelectItem>
+                          <SelectItem value="WAYBILL_DELIVERY">Waybill Delivery</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -426,7 +416,7 @@ export function TicketsManager({
                   </SheetFooter>
                 </SheetContent>
               </Sheet>
-              
+
               <Button
                 variant="outline"
                 size="icon"
@@ -454,9 +444,9 @@ export function TicketsManager({
           </div>
         </div>
       </div>
-      
+
       <div className="hidden print:block mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-black">Tickets Management</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-black">Inventory Alerts</h1>
         <p className="text-[11px] text-black/80 font-medium mt-1">
           Date: {appliedDateRange?.from ? format(appliedDateRange.from, "d MMMM yyyy") : "All Time"} {appliedDateRange?.to ? ` to ${format(appliedDateRange.to, "d MMMM yyyy")}` : ""}
           <br />
@@ -500,42 +490,44 @@ export function TicketsManager({
         </Card>
       </TooltipProvider>
 
-      {filteredTickets.length === 0 ? (
+      {filteredAlerts.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground border rounded-xl border-dashed bg-card">
-          No tickets found for the selected filters.
+          No inventory alerts found for the selected filters.
         </div>
       ) : (
         <>
           {/* ── CARD VIEW ─────────────────────────────────────────────────── */}
           <div className={cn("space-y-4 hide-on-print", viewMode === "card" ? "block" : "hidden")}>
-            {filteredTickets.map((t) => {
-              const variance = t.varianceLog;
+            {filteredAlerts.map((a) => {
+              const variance = a.varianceLog;
               return (
-                <Card 
-                  key={t.id} 
+                <Card
+                  key={a.id}
                   className="overflow-hidden hover:shadow-md transition-shadow"
                 >
                   <CardHeader className="bg-muted/30 p-4 border-b flex flex-row items-center justify-between space-y-0">
                     <div className="flex flex-col">
                       <CardTitle className="text-base flex items-center gap-2">
-                        {t.station?.name || "Global"}
-                        <Badge variant="outline" className="text-[10px] font-mono tracking-wider font-semibold">
-                          {t.category.replace("_", " ")}
-                        </Badge>
+                        {a.station?.name || "Global"}
+                        {variance && (
+                          <Badge variant="outline" className="text-[10px] font-mono tracking-wider font-semibold">
+                            {variance.varianceType.replace("_", " ")}
+                          </Badge>
+                        )}
                       </CardTitle>
                       <span className="text-xs text-muted-foreground mt-1 font-medium flex items-center gap-1">
                         <Calendar className="size-3" />
-                        {formatHumanReadableDate(t.createdAt)}
+                        {formatHumanReadableDate(a.createdAt)}
                       </span>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      {getStatusBadge(t.status)}
+                      {getStatusBadge(a.status)}
                     </div>
                   </CardHeader>
                   <CardContent className="p-4 space-y-4">
                     <div>
-                      <h4 className="font-semibold text-sm">{t.title}</h4>
-                      <p className="text-xs text-muted-foreground mt-1">{t.description}</p>
+                      <h4 className="font-semibold text-sm">{a.title}</h4>
+                      <p className="text-xs text-muted-foreground mt-1">{a.description}</p>
                     </div>
 
                     {variance && (
@@ -557,6 +549,39 @@ export function TicketsManager({
                         </div>
                       </div>
                     )}
+
+                    {!(a.status === "RESOLVED" || a.status === "CLOSED") && (
+                      <div className="flex gap-2 items-center pt-2 border-t">
+                        <Input
+                          placeholder="Reason / Remark"
+                          value={remarks[a.id] || ""}
+                          onChange={(e) => setRemarks(prev => ({ ...prev, [a.id]: e.target.value }))}
+                          className="h-9 flex-1 text-xs"
+                        />
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => resolveAlert(a.id, "APPROVE")}
+                          disabled={processing === a.id}
+                        >
+                          Acknowledge
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => resolveAlert(a.id, "REJECT")}
+                          disabled={processing === a.id}
+                        >
+                          Dismiss
+                        </Button>
+                      </div>
+                    )}
+                    {(a.status === "RESOLVED" || a.status === "CLOSED") && (
+                      <div className="flex flex-col items-start gap-1 pt-2 border-t">
+                        <span className="text-[11px] font-semibold text-emerald-700">Acknowledged by {a.approvedBy?.firstName || a.approvedBy?.email || "Admin"}</span>
+                        <span className="text-xs text-muted-foreground">"{a.remark}"</span>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -565,7 +590,7 @@ export function TicketsManager({
 
           {/* ── TABLE VIEW / PRINT VIEW ────────────────────────────────────── */}
           <div className={cn(
-            "w-full overflow-hidden force-table-print", 
+            "w-full overflow-hidden force-table-print",
             viewMode === "table" ? "block hide-on-print" : "hidden print:block",
             "print:shadow-none print:border-none print:bg-transparent"
           )}>
@@ -575,35 +600,37 @@ export function TicketsManager({
                   <tr>
                     <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Date</th>
                     <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Station</th>
-                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Category</th>
-                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Title / Details</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Source</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Details</th>
                     <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 print:border-black/30 print:text-black">Status</th>
                     <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-center text-muted-foreground print:text-black hide-on-print border-l">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50 print:divide-black/20">
-                  {filteredTickets.map((t) => {
-                    const variance = t.varianceLog;
-                    const isResolved = t.status === "RESOLVED" || t.status === "CLOSED";
+                  {filteredAlerts.map((a) => {
+                    const variance = a.varianceLog;
+                    const isResolved = a.status === "RESOLVED" || a.status === "CLOSED";
                     return (
-                      <tr 
-                        key={t.id}
+                      <tr
+                        key={a.id}
                         className="hover:bg-muted/20 bg-background print:bg-transparent group"
                       >
                         <td className="px-3 py-2 whitespace-nowrap font-medium print:text-[10px] print:text-black border-r border-border/50 print:border-black/30 align-top">
-                          {formatHumanReadableDate(t.createdAt)}
+                          {formatHumanReadableDate(a.createdAt)}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap font-semibold print:text-[10px] print:text-black border-r border-border/50 print:border-black/30 align-top">
-                          {t.station?.name || "-"}
+                          {a.station?.name || "-"}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap border-r border-border/50 print:border-black/30 align-top">
-                          <span className="font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-muted rounded print:bg-transparent print:border print:border-black/30 print:text-[9px] print:text-black">
-                            {t.category.replace("_", " ")}
-                          </span>
+                          {variance && (
+                            <span className="font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-muted rounded print:bg-transparent print:border print:border-black/30 print:text-[9px] print:text-black">
+                              {variance.varianceType.replace("_", " ")}
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2 border-r border-border/50 print:border-black/30 align-top max-w-sm">
-                          <div className="font-medium text-sm print:text-xs">{t.title}</div>
-                          <div className="text-xs text-muted-foreground mt-0.5 print:text-[10px]">{t.description}</div>
+                          <div className="font-medium text-sm print:text-xs">{a.title}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5 print:text-[10px]">{a.description}</div>
                           {variance && (
                             <div className="mt-2 flex gap-2 text-[10px] font-mono p-2 bg-slate-50 border rounded print:bg-transparent print:p-0 print:border-none">
                               <span>Exp: {Number(variance.expectedVolume).toLocaleString()}L</span>
@@ -615,39 +642,39 @@ export function TicketsManager({
                           )}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap border-r border-border/50 print:border-black/30 align-top">
-                          {getStatusBadge(t.status)}
+                          {getStatusBadge(a.status)}
                         </td>
                         <td className="px-3 py-2 text-center border-l hide-on-print align-top">
                           {isResolved ? (
                             <div className="flex flex-col items-start gap-1">
-                              <span className="text-[11px] font-semibold text-emerald-700">Resolved by {t.approvedBy?.firstName || t.approvedBy?.email || "Admin"}</span>
-                              <span className="text-xs text-muted-foreground text-left max-w-[200px] truncate" title={t.remark}>"{t.remark}"</span>
+                              <span className="text-[11px] font-semibold text-emerald-700">Ack. by {a.approvedBy?.firstName || a.approvedBy?.email || "Admin"}</span>
+                              <span className="text-xs text-muted-foreground text-left max-w-[200px] truncate" title={a.remark}>"{a.remark}"</span>
                             </div>
                           ) : (
                             <div className="flex gap-2 items-start justify-end flex-wrap w-full max-w-[220px]">
                               <Input
                                 placeholder="Reason / Remark"
-                                value={remarks[t.id] || ""}
-                                onChange={(e) => setRemarks(prev => ({ ...prev, [t.id]: e.target.value }))}
+                                value={remarks[a.id] || ""}
+                                onChange={(e) => setRemarks(prev => ({ ...prev, [a.id]: e.target.value }))}
                                 className="h-8 w-full text-xs"
                               />
-                              <Button 
-                                size="sm" 
+                              <Button
+                                size="sm"
                                 variant="default"
-                                onClick={() => resolveTicket(t.id, "APPROVE")}
-                                disabled={processing === t.id}
+                                onClick={() => resolveAlert(a.id, "APPROVE")}
+                                disabled={processing === a.id}
                                 className="h-8 flex-1"
                               >
-                                Approve
+                                Ack
                               </Button>
-                              <Button 
-                                size="sm" 
+                              <Button
+                                size="sm"
                                 variant="destructive"
-                                onClick={() => resolveTicket(t.id, "REJECT")}
-                                disabled={processing === t.id}
+                                onClick={() => resolveAlert(a.id, "REJECT")}
+                                disabled={processing === a.id}
                                 className="h-8"
                               >
-                                Reject
+                                Dismiss
                               </Button>
                             </div>
                           )}

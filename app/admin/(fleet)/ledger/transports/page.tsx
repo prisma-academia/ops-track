@@ -2,7 +2,10 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { prisma } from "@/lib/db/client";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { TransportsTable } from "./transports-table";
-import { DataTableFilterDrawer, FilterConfig } from "@/components/data-table-filter-drawer";
+import type { FilterConfig } from "@/components/data-table-filter-drawer";
+import {
+  buildTransportInsightStats,
+} from "../_components/ledger-insight-stats";
 
 export default async function TransportsLedgerPage(props: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -67,7 +70,7 @@ export default async function TransportsLedgerPage(props: {
     }
   }
 
-  const [totalCount, rows, transporters, drivers] = await Promise.all([
+  const [totalCount, rows, aggregate, transporters, drivers] = await Promise.all([
     prisma.transport.count({ where }),
     prisma.transport.findMany({
       where,
@@ -81,10 +84,27 @@ export default async function TransportsLedgerPage(props: {
         order: true,
       },
     }),
+    prisma.transport.aggregate({
+      where,
+      _sum: {
+        litersCarried: true,
+        netTransportFeePaid: true,
+        totalDeduction: true,
+        maintenanceCost: true,
+      },
+    }),
     prisma.transporter.findMany({ where: { tenantId: actor.tenantId }, select: { id: true, name: true } }),
     prisma.driver.findMany({ where: { tenantId: actor.tenantId }, select: { id: true, firstName: true, lastName: true } }),
   ]);
 
+  const serializedRows = JSON.parse(JSON.stringify(rows));
+  const insightStats = buildTransportInsightStats({
+    totalCount,
+    totalLiters: Number(aggregate._sum.litersCarried ?? 0),
+    totalNetPaid: Number(aggregate._sum.netTransportFeePaid ?? 0),
+    totalDeductions: Number(aggregate._sum.totalDeduction ?? 0),
+    totalMaintenance: Number(aggregate._sum.maintenanceCost ?? 0),
+  });
   const totalPages = Math.ceil(totalCount / pageSize);
 
   const filters: FilterConfig[] = [
@@ -103,14 +123,13 @@ export default async function TransportsLedgerPage(props: {
       </div>
 
       <TransportsTable 
-        data={JSON.parse(JSON.stringify(rows))} 
+        data={serializedRows} 
         totalCount={totalCount} 
         totalPages={totalPages} 
         currentPage={page} 
         pageSize={pageSize}
-        filterNode={
-          <DataTableFilterDrawer filters={filters} />
-        }
+        insightStats={insightStats}
+        filters={filters}
       />
     </div>
   );

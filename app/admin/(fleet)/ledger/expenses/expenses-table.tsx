@@ -1,8 +1,13 @@
 "use client";
 
-import { ColumnDef } from "@tanstack/react-table";
-import { LedgerTableShell } from "../_components/ledger-table-shell";
+import type { ColumnDef } from "@tanstack/react-table";
+import { format } from "date-fns";
+
 import { Badge } from "@/components/ui/badge";
+import { DataTableColumnHeader } from "@/components/tables";
+import { LedgerReportTable } from "../_components/ledger-report-table";
+import type { TableInsightStat } from "@/components/tables";
+import type { FilterConfig } from "@/components/data-table-filter-drawer";
 
 export type ExpensesLedgerRow = {
   id: string;
@@ -20,49 +25,86 @@ export type ExpensesLedgerRow = {
 export const expensesColumns: ColumnDef<ExpensesLedgerRow>[] = [
   {
     accessorKey: "createdAt",
-    header: "Date",
-    cell: ({ row }) => new Date(row.original.createdAt).toLocaleDateString(),
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
+    meta: { label: "Date" },
+    enableHiding: false,
+    footer: () => "Total",
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">
+        {format(new Date(row.original.createdAt), "LLL dd, y")}
+      </span>
+    ),
   },
   {
     accessorKey: "category",
-    header: "Category",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Category" />,
+    meta: { label: "Category" },
     cell: ({ row }) => {
-      const cat = row.original.category?.replace(/_/g, ' ') || "-";
+      const cat = row.original.category?.replace(/_/g, " ") || "-";
       return <Badge variant="secondary">{cat}</Badge>;
+    },
+    filterFn: (row, id, value) => {
+      if (!Array.isArray(value)) return true;
+      return value.includes(row.getValue(id));
     },
   },
   {
     accessorKey: "description",
-    header: "Description",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Description" />,
+    meta: { label: "Description" },
     cell: ({ row }) => {
       const desc = row.original.description || "-";
-      return <div className="max-w-[200px] truncate" title={desc}>{desc}</div>;
+      return (
+        <div className="max-w-[240px] truncate text-muted-foreground" title={desc}>
+          {desc}
+        </div>
+      );
     },
   },
   {
     accessorKey: "amount",
-    header: "Amount (₦)",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Amount" />,
+    meta: { label: "Amount" },
     cell: ({ row }) => {
       const amount = Number(row.original.amount);
-      return <span className="text-red-600 font-semibold">₦{amount.toLocaleString()}</span>;
+      return <span className="font-mono font-semibold text-red-600">₦{amount.toLocaleString()}</span>;
     },
+    footer: ({ table }) =>
+      `₦${table
+        .getFilteredRowModel()
+        .rows.reduce((sum, row) => sum + Number(row.original.amount), 0)
+        .toLocaleString()}`,
   },
   {
     accessorKey: "paymentMethod",
-    header: "Method",
-    cell: ({ row }) => row.original.paymentMethod || "-",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Method" />,
+    meta: { label: "Method" },
+    cell: ({ row }) => row.original.paymentMethod?.replace(/_/g, " ") || "-",
+    filterFn: (row, id, value) => {
+      if (!Array.isArray(value)) return true;
+      return value.includes(row.getValue(id));
+    },
   },
   {
-    accessorKey: "associatedTo",
-    header: "Associated To",
-    cell: ({ row }) => row.original.transporter?.name || row.original.truck?.plateNumber || row.original.truck?.name || "-",
+    id: "associatedTo",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Associated To" />,
+    meta: { label: "Associated To" },
+    accessorFn: (row) =>
+      row.transporter?.name || row.truck?.plateNumber || row.truck?.name || "-",
+    cell: ({ row }) =>
+      row.original.transporter?.name ||
+      row.original.truck?.plateNumber ||
+      row.original.truck?.name ||
+      "-",
   },
   {
-    accessorKey: "reference",
-    header: "Reference",
+    id: "reference",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Reference" />,
+    meta: { label: "Reference" },
+    accessorFn: (row) => row.reference || row.order?.reference || "-",
     cell: ({ row }) => {
       const ref = row.original.reference || row.original.order?.reference || "-";
-      return <span className="text-muted-foreground text-xs font-mono">{ref}</span>;
+      return <span className="font-mono text-xs text-muted-foreground">{ref}</span>;
     },
   },
 ];
@@ -73,15 +115,33 @@ interface ExpensesTableProps {
   totalPages: number;
   currentPage: number;
   pageSize: number;
-  filterNode?: React.ReactNode;
+  filters?: FilterConfig[];
+  insightStats: TableInsightStat[];
 }
 
-export function ExpensesTable(props: ExpensesTableProps) {
+export function ExpensesTable({
+  data,
+  totalCount,
+  totalPages,
+  currentPage,
+  pageSize,
+  filters,
+  insightStats,
+}: ExpensesTableProps) {
   return (
-    <LedgerTableShell
-      title="Operational Expenses"
+    <LedgerReportTable
+      tableId="fleet-ledger-expenses"
+      data={data}
       columns={expensesColumns}
-      {...props}
+      searchPlaceholder="Search description, reference..."
+      filters={filters}
+      insightStats={insightStats}
+      breakdownTitle="Expense breakdown"
+      totalCount={totalCount}
+      totalPages={totalPages}
+      currentPage={currentPage}
+      pageSize={pageSize}
+      emptyMessage="No expense records found."
     />
   );
 }

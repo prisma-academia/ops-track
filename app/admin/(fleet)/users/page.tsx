@@ -46,7 +46,7 @@ export default async function TenantUsersPage() {
 
   return (
     <div>
-      <DataTableToolbar title="Fleet Users" createHref="/admin/users/new" createLabel="Invite user" />
+      <DataTableToolbar title="Users" createHref="/admin/users/new" createLabel="Invite user" />
       <TenantUsersTable initialData={rows} initialMeta={initialMeta} moduleContext="FLEET" />
     </div>
   );

@@ -90,7 +90,9 @@ export function DataTableToolbar<TData>({
             </Tooltip>
           ) : null}
 
-          {actions}
+          {actions != null ? (
+            <React.Fragment key="toolbar-actions">{actions}</React.Fragment>
+          ) : null}
           <DataTableExportMenu />
           <DataTableViewOptions />
         </div>

@@ -29,6 +29,27 @@ export interface ClientPerformanceData {
   amount: number
 }
 
+export interface StationPerformanceData {
+  name: string
+  volume: number
+  trips: number
+  amount: number
+  lastSales: {
+    date: string
+    liters: number
+    amount: number
+  } | null
+  lastClosingStock: {
+    date: string
+    liters: number
+  } | null
+}
+
+export interface SpendingBreakdownPoint {
+  label: string
+  amount: number
+}
+
 export interface TransportStatusData {
   status: string
   count: number
@@ -66,10 +87,13 @@ export interface FleetOverviewData {
   counts: FleetCounts
   comparativeVolume: ComparativeVolumePoint[]
   transporterPerformance: TransporterPerformanceData[]
+  stationPerformance: StationPerformanceData[]
   clientPerformance: ClientPerformanceData[]
   transportStatus: TransportStatusData[]
   productVolume: ProductVolumeData[]
   paymentStatus: PaymentStatusPoint[]
+  spendingBreakdown: SpendingBreakdownPoint[]
+  period: string
 }
 
 

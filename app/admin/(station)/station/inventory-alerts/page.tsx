@@ -1,22 +1,19 @@
 import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { TicketsManager } from "./tickets-manager";
+import { InventoryAlertsManager } from "./inventory-alerts-manager";
 import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 
-export const metadata = { title: "Tickets | Rafuel" };
+export const metadata = { title: "Inventory Alerts | Rafuel" };
 
-export default async function TicketsPage() {
+export default async function InventoryAlertsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_READ.key);
 
   const activeOrgId = await resolveActiveOrgId(actor);
 
-  const ticketWhere: any = {
-    tenantId: actor.tenantId,
-    category: { not: "INVENTORY_VARIANCE" },
-  };
+  const alertWhere: any = { tenantId: actor.tenantId, category: "INVENTORY_VARIANCE" };
   if (activeOrgId) {
-    ticketWhere.station = { organizationId: activeOrgId };
+    alertWhere.station = { organizationId: activeOrgId };
   }
 
   const stationWhere: any = {
@@ -24,8 +21,8 @@ export default async function TicketsPage() {
     ...(activeOrgId ? { organizationId: activeOrgId } : {}),
   };
 
-  const tickets = await prisma.ticket.findMany({
-    where: ticketWhere,
+  const alerts = await prisma.ticket.findMany({
+    where: alertWhere,
     orderBy: { createdAt: "desc" },
     include: {
       station: {
@@ -65,12 +62,12 @@ export default async function TicketsPage() {
     orderBy: { name: "asc" },
   });
 
-  const serializedTickets = JSON.parse(JSON.stringify(tickets));
+  const serializedAlerts = JSON.parse(JSON.stringify(alerts));
   const serializedStations = JSON.parse(JSON.stringify(stations));
 
   return (
-    <TicketsManager
-      initialTickets={serializedTickets}
+    <InventoryAlertsManager
+      initialAlerts={serializedAlerts}
       stations={serializedStations}
     />
   );

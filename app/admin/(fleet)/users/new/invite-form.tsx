@@ -11,8 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { Save, ChevronsUpDown, Check } from "lucide-react";
+import { Save, ChevronsUpDown, Check, ChevronDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -22,7 +23,6 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const Schema = z.object({
@@ -36,16 +36,16 @@ const Schema = z.object({
 });
 type Values = z.infer<typeof Schema>;
 
-const allActions = ["read", "write", "approve"];
+const allActions = ["read", "write", "approve"] as const;
+
+type PermModule = { moduleName: string; perms: (typeof PERMISSIONS)[keyof typeof PERMISSIONS][] };
 
 export function InviteTenantUserForm({
   roles,
   allPermissions,
-  moduleContext,
 }: {
-  roles: { id: string; name: string; permissions: string[] }[];
+  roles: { id: string; name: string; permissions: string[]; module: string }[];
   allPermissions: readonly string[];
-  moduleContext: "STATION" | "FLEET";
 }) {
   const router = useRouter();
   const { register, handleSubmit, formState: { errors, isSubmitting }, control, setValue } = useForm<Values>({
@@ -54,6 +54,11 @@ export function InviteTenantUserForm({
   });
   const [error, setError] = useState<string | null>(null);
   const [openRoleSelect, setOpenRoleSelect] = useState(false);
+  const [openCards, setOpenCards] = useState<Record<string, boolean>>({
+    Fleet: true,
+    Station: true,
+    "Mobile Station": true,
+  });
 
   const roleTemplateId = useWatch({ control, name: "roleTemplateId" });
 
@@ -76,11 +81,26 @@ export function InviteTenantUserForm({
     setValue("permissions", next, { shouldDirty: true });
   };
 
+  const toggleCard = (title: string) => {
+    setOpenCards((prev) => ({ ...prev, [title]: !prev[title] }));
+  };
+
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
+    const perms = values.permissions ?? [];
+    const hasFleetPerm = perms.some((p) => p.startsWith("tenant.fleet"));
+    const hasStationOrMobilePerm = perms.some(
+      (p) => (p.startsWith("tenant.") && !p.startsWith("tenant.fleet")) || p.startsWith("mobile.tenant.")
+    );
+    const activeModules = Array.from(
+      new Set([
+        ...(hasFleetPerm ? ["FLEET"] : []),
+        ...(hasStationOrMobilePerm ? ["STATION"] : []),
+      ])
+    );
     const payload = {
       ...values,
-      activeModules: [moduleContext]
+      activeModules: activeModules.length > 0 ? activeModules : ["STATION", "FLEET"],
     };
     const res = await apiPost<{ user: { id: string } }>("/api/tenant/users", payload);
     if (res.error) {
@@ -90,113 +110,139 @@ export function InviteTenantUserForm({
     if (res.data?.user.id) router.push(`/admin/users/${res.data.user.id}`);
   });
 
-  const filteredPermissions = allPermissions.filter((key) => {
-    if (moduleContext === "STATION") return !key.startsWith("tenant.fleet");
-    if (moduleContext === "FLEET") return key.startsWith("tenant.fleet");
-    return true;
-  });
-
-  const groupedPermissions = filteredPermissions.reduce((acc, key) => {
-    const perm = Object.values(PERMISSIONS).find(p => p.key === key);
+  const groupedPermissions = allPermissions.reduce((acc, key) => {
+    const perm = Object.values(PERMISSIONS).find((p) => p.key === key);
     if (!perm) return acc;
     const moduleName = perm.module;
     if (!acc[moduleName]) acc[moduleName] = { moduleName, perms: [] };
     acc[moduleName].perms.push(perm);
     return acc;
-  }, {} as Record<string, { moduleName: string, perms: typeof PERMISSIONS[keyof typeof PERMISSIONS][] }>);
+  }, {} as Record<string, PermModule>);
 
   const modulesList = Object.values(groupedPermissions);
-  const webModulesList = modulesList.filter((m) => !m.moduleName.startsWith("mobile."));
+  const fleetModulesList = modulesList.filter((m) => m.moduleName.startsWith("tenant.fleet"));
+  const stationModulesList = modulesList.filter(
+    (m) => m.moduleName.startsWith("tenant.") && !m.moduleName.startsWith("tenant.fleet")
+  );
   const mobileModulesList = modulesList.filter((m) => m.moduleName.startsWith("mobile."));
 
   const getModuleName = (module: string) => {
-    return module.replace("mobile.tenant.", "").replace("tenant.", "").split(".").map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
+    return module.replace("mobile.tenant.", "").replace("tenant.", "").split(".").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
   };
 
-  const renderPermissionsCard = (
-    list: typeof modulesList,
-    title: string,
-    description: string
-  ) => (
-    <Card className="border-border/40 shadow-sm overflow-hidden p-0 gap-0">
-      <CardHeader className="bg-muted/10 border-b border-border/40 pt-2">
-        <CardTitle className="text-lg font-semibold text-foreground">
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          {/* Column headers */}
-          <div className="grid grid-cols-6 border-b border-border/40 bg-muted/30 px-6 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">
-            <div className="col-span-3">Permissions Module</div>
-            {allActions.map((action) => (
-              <div key={action} className="text-center">{action}</div>
-            ))}
-          </div>
+  const getActionKeys = (list: PermModule[], action: (typeof allActions)[number]) =>
+    list
+      .map((mod) => mod.perms.find((p) => p.key.endsWith(`:${action}`))?.key)
+      .filter((k): k is string => Boolean(k));
 
-          {/* Rows */}
-          {list.map((mod, index) => {
-            const readPerm = mod.perms.find(p => p.key.endsWith(':read'));
-            const writePerm = mod.perms.find(p => p.key.endsWith(':write'));
-            const approvePerm = mod.perms.find(p => p.key.endsWith(':approve'));
-            
-            // Construct a helpful combined description
-            const desc = [readPerm?.description, writePerm?.description].filter(Boolean).join(" • ");
+  const toggleColumn = (list: PermModule[], action: (typeof allActions)[number]) => {
+    const keys = getActionKeys(list, action);
+    const allSelected = keys.length > 0 && keys.every((k) => selectedPermissions.has(k));
+    const next = allSelected
+      ? currentPermissions.filter((p) => !keys.includes(p))
+      : Array.from(new Set([...currentPermissions, ...keys]));
+    setValue("permissions", next, { shouldDirty: true });
+  };
 
-            return (
-              <div
-                key={mod.moduleName}
-                className={`grid grid-cols-6 items-center px-6 py-4 text-sm hover:bg-muted/5 transition-colors ${
-                  index !== list.length - 1 ? "border-b border-border/30" : ""
-                }`}
-              >
-                <div className="col-span-3 pr-4">
-                  <p className="font-medium text-foreground">{getModuleName(mod.moduleName)}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{desc}</p>
+  const renderPermissionsCard = (list: PermModule[], title: string) => {
+    const isOpen = openCards[title] ?? true;
+    return (
+      <Card className="border-border/40 shadow-sm overflow-hidden p-0 gap-0">
+        <Collapsible open={isOpen} onOpenChange={() => toggleCard(title)}>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="bg-muted/10 border-b border-border/40 py-3 cursor-pointer select-none flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-lg font-semibold text-foreground">
+                {title}
+              </CardTitle>
+              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                {/* Column headers */}
+                <div className="grid grid-cols-6 border-b border-border/40 bg-muted/30 px-6 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">
+                  <div className="col-span-3">Permissions Module</div>
+                  {allActions.map((action) => {
+                    const keys = getActionKeys(list, action);
+                    const allSelected = keys.length > 0 && keys.every((k) => selectedPermissions.has(k));
+                    return (
+                      <div key={action} className="flex flex-col items-center gap-1">
+                        <span>{action}</span>
+                        <Checkbox
+                          checked={allSelected}
+                          disabled={keys.length === 0}
+                          onCheckedChange={() => toggleColumn(list, action)}
+                          className="size-4 rounded cursor-pointer"
+                          title={`Select all ${action}`}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="flex justify-center">
-                  {readPerm ? (
-                    <Checkbox
-                      id={`perm-${readPerm.key}`}
-                      checked={selectedPermissions.has(readPerm.key)}
-                      onCheckedChange={() => togglePermission(readPerm.key)}
-                      className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                    />
-                  ) : (
-                    <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
-                  )}
-                </div>
-                <div className="flex justify-center">
-                  {writePerm ? (
-                    <Checkbox
-                      id={`perm-${writePerm.key}`}
-                      checked={selectedPermissions.has(writePerm.key)}
-                      onCheckedChange={() => togglePermission(writePerm.key)}
-                      className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                    />
-                  ) : (
-                    <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
-                  )}
-                </div>
-                <div className="flex justify-center">
-                  {approvePerm ? (
-                    <Checkbox
-                      id={`perm-${approvePerm.key}`}
-                      checked={selectedPermissions.has(approvePerm.key)}
-                      onCheckedChange={() => togglePermission(approvePerm.key)}
-                      className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                    />
-                  ) : (
-                    <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
-                  )}
-                </div>
+
+                {/* Rows */}
+                {list.map((mod, index) => {
+                  const readPerm = mod.perms.find((p) => p.key.endsWith(":read"));
+                  const writePerm = mod.perms.find((p) => p.key.endsWith(":write"));
+                  const approvePerm = mod.perms.find((p) => p.key.endsWith(":approve"));
+
+                  return (
+                    <div
+                      key={mod.moduleName}
+                      className={`grid grid-cols-6 items-center px-6 py-3 text-sm hover:bg-muted/5 transition-colors ${
+                        index !== list.length - 1 ? "border-b border-border/30" : ""
+                      }`}
+                    >
+                      <div className="col-span-3 pr-4">
+                        <p className="font-medium text-foreground">{getModuleName(mod.moduleName)}</p>
+                      </div>
+                      <div className="flex justify-center">
+                        {readPerm ? (
+                          <Checkbox
+                            id={`perm-${readPerm.key}`}
+                            checked={selectedPermissions.has(readPerm.key)}
+                            onCheckedChange={() => togglePermission(readPerm.key)}
+                            className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                          />
+                        ) : (
+                          <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
+                        )}
+                      </div>
+                      <div className="flex justify-center">
+                        {writePerm ? (
+                          <Checkbox
+                            id={`perm-${writePerm.key}`}
+                            checked={selectedPermissions.has(writePerm.key)}
+                            onCheckedChange={() => togglePermission(writePerm.key)}
+                            className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                          />
+                        ) : (
+                          <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
+                        )}
+                      </div>
+                      <div className="flex justify-center">
+                        {approvePerm ? (
+                          <Checkbox
+                            id={`perm-${approvePerm.key}`}
+                            checked={selectedPermissions.has(approvePerm.key)}
+                            onCheckedChange={() => togglePermission(approvePerm.key)}
+                            className="size-5 rounded-md cursor-pointer data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                          />
+                        ) : (
+                          <div className="size-5 rounded-md border-2 border-muted bg-muted/20 opacity-30 cursor-not-allowed" />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
-  );
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
+      </Card>
+    );
+  };
 
   return (
     <form onSubmit={onSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -269,14 +315,19 @@ export function InviteTenantUserForm({
                               {roles.map((r) => (
                                 <CommandItem
                                   key={r.id}
-                                  value={r.name.toLowerCase()}
+                                  value={`${r.name} ${r.module}`.toLowerCase()}
                                   onSelect={() => {
                                     field.onChange(r.id);
                                     setOpenRoleSelect(false);
                                   }}
                                   className="flex items-center justify-between cursor-pointer"
                                 >
-                                  <span>{r.name}</span>
+                                  <span>
+                                    {r.name}
+                                    <span className="ml-1.5 text-xs text-muted-foreground">
+                                      ({r.module === "STATION" ? "Station" : "Fleet"})
+                                    </span>
+                                  </span>
                                   {field.value === r.id && (
                                     <Check className="h-4 w-4 text-primary" />
                                   )}
@@ -292,9 +343,9 @@ export function InviteTenantUserForm({
               />
               {errors.roleTemplateId && <p className="text-xs text-destructive">{errors.roleTemplateId.message}</p>}
             </div>
-            
+
             {error && <p className="text-sm text-destructive font-medium pt-2">{error}</p>}
-            
+
             <div className="pt-4">
               <Button type="submit" disabled={isSubmitting} className="w-full gap-2">
                 <Save className="h-4 w-4" />
@@ -307,16 +358,9 @@ export function InviteTenantUserForm({
 
       {/* Permissions Matrix - Right Column */}
       <div className="lg:col-span-2 space-y-6">
-        {renderPermissionsCard(
-          webModulesList,
-          "Web Portal Permissions",
-          "Access control for the web admin dashboard. Selecting a role on the left will automatically apply predefined templates."
-        )}
-        {renderPermissionsCard(
-          mobileModulesList,
-          "Mobile App Permissions",
-          "Access control for the mobile field client. These govern offline and field operations."
-        )}
+        {renderPermissionsCard(stationModulesList, "Station")}
+        {renderPermissionsCard(fleetModulesList, "Fleet")}
+        {renderPermissionsCard(mobileModulesList, "Mobile Station")}
       </div>
     </form>
   );

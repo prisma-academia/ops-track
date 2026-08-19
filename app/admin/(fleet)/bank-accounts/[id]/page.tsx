@@ -15,6 +15,7 @@ export default async function FleetBankAccountDetailPage({
   const details = await getBankAccountDetailsData({
     tenantId: actor.tenantId,
     bankAccountId: id,
+    paginateTransactions: false,
   });
 
   if (!details || details.account.scope !== "FLEET") {
@@ -22,11 +23,9 @@ export default async function FleetBankAccountDetailPage({
   }
 
   return (
-    <div className="p-6">
-      <BankAccountDetailsView
-        initialDetails={details}
-        backUrl="/admin/bank-accounts"
-      />
-    </div>
+    <BankAccountDetailsView
+      initialDetails={details}
+      backUrl="/admin/bank-accounts"
+    />
   );
 }

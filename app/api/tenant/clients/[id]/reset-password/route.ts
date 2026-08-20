@@ -4,6 +4,7 @@ import { hashPassword, generateTempPassword, recordPassword } from "@/lib/auth/p
 import { revokeAllSessionsForUser } from "@/lib/auth/session";
 import { sendEmail } from "@/lib/email/send";
 import { tempPasswordEmail } from "@/lib/email/templates";
+import { emailBrandFromTenant } from "@/lib/email/branding";
 import { env } from "@/lib/env";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
@@ -56,6 +57,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         }),
         loginUrl,
         tempPassword,
+        brand: emailBrandFromTenant(tenant),
       }),
     });
     return ok({ reset: true });

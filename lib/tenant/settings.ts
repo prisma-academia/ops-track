@@ -21,13 +21,15 @@ export const MODULE_KEYS = [
 
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
+export const DEFAULT_PRIMARY_COLOR = "#0f172a";
+
 export const tenantSettingsSchema = z.object({
   logoKey: z.string().min(1).max(300).optional(),
   backgroundKey: z.string().min(1).max(300).optional(),
   primaryColor: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex color like #1e293b")
-    .default("#0f172a"),
+    .default(DEFAULT_PRIMARY_COLOR),
   timezone: z.string().min(1).max(64).default("UTC"),
   locale: z.string().min(2).max(10).default("en"),
   currency: z.string().length(3).default("USD"),

@@ -1,4 +1,5 @@
 import argon2 from "argon2";
+import { randomInt } from "node:crypto";
 import { prisma } from "@/lib/db/client";
 import type { SessionUserType } from "@/lib/generated/prisma/enums";
 
@@ -69,9 +70,10 @@ export async function recordPassword(
   }
 }
 
-import { randomBytes } from "node:crypto";
+const TEMP_LOGIN_CODE_LENGTH = 8;
 
+/** OTP-style numeric code used as the one-time login password on invite / reset. */
 export function generateTempPassword(): string {
-  const raw = randomBytes(12).toString("base64url");
-  return `Tmp!${raw}9A`;
+  const max = 10 ** TEMP_LOGIN_CODE_LENGTH;
+  return String(randomInt(0, max)).padStart(TEMP_LOGIN_CODE_LENGTH, "0");
 }

@@ -5,6 +5,7 @@ import { resolveHost, resolveTenantFromHeaders } from "@/lib/auth/context";
 import { hashOpaqueToken, newOpaqueToken } from "@/lib/auth/tokens";
 import { sendEmail } from "@/lib/email/send";
 import { passwordResetEmail } from "@/lib/email/templates";
+import { emailBrandFromTenant, PLATFORM_EMAIL_BRAND, type EmailBrand } from "@/lib/email/branding";
 import { tenantHttpOrigin } from "@/lib/url/tenant";
 import { env } from "@/lib/env";
 import { displayName } from "@/lib/auth/display";
@@ -35,6 +36,7 @@ async function queuePasswordReset(input: {
   email: string;
   name: string | null;
   resetPath: string;
+  brand?: EmailBrand;
 }): Promise<void> {
   const raw = newOpaqueToken();
   const tokenHash = hashOpaqueToken(raw);
@@ -57,7 +59,7 @@ async function queuePasswordReset(input: {
   await sendEmail({
     to: input.email,
     subject: "Reset your password",
-    html: passwordResetEmail({ name: input.name, resetUrl }),
+    html: passwordResetEmail({ name: input.name, resetUrl, brand: input.brand ?? PLATFORM_EMAIL_BRAND }),
   });
 }
 
@@ -128,6 +130,7 @@ export async function POST(request: Request) {
           email: user.email,
           name: displayName(user),
           resetPath: "/admin/auth/reset-password",
+          brand: emailBrandFromTenant(tenant),
         });
         await audit({
           actorType: "SYSTEM",
@@ -160,6 +163,7 @@ export async function POST(request: Request) {
             email: client.email,
           }),
           resetPath: "/c/auth/reset-password",
+          brand: emailBrandFromTenant(tenant),
         });
         await audit({
           actorType: "SYSTEM",

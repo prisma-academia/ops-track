@@ -4,6 +4,7 @@ import { requirePlatformActor, PERMISSIONS } from "@/lib/auth/guards";
 import { hashPassword, generateTempPassword, recordPassword } from "@/lib/auth/password";
 import { sendEmail } from "@/lib/email/send";
 import { inviteEmail } from "@/lib/email/templates";
+import { PLATFORM_EMAIL_BRAND } from "@/lib/email/branding";
 import { env } from "@/lib/env";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
         loginUrl,
         tempPassword,
         subjectLabel: "the platform admin console",
+        brand: PLATFORM_EMAIL_BRAND,
       }),
     });
     return ok({ user });

@@ -1,4 +1,5 @@
-import { requireTenantActor } from "@/lib/auth/guards";
+import { requireTenantActor, PERMISSIONS, AuthError } from "@/lib/auth/guards";
+import { hasPermission } from "@/lib/auth/permissions";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { getBankAccountDetailsData } from "@/lib/bank-accounts/bank-account-details";
@@ -23,6 +24,14 @@ export async function GET(
 
     if (!details) {
       throw new DomainError(404, "not_found", "Bank account not found.");
+    }
+
+    const canReadFleet = hasPermission(actor, PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key);
+    const canReadStation = hasPermission(actor, PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key);
+    const canViewAccount =
+      details.account.scope === "FLEET" ? canReadFleet : canReadStation || canReadFleet;
+    if (!canViewAccount) {
+      throw new AuthError(403, "Forbidden.");
     }
 
     return ok(details);

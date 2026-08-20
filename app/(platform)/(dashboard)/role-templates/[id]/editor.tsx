@@ -55,7 +55,6 @@ export function RoleDetailEditor({
 
   const filteredPermissions = allPermissions.filter((key) => {
     if (moduleContext === "STATION") return !key.startsWith("tenant.fleet");
-    if (moduleContext === "FLEET") return key.startsWith("tenant.fleet");
     return true;
   });
 
@@ -72,8 +71,13 @@ export function RoleDetailEditor({
   }, {} as Record<string, { moduleName: string; perms: PermissionItem[] }>);
 
   const modulesList = Object.values(groupedPermissions);
-  const webModulesList = modulesList.filter((m) => !m.moduleName.startsWith("mobile."));
+  const fleetModulesList = modulesList.filter((m) => m.moduleName.startsWith("tenant.fleet"));
+  const stationModulesList = modulesList.filter(
+    (m) => m.moduleName.startsWith("tenant.") && !m.moduleName.startsWith("tenant.fleet")
+  );
   const mobileModulesList = modulesList.filter((m) => m.moduleName.startsWith("mobile."));
+  const webModulesList = modulesList.filter((m) => !m.moduleName.startsWith("mobile."));
+  const useInviteLayout = stationModulesList.length > 0 || fleetModulesList.length > 0;
 
   const getModuleName = (module: string) => {
     return module
@@ -81,7 +85,8 @@ export function RoleDetailEditor({
       .replace("tenant.", "")
       .replace("platform.", "")
       .split(".")
-      .map(s => s.charAt(0).toUpperCase() + s.slice(1))
+      .map((s) => s.replace(/-/g, " "))
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
       .join(" ");
   };
 
@@ -250,16 +255,37 @@ export function RoleDetailEditor({
         </CardContent>
       </Card>
 
-      {renderPermissionsCard(
-        webModulesList,
-        "Web Portal Permissions",
-        "Select module read, write, or approve access rights for users assigned this role template."
-      )}
-
-      {renderPermissionsCard(
-        mobileModulesList,
-        "Mobile App Permissions",
-        "Select field mobile access permissions for users assigned this role template."
+      {useInviteLayout ? (
+        <>
+          {renderPermissionsCard(
+            stationModulesList,
+            "Station",
+            "Station web portal modules such as users, roles, stations, and operations."
+          )}
+          {renderPermissionsCard(
+            fleetModulesList,
+            "Fleet",
+            "Fleet web portal modules such as orders, transports, sales, and reports."
+          )}
+          {renderPermissionsCard(
+            mobileModulesList,
+            "Mobile Station",
+            "Field mobile access permissions for users assigned this role template."
+          )}
+        </>
+      ) : (
+        <>
+          {renderPermissionsCard(
+            webModulesList,
+            "Web Portal Permissions",
+            "Select module read, write, or approve access rights for users assigned this role template."
+          )}
+          {renderPermissionsCard(
+            mobileModulesList,
+            "Mobile App Permissions",
+            "Select field mobile access permissions for users assigned this role template."
+          )}
+        </>
       )}
 
       {error && (

@@ -28,7 +28,8 @@ import {
   Settings
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { NavItem } from "@/components/sections/main-nav";
+import type { NavItem } from "@/components/sections/main-nav";
+import { PrintCompanyProvider } from "@/components/print/print-company-context";
 import { apiPost } from "@/lib/client/api";
 import {
   Command,
@@ -55,7 +56,14 @@ interface DashboardLayoutShellProps {
   logoutRedirect: string;
   logoutContext: "platform" | "tenant-admin" | "client";
   stations?: { id: string; name: string; code: string; organization?: { name: string | null; slug: string | null; logoUrl: string | null; type: string | null } }[];
-  tenant?: { name: string; slug: string; logoUrl: string | null };
+  tenant?: {
+    name: string;
+    slug: string;
+    logoUrl: string | null;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+  };
   activeStationId?: string;
   enabledModules?: string[];
   internalOrganizations?: { id: string; name: string; slug: string | null; logoUrl: string | null }[];
@@ -131,7 +139,18 @@ export function DashboardLayoutShell({
           />
 
           <main className="flex-1 p-4 md:p-8 bg-white dark:bg-black h-full">
-            {children}
+            <PrintCompanyProvider
+              value={{
+                name: tenant?.name ?? title,
+                slug: tenant?.slug ?? null,
+                logoUrl: tenant?.logoUrl ?? logoUrl ?? null,
+                email: tenant?.email ?? null,
+                phone: tenant?.phone ?? null,
+                address: tenant?.address ?? null,
+              }}
+            >
+              {children}
+            </PrintCompanyProvider>
           </main>
 
           {/* Controlled AlertDialog */}

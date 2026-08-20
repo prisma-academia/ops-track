@@ -115,7 +115,10 @@ const FLEET_NAV = [
     key: "bankAccounts",
     title: "Bank Accounts",
     icon: "IconBuildingBank",
-    permission: PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key,
+    permission: [
+      PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key,
+      PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key,
+    ],
   },
   {
     key: "management",
@@ -220,6 +223,12 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
       status: true, 
       settingsJson: true, 
       activeModules: true,
+      companyEmail: true,
+      companyPhone: true,
+      addressLine1: true,
+      addressLine2: true,
+      city: true,
+      region: true,
       modules: {
         where: { status: "ACTIVE" }
       }
@@ -312,10 +321,16 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
     };
   });
   
+  const canSeeNav = (permission: string | string[] | null | undefined) => {
+    if (!permission) return true;
+    const keys = Array.isArray(permission) ? permission : [permission];
+    return keys.some((key) => hasPermission(actor, key as Parameters<typeof hasPermission>[1]));
+  };
+
   const nav = FLEET_NAV.map((n: any) => {
     const children = n.children
       ? n.children
-          .filter((c: any) => !c.permission || hasPermission(actor, c.permission as any))
+          .filter((c: any) => canSeeNav(c.permission))
           .map((c: any) => ({
             href: c.href,
             title: c.title,
@@ -327,7 +342,7 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
       return null;
     }
 
-    if (!n.children && n.permission && !hasPermission(actor, n.permission as any)) {
+    if (!n.children && !canSeeNav(n.permission)) {
       return null;
     }
 
@@ -361,6 +376,12 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
         name: tenant.name,
         slug: tenant.slug,
         logoUrl: logoUrl,
+        email: tenant.companyEmail,
+        phone: tenant.companyPhone,
+        address:
+          [tenant.addressLine1, tenant.addressLine2, tenant.city, tenant.region]
+            .filter(Boolean)
+            .join(", ") || null,
       }}
     >
       <UnauthorizedToast />

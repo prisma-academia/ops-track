@@ -4,6 +4,7 @@ import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { hashPassword, generateTempPassword, recordPassword } from "@/lib/auth/password";
 import { sendEmail } from "@/lib/email/send";
 import { inviteEmail } from "@/lib/email/templates";
+import { emailBrandFromTenant } from "@/lib/email/branding";
 import { env } from "@/lib/env";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
@@ -203,6 +204,7 @@ export async function POST(request: Request) {
           loginUrl,
           tempPassword,
           subjectLabel: tenant.name,
+          brand: emailBrandFromTenant(tenant),
         }),
       });
     }

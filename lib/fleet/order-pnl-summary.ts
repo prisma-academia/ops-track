@@ -122,7 +122,8 @@ export type OrderPnlResult = {
 
 /**
  * Computes an order's full profit & loss breakdown (cost of goods, loading cost,
- * transport cost, fleet expenses, loss deductions vs. revenue collected/paid).
+ * company-borne transport cost, fleet expenses, loss deductions vs. product revenue).
+ * Client-borne transport is excluded from both revenue and expense.
  * Shared between the P&L list (aggregate row per order) and the order detail page
  * (per-transport / per-delivery breakdown) so the numbers never drift apart.
  */
@@ -161,10 +162,12 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
     if (truckLabel) truckLabels.add(truckLabel);
 
     const deliveriesData: OrderPnlDeliveryRow[] = transport.deliveries.map((delivery) => {
-      const saleTransportCost =
+      const rawTransportCost =
         toNum(delivery.transportCost) || toNum(delivery.litersDespatched) * toNum(transport.ratePerLiter);
       const clientTransportFee =
         delivery.transportCostBorneBy === "CLIENT" ? toNum(delivery.transportCost) : 0;
+      const saleTransportCost =
+        delivery.transportCostBorneBy === "COMPANY" ? rawTransportCost : 0;
       const saleQty = toNum(delivery.litersDespatched);
       const sellingPrice = toNum(delivery.amountPerLiter);
       const litersReceived =
@@ -172,15 +175,21 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
           ? toNum(delivery.litersReceived)
           : null;
 
-      const saleLossLiters = litersReceived !== null ? Math.max(0, saleQty - litersReceived) : 0;
+      // Only count loss when received volume is explicitly logged and is less than despatched.
+      // If not logged (null), revenue is billed on full despatch — no separate loss to deduct.
+      const saleLossLiters =
+        litersReceived !== null && saleQty > litersReceived ? saleQty - litersReceived : 0;
       const saleLossAmount = saleLossLiters * sellingPrice;
 
       totalOrderLossLiters += saleLossLiters;
       totalOrderLossAmount += saleLossAmount;
       transportStationLossAmount += saleLossAmount;
 
-      const saleRev = toNum(delivery.totalExpectedAmount) + clientTransportFee;
+      // Product sales only — client-borne transport is not company revenue (or expense).
+      const saleRev = toNum(delivery.totalExpectedAmount);
       const salePaid = resolveDeliveryPaymentReceived(delivery);
+      // Debt still reflects what the customer was billed (product + client transport fee).
+      const billedAmount = saleRev + clientTransportFee;
 
       transportTotalQty += saleQty;
       transportTotalRev += saleRev;
@@ -197,19 +206,25 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
         transportCost: saleTransportCost,
         salesRevenue: saleRev,
         paymentReceived: salePaid,
-        debtRemaining: saleRev - salePaid,
+        debtRemaining: billedAmount - salePaid,
         paymentStatus: delivery.status,
         createdAt: new Date(delivery.createdAt).toISOString(),
       };
     });
 
-    const dbLossDeduction = Math.max(0, toNum(transport.totalDeduction) - fleetExpenses);
-    const lossDeduction = Math.max(dbLossDeduction, transportStationLossAmount);
+    // Loss deduction only applies when a logged delivery shortfall exists.
+    // transport.totalDeduction may include transporter clawbacks that are already
+    // reflected in revenue (full despatch billed) — do not subtract those from cost.
+    let lossDeduction = transportStationLossAmount;
+
+    const transportLitersLost = toNum(transport.litersLost);
+    if (lossDeduction === 0 && transport.deliveries.length === 0 && transportLitersLost > 0) {
+      lossDeduction = transportLitersLost * pricePerLitre;
+    }
 
     totalFleetExpenses += fleetExpenses;
     totalLossDeduction += lossDeduction;
 
-    const transportLitersLost = toNum(transport.litersLost);
     if (transportLitersLost > 0 && transport.deliveries.length === 0) {
       totalOrderLossLiters += transportLitersLost;
     }
@@ -237,7 +252,11 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
 
   const totalCost = orderCost + totalTransportCost + totalFleetExpenses - totalLossDeduction;
   const pnl = amountSoldRev - totalCost;
-  const debtRemaining = amountSoldRev - amountPaid;
+  const debtRemaining = transportsData.reduce(
+    (sum, transport) =>
+      sum + transport.deliveries.reduce((dSum, delivery) => dSum + delivery.debtRemaining, 0),
+    0
+  );
   const qtyBalance = litersOrdered - totalAmountSoldQty;
   const effectiveLossLiters = totalOrderLossLiters > 0 ? totalOrderLossLiters : Math.max(0, qtyBalance);
 

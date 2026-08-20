@@ -40,6 +40,7 @@ interface OrderPnlRow {
   orderCost: number;
   totalTransportCost: number;
   totalFleetExpenses: number;
+  totalLossDeduction: number;
   totalCost: number;
   totalAmountSoldQty: number;
   amountSoldRev: number;
@@ -284,15 +285,15 @@ export function FleetPnlReportManager({
           )} L`,
       },
       {
-        accessorKey: "totalCost",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Total Cost" />,
-        meta: { label: "Total Cost" },
+        accessorKey: "orderCost",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Order Cost" />,
+        meta: { label: "Order Cost" },
         cell: ({ row }) => (
-          <span className="font-mono tabular-nums">{fmtMoney(row.original.totalCost)}</span>
+          <span className="font-mono tabular-nums">{fmtMoney(row.original.orderCost)}</span>
         ),
         footer: ({ table }) =>
           fmtMoney(
-            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.totalCost, 0)
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.orderCost, 0)
           ),
       },
       {
@@ -321,6 +322,41 @@ export function FleetPnlReportManager({
             table
               .getFilteredRowModel()
               .rows.reduce((sum, row) => sum + row.original.totalFleetExpenses, 0)
+          ),
+      },
+      {
+        accessorKey: "totalLossDeduction",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Loss Deduction" />,
+        meta: { label: "Loss Deduction" },
+        cell: ({ row }) => (
+          <span
+            className={cn(
+              "font-mono tabular-nums",
+              row.original.totalLossDeduction > 0 ? "text-amber-600" : "text-muted-foreground"
+            )}
+          >
+            {row.original.totalLossDeduction > 0
+              ? `−${fmtMoney(row.original.totalLossDeduction)}`
+              : fmtMoney(0)}
+          </span>
+        ),
+        footer: ({ table }) => {
+          const total = table
+            .getFilteredRowModel()
+            .rows.reduce((sum, row) => sum + row.original.totalLossDeduction, 0);
+          return total > 0 ? `−${fmtMoney(total)}` : fmtMoney(0);
+        },
+      },
+      {
+        accessorKey: "totalCost",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Total Cost" />,
+        meta: { label: "Total Cost" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums">{fmtMoney(row.original.totalCost)}</span>
+        ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.totalCost, 0)
           ),
       },
       {

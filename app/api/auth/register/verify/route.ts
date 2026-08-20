@@ -6,6 +6,7 @@ import { isValidSlug, RESERVED_SLUGS } from "@/lib/auth/context";
 import { TENANT_BUILTIN_ROLES, ALL_TENANT_PERMISSION_KEYS } from "@/lib/auth/permissions";
 import { sendEmail } from "@/lib/email/send";
 import { inviteEmail } from "@/lib/email/templates";
+import { emailBrandFromTenant } from "@/lib/email/branding";
 import { env } from "@/lib/env";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
@@ -130,6 +131,7 @@ export async function POST(request: Request) {
         loginUrl,
         tempPassword: "(the password you set during registration)",
         subjectLabel: `${body.name} — sign in to your admin console`,
+        brand: emailBrandFromTenant(created.tenant),
       }),
     });
 

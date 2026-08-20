@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { env } from "@/lib/env";
 import { sendEmail } from "@/lib/email/send";
 import { otpEmail } from "@/lib/email/templates";
+import { emailBrandFromTenant, PLATFORM_EMAIL_BRAND } from "@/lib/email/branding";
 import type { OtpPurpose } from "@/lib/generated/prisma/enums";
 
 const OTP_TTL_MS = 1000 * 60 * 5;
@@ -38,6 +39,16 @@ export async function issueOtp(input: {
       expiresAt: new Date(Date.now() + OTP_TTL_MS),
     },
   });
+
+  let brand = { ...PLATFORM_EMAIL_BRAND, companyName: input.tenantName };
+  if (input.tenantId) {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: input.tenantId },
+      select: { name: true, settingsJson: true },
+    });
+    if (tenant) brand = emailBrandFromTenant(tenant);
+  }
+
   await sendEmail({
     to: input.identifier,
     subject:
@@ -48,6 +59,7 @@ export async function issueOtp(input: {
       code,
       tenantName: input.tenantName,
       variant: input.emailVariant,
+      brand,
     }),
   });
   return { sent: true };

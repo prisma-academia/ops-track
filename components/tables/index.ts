@@ -8,7 +8,7 @@ export { DataTableExportMenu } from "./data-table-export-menu";
 export { DataTablePagination, type ServerPagination } from "./data-table-pagination";
 export { DataTableToolbar } from "./data-table-toolbar";
 export { DataTableProvider, useDataTable } from "./data-table-context";
-export { exportTableToCsv, exportTableToExcel, printElement } from "./table-export";
+export { exportTableToCsv, exportTableToExcel, printElement, getPrintDocumentTitle, getExportFileBaseName } from "./table-export";
 export type { DataTableFilterField, FacetedOption } from "./types";
 export { TableInsightCards, type TableInsightCardsProps } from "./table-insight-cards";
 export {

@@ -7,6 +7,7 @@ import { TENANT_BUILTIN_ROLES, ALL_TENANT_PERMISSION_KEYS } from "@/lib/auth/per
 import { hashPassword, generateTempPassword, recordPassword } from "@/lib/auth/password";
 import { sendEmail } from "@/lib/email/send";
 import { inviteEmail } from "@/lib/email/templates";
+import { emailBrandFromTenant } from "@/lib/email/branding";
 import { env } from "@/lib/env";
 import { requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
@@ -155,6 +156,7 @@ export async function POST(request: Request) {
         loginUrl,
         tempPassword,
         subjectLabel: `${body.name} as the owner`,
+        brand: emailBrandFromTenant({ name: body.name, settingsJson: created.tenant.settingsJson }),
       }),
     });
 

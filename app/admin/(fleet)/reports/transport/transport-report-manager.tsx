@@ -33,7 +33,7 @@ interface TransportRow {
   createdAt: string;
   status: string;
   litersCarried: number;
-  truck?: { plateNumber: string };
+  truck?: { plateNumber: string | null };
   driver?: { firstName: string; lastName: string };
   order?: { reference: string };
   deliveries: Array<{

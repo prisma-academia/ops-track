@@ -3,16 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
-import {
-  AlertTriangle,
-  Truck,
-  ArrowRight,
-  Calculator,
-  Eye,
-  Filter,
-  Check,
-  ChevronsUpDown,
-} from "lucide-react";
+import { format } from "date-fns";
+import { AlertTriangle, Truck, Calculator, Eye } from "lucide-react";
 
 import { PageHeader } from "@/components/shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -26,32 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Label } from "@/components/ui/label";
-import {
-  DataTable,
-  DataTableColumnHeader,
-  TableInsightCards,
-  buildPctStats,
-  type DataTableFilterField,
-} from "@/components/tables";
+import { DataTable, DataTableColumnHeader, TableInsightCards, buildPctStats } from "@/components/tables";
 import { cn } from "@/lib/utils";
 
 export type StationPerformanceItem = {
@@ -66,77 +33,44 @@ export type StationPerformanceItem = {
   fillPercentage: number;
   litersSold: number;
   totalRevenue: number;
-  totalPaymentsReceived: number;
-  litersOrdered: number;
+  expectedAmount: number;
+  cashVariance: number;
+  expensesAmount: number;
+  contribution: number;
+  todayLiters: number;
+  todayAmount: number;
+  salesDays: number;
+  avgPricePerLiter: number;
   dailySalesVelocity: number;
   daysStockRemaining: number;
+  lastSaleDate: string | null;
+  lastSaleLiters: number;
+  lastSaleAmount: number;
+  daysSinceLastSale: number | null;
+  soldByProduct: Record<string, number>;
   priority: "CRITICAL" | "HIGH" | "MEDIUM" | "ADEQUATE";
   recommendedAllocation: number;
+  performanceWindowDays: number;
 };
 
-function SearchSelect({
-  value,
-  onChange,
-  options,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: (string | { label: string; value: string })[];
-  placeholder: string;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const formattedOptions = options.map((opt) =>
-    typeof opt === "string" ? { label: opt, value: opt } : opt
-  );
-  const selectedOption = formattedOptions.find((opt) => opt.value === value);
+function formatMoney(value: number) {
+  return `₦${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
+function formatLastSale(iso: string | null, daysSince: number | null) {
+  if (!iso) return "—";
+  if (daysSince === 0) return "Today";
+  if (daysSince === 1) return "Yesterday";
+  if (daysSince != null && daysSince < 7) return `${daysSince}d ago`;
+  return format(new Date(iso), "d MMM");
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" className="h-10 w-full justify-between font-normal">
-          {selectedOption ? (
-            <span className="truncate">{selectedOption.label}</span>
-          ) : (
-            <span className="text-muted-foreground">{placeholder}</span>
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search..." />
-          <CommandList>
-            <CommandEmpty>No results found.</CommandEmpty>
-            <CommandGroup>
-              <CommandItem
-                value="--clear--"
-                onSelect={() => {
-                  onChange("");
-                  setOpen(false);
-                }}
-                className="justify-center text-xs italic text-muted-foreground"
-              >
-                Clear selection
-              </CommandItem>
-              {formattedOptions.map((opt) => (
-                <CommandItem
-                  key={opt.value}
-                  value={opt.label}
-                  onSelect={() => {
-                    onChange(opt.value);
-                    setOpen(false);
-                  }}
-                >
-                  <Check className={cn("mr-2 h-4 w-4", value === opt.value ? "opacity-100" : "opacity-0")} />
-                  {opt.label}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <div className="space-y-1 rounded-lg border border-border/30 bg-muted/40 p-3">
+      <span className="text-[10px] font-bold uppercase text-muted-foreground">{label}</span>
+      <p className="font-mono text-sm font-bold text-foreground">{value}</p>
+    </div>
   );
 }
 
@@ -148,89 +82,45 @@ export function StationPerformanceClient({
   const [selectedStation, setSelectedStation] = React.useState<StationPerformanceItem | null>(null);
   const [isCalcOpen, setIsCalcOpen] = React.useState(false);
   const [truckCapacity, setTruckCapacity] = React.useState(33000);
-  const [isFilterOpen, setIsFilterOpen] = React.useState(false);
-  const [filterPriority, setFilterPriority] = React.useState("ALL");
-  const [filterOrg, setFilterOrg] = React.useState("");
-  const [draftPriority, setDraftPriority] = React.useState(filterPriority);
-  const [draftOrg, setDraftOrg] = React.useState(filterOrg);
 
-  const priorityOptions = [
-    { label: "Resupply Urgent (Critical & High)", value: "RESUPPLY_NEEDED" },
-    { label: "Critical Stock", value: "CRITICAL" },
-    { label: "High Priority", value: "HIGH" },
-    { label: "Medium Priority", value: "MEDIUM" },
-    { label: "Adequate Stock", value: "ADEQUATE" },
-  ];
-
-  const uniqueOrganizations = React.useMemo(
-    () => Array.from(new Set(initialStations.map((s) => s.organization.name).filter(Boolean))),
-    [initialStations]
-  );
-
-  const filteredStations = React.useMemo(() => {
-    return initialStations.filter((s) => {
-      if (filterPriority === "RESUPPLY_NEEDED" && s.priority !== "CRITICAL" && s.priority !== "HIGH")
-        return false;
-      if (
-        filterPriority &&
-        filterPriority !== "ALL" &&
-        filterPriority !== "RESUPPLY_NEEDED" &&
-        s.priority !== filterPriority
-      )
-        return false;
-      if (filterOrg && s.organization.name !== filterOrg) return false;
-      return true;
-    });
-  }, [initialStations, filterPriority, filterOrg]);
+  const windowDays = initialStations[0]?.performanceWindowDays ?? 30;
 
   const metrics = React.useMemo(() => {
-    const totalStock = filteredStations.reduce((sum, s) => sum + s.currentStock, 0);
-    const totalCapacity = filteredStations.reduce((sum, s) => sum + s.totalCapacity, 0);
-    const totalSold = filteredStations.reduce((sum, s) => sum + s.litersSold, 0);
-    const totalRevenue = filteredStations.reduce((sum, s) => sum + s.totalRevenue, 0);
-    const totalRecommended = filteredStations.reduce((sum, s) => sum + s.recommendedAllocation, 0);
-    const critical = filteredStations.filter((s) => s.priority === "CRITICAL").length;
-    const high = filteredStations.filter((s) => s.priority === "HIGH").length;
+    const totalStock = initialStations.reduce((sum, station) => sum + station.currentStock, 0);
+    const totalSold = initialStations.reduce((sum, station) => sum + station.litersSold, 0);
+    const totalRevenue = initialStations.reduce((sum, station) => sum + station.totalRevenue, 0);
+    const totalDailyRate = initialStations.reduce((sum, station) => sum + station.dailySalesVelocity, 0);
 
-    return {
-      count: filteredStations.length,
-      totalStock,
-      totalCapacity,
-      totalSold,
-      totalRevenue,
-      totalRecommended,
-      critical,
-      high,
-    };
-  }, [filteredStations]);
+    return { count: initialStations.length, totalStock, totalSold, totalRevenue, totalDailyRate };
+  }, [initialStations]);
 
   const insightStats = React.useMemo(
     () =>
       buildPctStats([
         { key: "stations", label: "Managed Stations", value: metrics.count, color: "#3b82f6" },
         {
-          key: "stock",
-          label: "Network Stock",
-          value: metrics.totalStock,
-          color: "#f59e0b",
-          format: (n) => `${n.toLocaleString()} L`,
-        },
-        {
           key: "sold",
-          label: "Volume Sold",
+          label: `${windowDays}d Volume Sold`,
           value: metrics.totalSold,
           color: "#10b981",
           format: (n) => `${n.toLocaleString()} L`,
         },
         {
-          key: "allocation",
-          label: "Target Allocation",
-          value: metrics.totalRecommended,
+          key: "revenue",
+          label: `${windowDays}d Amount Sold`,
+          value: metrics.totalRevenue,
+          color: "#f59e0b",
+          format: (n) => formatMoney(n),
+        },
+        {
+          key: "daily",
+          label: "Network Daily Rate",
+          value: metrics.totalDailyRate,
           color: "#a855f7",
-          format: (n) => `${n.toLocaleString()} L`,
+          format: (n) => `${n.toLocaleString()} L/day`,
         },
       ]),
-    [metrics]
+    [metrics, windowDays]
   );
 
   const columns = React.useMemo<ColumnDef<StationPerformanceItem>[]>(
@@ -256,7 +146,7 @@ export function StationPerformanceClient({
               </Avatar>
               <div>
                 <span className="block text-sm font-semibold">{station.name}</span>
-                <span className="font-mono text-xs text-muted-foreground">{station.code}</span>
+                {/* <span className="font-mono text-xs text-muted-foreground">{station.code}</span> */}
               </div>
             </div>
           );
@@ -285,43 +175,28 @@ export function StationPerformanceClient({
             .toLocaleString()} L`,
       },
       {
-        accessorKey: "totalCapacity",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Capacity" />,
-        meta: { label: "Capacity" },
-        cell: ({ row }) => (
-          <span className="font-mono text-xs">
-            {row.original.totalCapacity.toLocaleString()} L
-          </span>
-        ),
-        footer: ({ table }) =>
-          `${table
-            .getFilteredRowModel()
-            .rows.reduce((sum, row) => sum + row.original.totalCapacity, 0)
-            .toLocaleString()} L`,
-      },
-      {
         accessorKey: "fillPercentage",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Fill %" />,
         meta: { label: "Fill %" },
         cell: ({ row }) => {
-          const s = row.original;
+          const station = row.original;
           return (
             <div className="w-28 space-y-1">
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                 <div
                   className={cn(
                     "h-full rounded-full",
-                    s.priority === "CRITICAL"
+                    station.priority === "CRITICAL"
                       ? "bg-red-500"
-                      : s.priority === "HIGH"
+                      : station.priority === "HIGH"
                         ? "bg-amber-500"
                         : "bg-emerald-500"
                   )}
-                  style={{ width: `${s.fillPercentage}%` }}
+                  style={{ width: `${station.fillPercentage}%` }}
                 />
               </div>
               <span className="block text-center text-[10px] font-semibold text-muted-foreground">
-                {s.fillPercentage}%
+                {station.fillPercentage}%
               </span>
             </div>
           );
@@ -355,42 +230,70 @@ export function StationPerformanceClient({
         meta: { label: "Amount Sold" },
         cell: ({ row }) => (
           <span className="font-mono text-xs font-bold text-emerald-500">
-            ₦{row.original.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            {formatMoney(row.original.totalRevenue)}
           </span>
         ),
         footer: ({ table }) =>
-          `₦${table
-            .getFilteredRowModel()
-            .rows.reduce((sum, row) => sum + row.original.totalRevenue, 0)
-            .toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+          formatMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.totalRevenue, 0)
+          ),
+      },
+      {
+        accessorKey: "daysStockRemaining",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Days Cover" />,
+        meta: { label: "Days Cover" },
+        cell: ({ row }) => {
+          const station = row.original;
+          if (station.dailySalesVelocity <= 0) return <span className="text-muted-foreground">—</span>;
+          return (
+            <span
+              className={cn(
+                "font-mono text-xs font-bold",
+                station.daysStockRemaining < 3
+                  ? "text-red-500"
+                  : station.daysStockRemaining < 7
+                    ? "text-amber-500"
+                    : "text-foreground"
+              )}
+            >
+              {station.daysStockRemaining}d
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "lastSaleDate",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Last Sale" />,
+        meta: { label: "Last Sale" },
+        cell: ({ row }) => (
+          <span className="text-xs">
+            {formatLastSale(row.original.lastSaleDate, row.original.daysSinceLastSale)}
+          </span>
+        ),
       },
       {
         accessorKey: "priority",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Priority" />,
         meta: { label: "Priority" },
         cell: ({ row }) => {
-          const p = row.original.priority;
+          const priority = row.original.priority;
           return (
             <Badge
               variant="outline"
               className={cn(
                 "text-[10px] font-bold uppercase tracking-wider",
-                p === "CRITICAL"
+                priority === "CRITICAL"
                   ? "border-red-500/30 bg-red-500/10 text-red-500"
-                  : p === "HIGH"
+                  : priority === "HIGH"
                     ? "border-amber-500/30 bg-amber-500/10 text-amber-500"
-                    : p === "MEDIUM"
+                    : priority === "MEDIUM"
                       ? "border-blue-500/30 bg-blue-500/10 text-blue-500"
                       : "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
               )}
             >
-              {p}
+              {priority}
             </Badge>
           );
-        },
-        filterFn: (row, id, value) => {
-          if (!Array.isArray(value)) return true;
-          return value.includes(row.getValue(id));
         },
       },
       {
@@ -415,133 +318,41 @@ export function StationPerformanceClient({
         id: "actions",
         header: "",
         enableHiding: false,
-        cell: ({ row }) => {
-          const s = row.original;
-          return (
-            <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setSelectedStation(s)}
-                title="View station details"
-              >
-                <Eye className="size-4" />
-              </Button>
-              <Button variant="outline" size="sm" asChild className="h-7 gap-1 px-2.5 text-xs">
-                <Link href={`/admin/orders?stationId=${s.id}`}>
-                  Allocate
-                  <ArrowRight className="size-3" />
-                </Link>
-              </Button>
-            </div>
-          );
-        },
+        cell: ({ row }) => (
+          <div className="flex items-center justify-end" onClick={(event) => event.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSelectedStation(row.original)}
+              title="View station details"
+            >
+              <Eye className="size-4" />
+            </Button>
+          </div>
+        ),
       },
     ],
     []
-  );
-
-  const filterFields = React.useMemo<DataTableFilterField<StationPerformanceItem>[]>(
-    () => [
-      {
-        id: "priority",
-        label: "Priority",
-        options: [
-          { label: "Critical", value: "CRITICAL" },
-          { label: "High", value: "HIGH" },
-          { label: "Medium", value: "MEDIUM" },
-          { label: "Adequate", value: "ADEQUATE" },
-        ],
-      },
-    ],
-    []
-  );
-
-  const applyFilters = () => {
-    setFilterPriority(draftPriority);
-    setFilterOrg(draftOrg);
-    setIsFilterOpen(false);
-  };
-
-  const clearFilters = () => {
-    setDraftPriority("ALL");
-    setDraftOrg("");
-    setFilterPriority("ALL");
-    setFilterOrg("");
-    setIsFilterOpen(false);
-  };
-
-  const activeFiltersCount =
-    (filterPriority !== "ALL" && filterPriority !== "" ? 1 : 0) + (filterOrg !== "" ? 1 : 0);
-
-  const filterSheet = (
-    <Sheet
-      open={isFilterOpen}
-      onOpenChange={(open) => {
-        setIsFilterOpen(open);
-        if (open) {
-          setDraftPriority(filterPriority);
-          setDraftOrg(filterOrg);
-        }
-      }}
-    >
-      <SheetTrigger asChild>
-        <Button variant="outline" className="relative gap-2 h-9">
-          <Filter className="h-4 w-4" />
-          Filter
-          {activeFiltersCount > 0 ? (
-            <Badge className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px]">
-              {activeFiltersCount}
-            </Badge>
-          ) : null}
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="right" className="flex w-[400px] flex-col sm:w-[540px]">
-        <SheetHeader>
-          <SheetTitle>Filter Records</SheetTitle>
-          <SheetDescription>Apply filters to narrow down the table results.</SheetDescription>
-        </SheetHeader>
-        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-6">
-          <div className="space-y-3 w-full pt-2">
-            <Label className="text-sm font-semibold">Resupply Priority</Label>
-            <SearchSelect
-              value={draftPriority === "ALL" ? "" : draftPriority}
-              onChange={(val) => setDraftPriority(val || "ALL")}
-              options={priorityOptions}
-              placeholder="Select priority..."
-            />
-          </div>
-          <div className="space-y-3 w-full pt-2">
-            <Label className="text-sm font-semibold">Organization</Label>
-            <SearchSelect
-              value={draftOrg}
-              onChange={setDraftOrg}
-              options={uniqueOrganizations}
-              placeholder="Select organization..."
-            />
-          </div>
-        </div>
-        <SheetFooter className="border-t pt-4">
-          <Button variant="outline" onClick={clearFilters} className="w-full">
-            Reset Filters
-          </Button>
-          <Button onClick={applyFilters} className="w-full">
-            Apply Filters
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
   );
 
   const resupplyStations = [...initialStations]
-    .filter((s) => s.recommendedAllocation > 0)
+    .filter((station) => station.recommendedAllocation > 0)
     .sort((a, b) => b.recommendedAllocation - a.recommendedAllocation);
+
+  const productEntries = selectedStation
+    ? Object.entries(selectedStation.soldByProduct).filter(([, liters]) => liters > 0)
+    : [];
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <PageHeader title="Station Performance & Fuel Allocation" />
+        <div>
+          <PageHeader title="Station Performance & Fuel Allocation" />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Pump sales, stock cover, and resupply need for the last {windowDays} days.
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" className="gap-2 text-xs" onClick={() => setIsCalcOpen(true)}>
             <Calculator className="size-4 text-primary" />
@@ -556,15 +367,13 @@ export function StationPerformanceClient({
         </div>
       </div>
 
-      <TableInsightCards stats={insightStats} breakdownTitle="Priority mix" />
+      <TableInsightCards stats={insightStats} breakdownTitle="Performance mix" />
 
       <DataTable
         columns={columns}
-        data={filteredStations}
+        data={initialStations}
         tableId="fleet-station-performance"
-        filterFields={filterFields}
         searchPlaceholder="Filter by station or org..."
-        toolbarActions={filterSheet}
         pageSize={15}
         emptyMessage="No station performance records found."
       />
@@ -577,7 +386,10 @@ export function StationPerformanceClient({
                 <div className="flex items-center gap-3">
                   <Avatar className="size-10 shrink-0 rounded-xl border border-border/40">
                     {selectedStation.organization.logoUrl ? (
-                      <AvatarImage src={selectedStation.organization.logoUrl} alt={selectedStation.organization.name} />
+                      <AvatarImage
+                        src={selectedStation.organization.logoUrl}
+                        alt={selectedStation.organization.name}
+                      />
                     ) : (
                       <AvatarFallback className="rounded-xl bg-primary/10 font-bold text-primary">
                         {selectedStation.name.substring(0, 2).toUpperCase()}
@@ -622,34 +434,73 @@ export function StationPerformanceClient({
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {[
-                    ["Current Stock", `${selectedStation.currentStock.toLocaleString()} L`],
-                    ["Total Capacity", `${selectedStation.totalCapacity.toLocaleString()} L`],
-                    ["Daily Sales Rate", `${selectedStation.dailySalesVelocity.toLocaleString()} L/day`],
-                    ["Total Volume Sold", `${selectedStation.litersSold.toLocaleString()} L`],
-                    [
-                      "Total Revenue",
-                      `₦${selectedStation.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                    ],
-                    ["Suggested Resupply", `+${selectedStation.recommendedAllocation.toLocaleString()} L`],
-                  ].map(([label, value]) => (
-                    <div key={label} className="space-y-1 rounded-lg border border-border/30 bg-muted/40 p-3">
-                      <span className="text-[10px] font-bold uppercase text-muted-foreground">{label}</span>
-                      <p className="font-mono text-sm font-bold text-foreground">{value}</p>
-                    </div>
-                  ))}
+                  <MetricCard
+                    label="Current Stock"
+                    value={`${selectedStation.currentStock.toLocaleString()} L`}
+                  />
+                  <MetricCard
+                    label="Total Capacity"
+                    value={`${selectedStation.totalCapacity.toLocaleString()} L`}
+                  />
+                  <MetricCard
+                    label="Daily Sales Rate"
+                    value={`${selectedStation.dailySalesVelocity.toLocaleString()} L/day`}
+                  />
+                  <MetricCard
+                    label={`${windowDays}d Volume Sold`}
+                    value={`${selectedStation.litersSold.toLocaleString()} L`}
+                  />
+                  <MetricCard label={`${windowDays}d Amount Sold`} value={formatMoney(selectedStation.totalRevenue)} />
+                  <MetricCard
+                    label="Avg Selling Price"
+                    value={
+                      selectedStation.avgPricePerLiter > 0
+                        ? `${formatMoney(selectedStation.avgPricePerLiter)}/L`
+                        : "—"
+                    }
+                  />
+                  <MetricCard label="Today's Sales" value={`${selectedStation.todayLiters.toLocaleString()} L`} />
+                  <MetricCard label="Today's Amount" value={formatMoney(selectedStation.todayAmount)} />
+                  <MetricCard
+                    label="Sales Days"
+                    value={`${selectedStation.salesDays} / ${windowDays}`}
+                  />
+                  <MetricCard
+                    label="Last Sale"
+                    value={formatLastSale(selectedStation.lastSaleDate, selectedStation.daysSinceLastSale)}
+                  />
+                  <MetricCard label="Expected Amount" value={formatMoney(selectedStation.expectedAmount)} />
+                  <MetricCard
+                    label="Cash Variance"
+                    value={formatMoney(selectedStation.cashVariance)}
+                  />
+                  <MetricCard label={`${windowDays}d Expenses`} value={formatMoney(selectedStation.expensesAmount)} />
+                  <MetricCard label="Contribution" value={formatMoney(selectedStation.contribution)} />
+                  <MetricCard
+                    label="Suggested Resupply"
+                    value={`+${selectedStation.recommendedAllocation.toLocaleString()} L`}
+                  />
                 </div>
+
+                {productEntries.length > 0 ? (
+                  <div className="rounded-lg border border-border/30 bg-muted/40 p-3">
+                    <p className="mb-2 text-[10px] font-bold uppercase text-muted-foreground">
+                      {windowDays}d volume by product
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {productEntries.map(([product, liters]) => (
+                        <Badge key={product} variant="outline" className="font-mono text-[11px]">
+                          {product}: {liters.toLocaleString()} L
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <DialogFooter className="border-t border-border/40 pt-3">
                 <Button variant="outline" size="sm" onClick={() => setSelectedStation(null)}>
                   Close
-                </Button>
-                <Button size="sm" asChild className="gap-1">
-                  <Link href={`/admin/orders?stationId=${selectedStation.id}`}>
-                    <Truck className="size-3.5" />
-                    Issue Resupply Dispatch
-                  </Link>
                 </Button>
               </DialogFooter>
             </>
@@ -698,7 +549,7 @@ export function StationPerformanceClient({
                 ) : (
                   resupplyStations.map((station) => {
                     const totalDeficit = resupplyStations.reduce(
-                      (sum, s) => sum + s.recommendedAllocation,
+                      (sum, item) => sum + item.recommendedAllocation,
                       0
                     );
                     const share = totalDeficit > 0 ? station.recommendedAllocation / totalDeficit : 0;

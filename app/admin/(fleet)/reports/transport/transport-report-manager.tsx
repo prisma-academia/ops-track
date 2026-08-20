@@ -40,11 +40,30 @@ interface TransportRow {
     litersDespatched: number | null;
     litersReceived: number | null;
   }>;
+  expectedFee: number;
+  totalFee: number;
+  transportExpense: number;
+  fleetTripExpense: number;
+  lossDeduction: number;
+  totalExpense: number;
+  net: number;
 }
 
 function fmtQty(n: number | null) {
   if (n === null || isNaN(n)) return "0 L";
   return `${n.toLocaleString("en-NG", { maximumFractionDigits: 0 })} L`;
+}
+
+function fmtMoney(n: number | null) {
+  if (n === null || isNaN(n)) return "—";
+  return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function moneyFooter(
+  table: { getFilteredRowModel: () => { rows: Array<{ original: TransportRow }> } },
+  pick: (row: TransportRow) => number
+) {
+  return fmtMoney(table.getFilteredRowModel().rows.reduce((sum, row) => sum + pick(row.original), 0));
 }
 
 function getDelivered(row: TransportRow) {
@@ -110,11 +129,23 @@ export function TransportReportManager({
     let totalCarried = 0;
     let totalDelivered = 0;
     let totalShortage = 0;
+    let expectedFee = 0;
+    let totalFee = 0;
+    let transportExpense = 0;
+    let fleetTripExpense = 0;
+    let lossDeduction = 0;
+    let totalExpense = 0;
 
     filteredRows.forEach((r) => {
       totalCarried += Number(r.litersCarried || 0);
       totalDelivered += getDelivered(r);
       totalShortage += getShortage(r);
+      expectedFee += r.expectedFee;
+      totalFee += r.totalFee;
+      transportExpense += r.transportExpense;
+      fleetTripExpense += r.fleetTripExpense;
+      lossDeduction += r.lossDeduction;
+      totalExpense += r.totalExpense;
     });
 
     return {
@@ -122,33 +153,46 @@ export function TransportReportManager({
       totalCarried,
       totalDelivered,
       totalShortage,
+      expectedFee,
+      totalFee,
+      transportExpense,
+      fleetTripExpense,
+      lossDeduction,
+      totalExpense,
+      net: totalFee - fleetTripExpense,
     };
   }, [filteredRows]);
 
   const insightStats = React.useMemo(
     () =>
       buildPctStats([
-        { key: "trips", label: "Total Trips", value: metrics.totalTrips, color: "#475569" },
         {
-          key: "allocated",
-          label: "Total Allocated",
-          value: metrics.totalCarried,
+          key: "expected",
+          label: "Expected Fee",
+          value: metrics.expectedFee,
           color: "#3b82f6",
-          format: (n) => `${n.toLocaleString()} L`,
+          format: (n) => fmtMoney(n),
         },
         {
-          key: "delivered",
-          label: "Total Delivered",
-          value: metrics.totalDelivered,
+          key: "totalFee",
+          label: "Total Fee",
+          value: metrics.totalFee,
           color: "#10b981",
-          format: (n) => `${n.toLocaleString()} L`,
+          format: (n) => fmtMoney(n),
         },
         {
-          key: "shortage",
-          label: "Total Shortage",
-          value: metrics.totalShortage,
+          key: "loss",
+          label: "Loss Deduction",
+          value: metrics.lossDeduction,
           color: "#f43f5e",
-          format: (n) => `${n.toLocaleString()} L`,
+          format: (n) => fmtMoney(n),
+        },
+        {
+          key: "opex",
+          label: "Fleet / Trip Exp",
+          value: metrics.fleetTripExpense,
+          color: "#f59e0b",
+          format: (n) => fmtMoney(n),
         },
       ]),
     [metrics]
@@ -250,6 +294,92 @@ export function TransportReportManager({
           ),
       },
       {
+        accessorKey: "lossDeduction",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Loss Deduction" />,
+        meta: { label: "Loss Deduction" },
+        cell: ({ row }) => (
+          <span
+            className={cn(
+              "font-mono tabular-nums",
+              row.original.lossDeduction > 0 ? "text-rose-600" : "text-muted-foreground"
+            )}
+          >
+            {row.original.lossDeduction > 0
+              ? `−${fmtMoney(row.original.lossDeduction)}`
+              : fmtMoney(0)}
+          </span>
+        ),
+        footer: ({ table }) => {
+          const total = table
+            .getFilteredRowModel()
+            .rows.reduce((sum, row) => sum + row.original.lossDeduction, 0);
+          return total > 0 ? `−${fmtMoney(total)}` : fmtMoney(0);
+        },
+      },
+      {
+        accessorKey: "transportExpense",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Transport Exp" />,
+        meta: { label: "Transport Exp" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums">{fmtMoney(row.original.transportExpense)}</span>
+        ),
+        footer: ({ table }) => moneyFooter(table, (row) => row.transportExpense),
+      },
+      {
+        accessorKey: "fleetTripExpense",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Fleet / Trip Exp" />,
+        meta: { label: "Fleet / Trip Exp" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums">{fmtMoney(row.original.fleetTripExpense)}</span>
+        ),
+        footer: ({ table }) => moneyFooter(table, (row) => row.fleetTripExpense),
+      },
+      {
+        accessorKey: "totalFee",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Total Fee" />,
+        meta: { label: "Total Fee" },
+        cell: ({ row }) => (
+          <span className="font-mono font-semibold text-emerald-600 tabular-nums">
+            {fmtMoney(row.original.totalFee)}
+          </span>
+        ),
+        footer: ({ table }) => moneyFooter(table, (row) => row.totalFee),
+      },
+      {
+        accessorKey: "expectedFee",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Expected Fee" />,
+        meta: { label: "Expected Fee" },
+        cell: ({ row }) => (
+          <span className="font-mono text-indigo-600 tabular-nums dark:text-indigo-400">
+            {fmtMoney(row.original.expectedFee)}
+          </span>
+        ),
+        footer: ({ table }) => moneyFooter(table, (row) => row.expectedFee),
+      },
+      {
+        accessorKey: "net",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Net" />,
+        meta: { label: "Net" },
+        cell: ({ row }) => {
+          const isProfit = row.original.net >= 0;
+          return (
+            <span className={cn("font-mono tabular-nums", isProfit ? "text-emerald-600" : "text-rose-600")}>
+              {isProfit ? "+" : ""}
+              {fmtMoney(row.original.net)}
+            </span>
+          );
+        },
+        footer: ({ table }) => {
+          const total = table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.net, 0);
+          return (
+            <span className={cn("font-mono", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
+              {total >= 0 ? "+" : ""}
+              {fmtMoney(total)}
+            </span>
+          );
+        },
+      },
+      {
         accessorKey: "status",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
         meta: { label: "Status" },
@@ -344,7 +474,7 @@ export function TransportReportManager({
       <div>
         <h1 className="text-xl font-semibold text-foreground">Transport & Allocation Report</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Trip volumes, delivery performance, and shortage tracking across fleet transports.
+          Trip volumes, loss deductions, haulage fees, and fleet / trip expenses.
         </p>
       </div>
 

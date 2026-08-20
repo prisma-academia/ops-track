@@ -16,7 +16,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useDataTable } from "./data-table-context";
-import { exportTableToCsv, exportTableToExcel, printElement } from "./table-export";
+import { exportTableToCsv, exportTableToExcel, printElement, getPrintDocumentTitle, getExportFileBaseName } from "./table-export";
+import { usePrintCompany } from "@/components/print/print-company-context";
 
 /**
  * "Export" toolbar button — print, CSV, or Excel, all scoped to the current
@@ -25,11 +26,15 @@ import { exportTableToCsv, exportTableToExcel, printElement } from "./table-expo
  */
 export function DataTableExportMenu<TData>() {
   const { table, tableId, tableContainerRef } = useDataTable<TData>();
+  const company = usePrintCompany();
 
   const handlePrint = () => {
     const tableEl = tableContainerRef.current?.querySelector("table");
-    if (tableEl) printElement(tableEl, tableId);
+    const fileBaseName = getExportFileBaseName(tableId, company?.slug);
+    if (tableEl) printElement(tableEl, getPrintDocumentTitle(tableId), company, fileBaseName);
   };
+
+  const exportBaseName = () => getExportFileBaseName(tableId, company?.slug);
 
   return (
     <DropdownMenu>
@@ -50,14 +55,14 @@ export function DataTableExportMenu<TData>() {
           Print
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => exportTableToCsv(table, `${tableId}.csv`)}
+          onClick={() => exportTableToCsv(table, `${exportBaseName()}.csv`)}
           className="cursor-pointer"
         >
           <FileTextIcon className="size-3.5 text-muted-foreground" />
           Export as CSV
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => exportTableToExcel(table, `${tableId}.xls`)}
+          onClick={() => exportTableToExcel(table, `${exportBaseName()}.xls`)}
           className="cursor-pointer"
         >
           <FileSpreadsheetIcon className="size-3.5 text-muted-foreground" />

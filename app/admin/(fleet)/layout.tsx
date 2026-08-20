@@ -220,6 +220,12 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
       status: true, 
       settingsJson: true, 
       activeModules: true,
+      companyEmail: true,
+      companyPhone: true,
+      addressLine1: true,
+      addressLine2: true,
+      city: true,
+      region: true,
       modules: {
         where: { status: "ACTIVE" }
       }
@@ -361,6 +367,12 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
         name: tenant.name,
         slug: tenant.slug,
         logoUrl: logoUrl,
+        email: tenant.companyEmail,
+        phone: tenant.companyPhone,
+        address:
+          [tenant.addressLine1, tenant.addressLine2, tenant.city, tenant.region]
+            .filter(Boolean)
+            .join(", ") || null,
       }}
     >
       <UnauthorizedToast />

@@ -123,7 +123,7 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                               className="flex items-center gap-2.5 py-2 cursor-pointer"
                             >
                               {tenant?.logoUrl ? (
-                                <img src={tenant.logoUrl} alt="" className="h-5 w-5 object-contain" />
+                                <img src={tenant.logoUrl} alt="" className="h-8 w-8 object-contain" />
                               ) : (
                                 <Truck className="h-4 w-4 text-muted-foreground" />
                               )}
@@ -154,7 +154,7 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                                   className="flex items-center gap-2.5 py-2 cursor-pointer"
                                 >
                                   {org.logoUrl ? (
-                                    <img src={org.logoUrl} alt="" className="h-5 w-5 object-contain" />
+                                    <img src={org.logoUrl} alt="" className="h-8 w-8 object-contain" />
                                   ) : (
                                     <Building2 className="h-4 w-4 text-muted-foreground" />
                                   )}

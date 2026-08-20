@@ -149,7 +149,19 @@ export default async function StationDashboardLayout({ children }: { children: R
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: actor.tenantId },
-    select: { name: true, slug: true, status: true, settingsJson: true, activeModules: true },
+    select: {
+      name: true,
+      slug: true,
+      status: true,
+      settingsJson: true,
+      activeModules: true,
+      companyEmail: true,
+      companyPhone: true,
+      addressLine1: true,
+      addressLine2: true,
+      city: true,
+      region: true,
+    },
   });
   if (!tenant || tenant.status !== "ACTIVE") redirect("/maintenance");
 
@@ -170,11 +182,12 @@ export default async function StationDashboardLayout({ children }: { children: R
   ]));
   
   let finalTitle = tenant?.name ?? "Tenant";
-  let finalLogoUrl = settings.logoKey?.startsWith("http")
+  const tenantLogoUrl = settings.logoKey?.startsWith("http")
     ? settings.logoKey
     : settings.logoKey && s3Configured()
     ? publicUrlForKey(settings.logoKey)
     : null;
+  let finalLogoUrl = tenantLogoUrl;
 
   if (orgInfo) {
     finalTitle = orgInfo.name;
@@ -182,7 +195,7 @@ export default async function StationDashboardLayout({ children }: { children: R
       ? orgInfo.logoKey
       : orgInfo.logoKey && s3Configured()
       ? publicUrlForKey(orgInfo.logoKey)
-      : null;
+      : tenantLogoUrl;
   }
   
   const internalOrganizations = allInternalOrgs.map(org => ({
@@ -252,7 +265,13 @@ export default async function StationDashboardLayout({ children }: { children: R
       tenant={{
         name: tenant.name,
         slug: tenant.slug,
-        logoUrl: finalLogoUrl,
+        logoUrl: tenantLogoUrl,
+        email: tenant.companyEmail,
+        phone: tenant.companyPhone,
+        address:
+          [tenant.addressLine1, tenant.addressLine2, tenant.city, tenant.region]
+            .filter(Boolean)
+            .join(", ") || null,
       }}
     >
       <UnauthorizedToast />

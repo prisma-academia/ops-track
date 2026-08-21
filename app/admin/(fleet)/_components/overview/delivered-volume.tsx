@@ -10,7 +10,8 @@ export function DeliveredVolume({ data }: { data: FleetOverviewData }) {
     <DashboardOverviewCardV3
       data={{
         formattedValue: data.kpi.deliveredVolume.formattedValue,
-        percentageChange: data.kpi.deliveredVolume.percentageChange,
+        subtitle: data.kpi.deliveredVolume.subtitle,
+        subtitleClassName: data.kpi.deliveredVolume.subtitleClassName,
       }}
       title="Delivered Volume (L)"
       action={<DashboardCardActionsDropdown />}

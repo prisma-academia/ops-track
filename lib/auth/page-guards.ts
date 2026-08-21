@@ -95,11 +95,20 @@ export async function requireTenantPage(
     organizationId: user.organizationId,
     permissions: new Set([...user.stationPermissions, ...user.fleetPermissions]),
   };
-  if (permission && !hasPermission(actor, permission)) {
+  const scopedPermissions =
+    module === "FLEET"
+      ? user.fleetPermissions
+      : module === "STATION"
+        ? user.stationPermissions
+        : [...user.stationPermissions, ...user.fleetPermissions];
+  if (
+    permission &&
+    !hasPermission({ ...actor, permissions: new Set(scopedPermissions) }, permission)
+  ) {
     // Fleet-only pages know their area; other pages default to the Fleet
     // home (the primary /admin surface) since we can't cheaply resolve
     // which module the caller belongs to at this layer.
-    redirect(module === "STATION" ? "/admin/station?error=unauthorized" : "/admin?error=unauthorized");
+    redirect(module === "STATION" ? "/admin/station/unauthorized" : "/admin/unauthorized");
   }
   return actor;
 }

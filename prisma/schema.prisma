@@ -168,6 +168,7 @@ model TenantUser {
   passwordHash        String
   mustChangePassword  Boolean        @default(true)
   status              UserStatus     @default(ACTIVE)
+  bannedReason        String?
   firstName           String?
   lastName            String?
   otherName           String?
@@ -1217,6 +1218,10 @@ enum LossType {
   THEFT
   MAINTENANCE
   ACCIDENT
+  SPILL
+  LEAKAGE
+  SHORTAGE
+  CONTAMINATION
   OTHERS
 }
 

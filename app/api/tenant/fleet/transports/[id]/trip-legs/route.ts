@@ -23,7 +23,7 @@ const CreateTripLegSchema = z.object({
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_TRANSPORTS_WRITE.key, "FLEET");
     const body = CreateTripLegSchema.parse(await request.json());
     const meta = requestMeta(request);
     const { id: transportId } = await context.params;

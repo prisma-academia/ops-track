@@ -7,7 +7,7 @@ import { parseTenantSettings } from "@/lib/tenant/settings";
 
 
 export default async function TransportDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_TRANSPORTS_READ.key);
   const { id } = await params;
 
   const transport = await prisma.transport.findFirst({

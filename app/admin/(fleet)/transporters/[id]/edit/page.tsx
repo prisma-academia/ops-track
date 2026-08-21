@@ -6,7 +6,7 @@ import { CreateTransporterForm } from "../../new/transporter-form";
 
 export default async function EditTransporterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_TRUCKS_WRITE.key);
 
   const transporter = await prisma.transporter.findFirst({
     where: { id, tenantId: actor.tenantId },

@@ -9,7 +9,7 @@ export default async function NewSalePage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_SALES_WRITE.key);
 
   const customers = await prisma.customer.findMany({
     where: { tenantId: actor.tenantId },

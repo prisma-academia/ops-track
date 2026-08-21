@@ -400,7 +400,7 @@ export function StockReportManager({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Stock Report</h1>
+        <h1 className="text-xl font-semibold text-foreground">Inventory Report</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Delivery volumes, stock value, reconciliation, and profit/loss by station.
         </p>

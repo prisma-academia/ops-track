@@ -6,6 +6,7 @@ import { getLocale, getMessages } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { resolveHostMetadata } from "@/lib/tenant/page-metadata";
 import "./globals.css";
 
 // Body copy + headings
@@ -19,10 +20,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Oil",
-  description: "Manage",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return resolveHostMetadata();
+}
 
 export default async function RootLayout({
   children,

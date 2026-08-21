@@ -17,7 +17,7 @@ export default async function FleetOverviewPage({
   const { period: periodParam } = await searchParams
   const period = parseOverviewPeriod(periodParam)
 
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key)
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET")
   const data = await getFleetOverviewData(actor.tenantId, period)
 
   return (

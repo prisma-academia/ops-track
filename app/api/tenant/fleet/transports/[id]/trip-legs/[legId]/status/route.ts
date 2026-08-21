@@ -13,7 +13,7 @@ const UpdateStatusSchema = z.object({
 export async function PATCH(request: Request, context: { params: Promise<{ id: string, legId: string }> }) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_TRANSPORTS_WRITE.key, "FLEET");
     const body = UpdateStatusSchema.parse(await request.json());
     const meta = requestMeta(request);
     const { legId } = await context.params;

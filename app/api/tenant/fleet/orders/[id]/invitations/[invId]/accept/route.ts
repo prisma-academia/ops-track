@@ -7,7 +7,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string, invId: string }> }) {
   try {
     const { id, invId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_ORDERS_WRITE.key, "FLEET");
 
     return await withTenantContext(actor, async () => {
       const invitation = await prisma.transportInvitation.findUnique({

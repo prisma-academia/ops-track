@@ -19,7 +19,7 @@ export async function POST(
   try {
     await requireCsrf(request);
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_SALES_WRITE.key, "FLEET");
     const body = DeductShortageSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -47,7 +47,7 @@ export async function POST(
         lossLogs: {
           create: {
             tenantId: actor.tenantId,
-            lossType: "OTHERS",
+            lossType: "SHORTAGE",
             lostQuantity: body.variance,
             expensesIncurred: body.totalDeduction,
             comment: `Manual shortage deduction from Delivery ${Delivery.id}`

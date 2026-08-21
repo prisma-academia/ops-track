@@ -10,7 +10,7 @@ export default async function DriverDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_DRIVERS_READ.key);
 
   const driver = await prisma.driver.findUnique({
     where: { id },

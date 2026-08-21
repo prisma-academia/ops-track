@@ -6,7 +6,7 @@ import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_LEDGER_READ.key, "FLEET");
     const url = new URL(request.url);
     const { cursor, take } = parsePagination(url.searchParams);
 

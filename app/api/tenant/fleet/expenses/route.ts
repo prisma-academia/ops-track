@@ -18,7 +18,7 @@ const CreateFleetExpenseSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_LEDGER_READ.key, "FLEET");
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
     const truckId = url.searchParams.get("truckId");
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_LEDGER_WRITE.key, "FLEET");
     const body = CreateFleetExpenseSchema.parse(await request.json());
     const meta = requestMeta(request);
 

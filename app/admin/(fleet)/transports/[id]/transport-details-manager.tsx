@@ -24,6 +24,7 @@ import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Droplet } from "lucide-react";
 import { TransportFeeBreakdown, getTransactionFeeLegLabel } from "@/components/fleet/transport-fee-breakdown";
 import { getFeeLegBreakdown } from "@/lib/fleet/transport-fees";
+import { PRODUCT_LOSS_TYPES, getLossTypeLabel, getProductLossType, isNotesRequiredForLossType } from "@/lib/fleet/loss-types";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
@@ -90,37 +91,82 @@ export function TransportDetailsManager({
     }
   };
 
+  const lossLogs = transport.lossLogs || [];
+  const carriedVolume = Number(transport.litersCarried) || 0;
+  const distributedVolume = (transport.deliveries || []).reduce(
+    (acc: number, sale: { litersDespatched?: number | string | null }) => acc + (Number(sale.litersDespatched) || 0),
+    0
+  );
+  const loggedLostVolume = lossLogs.reduce(
+    (sum: number, log: { lostQuantity?: number | string | null }) => sum + Number(log.lostQuantity || 0),
+    0
+  );
+  const remainingVolume = Math.max(0, carriedVolume - distributedVolume - loggedLostVolume);
+  const maxLosableVolume = Math.max(0, carriedVolume - loggedLostVolume);
+  const ratePerLiter = Number(transport.ratePerLiter) || 0;
+  const selectedLossType = getProductLossType(lossType);
+  const incidentQuantity = Number(lostQuantity || 0);
+  const incidentExpenses = Number(expensesIncurred || 0);
+  const exceedsRemaining = incidentQuantity > remainingVolume + 0.001;
+  const volumeDeduction = incidentQuantity * ratePerLiter;
+
   const handleLogIncident = async () => {
     setIsSubmitting(true);
     setError(null);
 
-    if (!lossType || !lostQuantity) {
-      setError("Loss Type and Lost Quantity are required");
+    const quantity = Number(lostQuantity || 0);
+    const expenses = Number(expensesIncurred || 0);
+    const selectedType = getProductLossType(lossType);
+
+    if (!lossType || !selectedType) {
+      setError("Select an incident type");
       setIsSubmitting(false);
       return;
     }
 
-    if (Number(lostQuantity) <= 0) {
-      setError("Lost Quantity must be greater than 0");
+    if (!lostQuantity || quantity <= 0) {
+      setError("Lost quantity must be greater than 0");
       setIsSubmitting(false);
       return;
     }
 
-    if (Number(expensesIncurred) < 0) {
+    if (quantity > maxLosableVolume + 0.001) {
+      setError(`Lost quantity cannot exceed the ${carriedVolume.toLocaleString()} L loaded on this trip`);
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (expenses < 0) {
       setError("Expenses cannot be negative");
       setIsSubmitting(false);
       return;
     }
 
-    const payload: any = {
+    if (isNotesRequiredForLossType(lossType) && !lossComment.trim()) {
+      setError("Describe what happened — notes are required for this incident type");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const payload: {
+      lossLog: {
+        lossType: string;
+        lostQuantity: number;
+        expensesIncurred: number;
+        comment?: string;
+      };
+      addLitersLost: number;
+      addMaintenanceCost: number;
+      status?: string;
+    } = {
       lossLog: {
         lossType,
-        lostQuantity: Number(lostQuantity),
-        expensesIncurred: Number(expensesIncurred || 0),
-        comment: lossComment
+        lostQuantity: quantity,
+        expensesIncurred: expenses,
+        comment: lossComment.trim() || undefined,
       },
-      addLitersLost: Number(lostQuantity),
-      addMaintenanceCost: Number(expensesIncurred || 0)
+      addLitersLost: quantity,
+      addMaintenanceCost: expenses,
     };
 
     if (terminateTrip) {
@@ -142,10 +188,6 @@ export function TransportDetailsManager({
       router.refresh();
     }
   };
-
-
-
-  const lossLogs = transport.lossLogs || [];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -239,11 +281,6 @@ export function TransportDetailsManager({
                 </div>
 
                 {(() => {
-                  const carriedVolume = Number(transport.litersCarried) || 0;
-                  const salesVol = (transport.deliveries || []).reduce((acc: number, sale: any) => acc + (Number(sale.litersDespatched) || 0), 0);
-                  const distributedVolume = salesVol;
-                  const remainingVolume = Math.max(0, carriedVolume - distributedVolume);
-
                   const variance = (transport.deliveries || []).reduce((sum: number, item: any) => {
                     const despatched = Number(item.litersDespatched || item.litersSold || 0);
                     const received = item.litersReceived;
@@ -270,6 +307,9 @@ export function TransportDetailsManager({
                         <div className="p-4 rounded-2xl border bg-card shadow-sm flex flex-col justify-center">
                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Remaining to Deliver</p>
                           <p className="text-2xl font-bold text-foreground">{remainingVolume.toLocaleString()} L</p>
+                          {loggedLostVolume > 0 && (
+                            <p className="text-xs text-destructive mt-1">{loggedLostVolume.toLocaleString()} L logged as lost</p>
+                          )}
                         </div>
                         <div className="p-4 rounded-2xl border bg-card shadow-sm flex flex-col justify-center">
                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Shortage (Variance)</p>
@@ -399,7 +439,7 @@ export function TransportDetailsManager({
                               {fmt(totalLossDeductions)}
                             </div>
                             <p className="text-xs text-muted-foreground mt-1">
-                              {lossLogs.length} incident{lossLogs.length === 1 ? "" : "s"} logged
+                              {loggedLostVolume.toLocaleString()} L · {lossLogs.length} incident{lossLogs.length === 1 ? "" : "s"}
                             </p>
                           </CardContent>
                         </Card>
@@ -605,9 +645,11 @@ export function TransportDetailsManager({
               <div className="flex justify-between items-end mb-2">
                 <div>
                   <h3 className="font-semibold text-lg">Loss Logs</h3>
-                  <p className="text-sm text-muted-foreground">Track any spills, thefts, or direct maintenance expenses incurred.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Product lost in transit — theft, accident, spill, leakage, shortage, or contamination. Truck repairs belong in Payments & Expenses.
+                  </p>
                 </div>
-                <Button variant="destructive" onClick={() => setOpenIncidentDialog(true)}>
+                <Button variant="destructive" onClick={() => { setError(null); setOpenIncidentDialog(true); }}>
                   <AlertTriangle className="h-4 w-4 mr-2" />
                   Log Incident or Loss
                 </Button>
@@ -615,32 +657,65 @@ export function TransportDetailsManager({
               {lossLogs.length === 0 ? (
                 <div className="text-center py-12 border rounded-2xl bg-card">
                   <AlertTriangle className="h-8 w-8 text-muted-foreground mx-auto mb-3 opacity-50" />
-                  <p className="text-muted-foreground">No losses recorded for this trip.</p>
+                  <p className="text-muted-foreground">No product losses recorded for this trip.</p>
                 </div>
               ) : (
-                lossLogs.map((log: any) => (
-                  <div key={log.id} className="p-5 rounded-2xl border bg-red-50/50 dark:bg-red-950/20 border-red-100 dark:border-red-900/50">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-semibold text-red-700 dark:text-red-400">{log.lossType}</h4>
-                      <span className="text-xs text-muted-foreground">{new Date(log.createdAt).toLocaleDateString()}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 mb-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Lost Quantity</p>
-                        <p className="font-medium">{Number(log.lostQuantity)} L</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Expenses Incurred</p>
-                        <p className="font-medium">₦{Number(log.expensesIncurred).toLocaleString()}</p>
-                      </div>
-                    </div>
-                    {log.comment && (
-                      <p className="text-sm bg-background/50 dark:bg-background/40 p-3 rounded-lg border border-red-100 dark:border-red-900/30">
-                        {log.comment}
-                      </p>
-                    )}
-                  </div>
-                ))
+                <div className="border rounded-2xl overflow-hidden bg-card">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/50 bg-muted/50">
+                        <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Date</th>
+                        <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Incident</th>
+                        <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Notes</th>
+                        <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Lost (L)</th>
+                        <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Expenses (₦)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lossLogs.map((log: { id: string; createdAt: string; lossType: string; comment?: string | null; lostQuantity?: number | string | null; expensesIncurred?: number | string | null }) => (
+                        <tr key={log.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
+                          <td className="py-3 px-4 text-foreground/90 whitespace-nowrap">
+                            {new Date(log.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-medium text-foreground">{getLossTypeLabel(log.lossType)}</div>
+                            {getProductLossType(log.lossType)?.summary && (
+                              <div className="text-[10px] text-muted-foreground mt-0.5">
+                                {getProductLossType(log.lossType)?.summary}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-foreground/90 max-w-[280px] truncate" title={log.comment || ""}>
+                            {log.comment || "—"}
+                          </td>
+                          <td className="text-right py-3 px-4 text-destructive font-medium">
+                            {Number(log.lostQuantity || 0).toLocaleString()} L
+                          </td>
+                          <td className="text-right py-3 px-4 text-foreground/90 font-medium font-mono text-destructive">
+                            {Number(log.expensesIncurred || 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-muted/30 border-t border-border/50 font-bold">
+                        <td colSpan={3} className="text-right py-3 px-4 text-foreground">Total product loss:</td>
+                        <td className="text-right py-3 px-4 text-destructive">
+                          {loggedLostVolume.toLocaleString()} L
+                        </td>
+                        <td className="text-right py-3 px-4 text-destructive font-mono text-base">
+                          {(() => {
+                            const totalExpenses = lossLogs.reduce(
+                              (sum: number, log: { expensesIncurred?: number | string | null }) => sum + Number(log.expensesIncurred || 0),
+                              0
+                            );
+                            return `₦${totalExpenses.toLocaleString()}`;
+                          })()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               )}
             </TabsContent>
 
@@ -760,55 +835,102 @@ export function TransportDetailsManager({
       </Dialog>
 
       {/* Log Incident Dialog */}
-      <Dialog open={openIncidentDialog} onOpenChange={setOpenIncidentDialog}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog
+        open={openIncidentDialog}
+        onOpenChange={(open) => {
+          setOpenIncidentDialog(open);
+          if (open) setError(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-destructive flex items-center gap-2">
               <AlertTriangle className="h-5 w-5" />
-              Log Incident or Loss
+              Log Product Loss
             </DialogTitle>
             <DialogDescription>
-              Record any spills, accidents, or theft. This will automatically deduct the lost volume from the transport earnings.
+              Record product lost on this trip. Lost litres are deducted from remaining volume and from transporter earnings at ₦{ratePerLiter.toLocaleString()}/L. Truck repairs belong in Payments & Expenses.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Incident Type</Label>
+              <Label>What happened</Label>
               <Select value={lossType} onValueChange={setLossType}>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue>
+                    {selectedLossType?.label ?? "Select what happened"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="THEFT">Theft</SelectItem>
-                  <SelectItem value="MAINTENANCE">Maintenance </SelectItem>
-                  <SelectItem value="ACCIDENT">Accident</SelectItem>
-                  <SelectItem value="OTHERS">Others</SelectItem>
+                  {PRODUCT_LOSS_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value} textValue={type.label}>
+                      <span className="flex flex-col items-start gap-0.5 py-0.5">
+                        <span>{type.label}</span>
+                        <span className="text-xs text-muted-foreground font-normal whitespace-normal">
+                          {type.summary}
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              {selectedLossType && (
+                <p className="text-xs text-muted-foreground leading-relaxed rounded-md border bg-muted/40 p-3">
+                  {selectedLossType.guidance}
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Lost Quantity (L)*</Label>
+                <Label>Lost quantity (L)*</Label>
                 <FormattedNumberInput min="0" value={lostQuantity} onChange={(e) => setLostQuantity(e.target.value)} placeholder="0" prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />} />
+                <p className="text-[11px] text-muted-foreground">
+                  Remaining on truck: {remainingVolume.toLocaleString()} L of {carriedVolume.toLocaleString()} L loaded
+                </p>
+                {exceedsRemaining && incidentQuantity <= maxLosableVolume && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                    This is more than the remaining {remainingVolume.toLocaleString()} L on the truck. Continue only if deliveries were recorded before this incident.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
-                <Label>Direct Expenses (₦)</Label>
+                <Label>{selectedLossType?.expenseLabel ?? "Incident expenses (₦)"}</Label>
                 <FormattedNumberInput min="0" value={expensesIncurred} onChange={(e) => setExpensesIncurred(e.target.value)} placeholder="0" prefixText="₦" />
+                <p className="text-[11px] text-muted-foreground">
+                  {selectedLossType?.expenseHint ?? "Costs tied to this product loss, not vehicle repairs."}
+                </p>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Notes</Label>
-              <Textarea value={lossComment} onChange={(e) => setLossComment(e.target.value)} placeholder="Explain what happened..." />
+              <Label>
+                Notes{selectedLossType?.notesRequired ? "*" : ""}
+              </Label>
+              <Textarea
+                value={lossComment}
+                onChange={(e) => setLossComment(e.target.value)}
+                placeholder={selectedLossType?.notesPlaceholder ?? "Explain what happened..."}
+              />
             </div>
 
-            <div className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow-sm bg-destructive/5 border-destructive/20 mt-4">
+            {incidentQuantity > 0 && (
+              <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">Impact on this trip</p>
+                <p>Product deducted: {incidentQuantity.toLocaleString()} L</p>
+                <p>Transporter volume deduction: ₦{volumeDeduction.toLocaleString()}</p>
+                {incidentExpenses > 0 && (
+                  <p>Incident expenses deducted: ₦{incidentExpenses.toLocaleString()}</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow-sm bg-destructive/5 border-destructive/20">
               <Checkbox id="terminateTrip" checked={terminateTrip} onCheckedChange={(c) => setTerminateTrip(!!c)} />
               <div className="space-y-1 leading-none">
-                <Label htmlFor="terminateTrip" className="font-semibold text-destructive">Terminate Trip (Total Loss)</Label>
+                <Label htmlFor="terminateTrip" className="font-semibold text-destructive">Terminate trip (total loss)</Label>
                 <p className="text-xs text-muted-foreground">
-                  Check this if the transport cannot proceed. The status will be marked as LOSS.
+                  {selectedLossType?.terminateHint ?? "Check this if the transport cannot proceed. The status will be marked as LOSS."}
                 </p>
               </div>
             </div>

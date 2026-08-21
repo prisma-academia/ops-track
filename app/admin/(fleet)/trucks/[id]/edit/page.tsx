@@ -6,7 +6,7 @@ import { CreateTruckForm } from "../../new/truck-form";
 
 export default async function EditTruckPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_TRUCKS_WRITE.key);
 
   const truck = await prisma.truck.findFirst({
     where: { id, tenantId: actor.tenantId },

@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { SalesDetailsManager } from "./deliveries-details-manager";
 
 export default async function SaleDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_SALES_READ.key);
   const { id } = await params;
 
   const delivery = await prisma.delivery.findFirst({

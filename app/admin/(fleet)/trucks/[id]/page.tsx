@@ -10,7 +10,7 @@ export default async function TruckDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_TRUCKS_READ.key);
 
   const truck = await prisma.truck.findUnique({
     where: { id },

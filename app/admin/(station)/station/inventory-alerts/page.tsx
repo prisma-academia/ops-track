@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { InventoryAlertsManager } from "./inventory-alerts-manager";
 import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 
-export const metadata = { title: "Inventory Alerts | Rafuel" };
+export const metadata = { title: "Inventory Alerts" };
 
 export default async function InventoryAlertsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_READ.key);

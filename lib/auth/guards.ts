@@ -84,7 +84,16 @@ export async function requireTenantActor(
     organizationId: user.organizationId,
     permissions: new Set([...user.stationPermissions, ...user.fleetPermissions]),
   };
-  if (permission && !hasPermission(actor, permission)) {
+  const scopedPermissions =
+    module === "FLEET"
+      ? user.fleetPermissions
+      : module === "STATION"
+        ? user.stationPermissions
+        : [...user.stationPermissions, ...user.fleetPermissions];
+  if (
+    permission &&
+    !hasPermission({ ...actor, permissions: new Set(scopedPermissions) }, permission)
+  ) {
     throw new AuthError(403, "Forbidden.");
   }
   return actor;

@@ -61,7 +61,7 @@ const FLEET_NAV = [
       {
         href: "/admin/fleet-pnl-report",
         key: "fleetPnlReport",
-        title: "Sales Report",
+        title: "Profit & Loss",
         icon: "IconFileText",
         permission: PERMISSIONS.TENANT_FLEET_REPORTS_READ.key,
       },

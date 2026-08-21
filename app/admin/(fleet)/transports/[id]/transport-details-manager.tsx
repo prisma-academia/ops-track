@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import { ArrowLeft, Truck, AlertTriangle, CheckCircle, Droplets, Wallet, FileText, Link2, ChevronsUpDown, Coins, CircleCheck, Receipt, CircleDollarSign } from "lucide-react";
+import { ArrowLeft, Truck, AlertTriangle, CheckCircle, Droplets, Wallet, FileText, Link2, ChevronsUpDown, Coins, CircleCheck, Receipt, CircleDollarSign, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
@@ -32,10 +32,12 @@ export function TransportDetailsManager({
   transport,
   orders = [],
   originToDepotFee = 0,
+  initialTab = "overview",
 }: {
   transport: any;
   orders?: any[];
   originToDepotFee?: number;
+  initialTab?: string;
 }) {
   const router = useRouter();
   
@@ -256,7 +258,7 @@ export function TransportDetailsManager({
 
       <div className="space-y-6">
         <div className="space-y-6">
-          <Tabs defaultValue="overview" className="w-full">
+          <Tabs defaultValue={initialTab} className="w-full">
             <TabsList className="w-full justify-start h-14 bg-muted/50 backdrop-blur-xs rounded-3xl border border-border">
               <TabsTrigger value="overview" className="text-[15px] font-semibold">Overview</TabsTrigger>
               <TabsTrigger value="distribution" className="text-[15px] font-semibold">Distribution ({transport.deliveries?.length || 0})</TabsTrigger>
@@ -535,14 +537,14 @@ export function TransportDetailsManager({
                       <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Despatched</th>
                       <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Received</th>
                       <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Price/L (₦)</th>
-                      <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Amount (₦)</th>
                       <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Transport Cost</th>
+                      <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Print</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(!transport.deliveries || transport.deliveries.length === 0) ? (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                        <td colSpan={7} className="py-8 text-center text-muted-foreground">
                           No sales/distribution recorded for this trip.
                         </td>
                       </tr>
@@ -577,11 +579,18 @@ export function TransportDetailsManager({
                               )}
                             </td>
                             <td className="text-right py-3 px-4 text-foreground/90 font-mono text-xs">₦{Number(sale.amountPerLiter || 0).toLocaleString()}</td>
-                            <td className="text-right py-3 px-4 text-foreground/90 font-medium">{Number(sale.totalExpectedAmount || sale.totalAmount || (Number(sale.litersDespatched || sale.litersSold || 0) * Number(sale.amountPerLiter || 0))).toLocaleString()}</td>
                             <td className="text-right py-3 px-4 text-foreground/90">
                               <Badge variant={sale.transportCostBorneBy === 'COMPANY' ? 'secondary' : 'default'} className="text-[10px]">
                                 {sale.transportCostBorneBy === 'COMPANY' ? 'COMPANY' : 'CLIENT'}
                               </Badge>
+                            </td>
+                            <td className="text-right py-3 px-4">
+                              <Button variant="outline" size="sm" asChild>
+                                <Link href={`/admin/deliveries/${sale.id}/print?from=transport`}>
+                                  <Printer className="w-4 h-4 mr-2" />
+                                  Print Waybill
+                                </Link>
+                              </Button>
                             </td>
                           </tr>
                         ))}
@@ -606,12 +615,7 @@ export function TransportDetailsManager({
                           })()}
                         </td>
                         <td></td>
-                        <td className="text-right py-3 px-4 text-foreground font-mono text-xs">
-                          {(() => {
-                             const salesAmount = (transport.deliveries || []).reduce((sum: number, sale: any) => sum + Number(sale.totalExpectedAmount || sale.totalAmount || (Number(sale.litersDespatched || sale.litersSold || 0) * Number(sale.amountPerLiter || 0))), 0);
-                             return `₦${(salesAmount).toLocaleString()}`;
-                          })()}
-                        </td>
+                        <td></td>
                         <td></td>
                       </tr>
                       {(() => {

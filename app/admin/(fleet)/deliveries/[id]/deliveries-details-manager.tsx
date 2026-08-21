@@ -231,13 +231,11 @@ export function SalesDetailsManager({ delivery }: { delivery: any }) {
             <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setOpenEditDialog(true)}>
               <Pencil className="size-4" />
             </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-9 w-9"
-              onClick={() => window.open(`/admin/deliveries/${delivery.id}/print`, "_blank")}
-            >
-              <Printer className="size-4" />
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/admin/deliveries/${delivery.id}/print`}>
+                <Printer className="w-4 h-4 mr-2" />
+                Print Waybill
+              </Link>
             </Button>
           </div>
         </div>

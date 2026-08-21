@@ -25,17 +25,8 @@ export async function verifyPassword(hash: string, plain: string): Promise<boole
   }
 }
 
-export type PasswordPolicyError = { ok: false; reason: string };
-export type PasswordPolicyOk = { ok: true };
-
-export function validatePolicy(password: string): PasswordPolicyOk | PasswordPolicyError {
-  if (password.length < 12) return { ok: false, reason: "Password must be at least 12 characters." };
-  if (!/[a-z]/.test(password)) return { ok: false, reason: "Password must contain a lowercase letter." };
-  if (!/[A-Z]/.test(password)) return { ok: false, reason: "Password must contain an uppercase letter." };
-  if (!/\d/.test(password)) return { ok: false, reason: "Password must contain a digit." };
-  if (!/[^A-Za-z0-9]/.test(password)) return { ok: false, reason: "Password must contain a symbol." };
-  return { ok: true };
-}
+export type { PasswordPolicyError, PasswordPolicyOk } from "@/lib/auth/password-policy";
+export { validatePolicy, generateRandomPassword } from "@/lib/auth/password-policy";
 
 export async function assertNotReused(
   userType: SessionUserType,

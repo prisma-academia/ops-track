@@ -3,8 +3,8 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PageHeader } from "@/components/shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ALL_FLEET_PERMISSION_KEYS, PERMISSIONS } from "@/lib/auth/permissions";
-import { UserDetailActions } from "@/app/(platform)/(dashboard)/users/[id]/actions";
+import { ALL_TENANT_PERMISSION_KEYS, PERMISSIONS } from "@/lib/auth/permissions";
+import { UserDetailsPanel } from "./user-details-panel";
 import { Badge } from "@/components/ui/badge";
 
 export default async function TenantUserDetailPage({
@@ -13,27 +13,39 @@ export default async function TenantUserDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_USERS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_USERS_READ.key, "FLEET");
   const user = await prisma.tenantUser.findUnique({ where: { id } });
   if (!user || user.tenantId !== actor.tenantId) notFound();
   const roles = await prisma.roleTemplate.findMany({
-    where: { scope: "TENANT", tenantId: actor.tenantId, module: "FLEET" },
+    where: { scope: "TENANT", tenantId: actor.tenantId },
     orderBy: [{ isSystem: "desc" }, { name: "asc" }],
-    select: { id: true, name: true, permissions: true },
+    select: { id: true, name: true, permissions: true, module: true },
   });
+  const combinedPermissions = Array.from(
+    new Set([...user.fleetPermissions, ...user.stationPermissions])
+  );
+  const displayName = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email;
+
   return (
     <div className="space-y-6">
-      <PageHeader title={`${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email} backHref="/admin/users" />
-      <div className="space-y-6">
-        {/* User Profile - Top */}
-        <div className="w-full">
-          <Card className="border-border/40 shadow-sm">
+      <PageHeader title={displayName} backHref="/admin/users" />
+      <UserDetailsPanel
+        userId={user.id}
+        email={user.email}
+        isOwner={user.isOwner}
+        status={user.status}
+        bannedReason={user.bannedReason}
+        permissions={combinedPermissions}
+        allPermissions={ALL_TENANT_PERMISSION_KEYS}
+        roles={roles}
+        profile={
+          <Card className="border-border/40 shadow-sm lg:col-span-2">
             <CardHeader className="pb-4 border-b border-border/40">
               <CardTitle className="text-lg font-semibold text-foreground">User Profile</CardTitle>
               <CardDescription className="text-xs">System details and login statistics.</CardDescription>
             </CardHeader>
             <CardContent className="pt-4">
-              <dl className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-6 text-sm">
+              <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6 text-sm">
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Email</dt>
                   <dd className="mt-1 font-medium">{user.email}</dd>
@@ -56,7 +68,9 @@ export default async function TenantUserDetailPage({
                 </div>
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</dt>
-                  <dd className="mt-1"><Badge variant={user.status === "ACTIVE" ? "default" : "secondary"}>{user.status}</Badge></dd>
+                  <dd className="mt-1">
+                    <Badge variant={user.status === "ACTIVE" ? "default" : "destructive"}>{user.status}</Badge>
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Owner</dt>
@@ -75,28 +89,21 @@ export default async function TenantUserDetailPage({
                 </div>
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Last login</dt>
-                  <dd className="mt-1 text-xs text-muted-foreground">{user.lastLoginAt ? user.lastLoginAt.toLocaleDateString() : "Never"}</dd>
+                  <dd className="mt-1 text-xs text-muted-foreground">
+                    {user.lastLoginAt ? user.lastLoginAt.toLocaleDateString() : "Never"}
+                  </dd>
                 </div>
+                {user.status === "SUSPENDED" && user.bannedReason && (
+                  <div className="md:col-span-2">
+                    <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Ban reason</dt>
+                    <dd className="mt-1 text-sm text-destructive">{user.bannedReason}</dd>
+                  </div>
+                )}
               </dl>
             </CardContent>
           </Card>
-        </div>
-        
-        {/* Permissions & Actions - Bottom */}
-        <div className="w-full">
-          <UserDetailActions
-            userId={user.id}
-            scope="tenant"
-            moduleContext="FLEET"
-            permissions={user.fleetPermissions}
-            allPermissions={ALL_FLEET_PERMISSION_KEYS}
-            roles={roles}
-            applyRoleEndpoint={`/api/tenant/users/${user.id}/apply-role`}
-            permissionsEndpoint={`/api/tenant/users/${user.id}/permissions`}
-            resetPasswordEndpoint={`/api/tenant/users/${user.id}/reset-password`}
-          />
-        </div>
-      </div>
+        }
+      />
     </div>
   );
 }

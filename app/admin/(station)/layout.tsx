@@ -26,9 +26,18 @@ const NAV: NavItemConfig[] = [
   { href: "/admin/station/waybills", key: "waybills", title: "Waybills", module: "operations" as ModuleKey, icon: "IconTruck", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   { href: "/admin/station/expenses", key: "expenses", title: "Expenses", module: "operations" as ModuleKey, icon: "IconReceiptDollar", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },
   { href: "/admin/station/prices", key: "prices", title: "Prices", module: "operations" as ModuleKey, icon: "IconReportAnalytics", permission: PERMISSIONS.TENANT_PRICES_READ.key },
-  { href: "/admin/station/tickets", key: "tickets", title: "Tickets", module: "operations" as ModuleKey, icon: "IconTicket", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
-  { href: "/admin/station/inventory-alerts", key: "inventoryAlerts", title: "Inventory Alerts", module: "operations" as ModuleKey, icon: "IconAlertTriangle", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
-  { href: "/admin/station/clients", key: "clients", title: "Clients", module: "operations" as ModuleKey, icon: "IconUsers", permission: PERMISSIONS.TENANT_CLIENTS_READ.key },
+  {
+    key: "monitoring",
+    title: "Monitoring",
+    module: "operations" as ModuleKey,
+    icon: "IconActivity",
+    permission: null,
+    children: [
+      { href: "/admin/station/dippings", key: "dippings", title: "Dippings", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_DIPPINGS_READ.key },
+      { href: "/admin/station/stock-movements", key: "stockMovements", title: "Stock Movements", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STATIONS_READ.key },
+      { href: "/admin/station/stock-report", key: "stockReport", title: "Inventory Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
+    ],
+  },
   {
     key: "reports",
     title: "Reports",
@@ -37,11 +46,13 @@ const NAV: NavItemConfig[] = [
     permission: null,
     children: [
       { href: "/admin/station/sales-reports", key: "salesReports", title: "Sales Reports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_SALES_REPORTS_READ.key },
-      { href: "/admin/station/stock-report", key: "stockReport", title: "Stock Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
       { href: "/admin/station/delivery-pnl", key: "deliveryPnl", title: "Delivery PnL", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
       { href: "/admin/station/pnl-report", key: "pnlReport", title: "Profit Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_PROFIT_REPORTS_READ.key },
     ],
   },
+  { href: "/admin/station/tickets", key: "tickets", title: "Tickets", module: "operations" as ModuleKey, icon: "IconTicket", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+  { href: "/admin/station/inventory-alerts", key: "inventoryAlerts", title: "Inventory Alerts", module: "operations" as ModuleKey, icon: "IconAlertTriangle", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+  { href: "/admin/station/clients", key: "clients", title: "Clients", module: "operations" as ModuleKey, icon: "IconUsers", permission: PERMISSIONS.TENANT_CLIENTS_READ.key },
   // { href: "/admin/station/table-demo", key: "tableDemo", title: "Table Demo", module: null, icon: "IconTable", permission: null },
 ];
 

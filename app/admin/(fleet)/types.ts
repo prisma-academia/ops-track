@@ -7,6 +7,8 @@ export interface KpiMetric {
   formattedValue: string
   percentageChange: number
   weeklyTrend: WeeklyDataPoint[]
+  subtitle?: string
+  subtitleClassName?: string
 }
 
 export interface ComparativeVolumePoint {
@@ -72,18 +74,29 @@ export interface PaymentStatusPoint {
   value: number
 }
 
+export interface SalesOverviewPoint {
+  name: string
+  earning: number
+  expense: number
+  loss: number
+}
+
+export interface SalesOverviewData {
+  points: SalesOverviewPoint[]
+  revenue: number
+  expense: number
+  loss: number
+  profit: number
+}
+
 export interface FleetOverviewData {
   kpi: {
     transportFees: KpiMetric
-    totalTransports: KpiMetric
+    totalLitresOrdered: KpiMetric
     shortageDeductions: KpiMetric
     deliveredVolume: KpiMetric
-    pnl?: {
-      revenue: KpiMetric
-      expenses: KpiMetric
-      netProfit: KpiMetric
-    }
   }
+  salesOverview: SalesOverviewData
   counts: FleetCounts
   comparativeVolume: ComparativeVolumePoint[]
   transporterPerformance: TransporterPerformanceData[]

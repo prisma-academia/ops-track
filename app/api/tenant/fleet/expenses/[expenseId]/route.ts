@@ -19,7 +19,7 @@ export async function PATCH(
   try {
     await requireCsrf(request);
     const { expenseId } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_LEDGER_WRITE.key, "FLEET");
     const body = UpdateFleetExpenseSchema.parse(await request.json());
     const meta = requestMeta(request);
 

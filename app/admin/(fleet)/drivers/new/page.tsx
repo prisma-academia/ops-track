@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { CreateDriverForm } from "./driver-form"; 
 
 export default async function NewDriverPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_DRIVERS_WRITE.key);
 
   const transporters = await prisma.transporter.findMany({
     where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true },

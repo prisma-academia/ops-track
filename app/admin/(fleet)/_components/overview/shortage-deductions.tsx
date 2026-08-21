@@ -10,7 +10,8 @@ export function ShortageDeductions({ data }: { data: FleetOverviewData }) {
     <DashboardOverviewCardV3
       data={{
         formattedValue: data.kpi.shortageDeductions.formattedValue,
-        percentageChange: data.kpi.shortageDeductions.percentageChange,
+        subtitle: data.kpi.shortageDeductions.subtitle,
+        subtitleClassName: data.kpi.shortageDeductions.subtitleClassName,
       }}
       title="Shortage Deductions"
       action={<DashboardCardActionsDropdown />}

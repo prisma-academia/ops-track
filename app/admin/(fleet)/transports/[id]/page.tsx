@@ -6,9 +6,16 @@ import { TransportDetailsManager } from "./transport-details-manager";
 import { parseTenantSettings } from "@/lib/tenant/settings";
 
 
-export default async function TransportDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+export default async function TransportDetailsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_TRANSPORTS_READ.key);
   const { id } = await params;
+  const { tab } = await searchParams;
 
   const transport = await prisma.transport.findFirst({
     where: { id, tenantId: actor.tenantId },
@@ -80,6 +87,8 @@ export default async function TransportDetailsPage({ params }: { params: Promise
   ]);
 
   const settings = parseTenantSettings(tenant?.settingsJson);
+  const initialTab =
+    tab === "distribution" || tab === "losses" || tab === "payments" ? tab : "overview";
 
   return (
     <div className="space-y-6">
@@ -87,6 +96,7 @@ export default async function TransportDetailsPage({ params }: { params: Promise
         transport={JSON.parse(JSON.stringify(transport))} 
         orders={JSON.parse(JSON.stringify(orders))}
         originToDepotFee={settings.originToDepotFee}
+        initialTab={initialTab}
       />
     </div>
   );

@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { TicketsManager } from "./tickets-manager";
 import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 
-export const metadata = { title: "Tickets | Rafuel" };
+export const metadata = { title: "Tickets" };
 
 export default async function TicketsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_WAYBILLS_READ.key);

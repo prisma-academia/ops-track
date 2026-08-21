@@ -5,7 +5,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 
 export async function GET(req: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_TRANSPORTS_READ.key, "FLEET");
 
     return await withTenantContext(actor, async () => {
       // Fetch Trucks and their active transports

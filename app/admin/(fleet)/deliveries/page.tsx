@@ -13,7 +13,7 @@ export default async function SalesPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; status?: string; customerStationId?: string; minVol?: string; maxVol?: string; page?: string; take?: string }>;
 }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_SALES_READ.key);
   const { from, to, status, customerStationId, minVol, maxVol, page: pageParam, take: takeParam } = await searchParams;
 
   const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);

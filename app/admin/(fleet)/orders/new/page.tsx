@@ -3,7 +3,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { CreateOrderForm } from "./order-form";
 
 export default async function NewOrderPage() {
-  await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
+  await requireTenantPage(PERMISSIONS.TENANT_FLEET_ORDERS_WRITE.key);
 
   return (
     <div className="space-y-6">

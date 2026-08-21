@@ -1,12 +1,16 @@
 import { prisma } from "@/lib/db/client"
 
 import type { FleetOverviewData, StationPerformanceData } from "../types"
+import { formatShortCurrency } from "@/lib/utils"
 import {
   getDateRangeForOverviewPeriod,
+  getOverviewChartBuckets,
   getOverviewPeriodLabel,
+  getPreviousDateRangeForOverviewPeriod,
   parseOverviewPeriod,
-  type OverviewPeriod,
 } from "@/lib/overview-period"
+
+const FLEET_OUTFLOW_CATEGORIES = ["TRANSPORT_PAYMENT", "FLEET_EXPENSE", "EXPENSE"] as const
 
 function formatCurrency(val: number): string {
   return `₦${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -19,6 +23,46 @@ function calcChange(curr: number, prev: number): number {
 
 function formatCategoryLabel(category: string): string {
   return category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function deliveredLiters(transport: {
+  litersDelivered: unknown
+  litersCarried: unknown
+}): number {
+  return transport.litersDelivered != null
+    ? Number(transport.litersDelivered) || 0
+    : Number(transport.litersCarried) || 0
+}
+
+function soldLiters(delivery: {
+  litersReceived: unknown
+  litersDespatched: unknown
+}): number {
+  return delivery.litersReceived != null
+    ? Number(delivery.litersReceived) || 0
+    : Number(delivery.litersDespatched) || 0
+}
+
+function shortageLiters(delivery: {
+  litersReceived: unknown
+  litersDespatched: unknown
+}): number {
+  if (delivery.litersReceived == null) return 0
+  const despatched = Number(delivery.litersDespatched) || 0
+  const received = Number(delivery.litersReceived) || 0
+  return despatched > received ? despatched - received : 0
+}
+
+function shortageAmount(delivery: {
+  litersReceived: unknown
+  litersDespatched: unknown
+  amountPerLiter: unknown
+}): number {
+  return shortageLiters(delivery) * (Number(delivery.amountPerLiter) || 0)
+}
+
+function inRange(date: Date, from: Date, to: Date): boolean {
+  return date >= from && date <= to
 }
 
 async function getStationSnapshots(
@@ -91,172 +135,198 @@ export async function getFleetOverviewData(
 ): Promise<FleetOverviewData> {
   const period = parseOverviewPeriod(periodInput)
   const { from: periodFrom, to: periodTo } = getDateRangeForOverviewPeriod(period)
-  // ── Entity counts ─────────────────────────────────────────────────────
-  const [transportersCount, trucksCount, driversCount, activeTransports] =
-    await Promise.all([
-      prisma.transporter.count({ where: { tenantId } }),
-      prisma.truck.count({ where: { tenantId } }),
-      prisma.driver.count({ where: { tenantId } }),
-      prisma.transport.count({ where: { tenantId, status: "IN_TRANSIT" } }),
-    ])
+  const { from: prevFrom, to: prevTo } = getPreviousDateRangeForOverviewPeriod(period)
+  const buckets = getOverviewChartBuckets(period, { from: periodFrom, to: periodTo })
+  const prevBuckets = getOverviewChartBuckets(period, { from: prevFrom, to: prevTo })
 
-  // ── This month vs last month ──────────────────────────────────────────
-  const now = new Date()
-  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  const lastMonthEnd = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    0,
-    23,
-    59,
-    59,
-    999
-  )
+  const transportSelect = {
+    createdAt: true,
+    litersCarried: true,
+    litersDelivered: true,
+    litersLost: true,
+    netTransportFeePaid: true,
+    totalDeduction: true,
+  } as const
 
-  const [thisMonthTransports, lastMonthTransports, thisMonthTx, lastMonthTx] = await Promise.all([
+  const [
+    transportersCount,
+    trucksCount,
+    driversCount,
+    activeTransports,
+    currentTransports,
+    prevTransports,
+    currentDeliveries,
+    currentOutflows,
+    currentOrders,
+    prevOrdersAgg,
+  ] = await Promise.all([
+    prisma.transporter.count({ where: { tenantId } }),
+    prisma.truck.count({ where: { tenantId } }),
+    prisma.driver.count({ where: { tenantId } }),
+    prisma.transport.count({ where: { tenantId, status: "IN_TRANSIT" } }),
     prisma.transport.findMany({
-      where: { tenantId, createdAt: { gte: thisMonthStart } },
-      select: {
-        createdAt: true,
-        litersCarried: true,
-        litersDelivered: true,
-        netTransportFeePaid: true,
-        totalDeduction: true,
-      },
+      where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
+      select: transportSelect,
     }),
     prisma.transport.findMany({
-      where: {
-        tenantId,
-        createdAt: { gte: lastMonthStart, lte: lastMonthEnd },
-      },
+      where: { tenantId, createdAt: { gte: prevFrom, lte: prevTo } },
+      select: transportSelect,
+    }),
+    prisma.delivery.findMany({
+      where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
       select: {
         createdAt: true,
-        litersCarried: true,
-        litersDelivered: true,
-        netTransportFeePaid: true,
-        totalDeduction: true,
+        litersDespatched: true,
+        litersReceived: true,
+        amountPerLiter: true,
+        totalExpectedAmount: true,
+        transport: { select: { productType: true } },
       },
     }),
     prisma.transaction.findMany({
       where: {
         tenantId,
-        createdAt: { gte: thisMonthStart },
-        category: { in: ["TRANSPORT_PAYMENT", "FLEET_EXPENSE"] },
+        type: "OUTFLOW",
+        category: { in: [...FLEET_OUTFLOW_CATEGORIES] },
+        createdAt: { gte: periodFrom, lte: periodTo },
       },
-      select: { createdAt: true, amount: true, type: true, category: true },
+      select: { createdAt: true, amount: true, category: true },
     }),
-    prisma.transaction.findMany({
-      where: {
-        tenantId,
-        createdAt: { gte: lastMonthStart, lte: lastMonthEnd },
-        category: { in: ["TRANSPORT_PAYMENT", "FLEET_EXPENSE"] },
-      },
-      select: { createdAt: true, amount: true, type: true, category: true },
+    prisma.order.findMany({
+      where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
+      select: { createdAt: true, litersOrdered: true },
+    }),
+    prisma.order.aggregate({
+      where: { tenantId, createdAt: { gte: prevFrom, lte: prevTo } },
+      _sum: { litersOrdered: true },
     }),
   ])
 
-  // ── KPI aggregates ────────────────────────────────────────────────────
-  const currentFees = thisMonthTransports.reduce(
+  const currentFees = currentTransports.reduce(
     (sum, t) => sum + (Number(t.netTransportFeePaid) || 0),
     0
   )
-  const prevFees = lastMonthTransports.reduce(
+  const prevFees = prevTransports.reduce(
     (sum, t) => sum + (Number(t.netTransportFeePaid) || 0),
     0
   )
 
-  const currentDeductions = thisMonthTransports.reduce(
+  const currentDeductions = currentTransports.reduce(
     (sum, t) => sum + (Number(t.totalDeduction) || 0),
     0
   )
-  const prevDeductions = lastMonthTransports.reduce(
+  const prevDeductions = prevTransports.reduce(
     (sum, t) => sum + (Number(t.totalDeduction) || 0),
     0
   )
 
-  const currentVolume = thisMonthTransports.reduce(
-    (sum, t) => sum + (Number(t.litersCarried) || 0),
+  const currentVolume = currentTransports.reduce(
+    (sum, t) => sum + deliveredLiters(t),
     0
   )
-  const prevVolume = lastMonthTransports.reduce(
-    (sum, t) => sum + (Number(t.litersCarried) || 0),
+  const prevVolume = prevTransports.reduce(
+    (sum, t) => sum + deliveredLiters(t),
     0
   )
 
-  // -- PnL aggregates --
-  const currentRev = thisMonthTx.filter(t => t.type === "INFLOW" && t.category === "TRANSPORT_PAYMENT").reduce((s, t) => s + Number(t.amount || 0), 0)
-  const prevRev = lastMonthTx.filter(t => t.type === "INFLOW" && t.category === "TRANSPORT_PAYMENT").reduce((s, t) => s + Number(t.amount || 0), 0)
-  const currentExp = thisMonthTx.filter(t => t.type === "OUTFLOW" && t.category === "FLEET_EXPENSE").reduce((s, t) => s + Number(t.amount || 0), 0)
-  const prevExp = lastMonthTx.filter(t => t.type === "OUTFLOW" && t.category === "FLEET_EXPENSE").reduce((s, t) => s + Number(t.amount || 0), 0)
-  const currentProfit = currentRev - currentExp
-  const prevProfit = prevRev - prevExp
+  const currentLitresOrdered = currentOrders.reduce(
+    (sum, order) => sum + (Number(order.litersOrdered) || 0),
+    0
+  )
+  const prevLitresOrdered = Number(prevOrdersAgg._sum.litersOrdered) || 0
 
-  const currentTrips = thisMonthTransports.length
-  const prevTrips = lastMonthTransports.length
+  const currentSalesRevenue = currentDeliveries.reduce(
+    (sum, d) => sum + (Number(d.totalExpectedAmount) || 0),
+    0
+  )
+  const currentExpenses = currentOutflows.reduce(
+    (sum, t) => sum + (Number(t.amount) || 0),
+    0
+  )
+  const deliveryLossLiters = currentDeliveries.reduce(
+    (sum, d) => sum + shortageLiters(d),
+    0
+  )
+  const transportLossLiters = currentTransports.reduce(
+    (sum, t) => sum + (Number(t.litersLost) || 0),
+    0
+  )
+  const currentLitersLost = deliveryLossLiters + transportLossLiters
+  const currentLossAmount = currentDeliveries.reduce(
+    (sum, d) => sum + shortageAmount(d),
+    0
+  )
+  const currentProfit = currentSalesRevenue - currentExpenses - currentLossAmount
 
-  // ── Weekly trend data for mini-charts ─────────────────────────────────
-  const weeklyTrends = [1, 2, 3, 4].map((week) => {
-    const startDay = (week - 1) * 7 + 1
-    const endDay = week === 4 ? 31 : week * 7
-    const chunk = thisMonthTransports.filter(
-      (t) =>
-        t.createdAt.getDate() >= startDay && t.createdAt.getDate() <= endDay
+  const periodTrends = buckets.map((bucket) => {
+    const chunk = currentTransports.filter((t) =>
+      inRange(t.createdAt, bucket.from, bucket.to)
     )
-
+    const orderChunk = currentOrders.filter((order) =>
+      inRange(order.createdAt, bucket.from, bucket.to)
+    )
     return {
-      label: `Week ${week}`,
-      fees: chunk.reduce(
-        (sum, t) => sum + (Number(t.netTransportFeePaid) || 0),
+      label: bucket.label,
+      fees: chunk.reduce((sum, t) => sum + (Number(t.netTransportFeePaid) || 0), 0),
+      volume: chunk.reduce((sum, t) => sum + deliveredLiters(t), 0),
+      deductions: chunk.reduce((sum, t) => sum + (Number(t.totalDeduction) || 0), 0),
+      litresOrdered: orderChunk.reduce(
+        (sum, order) => sum + (Number(order.litersOrdered) || 0),
         0
       ),
-      volume: chunk.reduce(
-        (sum, t) => sum + (Number(t.litersCarried) || 0),
-        0
-      ),
-      deductions: chunk.reduce(
-        (sum, t) => sum + (Number(t.totalDeduction) || 0),
-        0
-      ),
-      revenue: thisMonthTx.filter(t => t.createdAt.getDate() >= startDay && t.createdAt.getDate() <= endDay && t.type === "INFLOW" && t.category === "TRANSPORT_PAYMENT").reduce((s, t) => s + Number(t.amount), 0),
-      expenses: thisMonthTx.filter(t => t.createdAt.getDate() >= startDay && t.createdAt.getDate() <= endDay && t.type === "OUTFLOW" && t.category === "FLEET_EXPENSE").reduce((s, t) => s + Number(t.amount), 0),
-      trips: chunk.length,
     }
   })
 
-  // ── Comparative volume (this month vs last month, weekly) ─────────────
-  const comparativeVolume = [1, 2, 3, 4].map((week) => {
-    const startDay = (week - 1) * 7 + 1
-    const endDay = week === 4 ? 31 : week * 7
+  const salesOverviewPoints = buckets.map((bucket) => {
+    const bucketDeliveries = currentDeliveries.filter((d) =>
+      inRange(d.createdAt, bucket.from, bucket.to)
+    )
+    const earning = bucketDeliveries.reduce(
+      (sum, d) => sum + (Number(d.totalExpectedAmount) || 0),
+      0
+    )
+    const expense = currentOutflows
+      .filter((t) => inRange(t.createdAt, bucket.from, bucket.to))
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+    const loss = bucketDeliveries.reduce((sum, d) => sum + shortageAmount(d), 0)
+    return { name: bucket.label, earning, expense, loss }
+  })
 
-    const thisMonthVol = thisMonthTransports
-      .filter(
-        (t) =>
-          t.createdAt.getDate() >= startDay && t.createdAt.getDate() <= endDay
-      )
-      .reduce((sum, t) => sum + (Number(t.litersCarried) || 0), 0)
-
-    const lastMonthVol = lastMonthTransports
-      .filter(
-        (t) =>
-          t.createdAt.getDate() >= startDay && t.createdAt.getDate() <= endDay
-      )
-      .reduce((sum, t) => sum + (Number(t.litersCarried) || 0), 0)
-
+  const comparativeVolume = buckets.map((bucket, index) => {
+    const prevBucket = prevBuckets[index]
     return {
-      name: `Week ${week}`,
-      thisMonth: thisMonthVol,
-      lastMonth: lastMonthVol,
+      name: bucket.label,
+      thisMonth: currentTransports
+        .filter((t) => inRange(t.createdAt, bucket.from, bucket.to))
+        .reduce((sum, t) => sum + deliveredLiters(t), 0),
+      lastMonth: prevBucket
+        ? prevTransports
+            .filter((t) => inRange(t.createdAt, prevBucket.from, prevBucket.to))
+            .reduce((sum, t) => sum + deliveredLiters(t), 0)
+        : 0,
     }
   })
 
-  // ── Grouped queries ───────────────────────────────────────────────────
-  const [volumeRaw, statusRaw, transporterGroupRaw, stationGroupRaw, clientGroupRaw, salesPaymentGroupRaw, spendingRaw] = await Promise.all([
-    prisma.transport.groupBy({
-      by: ["productType"],
-      where: { tenantId, productType: { not: null }, createdAt: { gte: periodFrom, lte: periodTo } },
-      _sum: { litersCarried: true },
-    }),
+  const volumeMap = currentDeliveries.reduce((acc, delivery) => {
+    const productType = delivery.transport?.productType
+    if (!productType) return acc
+    acc[productType] = (acc[productType] || 0) + soldLiters(delivery)
+    return acc
+  }, {} as Record<string, number>)
+
+  const productVolume = ["PMS", "AGO", "DPK", "LPG"].map((pt) => ({
+    productType: pt,
+    volume: volumeMap[pt] || 0,
+  }))
+
+  const [
+    statusRaw,
+    transporterGroupRaw,
+    stationGroupRaw,
+    clientGroupRaw,
+    salesPaymentGroupRaw,
+    spendingRaw,
+  ] = await Promise.all([
     prisma.transport.groupBy({
       by: ["status"],
       where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
@@ -296,21 +366,12 @@ export async function getFleetOverviewData(
       where: {
         tenantId,
         type: "OUTFLOW",
+        category: { in: [...FLEET_OUTFLOW_CATEGORIES] },
         createdAt: { gte: periodFrom, lte: periodTo },
       },
       _sum: { amount: true },
     }),
   ])
-
-  const volumeMap = volumeRaw.reduce((acc, v) => {
-    acc[v.productType as string] = Number(v._sum.litersCarried) || 0
-    return acc
-  }, {} as Record<string, number>)
-
-  const productVolume = ["PMS", "AGO", "DPK", "LPG"].map((pt) => ({
-    productType: pt,
-    volume: volumeMap[pt] || 0,
-  }))
 
   const transportStatus = statusRaw.map((s) => ({
     status: s.status,
@@ -350,7 +411,6 @@ export async function getFleetOverviewData(
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5)
 
-  // ── Top transporters with names ───────────────────────────────────────
   const topTransporterIds = transporterGroupRaw.map((t) => t.transporterId)
   const transporters = await prisma.transporter.findMany({
     where: { id: { in: topTransporterIds } },
@@ -368,7 +428,6 @@ export async function getFleetOverviewData(
     }
   })
 
-  // ── Top stations with last sales / closing stock ──────────────────────
   const topStationIds = stationGroupRaw
     .map((s) => s.stationId)
     .filter(Boolean) as string[]
@@ -395,7 +454,6 @@ export async function getFleetOverviewData(
     }
   })
 
-  // ── Top B2B clients ───────────────────────────────────────────────────
   const customerIds = clientGroupRaw.map((s) => s.customerId).filter(Boolean) as string[]
 
   const customers = await prisma.customer.findMany({
@@ -410,58 +468,50 @@ export async function getFleetOverviewData(
     amount: Number(s._sum.totalExpectedAmount) || 0,
   }))
 
-  // ── Assemble result ───────────────────────────────────────────────────
   return {
     kpi: {
       transportFees: {
         formattedValue: formatCurrency(currentFees),
         percentageChange: calcChange(currentFees, prevFees),
-        weeklyTrend: weeklyTrends.map((w) => ({
+        weeklyTrend: periodTrends.map((w) => ({
           label: w.label,
           value: w.fees,
         })),
       },
-      totalTransports: {
-        formattedValue: currentTrips.toLocaleString(),
-        percentageChange: calcChange(currentTrips, prevTrips),
-        weeklyTrend: weeklyTrends.map((w) => ({
+      totalLitresOrdered: {
+        formattedValue: `${currentLitresOrdered.toLocaleString()} L`,
+        percentageChange: calcChange(currentLitresOrdered, prevLitresOrdered),
+        weeklyTrend: periodTrends.map((w) => ({
           label: w.label,
-          value: w.trips,
+          value: w.litresOrdered,
         })),
       },
       shortageDeductions: {
         formattedValue: formatCurrency(currentDeductions),
         percentageChange: calcChange(currentDeductions, prevDeductions),
-        weeklyTrend: weeklyTrends.map((w) => ({
+        weeklyTrend: periodTrends.map((w) => ({
           label: w.label,
           value: w.deductions,
         })),
+        subtitle: `${currentLitersLost.toLocaleString()} L lost`,
+        subtitleClassName: "text-rose-600",
       },
       deliveredVolume: {
         formattedValue: currentVolume.toLocaleString(),
         percentageChange: calcChange(currentVolume, prevVolume),
-        weeklyTrend: weeklyTrends.map((w) => ({
+        weeklyTrend: periodTrends.map((w) => ({
           label: w.label,
           value: w.volume,
         })),
+        subtitle: `${formatShortCurrency(currentSalesRevenue)} sold`,
       },
-      pnl: {
-        revenue: {
-          formattedValue: formatCurrency(currentRev),
-          percentageChange: calcChange(currentRev, prevRev),
-          weeklyTrend: weeklyTrends.map((w) => ({ label: w.label, value: w.revenue }))
-        },
-        expenses: {
-          formattedValue: formatCurrency(currentExp),
-          percentageChange: calcChange(currentExp, prevExp),
-          weeklyTrend: weeklyTrends.map((w) => ({ label: w.label, value: w.expenses }))
-        },
-        netProfit: {
-          formattedValue: formatCurrency(currentProfit),
-          percentageChange: calcChange(currentProfit, prevProfit),
-          weeklyTrend: weeklyTrends.map((w) => ({ label: w.label, value: w.revenue - w.expenses }))
-        }
-      }
+    },
+    salesOverview: {
+      points: salesOverviewPoints,
+      revenue: currentSalesRevenue,
+      expense: currentExpenses,
+      loss: currentLossAmount,
+      profit: currentProfit,
     },
     counts: {
       transporters: transportersCount,

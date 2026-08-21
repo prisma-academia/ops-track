@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { CreateTruckForm } from "./truck-form"; 
 
 export default async function NewTruckPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_TRUCKS_WRITE.key);
 
   const transporters = await prisma.transporter.findMany({
     where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true },

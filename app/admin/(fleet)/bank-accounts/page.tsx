@@ -10,7 +10,7 @@ export default async function FleetBankAccountsPage() {
   const canReadFleet = hasPermission(actor, PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key);
   const canReadStation = hasPermission(actor, PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key);
   if (!canReadFleet && !canReadStation) {
-    redirect("/admin?error=unauthorized");
+    redirect("/admin/unauthorized");
   }
 
   const take = 25;

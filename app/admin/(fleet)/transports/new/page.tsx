@@ -9,7 +9,7 @@ export default async function NewTransportPage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_WRITE.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_TRANSPORTS_WRITE.key);
 
   const transporters = await prisma.transporter.findMany({
     where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true },

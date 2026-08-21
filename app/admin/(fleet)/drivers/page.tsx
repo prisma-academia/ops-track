@@ -13,7 +13,7 @@ export default async function DriversPage({
 }: {
   searchParams: Promise<{ status?: string; page?: string; take?: string }>;
 }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET");
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_DRIVERS_READ.key, "FLEET");
   const { status, page: pageParam, take: takeParam } = await searchParams;
 
   const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);

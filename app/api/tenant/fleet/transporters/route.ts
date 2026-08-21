@@ -26,7 +26,7 @@ const CreateTransporterSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_TRUCKS_READ.key, "FLEET");
     const url = new URL(request.url);
     const { cursor, take } = parsePagination(url.searchParams);
 
@@ -55,7 +55,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_TRUCKS_WRITE.key, "FLEET");
     const body = CreateTransporterSchema.parse(await request.json());
     const meta = requestMeta(request);
 

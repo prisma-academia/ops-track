@@ -5,7 +5,7 @@ import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { TenantUsersTable } from "./table";
 
 export default async function TenantUsersPage() {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_USERS_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_USERS_READ.key, "FLEET");
   
   const take = 25;
   const skip = 0;

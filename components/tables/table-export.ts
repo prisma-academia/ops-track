@@ -6,7 +6,7 @@ export type { PrintCompanyInfo };
 const PRINT_TITLES: Record<string, string> = {
   "fleet-transport-report": "Transport & Allocation Report",
   "fleet-station-performance": "Station Performance",
-  "fleet-pnl-report": "Sales Report",
+  "fleet-pnl-report": "Profit & Loss",
   "fleet-ledger-expenses": "Expenses Ledger",
   "fleet-ledger-transports": "Transport Ledger",
   "fleet-ledger-deliveries": "Deliveries Ledger",

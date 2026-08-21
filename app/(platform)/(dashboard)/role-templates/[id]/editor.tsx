@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { isFleetPermissionKey, PERMISSIONS } from "@/lib/auth/permissions";
 import { Save, ArrowLeft, Loader2, AlertCircle, Pencil } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -55,6 +55,7 @@ export function RoleDetailEditor({
 
   const filteredPermissions = allPermissions.filter((key) => {
     if (moduleContext === "STATION") return !key.startsWith("tenant.fleet");
+    if (moduleContext === "FLEET") return isFleetPermissionKey(key);
     return true;
   });
 
@@ -71,9 +72,17 @@ export function RoleDetailEditor({
   }, {} as Record<string, { moduleName: string; perms: PermissionItem[] }>);
 
   const modulesList = Object.values(groupedPermissions);
-  const fleetModulesList = modulesList.filter((m) => m.moduleName.startsWith("tenant.fleet"));
+  const isFleetAdminModule = (name: string) => name === "tenant.users" || name === "tenant.roles";
+  const fleetModulesList = modulesList.filter(
+    (m) =>
+      m.moduleName.startsWith("tenant.fleet") ||
+      (moduleContext === "FLEET" && isFleetAdminModule(m.moduleName))
+  );
   const stationModulesList = modulesList.filter(
-    (m) => m.moduleName.startsWith("tenant.") && !m.moduleName.startsWith("tenant.fleet")
+    (m) =>
+      m.moduleName.startsWith("tenant.") &&
+      !m.moduleName.startsWith("tenant.fleet") &&
+      !(moduleContext === "FLEET" && isFleetAdminModule(m.moduleName))
   );
   const mobileModulesList = modulesList.filter((m) => m.moduleName.startsWith("mobile."));
   const webModulesList = modulesList.filter((m) => !m.moduleName.startsWith("mobile."));

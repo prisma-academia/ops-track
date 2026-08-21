@@ -1,27 +1,13 @@
 "use client";
 
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { format } from "date-fns";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Truck, Calendar, Box, Wallet, Receipt, TrendingUp, TrendingDown, Layers, MapPin } from "lucide-react";
+import { ChevronLeft, Truck, Calendar, Wallet, Receipt, TrendingUp, TrendingDown, MapPin } from "lucide-react";
 import Link from "next/link";
 import { cn, formatShortCurrency } from "@/lib/utils";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Tooltip,
   TooltipContent,
@@ -29,20 +15,17 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { AssetTank } from "@/components/asset-tank";
+import { DataTable } from "@/components/tables";
+import {
+  fmtMoney,
+  fmtQty,
+  getFleetPnlDetailsColumns,
+  type FleetPnlTableRow,
+} from "../fleet-pnl-columns";
 
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
   return format(new Date(iso), "dd/MM/yyyy HH:mm");
-}
-
-function fmtQty(n: number | null) {
-  if (n === null || isNaN(n)) return "—";
-  return n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function fmtMoney(n: number | null) {
-  if (n === null || isNaN(n)) return "—";
-  return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 interface OrderSummary {
@@ -56,6 +39,8 @@ interface OrderSummary {
   loadingCostPerLitre: number;
   totalLoadingCost: number;
   priceBought: number;
+  totalDepotToPrimaryCost?: number;
+  totalDeliveryTransportCost?: number;
   totalTransportCost: number;
   totalFleetExpenses: number;
   totalLossDeduction: number;
@@ -76,11 +61,20 @@ interface SaleData {
   litersSold: number;
   litersReceived?: number | null;
   lossLiters?: number;
+  lossAmount?: number;
   sellingPrice: number;
+  purchaseCost: number;
+  loadingCost: number;
+  orderCost: number;
+  depotToPrimaryCost: number;
+  deliveryTransportCost: number;
   transportCost: number;
+  fleetCost: number;
+  totalCost: number;
   salesRevenue: number;
   paymentReceived: number;
   debtRemaining: number;
+  pnl: number;
   paymentStatus: string;
   createdAt: string;
 }
@@ -89,12 +83,16 @@ interface TransportData {
   id: string;
   transporterName: string;
   truckNo: string;
+  truckId?: string | null;
   ratePerLiter: number;
+  litersCarried: number;
   fleetExpenses: number;
   lossDeduction: number;
   transportTotalQty: number;
   transportTotalRev: number;
   transportTotalPaid: number;
+  depotToPrimaryCost: number;
+  deliveryTransportCost: number;
   transportTotalCost: number;
   deliveries: SaleData[];
 }
@@ -143,6 +141,82 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
     }
     return lossLitresToDisplay * stationSellingPriceForLoss;
   }, [summary.totalLossAmount, lossLitresToDisplay, stationSellingPriceForLoss]);
+
+  const breakdownRows = useMemo<FleetPnlTableRow[]>(() => {
+    return transports.flatMap((transport): FleetPnlTableRow[] => {
+      const truckLabels =
+        transport.truckNo && transport.truckNo !== "Unknown" ? [transport.truckNo] : [];
+      const truckIds = transport.truckId ? [transport.truckId] : [];
+
+      if (transport.deliveries.length === 0) {
+        const totalCost =
+          transport.depotToPrimaryCost +
+          transport.deliveryTransportCost +
+          transport.fleetExpenses;
+        return [
+          {
+            id: transport.id,
+            orderDate: summary.orderDate,
+            orderReference: transport.transporterName,
+            depot: summary.depot,
+            productType: summary.productType,
+            litersOrdered: transport.litersCarried,
+            litersDespatched: transport.litersCarried,
+            litersReceived: null,
+            purchaseCost: 0,
+            purchasePricePerLitre: summary.priceBought,
+            loadingCost: 0,
+            sellingPrice: 0,
+            orderCost: 0,
+            depotToPrimaryCost: transport.depotToPrimaryCost,
+            deliveryTransportCost: transport.deliveryTransportCost,
+            totalTransportCost: transport.transportTotalCost,
+            totalFleetExpenses: transport.fleetExpenses,
+            totalLossDeduction: transport.lossDeduction,
+            totalCost,
+            totalAmountSoldQty: 0,
+            amountSoldRev: 0,
+            amountPaid: 0,
+            debtRemaining: 0,
+            pnl: -totalCost,
+            truckIds,
+            truckLabels,
+          },
+        ];
+      }
+
+      return transport.deliveries.map((delivery) => ({
+        id: delivery.id,
+        orderDate: delivery.createdAt,
+        orderReference: delivery.soldTo,
+        depot: summary.depot,
+        productType: summary.productType,
+        litersOrdered: delivery.litersSold,
+        litersDespatched: delivery.litersSold,
+        litersReceived: delivery.litersReceived ?? null,
+        purchaseCost: delivery.purchaseCost,
+        purchasePricePerLitre: summary.priceBought,
+        loadingCost: delivery.loadingCost,
+        sellingPrice: delivery.sellingPrice,
+        orderCost: delivery.orderCost,
+        depotToPrimaryCost: delivery.depotToPrimaryCost,
+        deliveryTransportCost: delivery.deliveryTransportCost,
+        totalTransportCost: delivery.transportCost,
+        totalFleetExpenses: delivery.fleetCost,
+        totalLossDeduction: delivery.lossAmount ?? 0,
+        totalCost: delivery.totalCost,
+        totalAmountSoldQty: delivery.litersReceived ?? delivery.litersSold,
+        amountSoldRev: delivery.salesRevenue,
+        amountPaid: delivery.paymentReceived,
+        debtRemaining: delivery.debtRemaining,
+        pnl: delivery.pnl,
+        truckIds,
+        truckLabels,
+      }));
+    });
+  }, [transports, summary]);
+
+  const columns = useMemo(() => getFleetPnlDetailsColumns(), []);
 
   const statCards = [
     {
@@ -395,194 +469,15 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
       {/* Transports & deliveries Breakdown */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold tracking-tight">Transports & deliveries Breakdown</h2>
-        
-        {transports.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground bg-card rounded-xl border border-border/40">
-            No transports found for this order.
-          </div>
-        ) : (
-          <div className="rounded-xl border border-border/40 overflow-hidden bg-card shadow-xs">
-            <div className="overflow-x-auto">
-              <Table className="w-full text-xs min-w-[1000px]">
-                <TableHeader className="bg-muted/50 border-b border-border/50">
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-muted-foreground">Transport / Station</TableHead>
-                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-right text-muted-foreground">Volume (Despatched / Recv)</TableHead>
-                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-right text-muted-foreground">Unit Price (Bought → Sold)</TableHead>
-                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-right text-muted-foreground">Cost Breakdown</TableHead>
-                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-right text-muted-foreground">Revenue</TableHead>
-                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-right text-muted-foreground">Profit / Loss</TableHead>
-                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-right text-muted-foreground">Paid / Debt</TableHead>
-                    <TableHead className="h-9 px-3 py-2 font-bold uppercase tracking-wider text-center text-muted-foreground">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody className="divide-y divide-border/50">
-                  {transports.map((transport) => {
-                    // Transport totals & PnL
-                    const transportFuelCost = transport.transportTotalQty * (summary.priceBought || 0);
-                    const transportTotalCostCalc = transportFuelCost + transport.transportTotalCost + transport.fleetExpenses - transport.lossDeduction;
-                    const transportProfit = transport.transportTotalRev - transportTotalCostCalc;
-                    const isTransportProfit = transportProfit >= 0;
-
-                    return (
-                      <React.Fragment key={transport.id}>
-                        {/* Transport Parent Row */}
-                        <TableRow className="bg-muted/30 hover:bg-muted/40 font-medium">
-                          <TableCell className="px-3 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="p-1.5 bg-primary/10 text-primary rounded-md">
-                                <Truck className="size-4" />
-                              </div>
-                              <div>
-                                <p className="font-bold text-foreground text-xs">{transport.transporterName}</p>
-                                <p className="text-[11px] text-muted-foreground font-mono">Truck: {transport.truckNo}</p>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="px-3 py-3 text-right font-mono font-semibold">
-                            {fmtQty(transport.transportTotalQty)} L
-                          </TableCell>
-                          <TableCell className="px-3 py-3 text-right font-mono text-muted-foreground">
-                            Rate: {fmtMoney(transport.ratePerLiter)}/L
-                          </TableCell>
-                          <TableCell className="px-3 py-3 text-right font-mono">
-                            <div className="flex flex-col items-end">
-                              <span className="font-semibold">{fmtMoney(transportTotalCostCalc)}</span>
-                              <span className="text-[10px] text-muted-foreground">(Fuel: {fmtMoney(transportFuelCost)} + Trans: {fmtMoney(transport.transportTotalCost)})</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="px-3 py-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                            {fmtMoney(transport.transportTotalRev)}
-                          </TableCell>
-                          <TableCell className="px-3 py-3 text-right font-mono font-bold">
-                            <span className={cn(
-                              "px-1.5 py-0.5 rounded text-xs",
-                              isTransportProfit ? "text-emerald-600 bg-emerald-500/10" : "text-rose-600 bg-rose-500/10"
-                            )}>
-                              {isTransportProfit ? "+" : ""}{fmtMoney(transportProfit)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="px-3 py-3 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                            {fmtMoney(transport.transportTotalPaid)}
-                          </TableCell>
-                          <TableCell className="px-3 py-3 text-center">
-                            <Badge variant="secondary" className="text-[10px] font-bold">
-                              {transport.deliveries.length} delivery{transport.deliveries.length === 1 ? "" : "s"}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-
-                        {/* Child delivery Sub-Rows */}
-                        {transport.deliveries.map((delivery) => {
-                          const saleOrderCost = delivery.litersSold * (summary.priceBought || 0);
-                          const saleTransportCost = delivery.transportCost || 0;
-                          const saleTotalCost = saleOrderCost + saleTransportCost;
-                          const salePnl = delivery.salesRevenue - saleTotalCost;
-                          const isSaleProfit = salePnl >= 0;
-
-                          return (
-                            <TableRow key={delivery.id} className="bg-background hover:bg-muted/20 relative">
-                              {/* Station / Customer & Tree Connector */}
-                              <TableCell className="px-3 py-2.5 pl-8 relative">
-                                <div className="absolute left-4 top-0 bottom-1/2 border-l border-b border-border/80 w-3 rounded-bl"></div>
-                                <p className="font-semibold text-foreground">{delivery.soldTo}</p>
-                                <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{fmtDate(delivery.createdAt)}</p>
-                              </TableCell>
-
-                              {/* Volume (Despatched / Recv / Loss) */}
-                              <TableCell className="px-3 py-2.5 text-right font-mono">
-                                <div className="flex flex-col items-end gap-0.5">
-                                  <span className="font-medium text-foreground">
-                                    {fmtQty(delivery.litersSold)} L <span className="text-[9px] text-muted-foreground uppercase">despatched</span>
-                                  </span>
-                                  <span className="text-[10px] text-muted-foreground">
-                                    {delivery.litersReceived !== null && delivery.litersReceived !== undefined
-                                      ? `${fmtQty(delivery.litersReceived)} L received`
-                                      : "—"}
-                                  </span>
-                                  {delivery.lossLiters && delivery.lossLiters > 0 ? (
-                                    <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400">
-                                      Loss: {fmtQty(delivery.lossLiters)} L ({fmtMoney(delivery.lossLiters * delivery.sellingPrice)})
-                                    </span>
-                                  ) : null}
-                                </div>
-                              </TableCell>
-
-                              {/* Unit Price (Bought -> Sold) */}
-                              <TableCell className="px-3 py-2.5 text-right font-mono">
-                                <div className="flex flex-col items-end gap-0.5">
-                                  <span className="text-[10px] text-muted-foreground">
-                                    Bought: {fmtMoney(summary.priceBought)}/L
-                                  </span>
-                                  <span className="font-semibold text-foreground">
-                                    Sold: {fmtMoney(delivery.sellingPrice)}/L
-                                  </span>
-                                </div>
-                              </TableCell>
-
-                              {/* Cost Breakdown (Fuel + Transport = Total Cost) */}
-                              <TableCell className="px-3 py-2.5 text-right font-mono">
-                                <div className="flex flex-col items-end gap-0.5">
-                                  <span className="font-medium text-foreground">Total: {fmtMoney(saleTotalCost)}</span>
-                                  <span className="text-[10px] text-muted-foreground">
-                                    (Fuel: {fmtMoney(saleOrderCost)} + Trans: {fmtMoney(saleTransportCost)})
-                                  </span>
-                                </div>
-                              </TableCell>
-
-                              {/* Revenue */}
-                              <TableCell className="px-3 py-2.5 text-right font-mono font-semibold text-indigo-600 dark:text-indigo-400">
-                                {fmtMoney(delivery.salesRevenue)}
-                              </TableCell>
-
-                              {/* Profit / Loss */}
-                              <TableCell className="px-3 py-2.5 text-right font-mono font-bold">
-                                <span className={cn(
-                                  "px-1.5 py-0.5 rounded text-xs",
-                                  isSaleProfit ? "text-emerald-600 bg-emerald-500/10" : "text-rose-600 bg-rose-500/10"
-                                )}>
-                                  {isSaleProfit ? "+" : ""}{fmtMoney(salePnl)}
-                                </span>
-                              </TableCell>
-
-                              {/* Paid / Debt */}
-                              <TableCell className="px-3 py-2.5 text-right font-mono">
-                                <div className="flex flex-col items-end gap-0.5">
-                                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                                    {fmtMoney(delivery.paymentReceived)}
-                                  </span>
-                                  <span className={cn(
-                                    "text-[10px] font-medium",
-                                    delivery.debtRemaining > 0 ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground/60"
-                                  )}>
-                                    Debt: {fmtMoney(delivery.debtRemaining)}
-                                  </span>
-                                </div>
-                              </TableCell>
-
-                              {/* Status */}
-                              <TableCell className="px-3 py-2.5 text-center">
-                                <Badge variant="outline" className={cn(
-                                  "text-[10px] px-2 py-0.5 font-semibold",
-                                  delivery.paymentStatus === "Paid" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : 
-                                  delivery.paymentStatus === "Partial" ? "bg-amber-500/10 text-amber-600 border-amber-500/20" : 
-                                  "bg-rose-500/10 text-rose-600 border-rose-500/20"
-                                )}>
-                                  {delivery.paymentStatus}
-                                </Badge>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        )}
+        <DataTable
+          columns={columns}
+          data={breakdownRows}
+          tableId="fleet-pnl-report-details"
+          hideToolbar
+          emptyMessage="No transports found for this order."
+        />
       </div>
     </div>
   );
 }
+

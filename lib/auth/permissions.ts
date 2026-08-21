@@ -91,8 +91,33 @@ export const ALL_MOBILE_PERMISSION_KEYS: PermissionKey[] = ALL_PERMISSIONS
   .filter((p) => p.key.startsWith("mobile.tenant."))
   .map((p) => p.key as PermissionKey);
 
+export function isFleetPermissionKey(key: string): boolean {
+  return (
+    key.startsWith("tenant.fleet") ||
+    key.startsWith("tenant.users:") ||
+    key.startsWith("tenant.roles:")
+  );
+}
+
+export function isMobilePermissionKey(key: string): boolean {
+  return key.startsWith("mobile.tenant.");
+}
+
+export function splitTenantPermissions(keys: readonly string[]): {
+  fleetPermissions: string[];
+  stationPermissions: string[];
+} {
+  const fleetPermissions: string[] = [];
+  const stationPermissions: string[] = [];
+  for (const key of keys) {
+    if (isFleetPermissionKey(key)) fleetPermissions.push(key);
+    else stationPermissions.push(key);
+  }
+  return { fleetPermissions, stationPermissions };
+}
+
 export const ALL_FLEET_PERMISSION_KEYS: PermissionKey[] = ALL_PERMISSIONS
-  .filter((p) => p.key.startsWith("tenant.fleet"))
+  .filter((p) => isFleetPermissionKey(p.key))
   .map((p) => p.key as PermissionKey);
 
 export const ALL_TENANT_PERMISSION_KEYS: PermissionKey[] = ALL_PERMISSIONS

@@ -4,7 +4,7 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { RoleEditor } from "@/app/(platform)/(dashboard)/role-templates/editor";
 
 export default async function NewFleetRolePage() {
-  await requireTenantPage(PERMISSIONS.TENANT_ROLES_WRITE.key);
+  await requireTenantPage(PERMISSIONS.TENANT_ROLES_WRITE.key, "FLEET");
   return (
     <div className="space-y-6">
       <PageHeader title="New Fleet Role Template" backHref="/admin/role-templates" />

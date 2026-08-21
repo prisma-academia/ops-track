@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { parseTenantSettings } from "@/lib/tenant/settings";
 import { DashboardLayoutShell } from "@/components/dashboard-layout-shell";
-import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 import { UnauthorizedToast } from "@/components/unauthorized-toast";
 
@@ -14,34 +14,34 @@ const FLEET_NAV = [
     key: "overview",
     title: "Overview",
     icon: "IconLayoutDashboard",
-    permission: null,
+    permission: PERMISSIONS.TENANT_FLEET_READ.key,
   },
   {
     href: "/admin/orders",
     key: "orders",
     title: "Orders",
     icon: "IconShoppingCart",
-    permission: PERMISSIONS.TENANT_FLEET_READ.key,
+    permission: PERMISSIONS.TENANT_FLEET_ORDERS_READ.key,
   },
   {
     href: "/admin/transports",
     key: "transports",
     title: "Transports",
     icon: "IconMapPin",
-    permission: PERMISSIONS.TENANT_FLEET_READ.key,
+    permission: PERMISSIONS.TENANT_FLEET_TRANSPORTS_READ.key,
   },
   {
     key: "salesManagement",
     title: "Point of Sale",
     icon: "IconReceiptDollar",
-    permission: PERMISSIONS.TENANT_FLEET_READ.key,
+    permission: PERMISSIONS.TENANT_FLEET_SALES_READ.key,
     children: [
       {
         href: "/admin/deliveries",
         key: "deliveries",
         title: "Sales Deliveries",
         icon: "IconReceiptDollar",
-        permission: PERMISSIONS.TENANT_FLEET_READ.key,
+        permission: PERMISSIONS.TENANT_FLEET_SALES_READ.key,
       },
       {
         href: "/admin/payments",
@@ -61,7 +61,7 @@ const FLEET_NAV = [
       {
         href: "/admin/fleet-pnl-report",
         key: "fleetPnlReport",
-        title: "Sales Report",
+        title: "Profit & Loss",
         icon: "IconFileText",
         permission: PERMISSIONS.TENANT_FLEET_REPORTS_READ.key,
       },
@@ -115,10 +115,7 @@ const FLEET_NAV = [
     key: "bankAccounts",
     title: "Bank Accounts",
     icon: "IconBuildingBank",
-    permission: [
-      PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key,
-      PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key,
-    ],
+    permission: PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key,
   },
   {
     key: "management",
@@ -144,21 +141,21 @@ const FLEET_NAV = [
         key: "transporters",
         title: "Transporters",
         icon: "IconBuilding",
-        permission: PERMISSIONS.TENANT_FLEET_READ.key,
+        permission: PERMISSIONS.TENANT_FLEET_TRUCKS_READ.key,
       },
       {
         href: "/admin/trucks",
         key: "trucks",
         title: "Trucks",
         icon: "IconTruck",
-        permission: PERMISSIONS.TENANT_FLEET_READ.key,
+        permission: PERMISSIONS.TENANT_FLEET_TRUCKS_READ.key,
       },
       {
         href: "/admin/drivers",
         key: "drivers",
         title: "Drivers",
         icon: "IconUser",
-        permission: PERMISSIONS.TENANT_FLEET_READ.key,
+        permission: PERMISSIONS.TENANT_FLEET_DRIVERS_READ.key,
       },
     ],
   },
@@ -211,7 +208,7 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
 
   const user = await prisma.tenantUser.findUnique({
     where: { id: actor.userId },
-    select: { email: true, firstName: true, lastName: true },
+    select: { email: true, firstName: true, lastName: true, fleetPermissions: true },
   });
   if (!user) redirect("/admin/auth/login");
 
@@ -321,10 +318,13 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
     };
   });
   
+  // Fleet nav must not inherit station permissions (e.g. tenant.users:read).
+  const fleetPermSet = new Set(user.fleetPermissions);
   const canSeeNav = (permission: string | string[] | null | undefined) => {
     if (!permission) return true;
+    if (actor.isOwner) return true;
     const keys = Array.isArray(permission) ? permission : [permission];
-    return keys.some((key) => hasPermission(actor, key as Parameters<typeof hasPermission>[1]));
+    return keys.some((key) => fleetPermSet.has(key));
   };
 
   const nav = FLEET_NAV.map((n: any) => {

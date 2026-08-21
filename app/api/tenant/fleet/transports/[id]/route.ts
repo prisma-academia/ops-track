@@ -7,6 +7,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { assertOrderLinkCapacity, asOrderLookupClient } from "@/lib/fleet/transport-order";
+import { PRODUCT_LOSS_TYPE_VALUES, isNotesRequiredForLossType } from "@/lib/fleet/loss-types";
 
 const UpdateTransportSchema = z.object({
   orderId: z.string().nullable().optional(),
@@ -16,8 +17,8 @@ const UpdateTransportSchema = z.object({
   addDeposit: z.number().min(0).optional(),
   status: z.enum(["IN_TRANSIT", "COMPLETED", "CANCELLED", "LOSS"]).optional(),
   lossLog: z.object({
-    lossType: z.enum(["THEFT", "MAINTENANCE", "ACCIDENT", "OTHERS"]),
-    lostQuantity: z.number().min(0),
+    lossType: z.enum(PRODUCT_LOSS_TYPE_VALUES),
+    lostQuantity: z.number().positive(),
     expensesIncurred: z.number().min(0),
     comment: z.string().optional()
   }).optional(),
@@ -29,7 +30,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_READ.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_TRANSPORTS_READ.key, "FLEET");
 
     const transport = await prisma.transport.findFirst({
       where: { id, tenantId: actor.tenantId },
@@ -60,7 +61,7 @@ export async function PATCH(
   try {
     await requireCsrf(request);
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_TRANSPORTS_WRITE.key, "FLEET");
     const body = UpdateTransportSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -77,6 +78,26 @@ export async function PATCH(
           body.orderId,
           Number(existing.litersCarried),
           existing.id
+        );
+      }
+    }
+
+    if (body.lossLog) {
+      if (isNotesRequiredForLossType(body.lossLog.lossType) && !body.lossLog.comment?.trim()) {
+        throw new DomainError(400, "invalid_input", "Please describe what happened.");
+      }
+
+      const loggedLost = await prisma.transportLossLog.aggregate({
+        where: { transportId: existing.id, tenantId: actor.tenantId },
+        _sum: { lostQuantity: true },
+      });
+      const lostSoFar = Number(loggedLost._sum.lostQuantity ?? 0);
+      const loadedVolume = Number(existing.litersCarried);
+      if (lostSoFar + body.lossLog.lostQuantity > loadedVolume + 0.001) {
+        throw new DomainError(
+          400,
+          "invalid_input",
+          `Lost quantity cannot exceed the ${loadedVolume.toLocaleString()} L loaded on this trip.`
         );
       }
     }

@@ -79,7 +79,9 @@ export function DashboardCard({
 interface DashboardOverviewCardV3Props extends ComponentProps<"div"> {
   data: {
     formattedValue: string
-    percentageChange: number
+    percentageChange?: number
+    subtitle?: string
+    subtitleClassName?: string
   }
   title: string
   action?: ReactNode
@@ -114,12 +116,19 @@ export function DashboardOverviewCardV3({
               <p className="text-xl font-semibold break-all">
                 {data.formattedValue}
               </p>
-              <PercentageChangeBadge
-                variant="ghost"
-                value={data.percentageChange}
-                className="p-0"
-              />
+              {data.percentageChange != null && !data.subtitle && (
+                <PercentageChangeBadge
+                  variant="ghost"
+                  value={data.percentageChange}
+                  className="p-0"
+                />
+              )}
             </div>
+            {data.subtitle ? (
+              <p className={cn("text-sm font-medium mt-1", data.subtitleClassName)}>
+                {data.subtitle}
+              </p>
+            ) : null}
           </div>
           {action}
         </div>

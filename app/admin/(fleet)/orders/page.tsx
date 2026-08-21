@@ -19,7 +19,7 @@ export default async function OrdersPage({
 }: {
   searchParams: Promise<{ status?: string; productType?: string; depot?: string; minVol?: string; maxVol?: string; from?: string; to?: string; page?: string; take?: string }>;
 }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_READ.key);
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_ORDERS_READ.key);
   const { status, productType, depot, minVol, maxVol, from, to, page: pageParam, take: takeParam } = await searchParams;
 
   const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);

@@ -25,11 +25,13 @@ function ctaButton(href: string, label: string, bg: string): string {
 
 function codeBox(code: string, primary: string, label = "Temporary login code"): string {
   const bg = tint(primary, 0.9);
+  const tracking = /^\d{8,10}$/.test(code) ? "0.28em" : "0.04em";
+  const size = /^\d{8,10}$/.test(code) ? "32px" : "18px";
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 24px 0;">
       <tr>
         <td style="background:${bg};border:1px solid ${primary};border-radius:10px;padding:18px 16px;text-align:center;">
           <p style="margin:0 0 6px 0;font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:${primary};">${escape(label)}</p>
-          <p style="margin:0;font-size:32px;font-weight:700;letter-spacing:0.28em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#0f172a;">${escape(code)}</p>
+          <p style="margin:0;font-size:${size};font-weight:700;letter-spacing:${tracking};font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#0f172a;word-break:break-all;">${escape(code)}</p>
         </td>
       </tr>
     </table>`;
@@ -136,12 +138,20 @@ export function tempPasswordEmail(input: {
   brand?: Partial<EmailBrand> | null;
 }): string {
   const brand = resolveEmailBrand(input.brand);
+  const isOtpCode = /^\d{8,10}$/.test(input.tempPassword);
+  const intro = isOtpCode
+    ? "An administrator reset your password. Use this code to sign in, then choose a new password."
+    : "An administrator set a new password for your account. Sign in with it below, then change it after you log in.";
+  const credentialBlock = isOtpCode
+    ? codeBox(input.tempPassword, brand.primaryColor)
+    : codeBox(input.tempPassword, brand.primaryColor, "Your new password");
+
   const body = `
     <p style="margin:0 0 8px 0;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${brand.primaryColor};">Password reset</p>
-    <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.3;color:#0f172a;">Your login code is ready</h1>
+    <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.3;color:#0f172a;">${isOtpCode ? "Your login code is ready" : "Your password was reset"}</h1>
     <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#334155;">${greeting(input.name)}</p>
-    <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#334155;">An administrator reset your password. Use this code to sign in, then choose a new password.</p>
-    ${codeBox(input.tempPassword, brand.primaryColor)}
+    <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#334155;">${intro}</p>
+    ${credentialBlock}
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px 0;">
       <tr><td>${ctaButton(input.loginUrl, "Sign in", brand.primaryColor)}</td></tr>
     </table>
@@ -150,7 +160,9 @@ export function tempPasswordEmail(input: {
 
   return shell({
     title: "Your password was reset",
-    preview: "Use your temporary login code to sign in and set a new password.",
+    preview: isOtpCode
+      ? "Use your temporary login code to sign in and set a new password."
+      : "An administrator set a new password for your account.",
     brand,
     body,
   });

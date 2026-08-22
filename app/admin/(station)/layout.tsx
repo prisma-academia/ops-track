@@ -50,8 +50,18 @@ const NAV: NavItemConfig[] = [
       { href: "/admin/station/pnl-report", key: "pnlReport", title: "Profit Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_PROFIT_REPORTS_READ.key },
     ],
   },
-  { href: "/admin/station/tickets", key: "tickets", title: "Tickets", module: "operations" as ModuleKey, icon: "IconTicket", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
-  { href: "/admin/station/inventory-alerts", key: "inventoryAlerts", title: "Inventory Alerts", module: "operations" as ModuleKey, icon: "IconAlertTriangle", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+  {
+    key: "alertsAndNotifications",
+    title: "Alert & Notification",
+    module: "operations" as ModuleKey,
+    icon: "IconBell",
+    permission: null,
+    children: [
+      { href: "/admin/station/notifications", key: "notifications", title: "Notifications", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_NOTIFICATIONS_READ.key },
+      { href: "/admin/station/tickets", key: "tickets", title: "Tickets", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+      { href: "/admin/station/inventory-alerts", key: "inventoryAlerts", title: "Inventory Alerts", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+    ],
+  },
   { href: "/admin/station/clients", key: "clients", title: "Clients", module: "operations" as ModuleKey, icon: "IconUsers", permission: PERMISSIONS.TENANT_CLIENTS_READ.key },
   // { href: "/admin/station/table-demo", key: "tableDemo", title: "Table Demo", module: null, icon: "IconTable", permission: null },
 ];

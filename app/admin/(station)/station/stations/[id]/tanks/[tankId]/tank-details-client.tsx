@@ -96,7 +96,11 @@ export function TankDetailsClient({
           </Button>
           <div>
             <CardTitle className="text-xl">Tank Details: {tank.name}</CardTitle>
-            <CardDescription>{tank.productType} • Capacity: {Number(tank.capacity).toLocaleString()} L</CardDescription>
+            <CardDescription>
+              {tank.productType} • Capacity: {Number(tank.capacity).toLocaleString()} L
+              {tank.waterLevel != null ? ` • Water: ${Number(tank.waterLevel).toLocaleString()} L` : ""}
+              {tank.temperature != null ? ` • Temp: ${Number(tank.temperature)}°C` : ""}
+            </CardDescription>
           </div>
         </CardHeader>
       </Card>

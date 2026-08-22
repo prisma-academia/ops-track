@@ -72,6 +72,7 @@ import {
   IconTicket,
   IconTable,
   IconAlertTriangle,
+  IconBell,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -152,6 +153,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   IconTicket,
   IconTable,
   IconAlertTriangle,
+  IconBell,
 };
 
 export type NavItem = {

@@ -138,6 +138,9 @@ model Tenant {
   transportInvitations TransportInvitation[]
   depots               Depot[]
   stockMovements       StockMovement[]
+  notificationSettings NotificationChannelSetting[]
+  notificationMessages NotificationMessage[]
+  notificationDeliveries NotificationDelivery[]
 
   @@index([status])
 }
@@ -198,6 +201,7 @@ model TenantUser {
   approvedExpenses        Expense[]        @relation("ExpenseApprovedBy")
   recordedWaybillDippings WaybillDipping[]
   stockMovements          StockMovement[]
+  createdNotifications    NotificationMessage[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -543,6 +547,8 @@ model Tank {
   productType   ProductType
   capacity      Decimal     @db.Decimal(12, 2)
   currentLiters Decimal     @default(0.00) @db.Decimal(12, 2)
+  waterLevel    Decimal?    @db.Decimal(12, 2)
+  temperature   Decimal?    @db.Decimal(6, 2)
   status        AssetStatus @default(ACTIVE)
 
   dippings        TankDipping[]
@@ -1589,4 +1595,89 @@ model StockMovement {
   @@index([tenantId, stationId])
   @@index([tankId, recordedAt])
   @@map("stock_movements")
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  MESSAGE
+  IN_APP
+}
+
+enum NotificationAudienceType {
+  ALL_MODULE_USERS
+  STATION
+  ORGANIZATION
+  USERS
+}
+
+enum NotificationMessageStatus {
+  DRAFT
+  SENT
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model NotificationChannelSetting {
+  id        String              @id @default(uuid())
+  tenantId  String
+  tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  module    AppModule
+  channel   NotificationChannel
+  enabled   Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@unique([tenantId, module, channel])
+  @@index([tenantId])
+  @@map("notification_channel_settings")
+}
+
+model NotificationMessage {
+  id                String                    @id @default(uuid())
+  tenantId          String
+  tenant            Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  module            AppModule
+  title             String
+  body              String                    @db.Text
+  channels          NotificationChannel[]
+  audienceType      NotificationAudienceType
+  audienceIds       String[]
+  audienceActorType ActorType                 @default(TENANT_USER)
+  status            NotificationMessageStatus @default(DRAFT)
+  createdById       String
+  createdBy         TenantUser                @relation(fields: [createdById], references: [id])
+  sentAt            DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  deliveries        NotificationDelivery[]
+
+  @@index([tenantId, module, createdAt])
+  @@index([createdById])
+  @@map("notification_messages")
+}
+
+model NotificationDelivery {
+  id        String                     @id @default(uuid())
+  tenantId  String
+  tenant    Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messageId String
+  message   NotificationMessage        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  actorType ActorType                  @default(TENANT_USER)
+  channel   NotificationChannel
+  status    NotificationDeliveryStatus @default(PENDING)
+  readAt    DateTime?
+  error     String?
+  createdAt DateTime                   @default(now())
+
+  @@index([tenantId, userId, createdAt])
+  @@index([messageId])
+  @@index([userId, channel, readAt])
+  @@map("notification_deliveries")
 }

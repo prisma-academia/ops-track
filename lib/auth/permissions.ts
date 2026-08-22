@@ -27,6 +27,8 @@ export const PERMISSIONS = {
   TENANT_PRICES_WRITE: { key: "tenant.prices:write", module: "tenant.prices", description: "Manage prices" },
   TENANT_EXPENSES_READ: { key: "tenant.expenses:read", module: "tenant.expenses", description: "View expenses" },
   TENANT_EXPENSES_WRITE: { key: "tenant.expenses:write", module: "tenant.expenses", description: "Manage expenses" },
+  TENANT_NOTIFICATIONS_READ: { key: "tenant.notifications:read", module: "tenant.notifications", description: "View station notifications" },
+  TENANT_NOTIFICATIONS_WRITE: { key: "tenant.notifications:write", module: "tenant.notifications", description: "Compose and send station notifications" },
   TENANT_FLEET_READ: { key: "tenant.fleet:read", module: "tenant.fleet", description: "View fleet operations (General)" },
   TENANT_FLEET_WRITE: { key: "tenant.fleet:write", module: "tenant.fleet", description: "Manage fleet operations (General)" },
   TENANT_FLEET_ORDERS_READ: { key: "tenant.fleet.orders:read", module: "tenant.fleet.orders", description: "View fleet orders" },
@@ -54,6 +56,7 @@ export const PERMISSIONS = {
   MOBILE_TENANT_ATTENDANTS_WRITE: { key: "mobile.tenant.attendants:write", module: "mobile.tenant.attendants", description: "Mobile app: Manage attendants" },
   MOBILE_TENANT_WAYBILLS_READ: { key: "mobile.tenant.waybills:read", module: "mobile.tenant.waybills", description: "Mobile app: View waybills" },
   MOBILE_TENANT_WAYBILLS_WRITE: { key: "mobile.tenant.waybills:write", module: "mobile.tenant.waybills", description: "Mobile app: Manage waybills" },
+  MOBILE_TENANT_NOTIFICATIONS_READ: { key: "mobile.tenant.notifications:read", module: "mobile.tenant.notifications", description: "Mobile app: View in-app notifications" },
   // Missing Station Modules
   TENANT_BANK_ACCOUNTS_READ: { key: "tenant.bank-accounts:read", module: "tenant.bank-accounts", description: "View bank accounts" },
   TENANT_BANK_ACCOUNTS_WRITE: { key: "tenant.bank-accounts:write", module: "tenant.bank-accounts", description: "Manage bank accounts" },
@@ -77,6 +80,8 @@ export const PERMISSIONS = {
   TENANT_FLEET_TEMPLATES_READ: { key: "tenant.fleet.templates:read", module: "tenant.fleet.templates", description: "View templates" },
   TENANT_FLEET_TEMPLATES_WRITE: { key: "tenant.fleet.templates:write", module: "tenant.fleet.templates", description: "Modify templates" },
   TENANT_FLEET_REPORTS_READ: { key: "tenant.fleet.reports:read", module: "tenant.fleet.reports", description: "View fleet reports (sales, station performance, transport)" },
+  TENANT_FLEET_NOTIFICATIONS_READ: { key: "tenant.fleet.notifications:read", module: "tenant.fleet.notifications", description: "View fleet notifications" },
+  TENANT_FLEET_NOTIFICATIONS_WRITE: { key: "tenant.fleet.notifications:write", module: "tenant.fleet.notifications", description: "Compose and send fleet notifications" },
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]["key"];

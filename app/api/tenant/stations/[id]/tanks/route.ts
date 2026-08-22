@@ -6,10 +6,22 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 
+const optionalReading = z.preprocess((value) => {
+  if (value === "" || value === undefined || value === null) return null;
+  return Number(value);
+}, z.number().nullable());
+
+const optionalWaterLevel = z.preprocess((value) => {
+  if (value === "" || value === undefined || value === null) return null;
+  return Number(value);
+}, z.number().nonnegative().nullable());
+
 const CreateTankSchema = z.object({
   name: z.string().min(1).max(50),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   capacity: z.coerce.number().positive(),
+  waterLevel: optionalWaterLevel.optional(),
+  temperature: optionalReading.optional(),
 });
 
 export async function GET(
@@ -68,6 +80,8 @@ export async function POST(
         name: body.name,
         productType: body.productType,
         capacity: body.capacity,
+        waterLevel: body.waterLevel ?? null,
+        temperature: body.temperature ?? null,
       },
     });
 

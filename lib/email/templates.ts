@@ -220,3 +220,31 @@ export function passwordResetEmail(input: {
     body,
   });
 }
+
+export function notificationEmail(input: {
+  name?: string | null;
+  title: string;
+  body: string;
+  moduleLabel: string;
+  brand?: Partial<EmailBrand> | null;
+}): string {
+  const brand = resolveEmailBrand(input.brand);
+  const paragraphs = escape(input.body)
+    .split(/\n+/)
+    .map((p) => `<p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#334155;">${p}</p>`)
+    .join("");
+
+  const html = `
+    <p style="margin:0 0 8px 0;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${brand.primaryColor};">${escape(input.moduleLabel)} notice</p>
+    <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.3;color:#0f172a;">${escape(input.title)}</h1>
+    <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#334155;">${greeting(input.name)}</p>
+    ${paragraphs}
+  `;
+
+  return shell({
+    title: input.title,
+    preview: input.body.slice(0, 120),
+    brand,
+    body: html,
+  });
+}

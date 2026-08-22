@@ -53,10 +53,18 @@ import { AssetTank } from "@/components/asset-tank";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import nigerianLocations from "@/constant/nigerian-locations.json";
 
+const optionalReading = z.preprocess((value) => {
+  if (value === "" || value === undefined || value === null) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}, z.number().nonnegative().nullable());
+
 const AddTankSchema = z.object({
   name: z.string().min(1, "Please enter a tank name").max(50),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   capacity: z.coerce.number().positive("Capacity must be positive"),
+  waterLevel: optionalReading.optional(),
+  temperature: optionalReading.optional(),
 });
 
 const AddPumpSchema = z.object({
@@ -140,7 +148,7 @@ export function StationDetailsManager({
 
   const tankForm = useForm({
     resolver: zodResolver(AddTankSchema),
-    defaultValues: { name: "", productType: "PMS" as any, capacity: 0 },
+    defaultValues: { name: "", productType: "PMS" as any, capacity: 0, waterLevel: null, temperature: null },
   });
 
   const pumpForm = useForm({
@@ -226,7 +234,7 @@ export function StationDetailsManager({
     setApiError(null);
     setNozzleCount(1);
     setIsAssigningManager(false);
-    tankForm.reset({ name: "", productType: "PMS" as any, capacity: 0 });
+    tankForm.reset({ name: "", productType: "PMS" as any, capacity: 0, waterLevel: null, temperature: null });
     pumpForm.reset({ name: "", tankId: "", nozzles: [{ name: "Nozzle A" }] });
     router.refresh();
   };
@@ -282,7 +290,9 @@ export function StationDetailsManager({
     tankForm.reset({
       name: `TANK ${nextTankIndex}`,
       productType: "PMS",
-      capacity: 0
+      capacity: 0,
+      waterLevel: null,
+      temperature: null,
     });
     setConfigTab("addTank");
     setActiveDialog("config");
@@ -714,9 +724,15 @@ export function StationDetailsManager({
                       </div>
                     </div>
                   </Link>
-                  {(tankPumps.length > 0 || nozzleCount > 0) && (
+                  {(tankPumps.length > 0 || nozzleCount > 0 || tank.waterLevel != null || tank.temperature != null) && (
                     <p className="text-[10px] text-center text-muted-foreground">
-                      {tankPumps.length} pump{tankPumps.length !== 1 ? "s" : ""} · {nozzleCount} nozzle{nozzleCount !== 1 ? "s" : ""}
+                      {[
+                        tankPumps.length > 0 || nozzleCount > 0
+                          ? `${tankPumps.length} pump${tankPumps.length !== 1 ? "s" : ""} · ${nozzleCount} nozzle${nozzleCount !== 1 ? "s" : ""}`
+                          : null,
+                        tank.waterLevel != null ? `Water ${Number(tank.waterLevel).toLocaleString()} L` : null,
+                        tank.temperature != null ? `${Number(tank.temperature)}°C` : null,
+                      ].filter(Boolean).join(" · ")}
                     </p>
                   )}
                 </div>
@@ -1018,6 +1034,37 @@ export function StationDetailsManager({
                       )}
                     />
                   </FormField>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField label="Water level (L, optional)" htmlFor="t_water" error={tankForm.formState.errors.waterLevel?.message}>
+                      <Controller
+                        name="waterLevel"
+                        control={tankForm.control}
+                        render={({ field }) => (
+                          <FormattedNumberInput
+                            id="t_water"
+                            placeholder="e.g. 12"
+                            value={(field.value ?? "") as string | number}
+                            onChange={(e: any) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                          />
+                        )}
+                      />
+                    </FormField>
+                    <FormField label="Temperature (°C, optional)" htmlFor="t_temp" error={tankForm.formState.errors.temperature?.message}>
+                      <Controller
+                        name="temperature"
+                        control={tankForm.control}
+                        render={({ field }) => (
+                          <FormattedNumberInput
+                            id="t_temp"
+                            placeholder="e.g. 28"
+                            value={(field.value ?? "") as string | number}
+                            onChange={(e: any) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                          />
+                        )}
+                      />
+                    </FormField>
+                  </div>
 
                   {apiError && <p className="text-xs text-red-600">{apiError}</p>}
 

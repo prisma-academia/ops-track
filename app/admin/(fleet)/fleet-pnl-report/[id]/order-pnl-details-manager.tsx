@@ -446,14 +446,6 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
                 </p>
               </div>
 
-              {/* Price Sold / Per Litre */}
-              <div className="space-y-1 border-x border-border/40 px-2 sm:px-4">
-                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Selling Price / Litre</p>
-                <p className="text-base font-bold font-mono text-foreground">
-                  {fmtMoney(stationSellingPriceForLoss)}
-                </p>
-              </div>
-
               {/* Total Loss */}
               <div className="space-y-1 text-right">
                 <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Total Loss</p>

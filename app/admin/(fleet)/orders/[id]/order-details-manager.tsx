@@ -407,11 +407,12 @@ export function OrderDetailsManager({
                   </div>
 
                   <Button size={"icon-lg"}
+                    asChild
                     className="w-full justify-center mt-2 gap-2"
                   >
-                    <Calculator className="h-4 w-4" />
-                    
-                    Profit &amp; Loss
+                  <Link href={`/admin/fleet-pnl-report/${order.id}`}>
+                    <Calculator className="h-4 w-4" /> Profit &amp; Loss
+                  </Link>
                   </Button>
              
                 </div>

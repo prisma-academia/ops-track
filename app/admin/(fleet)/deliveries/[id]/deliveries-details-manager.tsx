@@ -29,7 +29,6 @@ import {
   Truck,
   Calendar,
   MapPin,
-  Wallet,
   Receipt,
   Droplets,
   Droplet,
@@ -37,6 +36,8 @@ import {
   Pencil,
   MinusCircle,
   TrendingDown,
+  TrendingUp,
+  ArrowRight,
 } from "lucide-react";
 import { cn, formatShortCurrency, formatHumanReadableDate } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
@@ -53,7 +54,31 @@ function fmtMoney(n: number | null) {
   return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function SalesDetailsManager({ delivery }: { delivery: any }) {
+export type SalePnlSummary = {
+  orderId: string;
+  orderReference: string;
+  litersSold: number;
+  sellingPrice: number;
+  purchaseCost: number;
+  loadingCost: number;
+  depotToPrimaryCost: number;
+  deliveryTransportCost: number;
+  fleetCost: number;
+  totalCost: number;
+  pnl: number;
+};
+
+function perLitre(total: number, qty: number) {
+  return qty > 0 ? total / qty : 0;
+}
+
+export function SalesDetailsManager({
+  delivery,
+  salePnl,
+}: {
+  delivery: any;
+  salePnl?: SalePnlSummary | null;
+}) {
   const router = useRouter();
 
   const [openEditDialog, setOpenEditDialog] = useState(false);
@@ -79,6 +104,7 @@ export function SalesDetailsManager({ delivery }: { delivery: any }) {
   const hasDeduction = delivery.transport?.lossLogs?.some((l: { comment?: string | null }) => l.comment?.includes(delivery.id)) || false;
 
   const productType = delivery.transport?.productType || delivery.transport?.order?.productType || "PMS";
+  const volumeUnit = productType === "LPG" ? "KG" : "L";
   const recipientName = delivery.customer ? delivery.customer.name : delivery.station ? delivery.station.name : "Unknown Recipient";
   const driverName = delivery.transport?.driver
     ? `${delivery.transport.driver.firstName} ${delivery.transport.driver.lastName}`.trim()
@@ -204,40 +230,16 @@ export function SalesDetailsManager({ delivery }: { delivery: any }) {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-          <div className="flex items-center gap-4 bg-muted/50 px-4 py-2 rounded-lg border border-border/50">
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Despatched</p>
-              <p className="text-sm font-bold font-mono text-foreground">{fmtQty(litersDespatched)} L</p>
-            </div>
-            <div className="w-px h-8 bg-border/50" />
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Received</p>
-              <p className="text-sm font-bold font-mono text-emerald-600">
-                {litersReceived === null ? "—" : `${fmtQty(litersReceived)} L`}
-              </p>
-            </div>
-            {hasShortage && (
-              <>
-                <div className="w-px h-8 bg-border/50" />
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Shortage</p>
-                  <p className="text-sm font-bold font-mono text-rose-600">{fmtQty(variance)} L</p>
-                </div>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setOpenEditDialog(true)}>
-              <Pencil className="size-4" />
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/admin/deliveries/${delivery.id}/print`}>
-                <Printer className="w-4 h-4 mr-2" />
-                Print Waybill
-              </Link>
-            </Button>
-          </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setOpenEditDialog(true)}>
+            <Pencil className="size-4" />
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/admin/deliveries/${delivery.id}/print`}>
+              <Printer className="w-4 h-4 mr-2" />
+              Print Waybill
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -358,13 +360,94 @@ export function SalesDetailsManager({ delivery }: { delivery: any }) {
             lossLitres={hasShortage ? variance ?? undefined : undefined}
           />
 
+          {salePnl && (
+            <Card className="shadow-xs border-border/40 bg-card p-4 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Profit &amp; Loss
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                    {fmtQty(salePnl.litersSold)} {volumeUnit} · order {salePnl.orderReference}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/admin/fleet-pnl-report/${salePnl.orderId}`}>
+                    Full report
+                    <ArrowRight className="size-3.5 ml-1.5" />
+                  </Link>
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/10 space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-600/80 dark:text-indigo-400">Sold</p>
+                  <p className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400">
+                    {fmtMoney(salePnl.sellingPrice)}/{volumeUnit}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">Selling price for this delivery</p>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-500/5 border border-slate-500/10 space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Bought</p>
+                  <p className="text-lg font-bold font-mono text-foreground">
+                    {fmtMoney(perLitre(salePnl.totalCost, salePnl.litersSold))}/{volumeUnit}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">Landed cost of this delivery</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Bought breakdown</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { label: "Purchase", total: salePnl.purchaseCost },
+                    { label: "Loading", total: salePnl.loadingCost },
+                    { label: "Depot → Primary", total: salePnl.depotToPrimaryCost },
+                    { label: "Delivery Transport", total: salePnl.deliveryTransportCost },
+                    { label: "Fleet", total: salePnl.fleetCost },
+                  ].map((item) => (
+                    <div key={item.label} className="space-y-0.5">
+                      <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">{item.label}</p>
+                      <p className="text-sm font-mono font-medium text-foreground">
+                        {fmtMoney(perLitre(item.total, salePnl.litersSold))}/{volumeUnit}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className={cn(
+                "flex items-center justify-between rounded-lg border px-3.5 py-3",
+                salePnl.pnl >= 0 ? "bg-emerald-500/5 border-emerald-500/10" : "bg-rose-500/5 border-rose-500/10"
+              )}>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  {salePnl.pnl >= 0 ? (
+                    <TrendingUp className="size-3.5 text-emerald-600" />
+                  ) : (
+                    <TrendingDown className="size-3.5 text-rose-600" />
+                  )}
+                  {salePnl.pnl >= 0 ? "Profit" : "Loss"}
+                  <span className="font-mono font-normal normal-case tracking-normal text-muted-foreground/80">
+                    sold − bought
+                  </span>
+                </p>
+                <p className={cn(
+                  "text-base font-bold font-mono",
+                  salePnl.pnl >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                )}>
+                  {salePnl.pnl >= 0 ? "+" : ""}{fmtMoney(salePnl.pnl)}
+                </p>
+              </div>
+            </Card>
+          )}
+
           {hasShortage && (
             <Card className="shadow-xs border-border/40 bg-card p-4 space-y-4">
               <div className="grid grid-cols-3 gap-3 text-center sm:text-left items-center">
                 <div className="space-y-1">
                   <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Shortage</p>
                   <p className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">
-                    {fmtQty(variance)} <span className="text-xs font-normal text-muted-foreground">{productType === "LPG" ? "KG" : "L"}</span>
+                    {fmtQty(variance)} <span className="text-xs font-normal text-muted-foreground">{volumeUnit}</span>
                   </p>
                 </div>
                 <div className="space-y-1 border-x border-border/40 px-2 sm:px-4">

@@ -13,14 +13,20 @@ const CreateTransactionSchema = z.object({
   amount: z.number().positive(),
   paymentPurpose: z.string().optional().nullable(),
   reference: z.string().optional().nullable(),
-  paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"]).optional().nullable(),
+  paymentMethod: z
+    .enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"])
+    .optional()
+    .nullable(),
   deliveryId: z.string().optional().nullable(),
   bankAccountId: z.string().optional(),
 });
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_PAYMENTS_READ.key, "FLEET");
+    const actor = await requireTenantActor(
+      PERMISSIONS.TENANT_FLEET_PAYMENTS_READ.key,
+      "FLEET",
+    );
     const url = new URL(request.url);
     const { cursor, take } = parsePagination(url.searchParams);
     const type = url.searchParams.get("type");
@@ -52,12 +58,23 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_PAYMENTS_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(
+      PERMISSIONS.TENANT_FLEET_PAYMENTS_WRITE.key,
+      "FLEET",
+    );
     const body = CreateTransactionSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    if (body.paymentMethod && body.paymentMethod !== "CASH" && !body.bankAccountId) {
-      throw new DomainError(400, "invalid_input", "Bank account is required for non-cash payments.");
+    if (
+      body.paymentMethod &&
+      body.paymentMethod !== "CASH" &&
+      !body.bankAccountId
+    ) {
+      throw new DomainError(
+        400,
+        "invalid_input",
+        "Bank account is required for non-cash payments.",
+      );
     }
 
     const transaction = await prisma.transaction.create({
@@ -76,7 +93,9 @@ export async function POST(request: Request) {
 
     // Auto-reconcile: if this is an INFLOW linked to a delivery, update the delivery status
     if (body.type === "INFLOW" && body.deliveryId) {
-      const delivery = await prisma.delivery.findUnique({ where: { id: body.deliveryId } });
+      const delivery = await prisma.delivery.findUnique({
+        where: { id: body.deliveryId },
+      });
       if (delivery) {
         const allTx = await prisma.transaction.findMany({
           where: { deliveryId: body.deliveryId, type: "INFLOW" },
@@ -100,7 +119,11 @@ export async function POST(request: Request) {
       tenantId: actor.tenantId,
       targetType: "Transaction",
       targetId: transaction.id,
-      after: { type: transaction.type, amount: transaction.amount.toString(), category: transaction.category } as object,
+      after: {
+        type: transaction.type,
+        amount: transaction.amount.toString(),
+        category: transaction.category,
+      } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });

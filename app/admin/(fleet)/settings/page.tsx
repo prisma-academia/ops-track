@@ -36,6 +36,13 @@ export default async function TenantSettingsProfilePage() {
       ? publicUrlForKey(settings.backgroundKey)
       : null;
 
+  const signatureUrl =
+    settings.signatureKey?.startsWith("http")
+      ? settings.signatureKey
+      : settings.signatureKey && s3Configured()
+      ? publicUrlForKey(settings.signatureKey)
+      : null;
+
   const t = await getTranslations("settings");
 
   return (
@@ -126,6 +133,30 @@ export default async function TenantSettingsProfilePage() {
                 ) : (
                   <span className="text-muted-foreground">Not provided</span>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Documents & Signatures</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div>
+                  <span className="font-medium text-sm text-foreground/80">Authorized Signature</span>
+                  {signatureUrl ? (
+                    <div className="mt-2 h-20 w-48 rounded-md border-2 border-dashed bg-stone-50 dark:bg-stone-900 flex items-center justify-center p-1">
+                      <img
+                        alt="Authorized Signature"
+                        src={signatureUrl}
+                        className="h-full w-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground mt-1">Not provided</p>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -193,9 +193,13 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
           <div className="space-y-2">
             <Label>Discharge To Tank *</Label>
             <Select value={tankId} onValueChange={setTankId} disabled={loadingTanks}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <div className="flex items-center gap-2">
-                  <Container className="w-4 h-4 text-muted-foreground" />
+                  {loadingTanks ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Container className="w-4 h-4 text-muted-foreground" />
+                  )}
                   <SelectValue placeholder={loadingTanks ? "Loading tanks..." : tanks.length === 0 ? "No compatible tanks" : "Select a tank"} />
                 </div>
               </SelectTrigger>

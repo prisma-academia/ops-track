@@ -302,6 +302,12 @@ export function InvoiceReceipt({ transaction }: InvoiceReceiptProps) {
           {/* Signature + QR verification */}
           <div className="flex items-end justify-between gap-6 mt-10 pt-6 border-t border-gray-100">
             <div className="flex-1 max-w-[220px]">
+              {transaction.tenant?.signatureUrl && (
+                <div className="mb-2 flex justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={transaction.tenant.signatureUrl} alt="Authorized Signature" className="max-h-16 object-contain" />
+                </div>
+              )}
               <div className="border-t border-gray-900 pt-2 text-center text-xs font-medium text-gray-700">
                 Authorized Signature
               </div>

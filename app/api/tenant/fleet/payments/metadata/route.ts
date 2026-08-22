@@ -6,14 +6,31 @@ import { parseTenantSettings } from "@/lib/tenant/settings";
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_PAYMENTS_READ.key, "FLEET");
-    
-    const [customers, transporters, trucks, orders, transports, sales, stations, bankAccounts, tenant] = await Promise.all([
+    const actor = await requireTenantActor(
+      PERMISSIONS.TENANT_FLEET_PAYMENTS_READ.key,
+      "FLEET",
+    );
+
+    const [
+      customers,
+      transporters,
+      trucks,
+      orders,
+      transports,
+      sales,
+      stations,
+      bankAccounts,
+      tenant,
+    ] = await Promise.all([
       prisma.customer.findMany({ where: { tenantId: actor.tenantId } }),
-      prisma.transporter.findMany({ where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true } }),
-      prisma.truck.findMany({ where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true } }),
+      prisma.transporter.findMany({
+        where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true },
+      }),
+      prisma.truck.findMany({
+        where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true },
+      }),
       prisma.order.findMany({ where: { tenantId: actor.tenantId } }),
-      prisma.transport.findMany({ 
+      prisma.transport.findMany({
         where: { tenantId: actor.tenantId },
         include: {
           transporter: true,
@@ -28,11 +45,16 @@ export async function GET(request: Request) {
         },
       }),
       prisma.delivery.findMany({
-        where: { tenantId: actor.tenantId, status: { in: ["UNPAID", "PART_PAID"] } },
+        where: {
+          tenantId: actor.tenantId,
+          status: { in: ["UNPAID", "PART_PAID"] },
+        },
         include: { customer: true, station: true },
       }),
       prisma.station.findMany({ where: { tenantId: actor.tenantId } }),
-      prisma.bankAccount.findMany({ where: { tenantId: actor.tenantId, scope: "FLEET", isActive: true } }),
+      prisma.bankAccount.findMany({
+        where: { tenantId: actor.tenantId, scope: "FLEET", isActive: true },
+      }),
       prisma.tenant.findUnique({
         where: { id: actor.tenantId },
         select: { settingsJson: true },

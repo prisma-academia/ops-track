@@ -11,7 +11,12 @@ const InflowSchema = z.object({
   deliveryId: z.string().optional().nullable(),
   saleId: z.string().optional().nullable(),
   amount: z.number().positive(),
-  paymentType: z.enum(["ADVANCE_DEPOSIT", "PART_PAYMENT", "FULL_SETTLEMENT", "DEBT_CLEARANCE"]),
+  paymentType: z.enum([
+    "ADVANCE_DEPOSIT",
+    "PART_PAYMENT",
+    "FULL_SETTLEMENT",
+    "DEBT_CLEARANCE",
+  ]),
   paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"]),
   reference: z.string().optional().nullable(),
   receiptUrl: z.string().optional().nullable(),
@@ -21,12 +26,23 @@ const InflowSchema = z.object({
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_PAYMENTS_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(
+      PERMISSIONS.TENANT_FLEET_PAYMENTS_WRITE.key,
+      "FLEET",
+    );
     const body = InflowSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    if (body.paymentMethod !== "CASH" && body.paymentMethod !== "DEPOSIT" && !body.bankAccountId) {
-      throw new DomainError(400, "invalid_input", "Bank account is required for this payment method.");
+    if (
+      body.paymentMethod !== "CASH" &&
+      body.paymentMethod !== "DEPOSIT" &&
+      !body.bankAccountId
+    ) {
+      throw new DomainError(
+        400,
+        "invalid_input",
+        "Bank account is required for this payment method.",
+      );
     }
 
     const transaction = await prisma.$transaction(async (tx) => {
@@ -42,7 +58,7 @@ export async function POST(request: Request) {
           })
         : null;
 
-      let delivery = deliveryId
+      const delivery = deliveryId
         ? await tx.delivery.findFirst({
             where: { id: deliveryId, tenantId: actor.tenantId },
             include: { station: true, organization: true },
@@ -51,9 +67,14 @@ export async function POST(request: Request) {
 
       // If paying with a deposit, deduct from deposit balance first
       if (body.paymentMethod === "DEPOSIT") {
-        if (!customer) throw new Error("Customer not found or cannot use deposit for stations.");
+        if (!customer)
+          throw new Error(
+            "Customer not found or cannot use deposit for stations.",
+          );
         if (Number(customer.depositBalance) < body.amount) {
-          throw new Error(`Insufficient deposit balance. Available: ₦${customer.depositBalance.toString()}`);
+          throw new Error(
+            `Insufficient deposit balance. Available: ₦${customer.depositBalance.toString()}`,
+          );
         }
         await tx.customer.update({
           where: { id: body.customerId },
@@ -80,7 +101,12 @@ export async function POST(request: Request) {
         },
       });
 
-      if (customer && body.paymentType === "ADVANCE_DEPOSIT" && !deliveryId && body.paymentMethod !== "DEPOSIT") {
+      if (
+        customer &&
+        body.paymentType === "ADVANCE_DEPOSIT" &&
+        !deliveryId &&
+        body.paymentMethod !== "DEPOSIT"
+      ) {
         await tx.customer.update({
           where: { id: body.customerId },
           data: { depositBalance: { increment: body.amount } },
@@ -88,9 +114,14 @@ export async function POST(request: Request) {
       }
 
       if (delivery) {
-        const newPaymentReceived = Number(delivery.paymentReceived) + body.amount;
-        const transportFee = delivery.transportCostBorneBy === "CLIENT" ? Number(delivery.transportCost || 0) : 0;
-        const totalSaleAmount = Number(delivery.totalExpectedAmount) + transportFee;
+        const newPaymentReceived =
+          Number(delivery.paymentReceived) + body.amount;
+        const transportFee =
+          delivery.transportCostBorneBy === "CLIENT"
+            ? Number(delivery.transportCost || 0)
+            : 0;
+        const totalSaleAmount =
+          Number(delivery.totalExpectedAmount) + transportFee;
         let status = delivery.status;
         if (newPaymentReceived >= totalSaleAmount) {
           status = "CLEARED";
@@ -118,7 +149,10 @@ export async function POST(request: Request) {
       tenantId: actor.tenantId,
       targetType: "Transaction",
       targetId: transaction.id,
-      after: { amount: transaction.amount.toString(), paymentType: transaction.paymentType } as object,
+      after: {
+        amount: transaction.amount.toString(),
+        paymentType: transaction.paymentType,
+      } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });

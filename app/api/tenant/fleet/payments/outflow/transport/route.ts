@@ -33,12 +33,23 @@ const TransportPaymentSchema = z.object({
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_PAYMENTS_WRITE.key, "FLEET");
+    const actor = await requireTenantActor(
+      PERMISSIONS.TENANT_FLEET_PAYMENTS_WRITE.key,
+      "FLEET",
+    );
     const body = TransportPaymentSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    if (body.paymentMethod !== "CASH" && body.paymentMethod !== "DEPOSIT" && !body.bankAccountId) {
-      throw new DomainError(400, "invalid_input", "Bank account is required for this payment method.");
+    if (
+      body.paymentMethod !== "CASH" &&
+      body.paymentMethod !== "DEPOSIT" &&
+      !body.bankAccountId
+    ) {
+      throw new DomainError(
+        400,
+        "invalid_input",
+        "Bank account is required for this payment method.",
+      );
     }
 
     const transaction = await prisma.$transaction(async (tx) => {
@@ -65,19 +76,25 @@ export async function POST(request: Request) {
       const settings = parseTenantSettings(tenant?.settingsJson);
       const originToDepotFee = settings.originToDepotFee;
 
-      if (body.feeLeg === "FULL_TRIP" && hasPartialLegPayments(transport.transactions)) {
+      if (
+        body.feeLeg === "FULL_TRIP" &&
+        hasPartialLegPayments(transport.transactions)
+      ) {
         throw new DomainError(
           400,
           "invalid_input",
-          "Cannot pay full trip when individual fee legs have already been paid."
+          "Cannot pay full trip when individual fee legs have already been paid.",
         );
       }
 
-      if (body.feeLeg !== "FULL_TRIP" && hasFullTripPayment(transport.transactions)) {
+      if (
+        body.feeLeg !== "FULL_TRIP" &&
+        hasFullTripPayment(transport.transactions)
+      ) {
         throw new DomainError(
           400,
           "invalid_input",
-          "Cannot pay individual legs after a full trip payment has been recorded."
+          "Cannot pay individual legs after a full trip payment has been recorded.",
         );
       }
 
@@ -87,28 +104,44 @@ export async function POST(request: Request) {
           throw new DomainError(
             400,
             "invalid_input",
-            "Select a delivery for the secondary destination fee leg."
+            "Select a delivery for the secondary destination fee leg.",
           );
         }
-        if (body.deliveryId && !deliveries.some((d) => d.id === body.deliveryId)) {
-          throw new DomainError(400, "invalid_input", "Delivery does not belong to this transport.");
+        if (
+          body.deliveryId &&
+          !deliveries.some((d) => d.id === body.deliveryId)
+        ) {
+          throw new DomainError(
+            400,
+            "invalid_input",
+            "Delivery does not belong to this transport.",
+          );
         }
       }
 
-      const remaining = getRemainingForLeg(transport, transport.transactions, body.feeLeg, {
-        deliveryId: body.deliveryId ?? undefined,
-        originToDepotFee,
-      });
+      const remaining = getRemainingForLeg(
+        transport,
+        transport.transactions,
+        body.feeLeg,
+        {
+          deliveryId: body.deliveryId ?? undefined,
+          originToDepotFee,
+        },
+      );
 
       if (remaining <= 0) {
-        throw new DomainError(400, "invalid_input", "This fee leg has already been fully paid.");
+        throw new DomainError(
+          400,
+          "invalid_input",
+          "This fee leg has already been fully paid.",
+        );
       }
 
       if (body.amount > remaining) {
         throw new DomainError(
           400,
           "invalid_input",
-          `Payment exceeds remaining balance of ${remaining.toLocaleString()} for this fee leg.`
+          `Payment exceeds remaining balance of ${remaining.toLocaleString()} for this fee leg.`,
         );
       }
 
@@ -128,7 +161,7 @@ export async function POST(request: Request) {
           feeLeg: body.feeLeg,
           deliveryId:
             body.feeLeg === "PRIMARY_TO_SUBSEQUENT"
-              ? body.deliveryId ?? transport.deliveries[0]?.id ?? null
+              ? (body.deliveryId ?? transport.deliveries[0]?.id ?? null)
               : null,
         },
       });
@@ -136,7 +169,8 @@ export async function POST(request: Request) {
       await tx.transport.update({
         where: { id: body.transportId },
         data: {
-          netTransportFeePaid: Number(transport.netTransportFeePaid) + body.amount,
+          netTransportFeePaid:
+            Number(transport.netTransportFeePaid) + body.amount,
         },
       });
 
@@ -151,7 +185,10 @@ export async function POST(request: Request) {
       tenantId: actor.tenantId,
       targetType: "Transaction",
       targetId: transaction.id,
-      after: { amount: transaction.amount.toString(), feeLeg: body.feeLeg } as object,
+      after: {
+        amount: transaction.amount.toString(),
+        feeLeg: body.feeLeg,
+      } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });

@@ -34,6 +34,13 @@ export default async function TenantSettingsEditPage() {
       ? publicUrlForKey(settings.backgroundKey)
       : null;
 
+  const signatureUrl =
+    settings.signatureKey?.startsWith("http")
+      ? settings.signatureKey
+      : settings.signatureKey && s3Configured()
+      ? publicUrlForKey(settings.signatureKey)
+      : null;
+
   return (
     <div className="container px-0 max-w-5xl mx-auto pb-10">
       <div className="mb-6 flex items-center justify-between">
@@ -64,7 +71,8 @@ export default async function TenantSettingsEditPage() {
             country: tenant.country,
             settings, 
             logoUrl, 
-            backgroundUrl 
+            backgroundUrl,
+            signatureUrl
           }}
           storageEnabled={s3Configured()}
         />

@@ -5,7 +5,10 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { tenantSettingsSchema, parseTenantSettings } from "@/lib/tenant/settings";
+import {
+  tenantSettingsSchema,
+  parseTenantSettings,
+} from "@/lib/tenant/settings";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 
 const PatchBody = z.object({
@@ -26,22 +29,34 @@ function withUrls(settings: ReturnType<typeof parseTenantSettings>) {
   return {
     ...settings,
     logoUrl:
-      settings.logoKey && s3Configured() ? publicUrlForKey(settings.logoKey) : null,
+      settings.logoKey && s3Configured()
+        ? publicUrlForKey(settings.logoKey)
+        : null,
     backgroundUrl:
-      settings.backgroundKey && s3Configured() ? publicUrlForKey(settings.backgroundKey) : null,
+      settings.backgroundKey && s3Configured()
+        ? publicUrlForKey(settings.backgroundKey)
+        : null,
+    signatureUrl:
+      settings.signatureKey && s3Configured()
+        ? publicUrlForKey(settings.signatureKey)
+        : null,
   };
 }
 
 export async function GET() {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_SETTINGS_READ.key);
-    const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId } });
+    const actor = await requireTenantActor(
+      PERMISSIONS.TENANT_FLEET_SETTINGS_READ.key,
+    );
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: actor.tenantId },
+    });
     if (!tenant) throw new DomainError(404, "not_found", "Tenant not found.");
     const settings = parseTenantSettings(tenant.settingsJson);
     return ok({
-      tenant: { 
-        id: tenant.id, 
-        name: tenant.name, 
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
         slug: tenant.slug,
         companyEmail: tenant.companyEmail,
         companyPhone: tenant.companyPhone,
@@ -63,11 +78,15 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_SETTINGS_WRITE.key);
+    const actor = await requireTenantActor(
+      PERMISSIONS.TENANT_FLEET_SETTINGS_WRITE.key,
+    );
     const body = PatchBody.parse(await request.json());
     const meta = requestMeta(request);
 
-    const before = await prisma.tenant.findUnique({ where: { id: actor.tenantId } });
+    const before = await prisma.tenant.findUnique({
+      where: { id: actor.tenantId },
+    });
     if (!before) throw new DomainError(404, "not_found", "Tenant not found.");
 
     const current = parseTenantSettings(before.settingsJson);
@@ -81,14 +100,26 @@ export async function PATCH(request: Request) {
       where: { id: actor.tenantId },
       data: {
         ...(body.name ? { name: body.name } : {}),
-        ...(body.companyEmail !== undefined ? { companyEmail: body.companyEmail } : {}),
-        ...(body.companyPhone !== undefined ? { companyPhone: body.companyPhone } : {}),
-        ...(body.website !== undefined ? { website: body.website === "" ? null : body.website } : {}),
-        ...(body.addressLine1 !== undefined ? { addressLine1: body.addressLine1 } : {}),
-        ...(body.addressLine2 !== undefined ? { addressLine2: body.addressLine2 } : {}),
+        ...(body.companyEmail !== undefined
+          ? { companyEmail: body.companyEmail }
+          : {}),
+        ...(body.companyPhone !== undefined
+          ? { companyPhone: body.companyPhone }
+          : {}),
+        ...(body.website !== undefined
+          ? { website: body.website === "" ? null : body.website }
+          : {}),
+        ...(body.addressLine1 !== undefined
+          ? { addressLine1: body.addressLine1 }
+          : {}),
+        ...(body.addressLine2 !== undefined
+          ? { addressLine2: body.addressLine2 }
+          : {}),
         ...(body.city !== undefined ? { city: body.city } : {}),
         ...(body.region !== undefined ? { region: body.region } : {}),
-        ...(body.postalCode !== undefined ? { postalCode: body.postalCode } : {}),
+        ...(body.postalCode !== undefined
+          ? { postalCode: body.postalCode }
+          : {}),
         ...(body.country !== undefined ? { country: body.country } : {}),
         settingsJson: merged as object,
       },
@@ -106,9 +137,9 @@ export async function PATCH(request: Request) {
       userAgent: meta.userAgent,
     });
     return ok({
-      tenant: { 
-        id: updated.id, 
-        name: updated.name, 
+      tenant: {
+        id: updated.id,
+        name: updated.name,
         slug: updated.slug,
         companyEmail: updated.companyEmail,
         companyPhone: updated.companyPhone,

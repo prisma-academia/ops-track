@@ -26,6 +26,7 @@ export const DEFAULT_PRIMARY_COLOR = "#0f172a";
 export const tenantSettingsSchema = z.object({
   logoKey: z.string().min(1).max(300).optional(),
   backgroundKey: z.string().min(1).max(300).optional(),
+  signatureKey: z.string().min(1).max(300).optional(),
   primaryColor: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex color like #1e293b")
@@ -33,9 +34,7 @@ export const tenantSettingsSchema = z.object({
   timezone: z.string().min(1).max(64).default("UTC"),
   locale: z.string().min(2).max(10).default("en"),
   currency: z.string().length(3).default("USD"),
-  enabledModules: z
-    .array(z.enum(MODULE_KEYS))
-    .default([...MODULE_KEYS]),
+  enabledModules: z.array(z.enum(MODULE_KEYS)).default([...MODULE_KEYS]),
   varianceThreshold: z.number().min(0).default(0),
   blockOnUnresolvedVariance: z.boolean().default(false),
   /** Flat fee (tenant currency) for origin-to-depot transport leg payouts */
@@ -47,7 +46,7 @@ export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 /** Parse stored settings, applying defaults and never throwing. */
 export function parseTenantSettings(json: unknown): TenantSettings {
   const result = tenantSettingsSchema.safeParse(
-    json && typeof json === "object" ? json : {}
+    json && typeof json === "object" ? json : {},
   );
   if (result.success) return result.data;
   // Legacy / malformed: return schema defaults.

@@ -3,7 +3,10 @@ import { PrismaClient } from "../lib/generated/prisma/client";
 import argon2 from "argon2";
 import "dotenv/config";
 
-import { ALL_PERMISSIONS, ALL_PLATFORM_PERMISSION_KEYS } from "../lib/auth/permissions";
+import {
+  ALL_PERMISSIONS,
+  ALL_PLATFORM_PERMISSION_KEYS,
+} from "../lib/auth/permissions";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -17,7 +20,10 @@ async function main() {
     });
   }
 
-  await ensurePlatformRole("Platform Super Admin", ALL_PLATFORM_PERMISSION_KEYS);
+  await ensurePlatformRole(
+    "Platform Super Admin",
+    ALL_PLATFORM_PERMISSION_KEYS,
+  );
 
   console.log("Seeding Platform Admin...");
   const adminEmail = process.env.PLATFORM_ADMIN_EMAIL || "admin@rafuel.com";

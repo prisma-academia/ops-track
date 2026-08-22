@@ -93,6 +93,7 @@ export function BankAccountFormModal({
             <Select 
               value={watch("scope")} 
               onValueChange={(value: "STATION" | "FLEET") => setValue("scope", value)}
+              disabled={!!fixedScope || !!initialData}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Scope" />

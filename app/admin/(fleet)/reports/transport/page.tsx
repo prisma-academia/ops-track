@@ -76,6 +76,12 @@ export default async function TransportReportPage() {
           lastName: true,
         },
       },
+      transporter: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       order: {
         select: {
           id: true,
@@ -116,6 +122,7 @@ export default async function TransportReportPage() {
       driver: transport.driver
         ? { firstName: transport.driver.firstName, lastName: transport.driver.lastName }
         : undefined,
+      transporter: { id: transport.transporter.id, name: transport.transporter.name },
       order: transport.order ? { reference: transport.order.reference ?? "" } : undefined,
       deliveries: transport.deliveries.map((delivery) => ({
         litersDespatched: toNum(delivery.litersDespatched),

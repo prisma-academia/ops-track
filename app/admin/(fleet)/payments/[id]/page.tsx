@@ -50,13 +50,21 @@ export default async function PaymentDetailsPage({
   }
 
   let logoUrl = null;
+  let signatureUrl = null;
   if (transaction.tenant?.settingsJson) {
-    const settings = transaction.tenant.settingsJson as { logoKey?: string };
+    const settings = transaction.tenant.settingsJson as { logoKey?: string; signatureKey?: string };
     if (settings.logoKey) {
       if (settings.logoKey.startsWith("http")) {
         logoUrl = settings.logoKey;
       } else if (s3Configured()) {
         logoUrl = publicUrlForKey(settings.logoKey);
+      }
+    }
+    if (settings.signatureKey) {
+      if (settings.signatureKey.startsWith("http")) {
+        signatureUrl = settings.signatureKey;
+      } else if (s3Configured()) {
+        signatureUrl = publicUrlForKey(settings.signatureKey);
       }
     }
   }
@@ -224,6 +232,7 @@ export default async function PaymentDetailsPage({
       ? {
           name: transaction.tenant.name,
           logoUrl,
+          signatureUrl,
           email: transaction.tenant.companyEmail,
           phone: transaction.tenant.companyPhone,
           address: [transaction.tenant.addressLine1, transaction.tenant.addressLine2, transaction.tenant.city, transaction.tenant.region]

@@ -35,6 +35,7 @@ type Initial = {
   settings: TenantSettings;
   logoUrl: string | null;
   backgroundUrl: string | null;
+  signatureUrl: string | null;
 };
 
 export function SettingsForm({
@@ -68,13 +69,18 @@ export function SettingsForm({
   const [backgroundKey, setBackgroundKey] = useState<string | undefined>(initial.settings.backgroundKey);
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(initial.backgroundUrl);
 
+  const [signatureKey, setSignatureKey] = useState<string | undefined>(initial.settings.signatureKey);
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(initial.signatureUrl);
+
   const [pending, setPending] = useState(false);
   
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingBg, setUploadingBg] = useState(false);
+  const [uploadingSignature, setUploadingSignature] = useState(false);
   
   const [bgToRemove, setBgToRemove] = useState(false);
   const [logoToRemove, setLogoToRemove] = useState(false);
+  const [signatureToRemove, setSignatureToRemove] = useState(false);
 
   function toggleModule(key: ModuleKey) {
     setEnabled((prev) =>
@@ -201,8 +207,67 @@ export function SettingsForm({
     }
   });
 
+  const [
+    { files: sigFiles, errors: sigUploadErrors },
+    { openFileDialog: openSigFileDialog, removeFile: removeSigFile, getInputProps: getSigInputProps },
+  ] = useFileUpload({
+    accept: "image/png,image/jpeg,image/jpg,image/webp",
+    maxSize,
+    onFilesAdded: async (addedFiles) => {
+      const file = addedFiles[0]?.file;
+      if (!file || !(file instanceof File)) return;
+      setUploadingSignature(true);
+      try {
+        const res = await apiPost<any>("/api/tenant/settings/logo", { contentType: file.type });
+        if (res.error || !res.data) {
+          toast.error(res.error?.message ?? "Upload could not be started.");
+          return;
+        }
+
+        let publicUrl = "";
+        let publicId = "";
+
+        if (res.data.uploadType === "cloudinary") {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("api_key", res.data.apiKey);
+          formData.append("timestamp", res.data.timestamp.toString());
+          formData.append("signature", res.data.signature);
+
+          const uploadRes = await fetch(res.data.url, { method: "POST", body: formData });
+          if (!uploadRes.ok) {
+            toast.error("Cloudinary upload failed.");
+            return;
+          }
+          const cloudinaryData = await uploadRes.json();
+          publicId = cloudinaryData.secure_url;
+          publicUrl = cloudinaryData.secure_url;
+        } else {
+          const put = await fetch(res.data.url, {
+            method: "PUT",
+            headers: { "Content-Type": file.type },
+            body: file,
+          });
+          if (!put.ok) {
+            toast.error("S3 Upload failed.");
+            return;
+          }
+          publicId = res.data.key;
+          publicUrl = res.data.publicUrl;
+        }
+
+        setSignatureKey(publicId);
+        setSignatureUrl(publicUrl);
+        toast.success("Signature uploaded. Remember to Save.");
+      } finally {
+        setUploadingSignature(false);
+      }
+    }
+  });
+
   const previewUrl = logoUrl || (files[0]?.preview || null);
   const bgPreviewUrl = backgroundUrl || (bgFiles[0]?.preview || null);
+  const sigPreviewUrl = signatureUrl || (sigFiles[0]?.preview || null);
 
   async function submit() {
     setPending(true);
@@ -227,6 +292,7 @@ export function SettingsForm({
         enabledModules: enabled,
         ...(logoKey ? { logoKey } : {}),
         ...(backgroundKey ? { backgroundKey } : {}),
+        ...(signatureKey ? { signatureKey } : {}),
       },
     });
     setPending(false);
@@ -415,6 +481,70 @@ export function SettingsForm({
           </div>
         </div>
 
+        {/* Documents & Signatures */}
+        <div className="space-y-4 pt-6 border-t">
+          <h3 className="text-lg font-medium">Documents & Signatures</h3>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Authorized Signature</Label>
+              <div className="flex items-center gap-4">
+                <div className="relative flex h-20 w-48 items-center justify-center overflow-hidden rounded-md border-2 border-dashed bg-stone-50 dark:bg-stone-900">
+                  {uploadingSignature ? (
+                    <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                  ) : sigPreviewUrl ? (
+                    <img
+                      alt="Authorized Signature"
+                      className="h-full w-full object-contain p-1"
+                      src={sigPreviewUrl}
+                    />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">No signature</span>
+                  )}
+                  <input
+                    {...getSigInputProps()}
+                    aria-label="Upload signature file"
+                    className="sr-only"
+                    disabled={uploadingSignature}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={openSigFileDialog}
+                    disabled={uploadingSignature}
+                  >
+                    <ImagePlusIcon className="mr-2 size-4" />
+                    Upload Signature
+                  </Button>
+                  {sigPreviewUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setSignatureToRemove(true)}
+                    >
+                      <XIcon className="mr-2 size-4" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                This signature will be appended to generated receipts and vouchers.
+              </p>
+              {sigUploadErrors.length > 0 && (
+                <div className="flex items-center gap-2 text-destructive text-sm mt-2">
+                  <AlertCircleIcon className="size-4 shrink-0" />
+                  <span>{sigUploadErrors[0]}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Localization */}
         <div className="space-y-4 pt-6 border-t">
           <h3 className="text-lg font-medium">System Configuration</h3>
@@ -490,7 +620,7 @@ export function SettingsForm({
         </div>
 
         <div className="pt-4 pb-10">
-          <Button onClick={submit} disabled={pending || uploadingBg || uploadingLogo}>
+          <Button onClick={submit} disabled={pending || uploadingBg || uploadingLogo || uploadingSignature}>
             {pending ? "Saving…" : "Save All Changes"}
           </Button>
         </div>
@@ -564,6 +694,26 @@ export function SettingsForm({
               setLogoUrl(null);
               setLogoKey(undefined);
               setLogoToRemove(false);
+            }}>Remove</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={signatureToRemove} onOpenChange={setSignatureToRemove}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove Signature?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove the authorized signature? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSignatureToRemove(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => {
+              removeSigFile(sigFiles[0]?.id);
+              setSignatureUrl(null);
+              setSignatureKey(undefined);
+              setSignatureToRemove(false);
             }}>Remove</Button>
           </DialogFooter>
         </DialogContent>

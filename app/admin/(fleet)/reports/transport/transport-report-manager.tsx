@@ -20,6 +20,13 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   DataTable,
   DataTableColumnHeader,
   TableInsightCards,
@@ -34,6 +41,7 @@ interface TransportRow {
   status: string;
   litersCarried: number;
   truck?: { plateNumber: string | null };
+  transporter?: { id: string; name: string };
   driver?: { firstName: string; lastName: string };
   order?: { reference: string };
   deliveries: Array<{
@@ -97,14 +105,20 @@ export function TransportReportManager({
   });
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>(draftDateRange);
 
+  const [draftTransporterId, setDraftTransporterId] = React.useState<string | "ALL">("ALL");
+  const [transporterId, setTransporterId] = React.useState<string | "ALL">(draftTransporterId);
+
   const applyFilters = React.useCallback(() => {
     setDateRange(draftDateRange);
+    setTransporterId(draftTransporterId);
     setIsOpen(false);
-  }, [draftDateRange]);
+  }, [draftDateRange, draftTransporterId]);
 
   const clearFilters = React.useCallback(() => {
     setDraftDateRange(undefined);
     setDateRange(undefined);
+    setDraftTransporterId("ALL");
+    setTransporterId("ALL");
     setIsOpen(false);
   }, []);
 
@@ -121,9 +135,12 @@ export function TransportReportManager({
         e.setHours(23, 59, 59, 999);
         if (d > e) return false;
       }
+      if (transporterId !== "ALL" && row.transporter?.id !== transporterId) {
+        return false;
+      }
       return true;
     });
-  }, [initialTransports, dateRange]);
+  }, [initialTransports, dateRange, transporterId]);
 
   const metrics = React.useMemo(() => {
     let totalCarried = 0;
@@ -220,6 +237,19 @@ export function TransportReportManager({
         cell: ({ row }) => (
           <span className="font-mono text-xs font-semibold">{row.original.order?.reference || "—"}</span>
         ),
+      },
+      {
+        id: "transporter",
+        accessorFn: (row) => row.transporter?.name ?? "—",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Transporter" />,
+        meta: { label: "Transporter" },
+        cell: ({ row }) => (
+          <span className="truncate max-w-[150px] inline-block">{row.original.transporter?.name || "—"}</span>
+        ),
+        filterFn: (row, id, value) => {
+          if (!Array.isArray(value) || value.length === 0) return true;
+          return value.includes(row.original.transporter?.id);
+        },
       },
       {
         id: "truckPlate",
@@ -398,18 +428,43 @@ export function TransportReportManager({
   );
 
   const filterFields = React.useMemo<DataTableFilterField<TransportRow>[]>(
-    () => [
-      {
-        id: "status",
-        label: "Status",
-        options: Array.from(new Set(initialTransports.map((t) => t.status))).map((s) => ({
-          label: s.replace(/_/g, " "),
-          value: s,
-        })),
-      },
-    ],
+    () => {
+      const uniqueTransporters = new Map<string, string>();
+      initialTransports.forEach(t => {
+        if (t.transporter) {
+          uniqueTransporters.set(t.transporter.id, t.transporter.name);
+        }
+      });
+
+      return [
+        {
+          id: "transporter",
+          label: "Transporter",
+          options: Array.from(uniqueTransporters.entries()).map(([id, name]) => ({
+            label: name,
+            value: id,
+          })),
+        },
+        {
+          id: "status",
+          label: "Status",
+          options: Array.from(new Set(initialTransports.map((t) => t.status))).map((s) => ({
+            label: s.replace(/_/g, " "),
+            value: s,
+          })),
+        },
+      ];
+    },
     [initialTransports]
   );
+
+  const uniqueTransportersList = React.useMemo(() => {
+    const map = new Map<string, string>();
+    initialTransports.forEach(t => {
+      if (t.transporter) map.set(t.transporter.id, t.transporter.name);
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [initialTransports]);
 
   const filterSheet = (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -424,7 +479,7 @@ export function TransportReportManager({
           <SheetTitle>Filter Records</SheetTitle>
           <SheetDescription>Apply filters to narrow down results.</SheetDescription>
         </SheetHeader>
-        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-6">
+        <div className="flex-1 space-y-6 overflow-y-auto px-4 py-6">
           <div className="space-y-3 w-full">
             <Label className="text-sm font-semibold">Date Range</Label>
             <div className="grid grid-cols-2 gap-4">
@@ -456,6 +511,20 @@ export function TransportReportManager({
               </div>
             </div>
           </div>
+          <div className="space-y-3 w-full border-t pt-4">
+            <Label className="text-sm font-semibold">Transporter</Label>
+            <Select value={draftTransporterId} onValueChange={setDraftTransporterId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="All Transporters" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Transporters</SelectItem>
+                {uniqueTransportersList.map(t => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <SheetFooter className="border-t pt-4">
           <Button variant="outline" onClick={clearFilters} className="w-full">
@@ -485,7 +554,7 @@ export function TransportReportManager({
         data={filteredRows}
         tableId="fleet-transport-report"
         filterFields={filterFields}
-        searchPlaceholder="Search order, truck, driver..."
+        searchPlaceholder="Search order, truck, driver, transporter..."
         toolbarActions={filterSheet}
         emptyMessage="No transport records found for the selected filters."
       />

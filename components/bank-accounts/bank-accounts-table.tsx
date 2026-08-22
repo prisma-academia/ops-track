@@ -129,8 +129,8 @@ export function BankAccountsTable({
         }}
         filterColumnId="bankName"
         searchPlaceholder="Search by bank name..."
-        rowHref={(row) => scopeFilter === "FLEET" 
-          ? `/admin/bank-accounts/${row.id}`
+        rowHref={(row) => scopeFilter === "STATION" 
+          ? `/admin/station/bank-accounts/${row.id}`
           : `/admin/bank-accounts/${row.id}`
         }
         headerAction={

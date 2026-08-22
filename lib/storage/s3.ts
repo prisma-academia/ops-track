@@ -39,9 +39,9 @@ export function s3Configured(): boolean {
   const hasRegion = Boolean(env.S3_REGION || env.S3_ENDPOINT);
   return Boolean(
     hasRegion &&
-      env.S3_BUCKET &&
-      env.S3_ACCESS_KEY_ID &&
-      env.S3_SECRET_ACCESS_KEY
+    env.S3_BUCKET &&
+    env.S3_ACCESS_KEY_ID &&
+    env.S3_SECRET_ACCESS_KEY,
   );
 }
 

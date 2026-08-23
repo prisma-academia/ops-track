@@ -1,23 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useRouter, useSearchParams } from "next/navigation";
-import { apiPost } from "@/lib/client/api";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { NumberInput } from "@/components/ui/number-input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/data-table";
 import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
@@ -29,30 +14,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-} from "@/components/ui/command";
-import { cn, formatHumanReadableDate } from "@/lib/utils";
-import { Plus, CheckCircle2, AlertCircle, Eye, Check, User, ChevronsUpDown } from "lucide-react";
+import { formatHumanReadableDate } from "@/lib/utils";
+import { CheckCircle2, Eye, User } from "lucide-react";
 import Image from "next/image";
-import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 
 interface ExpenseUser {
@@ -94,26 +58,6 @@ interface ExpenseRow {
   approvedBy: ExpenseUser | null;
 }
 
-const RecordExpenseSchema = z
-  .object({
-    stationId: z.string().min(1, "Station is required"),
-    category: z.enum(["FUEL_FOR_GEN", "MAINTENANCE", "UTILITIES", "STATIONERY", "OTHER"]),
-    paymentMethod: z.string(),
-    bankAccountId: z.string().optional().or(z.literal("")),
-    amount: z.coerce.number().positive("Amount must be a positive number"),
-    description: z.string().min(2, "Description must be at least 2 characters").max(500),
-    receiptUrl: z.string().optional().or(z.literal("")),
-  })
-  .superRefine((values, ctx) => {
-    if (values.paymentMethod !== "CASH" && !values.bankAccountId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["bankAccountId"],
-        message: "Bank account is required for non-cash payments.",
-      });
-    }
-  });
-
 const CATEGORY_MAP = {
   FUEL_FOR_GEN: "Generator Fuel",
   MAINTENANCE: "Equipment Maintenance",
@@ -133,20 +77,15 @@ export function ExpensesManager({
   initialExpenses,
   initialMeta,
   stations,
-  bankAccounts,
+  bankAccounts: _bankAccounts,
 }: {
   initialExpenses: ExpenseRow[];
   initialMeta: any;
   stations: { id: string; name: string; code: string }[];
   bankAccounts: BankAccountOption[];
 }) {
-  const router = useRouter();
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [openStationSelect, setOpenStationSelect] = useState(false);
-  const [approvingExpenseId, setApprovingExpenseId] = useState<string | null>(null);
-  const [approveConfirmOpenId, setApproveConfirmOpenId] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
   const appliedFilters: Record<string, string> = {};
@@ -155,7 +94,6 @@ export function ExpensesManager({
   if (searchParams.has("paymentMethod")) appliedFilters.paymentMethod = searchParams.get("paymentMethod")!;
   if (searchParams.has("amountMin")) appliedFilters.amountMin = searchParams.get("amountMin")!;
   if (searchParams.has("amountMax")) appliedFilters.amountMax = searchParams.get("amountMax")!;
-  if (searchParams.has("approvedStatus")) appliedFilters.approvedStatus = searchParams.get("approvedStatus")!;
   if (searchParams.has("dateStart")) appliedFilters.dateStart = searchParams.get("dateStart")!;
   if (searchParams.has("dateEnd")) appliedFilters.dateEnd = searchParams.get("dateEnd")!;
 
@@ -169,46 +107,9 @@ export function ExpensesManager({
     setInitialData(initialExpenses, initialMeta);
   }, [initialExpenses, initialMeta, setInitialData]);
 
-  const form = useForm({
-    resolver: zodResolver(RecordExpenseSchema),
-    defaultValues: { paymentMethod: "CASH", stationId: "", category: "OTHER", bankAccountId: "", amount: undefined, description: "", receiptUrl: "" },
-  });
-
-  const { register, formState: { errors, isSubmitting }, control, watch } = form;
-  const watchPaymentMethod = watch("paymentMethod");
-
-  const handleRecordExpense = form.handleSubmit(async (values) => {
-    setApiError(null);
-    const res = await apiPost("/api/tenant/expenses", {
-      ...values,
-      bankAccountId: values.paymentMethod === "CASH" ? undefined : values.bankAccountId,
-    });
-    if (res.error) {
-      setApiError(res.error.message);
-    } else {
-      closeDialog();
-    }
-  });
-
-  const handleApproveExpense = async (expenseId: string, status: "APPROVED" | "REJECTED") => {
-    setApprovingExpenseId(expenseId);
-    const res = await apiPost(`/api/tenant/expenses/${expenseId}/approve`, { status });
-    setApprovingExpenseId(null);
-    if (res.error) {
-      alert(res.error.message);
-    } else {
-      setApproveConfirmOpenId(null);
-      setActiveDialog(null);
-      router.refresh();
-    }
-  };
-
   const closeDialog = () => {
     setActiveDialog(null);
     setSelectedExpense(null);
-    setApiError(null);
-    form.reset({ paymentMethod: "CASH", stationId: "", category: "OTHER", bankAccountId: "", amount: undefined, description: "", receiptUrl: "" });
-    router.refresh();
   };
 
   const activeExpenses = expenses.length > 0 ? expenses : initialExpenses;
@@ -314,26 +215,14 @@ export function ExpensesManager({
               </span>
             </div>
 
-            {exp.status === "APPROVED" ? (
-              <div className="flex items-center gap-1 text-xs text-emerald-600">
-                <CheckCircle2 className="size-3" />
-                <span className="font-semibold">
-                  {approvedUser
-                    ? `${approvedUser.firstName ?? ""} ${approvedUser.lastName ?? ""}`.trim()
-                    : "Yes"}
-                </span>
-              </div>
-            ) : exp.status === "REJECTED" ? (
-              <div className="flex items-center gap-1 text-xs text-red-600 font-medium">
-                <AlertCircle className="size-3" />
-                <span>Rejected</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 text-xs text-amber-500 font-medium">
-                <AlertCircle className="size-3" />
-                <span>Pending Approval</span>
-              </div>
-            )}
+            <div className="flex items-center gap-1 text-xs text-emerald-600">
+              <CheckCircle2 className="size-3" />
+              <span className="font-semibold">
+                {approvedUser
+                  ? `${approvedUser.firstName ?? ""} ${approvedUser.lastName ?? ""}`.trim()
+                  : "Approved"}
+              </span>
+            </div>
           </div>
         );
       },
@@ -375,14 +264,9 @@ export function ExpensesManager({
           onPageSizeChange: setPageSize,
         }}
         title="Station Expenses"
-        description="Monitor and approve local station cash expenditures and payouts."
+        description="Approved station payouts. Create and review spend from Tickets."
         filterColumnId="station_name"
         searchPlaceholder="Search by station name…"
-        headerAction={
-          <Button onClick={() => setActiveDialog("create")}>
-            <Plus size={16} className="mr-1" /> Record Expense
-          </Button>
-        }
         filterNode={
           <DataTableFilterDrawer
             filters={[
@@ -411,15 +295,6 @@ export function ExpensesManager({
                 toParam: "amountMax",
               },
               {
-                type: "select",
-                paramName: "approvedStatus",
-                label: "Approval Status",
-                options: [
-                  { value: "PENDING", label: "Pending" },
-                  { value: "APPROVED", label: "Approved" },
-                ],
-              },
-              {
                 type: "date-range",
                 label: "Date Range",
                 fromParam: "dateStart",
@@ -429,224 +304,6 @@ export function ExpensesManager({
           />
         }
       />
-
-      {/* ==========================================
-          CREATE EXPENSE DIALOG
-      ========================================== */}
-      {activeDialog === "create" && (
-        <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Record Petty Cash Expense</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleRecordExpense} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="e_stat" className={errors.stationId ? "text-destructive" : ""}>
-                  Select Station *
-                </Label>
-                <Controller
-                  control={control}
-                  name="stationId"
-                  render={({ field }) => {
-                    const selectedStation = stations.find((s) => s.id === field.value);
-                    const displayLabel = selectedStation
-                      ? `${selectedStation.name} (${selectedStation.code})`
-                      : "Select a station...";
-                    return (
-                      <Popover open={openStationSelect} onOpenChange={setOpenStationSelect}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className={`w-full justify-between font-normal ${
-                              errors.stationId ? "border-destructive" : ""
-                            }`}
-                          >
-                            <span className="truncate">{displayLabel}</span>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                          <Command>
-                            <CommandInput placeholder="Search station..." />
-                            <CommandList>
-                              <CommandEmpty>No station found.</CommandEmpty>
-                              <CommandGroup>
-                                {stations.map((s) => {
-                                  const label = `${s.name} (${s.code})`;
-                                  return (
-                                    <CommandItem
-                                      key={s.id}
-                                      value={label.toLowerCase()}
-                                      onSelect={() => {
-                                        form.setValue("stationId", s.id, { shouldValidate: true });
-                                        setOpenStationSelect(false);
-                                      }}
-                                      data-checked={field.value === s.id}
-                                    >
-                                      {label}
-                                    </CommandItem>
-                                  );
-                                })}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    );
-                  }}
-                />
-                {errors.stationId && (
-                  <p className="text-xs text-destructive">{errors.stationId.message}</p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="e_cat" className={errors.category ? "text-destructive" : ""}>
-                    Expense Category *
-                  </Label>
-                  <Controller
-                    control={control}
-                    name="category"
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger id="e_cat" className={errors.category ? "border-destructive w-full" : "w-full"}>
-                          <SelectValue placeholder="Select Category..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="FUEL_FOR_GEN">Generator Fuel</SelectItem>
-                          <SelectItem value="MAINTENANCE">Equipment Maintenance</SelectItem>
-                          <SelectItem value="UTILITIES">Utilities (Water, Power)</SelectItem>
-                          <SelectItem value="STATIONERY">Stationery</SelectItem>
-                          <SelectItem value="OTHER">Other Expenses</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                  {errors.category && (
-                    <p className="text-xs text-destructive">{errors.category.message}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="e_pay" className={errors.paymentMethod ? "text-destructive" : ""}>
-                    Payment Method *
-                  </Label>
-                  <Controller
-                    control={control}
-                    name="paymentMethod"
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger id="e_pay" className={errors.paymentMethod ? "border-destructive w-full" : "w-full"}>
-                          <SelectValue placeholder="Select Method..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="CASH">Cash</SelectItem>
-                          <SelectItem value="POS">POS Machine</SelectItem>
-                          <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
-                          <SelectItem value="CHEQUE">Cheque</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                  {errors.paymentMethod && (
-                    <p className="text-xs text-destructive">{errors.paymentMethod.message}</p>
-                  )}
-                </div>
-              </div>
-
-              {watchPaymentMethod !== "CASH" && (
-                <div className="space-y-2">
-                  <Label htmlFor="e_bank" className={errors.bankAccountId ? "text-destructive" : ""}>
-                    Bank Account *
-                  </Label>
-                  <Controller
-                    control={control}
-                    name="bankAccountId"
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger id="e_bank" className={errors.bankAccountId ? "border-destructive w-full" : "w-full"}>
-                          <SelectValue placeholder="Select Bank Account..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {bankAccounts.length === 0 ? (
-                            <div className="px-3 py-2 text-xs text-muted-foreground">
-                              No station bank accounts configured.
-                            </div>
-                          ) : (
-                            bankAccounts.map((account) => (
-                              <SelectItem key={account.id} value={account.id}>
-                                {account.bankName} - {account.accountNumber}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                  {errors.bankAccountId && (
-                    <p className="text-xs text-destructive">{errors.bankAccountId.message}</p>
-                  )}
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="e_amt" className={errors.amount ? "text-destructive" : ""}>
-                  Amount *
-                </Label>
-                <Controller
-                  control={control}
-                  name="amount"
-                  render={({ field: { value, onChange, onBlur } }) => (
-                    <NumberInput
-                      id="e_amt"
-                      placeholder="e.g. 15000"
-                      value={value as number }
-                      onChange={onChange}
-                      onBlur={onBlur}
-                      className={errors.amount ? "border-destructive" : ""}
-                    />
-                  )}
-                />
-                {errors.amount && (
-                  <p className="text-xs text-destructive">{errors.amount.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="e_desc" className={errors.description ? "text-destructive" : ""}>
-                  Description Details *
-                </Label>
-                <Textarea
-                  id="e_desc"
-                  placeholder="e.g. Purchased office envelopes and clipboards"
-                  {...register("description")}
-                  className={errors.description ? "border-destructive" : ""}
-                />
-                {errors.description && (
-                  <p className="text-xs text-destructive">{errors.description.message}</p>
-                )}
-              </div>
-
-              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
-
-              <DialogFooter showCloseButton={true}>
-                <Button type="submit" disabled={isSubmitting} className="gap-2">
-                  {isSubmitting ? (
-                    <>
-                      <SpinnerEllipsis />
-                      <span>Recording...</span>
-                    </>
-                  ) : (
-                    "Record Payout"
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
 
       {/* ==========================================
           EXPENSE DETAILS DIALOG
@@ -789,26 +446,6 @@ export function ExpensesManager({
             </div>
 
             <DialogFooter className="flex-row items-center sm:justify-end gap-2 shrink-0 pt-2 border-t">
-              {currentSelectedExpense.status === "PENDING" && (
-                <div className="flex items-center gap-2 mr-auto">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => handleApproveExpense(currentSelectedExpense.id, "REJECTED")}
-                    disabled={approvingExpenseId === currentSelectedExpense.id}
-                  >
-                    Reject
-                  </Button>
-                  <Button
-                    type="button"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                    onClick={() => handleApproveExpense(currentSelectedExpense.id, "APPROVED")}
-                    disabled={approvingExpenseId === currentSelectedExpense.id}
-                  >
-                    Approve
-                  </Button>
-                </div>
-              )}
               <Button type="button" variant="outline" onClick={closeDialog}>
                 Close
               </Button>

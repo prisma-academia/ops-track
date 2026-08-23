@@ -5,9 +5,11 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { reviewExpense } from "@/lib/tickets/ticket-service";
 
 const ApproveExpenseSchema = z.object({
   status: z.enum(["APPROVED", "REJECTED", "PENDING"]),
+  remark: z.string().optional(),
 });
 
 export async function POST(
@@ -26,12 +28,16 @@ export async function POST(
       throw new DomainError(404, "not_found", "Expense record not found.");
     }
 
-    const expense = await prisma.expense.update({
+    const result = await reviewExpense({
+      expenseId: id,
+      tenantId: actor.tenantId,
+      actorUserId: actor.userId,
+      status: body.status,
+      remark: body.remark,
+    });
+
+    const expense = await prisma.expense.findUnique({
       where: { id },
-      data: {
-        status: body.status,
-        approvedById: body.status !== "PENDING" ? actor.userId : null,
-      },
       include: {
         approvedBy: {
           select: {
@@ -50,13 +56,13 @@ export async function POST(
       action: `expense.${body.status.toLowerCase()}`,
       tenantId: actor.tenantId,
       targetType: "Expense",
-      targetId: expense.id,
+      targetId: id,
       after: { status: body.status, approverId: actor.userId } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
 
-    return ok({ expense });
+    return ok({ expense, ticket: result.ticket ?? null });
   } catch (e) {
     return handleError(e);
   }

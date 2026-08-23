@@ -5,11 +5,12 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { FinanceService } from "@/lib/finance/finance-service";
+import { reviewExpense } from "@/lib/tickets/ticket-service";
 
 const UpdateExpenseSchema = z.object({
   status: z.enum(["PENDING", "APPROVED", "REJECTED"]),
   bankAccountId: z.string().nullable().optional(),
+  remark: z.string().optional(),
 });
 
 export async function PATCH(
@@ -36,36 +37,17 @@ export async function PATCH(
       throw new DomainError(404, "not_found", "Expense not found.");
     }
 
-    if (expense.status === "APPROVED") {
-      throw new DomainError(400, "invalid_state", "Expense is already approved.");
-    }
+    const result = await reviewExpense({
+      expenseId,
+      tenantId: actor.tenantId,
+      actorUserId: actor.userId,
+      status: body.status,
+      remark: body.remark,
+      bankAccountId: body.bankAccountId,
+    });
 
-    const updatedExpense = await prisma.$transaction(async (tx) => {
-      const updated = await tx.expense.update({
-        where: { id: expenseId },
-        data: {
-          status: body.status,
-          bankAccountId: body.bankAccountId,
-          ...(body.status === "APPROVED" ? {
-            approvedById: actor.userId,
-          } : {}),
-        },
-      });
-
-      if (body.status === "APPROVED") {
-        await FinanceService.recordExpensePayment(tx as any, {
-          tenantId: actor.tenantId,
-          expenseId: updated.id,
-          context: updated.context,
-          stationId: updated.stationId,
-          truckId: updated.truckId,
-          amount: updated.amount,
-          bankAccountId: body.bankAccountId,
-          description: `Expense Payment: ${updated.description}`,
-        });
-      }
-
-      return updated;
+    const updatedExpense = await prisma.expense.findUnique({
+      where: { id: expenseId },
     });
 
     await audit({
@@ -75,12 +57,12 @@ export async function PATCH(
       tenantId: actor.tenantId,
       targetType: "Expense",
       targetId: expense.id,
-      after: { status: updatedExpense.status } as object,
+      after: { status: updatedExpense?.status } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
 
-    return ok({ expense: updatedExpense });
+    return ok({ expense: updatedExpense, ticket: result.ticket ?? null });
   } catch (e) {
     return handleError(e);
   }

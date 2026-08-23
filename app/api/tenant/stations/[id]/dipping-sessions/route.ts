@@ -102,6 +102,7 @@ export async function POST(
       const unresolvedVariance = await prisma.ticket.findFirst({
         where: {
           tenantId: actor.tenantId,
+          category: "INVENTORY_VARIANCE",
           status: { in: ["OPEN", "PENDING_APPROVAL"] },
           varianceLog: {
             tankId: body.tankId,

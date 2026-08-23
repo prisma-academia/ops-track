@@ -59,7 +59,7 @@ const NAV: NavItemConfig[] = [
     children: [
       { href: "/admin/station/notifications", key: "notifications", title: "Notifications", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_NOTIFICATIONS_READ.key },
       { href: "/admin/station/tickets", key: "tickets", title: "Tickets", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
-      { href: "/admin/station/inventory-alerts", key: "inventoryAlerts", title: "Inventory Alerts", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+      // TENANT_TICKETS_READ is preferred; owners always see this. Existing roles keep waybills access via page fallback.
     ],
   },
   { href: "/admin/station/clients", key: "clients", title: "Clients", module: "operations" as ModuleKey, icon: "IconUsers", permission: PERMISSIONS.TENANT_CLIENTS_READ.key },

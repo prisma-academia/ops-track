@@ -12,7 +12,7 @@ export default async function ExpensesPage() {
 
   const activeOrgId = await resolveActiveOrgId(actor);
 
-  const expenseWhere: any = { tenantId: actor.tenantId };
+  const expenseWhere: any = { tenantId: actor.tenantId, status: "APPROVED" };
   if (activeOrgId) {
     expenseWhere.station = { organizationId: activeOrgId };
   }

@@ -446,10 +446,18 @@ enum TicketStatus {
   CLOSED
 }
 
+enum TicketOrigin {
+  SYSTEM
+  MOBILE
+  ADMIN
+}
+
 enum TicketCategory {
   INVENTORY_VARIANCE
   EQUIPMENT_FAULT
   CASH_DISCREPANCY
+  EXPENSE_REQUEST
+  EXPENSE_VERIFY
   OTHER
 }
 
@@ -681,10 +689,16 @@ model Ticket {
   approvedById String?
   approvedBy   TenantUser?    @relation("TicketApprover", fields: [approvedById], references: [id])
   category     TicketCategory
+  origin       TicketOrigin   @default(SYSTEM)
   title        String
   description  String         @db.Text
   status       TicketStatus   @default(OPEN)
   remark       String?        @db.Text
+  requestedAmount   Decimal?          @db.Decimal(12, 2)
+  requestedCategory ExpenseCategory?
+  evidenceUrls      String[]          @default([])
+  expenseId    String?        @unique
+  expense      Expense?       @relation(fields: [expenseId], references: [id], onDelete: SetNull)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
@@ -930,6 +944,7 @@ model Expense {
 
   createdAt    DateTime      @default(now())
   transactions Transaction[]
+  ticket       Ticket?
 
   @@index([tenantId])
   @@index([stationId])

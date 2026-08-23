@@ -53,6 +53,7 @@ export async function checkAndCreateVarianceTicket({
         stationId,
         raisedById,
         category: "INVENTORY_VARIANCE",
+        origin: "SYSTEM",
         title,
         description,
         status: "OPEN",

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Mail, MessageSquare, Phone, Smartphone } from "lucide-react";
+import { Bell, ChevronDown, Mail, MessageSquare, Phone, Smartphone } from "lucide-react";
 import { apiPatch, apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 
 type Channel = "SMS" | "EMAIL" | "MESSAGE" | "IN_APP";
@@ -76,6 +77,11 @@ export function NotificationsManager({
     () => new Set(settings.filter((s) => s.enabled).map((s) => s.channel)),
     [settings]
   );
+
+  const channelSummary = CHANNEL_META
+    .filter((item) => channels.includes(item.id))
+    .map((item) => item.label)
+    .join(", ");
 
   const audienceOptions = audienceType === "STATION"
     ? stations.map((s) => ({ id: s.id, label: `${s.name} (${s.code})` }))
@@ -145,8 +151,8 @@ export function NotificationsManager({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <Card className="xl:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="text-base">Compose message</CardTitle>
             <CardDescription>Only enabled channels can be selected.</CardDescription>
@@ -162,7 +168,67 @@ export function NotificationsManager({
             </div>
 
             <div className="space-y-2">
-              <Label>Audience</Label>
+              <Label>Channels</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className={channelSummary ? "truncate" : "text-muted-foreground"}>
+                      {channelSummary || "Select channels"}
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-1" align="start">
+                  {CHANNEL_META.map((item) => {
+                    const enabled = enabledChannels.has(item.id);
+                    const Icon = item.icon;
+                    return (
+                      <label
+                        key={item.id}
+                        className={`flex items-start gap-2 rounded-sm px-2 py-2 ${enabled ? "cursor-pointer hover:bg-accent" : "cursor-not-allowed opacity-50"}`}
+                      >
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={channels.includes(item.id)}
+                          disabled={!enabled}
+                          onCheckedChange={(checked) => toggleChannel(item.id, checked === true)}
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-sm">
+                            <Icon className="h-3.5 w-3.5 shrink-0" />
+                            {item.label}
+                          </div>
+                          <p className="text-xs text-muted-foreground">{item.hint}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="flex justify-end">
+              <Button onClick={handleSend} disabled={sending || !title.trim() || !body.trim() || channels.length === 0}>
+                {sending ? "Sending…" : "Send notification"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle className="text-base">Audience</CardTitle>
+            <CardDescription>
+              Choose who should receive this {module === "FLEET" ? "fleet" : "station"} notice.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Audience type</Label>
               <Select
                 value={audienceType}
                 onValueChange={(value) => {
@@ -182,8 +248,12 @@ export function NotificationsManager({
               </Select>
             </div>
 
-            {audienceType !== "ALL_MODULE_USERS" && (
-              <div className="max-h-48 overflow-y-auto rounded-lg border divide-y">
+            {audienceType === "ALL_MODULE_USERS" ? (
+              <p className="rounded-lg border bg-muted/30 px-3 py-6 text-sm text-muted-foreground text-center">
+                Every active {module === "FLEET" ? "fleet" : "station"} user will receive this message.
+              </p>
+            ) : (
+              <div className="max-h-80 overflow-y-auto rounded-lg border divide-y">
                 {audienceOptions.length === 0 ? (
                   <p className="p-3 text-xs text-muted-foreground">No targets available.</p>
                 ) : (
@@ -199,73 +269,38 @@ export function NotificationsManager({
                 )}
               </div>
             )}
-
-            <div className="space-y-2">
-              <Label>Channels</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {CHANNEL_META.map((item) => {
-                  const enabled = enabledChannels.has(item.id);
-                  const Icon = item.icon;
-                  return (
-                    <label
-                      key={item.id}
-                      className={`flex items-start gap-3 rounded-lg border p-3 ${enabled ? "bg-card" : "opacity-50 bg-muted/40"}`}
-                    >
-                      <Checkbox
-                        checked={channels.includes(item.id)}
-                        disabled={!enabled}
-                        onCheckedChange={(checked) => toggleChannel(item.id, checked === true)}
-                      />
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5 text-sm font-medium">
-                          <Icon className="h-3.5 w-3.5" />
-                          {item.label}
-                        </div>
-                        <p className="text-xs text-muted-foreground">{item.hint}</p>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <Button onClick={handleSend} disabled={sending || !title.trim() || !body.trim() || channels.length === 0}>
-                {sending ? "Sending…" : "Send notification"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Channel features</CardTitle>
-            <CardDescription>
-              Disable a channel to hide it from compose. Later this can differ for platform vs tenant users.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {CHANNEL_META.map((item) => {
-              const current = settings.find((s) => s.channel === item.id)?.enabled ?? true;
-              return (
-                <div key={item.id} className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium">{item.label}</p>
-                    <p className="text-xs text-muted-foreground">{item.hint}</p>
-                  </div>
-                  <Switch
-                    checked={current}
-                    disabled={savingSettings}
-                    onCheckedChange={(enabled) =>
-                      saveSettings(settings.map((s) => s.channel === item.id ? { ...s, enabled } : s))
-                    }
-                  />
-                </div>
-              );
-            })}
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Channel features</CardTitle>
+          <CardDescription>
+            Disable a channel to hide it from compose. Later this can differ for platform vs tenant users.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {CHANNEL_META.map((item) => {
+            const current = settings.find((s) => s.channel === item.id)?.enabled ?? true;
+            return (
+              <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div>
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.hint}</p>
+                </div>
+                <Switch
+                  checked={current}
+                  disabled={savingSettings}
+                  onCheckedChange={(enabled) =>
+                    saveSettings(settings.map((s) => s.channel === item.id ? { ...s, enabled } : s))
+                  }
+                />
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

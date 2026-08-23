@@ -48,6 +48,23 @@ export async function POST(
       if (tanks.length !== uniqueTankIds.length || tanks.some(t => t.stationId !== allocation.stationId || t.tenantId !== actor.tenantId)) {
         throw new DomainError(404, "not_found", "One or more tanks not found or belong to a different station.");
       }
+
+      const openSessions = await prisma.dippingSession.findMany({
+        where: {
+          tankId: { in: uniqueTankIds },
+          tenantId: actor.tenantId,
+          status: "OPEN",
+        },
+        include: { tank: { select: { name: true } } },
+      });
+      if (openSessions.length > 0) {
+        const names = Array.from(new Set(openSessions.map((s) => s.tank.name))).join(", ");
+        throw new DomainError(
+          400,
+          "open_dipping_exists",
+          `Close the open dipping session on tank${openSessions.length > 1 ? "s" : ""} ${names} before recording a waybill drop.`
+        );
+      }
     }
 
     // Validate capacity limits before entering transaction
@@ -108,9 +125,8 @@ export async function POST(
         }
       }
 
-      // Check if allocation should be auto-completed
       const currentReceived = Number(allocation.litersReceived ?? 0) + totalNetDischarged;
-      const shouldComplete = currentReceived >= Number(allocation.litersToDispense) || body.completeWithShortage;
+      const shouldComplete = body.completeWithShortage === true;
 
       const updateData: any = {};
       if (totalNetDischarged > 0 || body.dippings.some(d => d.afterLiters !== null && d.afterLiters !== undefined)) {

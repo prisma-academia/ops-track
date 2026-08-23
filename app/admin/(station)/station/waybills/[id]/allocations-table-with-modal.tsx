@@ -5,17 +5,43 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { Truck, Clock, MapPin, ExternalLink, AlertCircle, Check, Eye, Package, ClipboardCheck, Loader2, Droplet, Container } from "lucide-react";
+import { Truck, MapPin, ExternalLink, AlertCircle, Check, Eye, Package, ClipboardCheck, Loader2, Container, ChevronsUpDown, Plus } from "lucide-react";
 import { formatHumanReadableDate } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { apiPost, apiPatch, apiGet } from "@/lib/client/api";
+
+type TankOption = {
+  id: string;
+  name: string;
+  productType: string;
+  capacity: number | string;
+  currentLiters: number | string;
+  hasOpenDipping?: boolean;
+};
+
+type RecordedDip = {
+  tankId: string;
+  tankName: string;
+  beforeLiters: number;
+  afterLiters: number;
+  net: number;
+};
 
 export function ConfirmArrivalModal({ allocation, onSuccess }: { allocation: any; onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
@@ -98,182 +124,490 @@ export function ConfirmArrivalModal({ allocation, onSuccess }: { allocation: any
 export function LogDippingModal({ allocation, onSuccess }: { allocation: any; onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+  const [completing, setCompleting] = useState(false);
+  const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
+  const [tankPopoverOpen, setTankPopoverOpen] = useState(false);
+
   const [tankId, setTankId] = useState("");
   const [loadingTanks, setLoadingTanks] = useState(false);
-  const [tanks, setTanks] = useState<any[]>([]);
-  
+  const [tanks, setTanks] = useState<TankOption[]>([]);
   const [afterLiters, setAfterLiters] = useState("");
   const [beforeLiters, setBeforeLiters] = useState("");
+  const [recordedDips, setRecordedDips] = useState<RecordedDip[]>([]);
+  const [receivedSoFar, setReceivedSoFar] = useState(Number(allocation.litersReceived ?? 0));
+  const savedThisSession = React.useRef(false);
 
-  const selectedTank = tanks.find(t => t.id === tankId);
+  const selectedTank = tanks.find((t) => t.id === tankId);
   const expectedLiters = Number(allocation.litersToDispense);
-  
-  // Update beforeLiters when tank changes
+  const remainingDispatch = expectedLiters - receivedSoFar;
+  const overallVariance = receivedSoFar - expectedLiters;
+
   useEffect(() => {
     if (selectedTank) {
-      setBeforeLiters(selectedTank.currentLiters?.toString() || "0");
+      setBeforeLiters(String(selectedTank.currentLiters ?? "0"));
     } else {
       setBeforeLiters("");
     }
   }, [selectedTank]);
 
   const currentBeforeLiters = beforeLiters ? Number(beforeLiters) : 0;
+  const tankCapacity = selectedTank ? Number(selectedTank.capacity) : 0;
+  const availableSpace = selectedTank ? Math.max(0, tankCapacity - currentBeforeLiters) : 0;
   const dippingReceivedLiters = afterLiters ? Number(afterLiters) - currentBeforeLiters : 0;
-  const variance = dippingReceivedLiters - expectedLiters;
+  const afterExceedsCapacity = Boolean(selectedTank && afterLiters && Number(afterLiters) > tankCapacity);
 
   useEffect(() => {
-    if (open) {
-      setLoadingTanks(true);
-      apiGet(`/api/tenant/stations/${allocation.stationId}/tanks`)
-        .then((res) => {
-          if (!res.error && res.data) {
-            const compatibleTanks = (res.data as any[]).filter(t => t.productType === allocation.productType);
-            setTanks(compatibleTanks);
+    if (!open) return;
+    savedThisSession.current = false;
+    setTankId("");
+    setAfterLiters("");
+    setBeforeLiters("");
+    setRecordedDips([]);
+    setReceivedSoFar(Number(allocation.litersReceived ?? 0));
+    setConfirmCompleteOpen(false);
+    setTankPopoverOpen(false);
+    setLoadingTanks(true);
+    Promise.all([
+      apiGet(`/api/tenant/stations/${allocation.stationId}/tanks`),
+      apiGet(`/api/tenant/stations/${allocation.stationId}/dipping-sessions`),
+    ])
+      .then(([tanksRes, sessionsRes]) => {
+        const openTankIds = new Set<string>();
+        if (!sessionsRes.error && sessionsRes.data) {
+          const payload = sessionsRes.data as { sessions?: { tankId: string; status: string }[] };
+          const list = Array.isArray(payload) ? payload : payload.sessions ?? [];
+          for (const session of list) {
+            if (session.status === "OPEN") openTankIds.add(session.tankId);
           }
-        })
-        .finally(() => setLoadingTanks(false));
-    }
-  }, [open, allocation.stationId, allocation.productType]);
+        }
+        if (!tanksRes.error && tanksRes.data) {
+          const compatibleTanks = (tanksRes.data as TankOption[])
+            .filter((t) => t.productType === allocation.productType)
+            .map((t) => ({ ...t, hasOpenDipping: openTankIds.has(t.id) }));
+          setTanks(compatibleTanks);
+        }
+      })
+      .finally(() => setLoadingTanks(false));
+  }, [open, allocation.stationId, allocation.productType, allocation.litersReceived]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const resetCurrentTankForm = () => {
+    setTankId("");
+    setAfterLiters("");
+    setBeforeLiters("");
+  };
+
+  const validateCurrentDip = () => {
+    if (!tankId || !selectedTank) {
+      toast.error("Please select a discharge tank.");
+      return false;
+    }
+    if (selectedTank.hasOpenDipping) {
+      toast.error(`Close the open dipping on tank "${selectedTank.name}" before recording a waybill drop.`);
+      return false;
+    }
+    if (!afterLiters) {
+      toast.error("Please enter after liters.");
+      return false;
+    }
+    if (Number(afterLiters) <= currentBeforeLiters) {
+      toast.error("After liters must be greater than before liters.");
+      return false;
+    }
+    if (Number(afterLiters) > tankCapacity) {
+      toast.error(`After liters exceeds tank capacity of ${tankCapacity.toLocaleString()} L.`);
+      return false;
+    }
+    if (dippingReceivedLiters > availableSpace) {
+      toast.error(`Discharged volume (${dippingReceivedLiters.toLocaleString()} L) exceeds remaining tank capacity of ${availableSpace.toLocaleString()} L.`);
+      return false;
+    }
+    return true;
+  };
+
+  const handleAddDipping = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tankId) return toast.error("Please select a discharge tank.");
+    if (!validateCurrentDip() || !selectedTank) return;
 
     setLoading(true);
     try {
-      if (afterLiters) {
-        if (Number(afterLiters) <= currentBeforeLiters) {
-          toast.error("After liters must be greater than before liters.");
-          setLoading(false);
-          return;
-        }
-        if (selectedTank && Number(afterLiters) > Number(selectedTank.capacity)) {
-          toast.error(`After liters exceeds tank capacity of ${Number(selectedTank.capacity).toLocaleString()} L`);
-          setLoading(false);
-          return;
-        }
-      }
-
-      const dipRes = await apiPost<any>(`/api/tenant/waybills/${allocation.id}/dippings`, {
+      const dipRes = await apiPost<{ completed?: boolean }>(`/api/tenant/waybills/${allocation.id}/dippings`, {
         dippings: [{
           tankId,
           beforeLiters: currentBeforeLiters,
-          afterLiters: Number(afterLiters)
+          afterLiters: Number(afterLiters),
         }],
-        completeWithShortage: true
+        completeWithShortage: false,
       });
 
       if (dipRes.error) {
         toast.error(dipRes.error.message || "Failed to record dipping.");
-      } else {
-        toast.success("Physical dipping recorded successfully!");
-        setOpen(false);
-        onSuccess();
+        return;
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to record dipping.");
+
+      const net = dippingReceivedLiters;
+      const nextReceived = receivedSoFar + net;
+      const nextRemaining = expectedLiters - nextReceived;
+
+      setTanks((prev) =>
+        prev.map((t) =>
+          t.id === tankId ? { ...t, currentLiters: Number(t.currentLiters) + net } : t
+        )
+      );
+      setRecordedDips((prev) => [
+        ...prev,
+        {
+          tankId,
+          tankName: selectedTank.name,
+          beforeLiters: currentBeforeLiters,
+          afterLiters: Number(afterLiters),
+          net,
+        },
+      ]);
+      setReceivedSoFar(nextReceived);
+      savedThisSession.current = true;
+      resetCurrentTankForm();
+
+      if (nextRemaining > 0) {
+        toast.success(`Dipping saved. ${nextRemaining.toLocaleString()} L remaining — select another tank or confirm complete.`);
+      } else {
+        toast.success("Dipping saved. Review the variance and confirm complete when you are ready.");
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to record dipping.");
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="w-full md:w-auto" variant="default">
-          <ClipboardCheck className="mr-2 h-4 w-4" /> Log Physical Dipping
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Physical Dipping - {allocation.station.name}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-          <div className="space-y-2">
-            <Label>Discharge To Tank *</Label>
-            <Select value={tankId} onValueChange={setTankId} disabled={loadingTanks}>
-              <SelectTrigger className="w-full">
-                <div className="flex items-center gap-2">
-                  {loadingTanks ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                  ) : (
-                    <Container className="w-4 h-4 text-muted-foreground" />
-                  )}
-                  <SelectValue placeholder={loadingTanks ? "Loading tanks..." : tanks.length === 0 ? "No compatible tanks" : "Select a tank"} />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                {tanks.map((tank) => (
-                  <SelectItem key={tank.id} value={tank.id}>
-                    {tank.name} (Cap: {Number(tank.capacity).toLocaleString()} L | Cur: {Number(tank.currentLiters).toLocaleString()} L)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Fuel will be immediately transferred and the tank volume will update.
-            </p>
-          </div>
+  const handleComplete = async () => {
+    if (tankId && afterLiters) {
+      toast.error("Save the current tank dipping before completing, or clear it.");
+      return;
+    }
+    if (receivedSoFar <= 0 && recordedDips.length === 0) {
+      toast.error("Record at least one tank dipping before completing.");
+      return;
+    }
+    setCompleting(true);
+    try {
+      const dipRes = await apiPost<{ completed?: boolean; variance?: number }>(`/api/tenant/waybills/${allocation.id}/dippings`, {
+        dippings: [],
+        completeWithShortage: true,
+      });
 
-          {!tankId ? (
-            <div className="p-4 bg-muted/20 border border-dashed rounded-lg text-center text-sm text-muted-foreground mt-4">
-              Please select a discharge tank above to proceed with physical dipping.
+      if (dipRes.error) {
+        toast.error(dipRes.error.message || "Failed to complete receipt.");
+        return;
+      }
+
+      toast.success(overallVariance === 0 ? "Receipt completed." : "Receipt completed with recorded variance.");
+      savedThisSession.current = false;
+      setConfirmCompleteOpen(false);
+      setOpen(false);
+      onSuccess();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to complete receipt.");
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const tankPlaceholder = loadingTanks
+    ? "Loading tanks..."
+    : tanks.length === 0
+      ? "No compatible tanks"
+      : "Select a tank";
+
+  return (
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next && savedThisSession.current) {
+            savedThisSession.current = false;
+            onSuccess();
+          }
+        }}
+      >
+        <DialogTrigger asChild>
+          <Button className="w-full md:w-auto" variant="default">
+            <ClipboardCheck className="mr-2 h-4 w-4" /> Log Physical Dipping
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Physical Dipping - {allocation.station.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddDipping} className="space-y-4 pt-2">
+            <div className="grid grid-cols-3 gap-2 rounded-lg border bg-muted/30 p-3 text-center text-xs">
+              <div>
+                <p className="text-muted-foreground uppercase tracking-wider font-semibold text-[10px]">Expected</p>
+                <p className="font-semibold mt-0.5">{expectedLiters.toLocaleString()} L</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground uppercase tracking-wider font-semibold text-[10px]">Received</p>
+                <p className="font-semibold mt-0.5 text-emerald-600">{receivedSoFar.toLocaleString()} L</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground uppercase tracking-wider font-semibold text-[10px]">Remaining</p>
+                <p className={`font-semibold mt-0.5 ${remainingDispatch > 0 ? "text-amber-600" : "text-emerald-600"}`}>
+                  {Math.max(0, remainingDispatch).toLocaleString()} L
+                </p>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-3 bg-muted/20 p-4 border border-dashed rounded-lg mt-4">
-              <div className="flex justify-between items-center pb-2 border-b">
-                <span className="text-sm font-semibold">Dipping Logs</span>
-                <span className="text-xs text-muted-foreground">Expected: {expectedLiters.toLocaleString()} L</span>
+
+            {tanks.some((t) => t.hasOpenDipping) && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                <span>
+                  Close open dipping sessions before discharging into those tanks:{" "}
+                  <span className="font-semibold">
+                    {tanks.filter((t) => t.hasOpenDipping).map((t) => t.name).join(", ")}
+                  </span>
+                  . Other tanks without an open dip can still be used.
+                </span>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Before Liters *</Label>
-                  <FormattedNumberInput 
-                    required 
-                    min="0"
-                    step="0.01"
-                    value={beforeLiters} 
-                    onChange={(e: any) => setBeforeLiters(e.target.value)} 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>After Liters *</Label>
-                  <FormattedNumberInput 
-                    required 
-                    min={currentBeforeLiters.toString()}
-                    step="0.01"
-                    value={afterLiters} 
-                    onChange={(e: any) => setAfterLiters(e.target.value)} 
-                  />
-                </div>
+            )}
+
+            {recordedDips.length > 0 && (
+              <div className="rounded-lg border overflow-hidden">
+                <div className="px-3 py-2 bg-muted/40 text-xs font-semibold">Saved tank dips</div>
+                <ul className="divide-y text-sm">
+                  {recordedDips.map((dip, idx) => (
+                    <li key={`${dip.tankId}-${idx}`} className="flex items-center justify-between px-3 py-2">
+                      <span className="font-medium">{dip.tankName}</span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {dip.beforeLiters.toLocaleString()} → {dip.afterLiters.toLocaleString()}
+                        <span className="ml-2 font-semibold text-foreground">+{dip.net.toLocaleString()} L</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              {afterLiters && Number(afterLiters) > currentBeforeLiters && (
-                <div className="flex items-center justify-between pt-2">
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Received: </span>
-                    <span className="font-semibold">{dippingReceivedLiters.toLocaleString()} L</span>
+            )}
+
+            {remainingDispatch > 0 && (
+              <>
+                <div className="space-y-2">
+                  <Label>Discharge To Tank *</Label>
+                  <Popover open={tankPopoverOpen} onOpenChange={setTankPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={loadingTanks}
+                        className="w-full justify-between font-normal"
+                      >
+                        <span className="flex items-center gap-2 truncate">
+                          {loadingTanks ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                          ) : (
+                            <Container className="w-4 h-4 text-muted-foreground shrink-0" />
+                          )}
+                          <span className="truncate">
+                            {selectedTank
+                              ? `${selectedTank.name} · ${Number(selectedTank.currentLiters).toLocaleString()} / ${Number(selectedTank.capacity).toLocaleString()} L`
+                              : tankPlaceholder}
+                          </span>
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search tanks..." />
+                        <CommandList className="max-h-[240px] overflow-y-auto">
+                          <CommandEmpty>No compatible tanks found.</CommandEmpty>
+                          <CommandGroup>
+                            {tanks.map((tank) => {
+                              const capacity = Number(tank.capacity);
+                              const current = Number(tank.currentLiters);
+                              const space = Math.max(0, capacity - current);
+                              const full = space <= 0;
+                              const blocked = full || Boolean(tank.hasOpenDipping);
+                              return (
+                                <CommandItem
+                                  key={tank.id}
+                                  value={`${tank.name} ${tank.id}`}
+                                  disabled={blocked}
+                                  onSelect={() => {
+                                    if (blocked) return;
+                                    setTankId(tank.id);
+                                    setAfterLiters("");
+                                    setTankPopoverOpen(false);
+                                    if (space < remainingDispatch) {
+                                      toast.error(
+                                        `${tank.name} only has ${space.toLocaleString()} L of space. Dispatched volume cannot exceed tank capacity (${capacity.toLocaleString()} L). Fill this tank up to capacity, then select another tank.`
+                                      );
+                                    }
+                                  }}
+                                  data-checked={tankId === tank.id}
+                                >
+                                  <div className="flex flex-col gap-0.5 min-w-0">
+                                    <span className="font-medium">{tank.name}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      Cap {capacity.toLocaleString()} L · Now {current.toLocaleString()} L · Space {space.toLocaleString()} L
+                                      {full ? " · Full" : tank.hasOpenDipping ? " · Open dipping — close first" : ""}
+                                    </span>
+                                  </div>
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  <p className="text-xs text-muted-foreground">
+                    Saving a dip does not complete the receipt. If this tank fills first, pick another tank for the remaining dispatch volume.
+                  </p>
+                </div>
+
+                {!tankId ? (
+                  <div className="p-4 bg-muted/20 border border-dashed rounded-lg text-center text-sm text-muted-foreground">
+                    {recordedDips.length > 0
+                      ? `Select another tank for the remaining ${remainingDispatch.toLocaleString()} L.`
+                      : "Please select a discharge tank to record a physical dip."}
                   </div>
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Variance: </span>
-                    <span className={`font-semibold ${variance < 0 ? 'text-destructive' : variance > 0 ? 'text-emerald-500' : ''}`}>
-                      {variance > 0 ? '+' : ''}{variance.toLocaleString()} L
+                ) : (
+                  <div className="space-y-3 bg-muted/20 p-4 border border-dashed rounded-lg">
+                    <div className="flex justify-between items-center pb-2 border-b">
+                      <span className="text-sm font-semibold">{selectedTank?.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        Space: {availableSpace.toLocaleString()} L
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Before Liters *</Label>
+                        <FormattedNumberInput
+                          required
+                          min="0"
+                          step="0.01"
+                          value={beforeLiters}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBeforeLiters(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>After Liters *</Label>
+                        <FormattedNumberInput
+                          required
+                          min={currentBeforeLiters.toString()}
+                          step="0.01"
+                          value={afterLiters}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAfterLiters(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    {afterExceedsCapacity && (
+                      <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
+                        <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                        <span>
+                          Amount dispatched ({Number(afterLiters).toLocaleString()} L after) exceeds tank capacity of {tankCapacity.toLocaleString()} L. Reduce after liters or select another tank.
+                        </span>
+                      </div>
+                    )}
+                    {!afterExceedsCapacity && afterLiters && dippingReceivedLiters > availableSpace && (
+                      <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
+                        <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                        <span>
+                          Discharged volume ({dippingReceivedLiters.toLocaleString()} L) exceeds remaining space of {availableSpace.toLocaleString()} L.
+                        </span>
+                      </div>
+                    )}
+                    {afterLiters && Number(afterLiters) > currentBeforeLiters && !afterExceedsCapacity && dippingReceivedLiters <= availableSpace && (
+                      <div className="flex items-center justify-between pt-1 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">This dip: </span>
+                          <span className="font-semibold">{dippingReceivedLiters.toLocaleString()} L</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Then remaining: </span>
+                          <span className="font-semibold">
+                            {Math.max(0, remainingDispatch - dippingReceivedLiters).toLocaleString()} L
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    {selectedTank && availableSpace < remainingDispatch && (
+                      <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+                        <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                        <span>
+                          This tank only has {availableSpace.toLocaleString()} L of space. You cannot discharge the full remaining {remainingDispatch.toLocaleString()} L here. Save up to capacity, then select another tank.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+              {(receivedSoFar > 0 || recordedDips.length > 0) && (
+                <Button
+                  type="button"
+                  variant={remainingDispatch > 0 ? "outline" : "default"}
+                  disabled={loading || completing}
+                  onClick={() => setConfirmCompleteOpen(true)}
+                >
+                  Complete with variance
+                </Button>
+              )}
+              {remainingDispatch > 0 && (
+                <Button type="submit" disabled={loading || completing || !tankId || !afterLiters || afterExceedsCapacity || dippingReceivedLiters > availableSpace || Boolean(selectedTank?.hasOpenDipping)}>
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                  Save dipping
+                </Button>
+              )}
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirmCompleteOpen} onOpenChange={setConfirmCompleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to complete this receipt?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  {remainingDispatch > 0
+                    ? "Dispatch volume still has remaining liters. Completing now records that remaining as variance / shortage."
+                    : overallVariance === 0
+                      ? "Received volume matches the dispatched amount. Confirm to complete this receipt."
+                      : "Received volume differs from the dispatched amount. Confirm to complete this receipt with the variance below."}
+                </p>
+                <div className="rounded-md border bg-muted/40 p-3 space-y-1 tabular-nums text-foreground">
+                  <div className="flex justify-between">
+                    <span>Expected</span>
+                    <span>{expectedLiters.toLocaleString()} L</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Received</span>
+                    <span>{receivedSoFar.toLocaleString()} L</span>
+                  </div>
+                  <div className="flex justify-between font-semibold">
+                    <span>Variance</span>
+                    <span className={overallVariance < 0 ? "text-destructive" : overallVariance > 0 ? "text-amber-600" : ""}>
+                      {overallVariance > 0 ? "+" : ""}
+                      {overallVariance.toLocaleString()} L
                     </span>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2 pt-4">
-            <Button type="submit" disabled={loading || !tankId || !afterLiters}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Submit Dipping
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={completing}>Cancel</AlertDialogCancel>
+            <Button onClick={handleComplete} disabled={completing}>
+              {completing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Yes, complete
             </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -522,7 +856,7 @@ export function AllocationsTableWithModal({
                               <div>
                                 <h4 className="font-semibold text-blue-800 dark:text-blue-400">Log Physical Dipping</h4>
                                 <p className="text-xs text-blue-600 dark:text-blue-500/80 mt-1">
-                                  The truck has arrived. Please record the physical dipping to finalize receipt.
+                                  Record tank dips. If a tank fills before the dispatch is empty, select another tank. Complete only when finished — remaining volume is recorded as variance.
                                 </p>
                               </div>
                               <LogDippingModal allocation={a} onSuccess={() => router.refresh()} />

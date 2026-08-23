@@ -2,14 +2,11 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { addDays, format } from "date-fns";
-import { type DateRange } from "react-day-picker";
 import { Filter } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -54,7 +51,9 @@ export type StockMovementRow = {
     | "RETURN"
     | "LOSS";
   quantity: number;
+  balanceBefore: number;
   balanceAfter: number;
+  variance: number;
   notes: string | null;
   referenceType: string | null;
   recordedByName: string;
@@ -62,6 +61,7 @@ export type StockMovementRow = {
 };
 
 type Station = { id: string; name: string; code: string };
+type TankOption = { id: string; name: string; stationId: string; stationName: string; productType: string };
 
 const MOVEMENT_TYPES: StockMovementRow["movementType"][] = [
   "OPENING_BALANCE",
@@ -103,39 +103,43 @@ function fmtLiters(n: number) {
 export function StockMovementsManager({
   initialRows,
   stations,
+  tanks,
 }: {
   initialRows: StockMovementRow[];
   stations: Station[];
+  tanks: TankOption[];
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [draftDateRange, setDraftDateRange] = React.useState<DateRange | undefined>({
-    from: addDays(new Date(), -30),
-    to: new Date(),
-  });
   const [draftStationIds, setDraftStationIds] = React.useState<string[]>([]);
+  const [draftTankIds, setDraftTankIds] = React.useState<string[]>([]);
   const [draftProduct, setDraftProduct] = React.useState<string>("ALL");
   const [draftType, setDraftType] = React.useState<string>("ALL");
 
-  const [appliedDateRange, setAppliedDateRange] = React.useState<DateRange | undefined>(draftDateRange);
   const [appliedStationIds, setAppliedStationIds] = React.useState<string[]>([]);
+  const [appliedTankIds, setAppliedTankIds] = React.useState<string[]>([]);
   const [appliedProduct, setAppliedProduct] = React.useState<string>("ALL");
   const [appliedType, setAppliedType] = React.useState<string>("ALL");
 
+  const selectableTanks = React.useMemo(() => {
+    if (draftStationIds.length === 0) return tanks;
+    return tanks.filter((tank) => draftStationIds.includes(tank.stationId));
+  }, [tanks, draftStationIds]);
+
   const applyFilters = React.useCallback(() => {
-    setAppliedDateRange(draftDateRange);
     setAppliedStationIds(draftStationIds);
+    setAppliedTankIds(draftTankIds);
     setAppliedProduct(draftProduct);
     setAppliedType(draftType);
     setIsOpen(false);
-  }, [draftDateRange, draftStationIds, draftProduct, draftType]);
+  }, [draftStationIds, draftTankIds, draftProduct, draftType]);
 
   const clearFilters = React.useCallback(() => {
-    setDraftDateRange(undefined);
     setDraftStationIds([]);
+    setDraftTankIds([]);
     setDraftProduct("ALL");
     setDraftType("ALL");
-    setAppliedDateRange(undefined);
     setAppliedStationIds([]);
+    setAppliedTankIds([]);
     setAppliedProduct("ALL");
     setAppliedType("ALL");
     setIsOpen(false);
@@ -144,36 +148,27 @@ export function StockMovementsManager({
   const filteredRows = React.useMemo(() => {
     return initialRows.filter((row) => {
       if (appliedStationIds.length > 0 && !appliedStationIds.includes(row.stationId)) return false;
+      if (appliedTankIds.length > 0 && !appliedTankIds.includes(row.tankId)) return false;
       if (appliedProduct !== "ALL" && row.productType !== appliedProduct) return false;
       if (appliedType !== "ALL" && row.movementType !== appliedType) return false;
-
-      const recordedAt = new Date(row.recordedAt);
-      if (appliedDateRange?.from) {
-        const start = new Date(appliedDateRange.from);
-        start.setHours(0, 0, 0, 0);
-        if (recordedAt < start) return false;
-      }
-      if (appliedDateRange?.to) {
-        const end = new Date(appliedDateRange.to);
-        end.setHours(23, 59, 59, 999);
-        if (recordedAt > end) return false;
-      }
       return true;
     });
-  }, [initialRows, appliedStationIds, appliedProduct, appliedType, appliedDateRange]);
+  }, [initialRows, appliedStationIds, appliedTankIds, appliedProduct, appliedType]);
 
   const metrics = React.useMemo(() => {
     let delivered = 0;
     let sold = 0;
     let lost = 0;
+    let variance = 0;
 
     filteredRows.forEach((row) => {
+      variance += row.variance;
       if (row.movementType === "DELIVERY") delivered += Math.abs(row.quantity);
       if (row.movementType === "SALE") sold += Math.abs(row.quantity);
       if (row.movementType === "LOSS") lost += Math.abs(row.quantity);
     });
 
-    return { count: filteredRows.length, delivered, sold, lost };
+    return { count: filteredRows.length, delivered, sold, lost, variance };
   }, [filteredRows]);
 
   const insightStats = React.useMemo(
@@ -200,6 +195,13 @@ export function StockMovementsManager({
           value: metrics.lost,
           color: "#f43f5e",
           format: (n) => fmtLiters(n),
+        },
+        {
+          key: "variance",
+          label: "Net Variance",
+          value: metrics.variance,
+          color: metrics.variance < 0 ? "#f43f5e" : "#10b981",
+          format: (n) => `${n > 0 ? "+" : ""}${fmtLiters(n)}`,
         },
       ]),
     [metrics]
@@ -228,6 +230,10 @@ export function StockMovementsManager({
         header: ({ column }) => <DataTableColumnHeader column={column} title="Tank" />,
         meta: { label: "Tank" },
         cell: ({ row }) => <span>{row.original.tankName}</span>,
+        filterFn: (row, id, value) => {
+          if (!Array.isArray(value)) return true;
+          return value.includes(row.getValue(id));
+        },
       },
       {
         accessorKey: "productType",
@@ -254,27 +260,37 @@ export function StockMovementsManager({
         },
       },
       {
-        accessorKey: "quantity",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Quantity" />,
-        meta: { label: "Quantity" },
+        accessorKey: "balanceBefore",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Before" />,
+        meta: { label: "Before" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums text-muted-foreground">
+            {fmtLiters(row.original.balanceBefore)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "variance",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Variance" />,
+        meta: { label: "Variance" },
         cell: ({ row }) => {
-          const qty = row.original.quantity;
+          const variance = row.original.variance;
           return (
             <span
               className={cn(
                 "font-mono font-semibold tabular-nums",
-                qty > 0 ? "text-emerald-600" : qty < 0 ? "text-rose-600" : "text-muted-foreground"
+                variance > 0 ? "text-emerald-600" : variance < 0 ? "text-rose-600" : "text-muted-foreground"
               )}
             >
-              {qty > 0 ? "+" : ""}
-              {fmtLiters(qty)}
+              {variance > 0 ? "+" : ""}
+              {fmtLiters(variance)}
             </span>
           );
         },
         footer: ({ table }) => {
           const total = table
             .getFilteredRowModel()
-            .rows.reduce((sum, row) => sum + row.original.quantity, 0);
+            .rows.reduce((sum, row) => sum + row.original.variance, 0);
           return (
             <span className={cn("font-mono", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
               {total > 0 ? "+" : ""}
@@ -285,10 +301,10 @@ export function StockMovementsManager({
       },
       {
         accessorKey: "balanceAfter",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Balance" />,
-        meta: { label: "Balance" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="After" />,
+        meta: { label: "After" },
         cell: ({ row }) => (
-          <span className="font-mono tabular-nums text-muted-foreground">
+          <span className="font-mono tabular-nums">
             {fmtLiters(row.original.balanceAfter)}
           </span>
         ),
@@ -325,8 +341,16 @@ export function StockMovementsManager({
         label: "Product",
         options: ["PMS", "AGO", "DPK", "LPG"].map((p) => ({ label: p, value: p })),
       },
+      {
+        id: "tankName",
+        label: "Tank",
+        options: tanks.map((tank) => ({
+          label: stations.length > 1 ? `${tank.name} (${tank.stationName})` : tank.name,
+          value: tank.name,
+        })),
+      },
     ],
-    []
+    [tanks, stations.length]
   );
 
   const filterSheet = (
@@ -382,7 +406,14 @@ export function StockMovementsManager({
                           if (checked) {
                             setDraftStationIds([...draftStationIds, s.id]);
                           } else {
-                            setDraftStationIds(draftStationIds.filter((id) => id !== s.id));
+                            const nextStationIds = draftStationIds.filter((id) => id !== s.id);
+                            setDraftStationIds(nextStationIds);
+                            setDraftTankIds((current) =>
+                              current.filter((tankId) => {
+                                const tank = tanks.find((item) => item.id === tankId);
+                                return tank && (nextStationIds.length === 0 || nextStationIds.includes(tank.stationId));
+                              })
+                            );
                           }
                         }}
                       />
@@ -399,36 +430,64 @@ export function StockMovementsManager({
             </Popover>
           </div>
 
-          <div className="w-full space-y-3">
-            <Label className="text-sm font-semibold">Date Range</Label>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">From</Label>
-                <Input
-                  type="date"
-                  value={draftDateRange?.from ? format(draftDateRange.from, "yyyy-MM-dd") : ""}
-                  onChange={(e) =>
-                    setDraftDateRange((prev) => ({
-                      from: e.target.value ? new Date(e.target.value) : undefined,
-                      to: prev?.to,
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">To</Label>
-                <Input
-                  type="date"
-                  value={draftDateRange?.to ? format(draftDateRange.to, "yyyy-MM-dd") : ""}
-                  onChange={(e) =>
-                    setDraftDateRange((prev) => ({
-                      from: prev?.from,
-                      to: e.target.value ? new Date(e.target.value) : undefined,
-                    }))
-                  }
-                />
-              </div>
-            </div>
+          <div className="w-full space-y-1">
+            <Label className="text-xs font-medium text-muted-foreground">Tank</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "h-9 w-full justify-start text-left font-normal",
+                    draftTankIds.length === 0 && "text-muted-foreground"
+                  )}
+                >
+                  {draftTankIds.length === 0
+                    ? "All Tanks"
+                    : `${draftTankIds.length} tank(s)`}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-2" align="start">
+                <div className="max-h-64 space-y-2 overflow-y-auto">
+                  <div className="flex items-center space-x-2 p-1">
+                    <Checkbox
+                      id="tank-all"
+                      checked={draftTankIds.length === 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) setDraftTankIds([]);
+                      }}
+                    />
+                    <label htmlFor="tank-all" className="cursor-pointer text-sm font-medium leading-none">
+                      All Tanks
+                    </label>
+                  </div>
+                  {selectableTanks.map((tank) => (
+                    <div key={tank.id} className="flex items-center space-x-2 p-1">
+                      <Checkbox
+                        id={`tank-${tank.id}`}
+                        checked={draftTankIds.includes(tank.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setDraftTankIds([...draftTankIds, tank.id]);
+                          } else {
+                            setDraftTankIds(draftTankIds.filter((id) => id !== tank.id));
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor={`tank-${tank.id}`}
+                        className="cursor-pointer text-sm font-medium leading-none"
+                      >
+                        {tank.name}
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          {tank.productType}
+                          {stations.length > 1 ? ` · ${tank.stationName}` : ""}
+                        </span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="w-full space-y-1">

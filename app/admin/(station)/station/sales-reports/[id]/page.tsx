@@ -13,6 +13,30 @@ const userSelect = {
   },
 };
 
+const bankSelect = {
+  select: {
+    id: true,
+    accountName: true,
+    accountNumber: true,
+    bankName: true,
+  },
+};
+
+const repaymentSelect = {
+  id: true,
+  amountPos: true,
+  amountTransfer: true,
+  status: true,
+  logDate: true,
+  posReceiptUrl: true,
+  transferReceiptUrl: true,
+  recordedBy: userSelect,
+  approvedBy: userSelect,
+  reason: true,
+  posBankAccount: bankSelect,
+  transferBankAccount: bankSelect,
+};
+
 export default async function SalesReportDetailsPage({
   params,
 }: {
@@ -22,7 +46,7 @@ export default async function SalesReportDetailsPage({
   const resolvedParams = await params;
 
   const report = await prisma.salesLog.findUnique({
-    where: { 
+    where: {
       id: resolvedParams.id,
       tenantId: actor.tenantId,
     },
@@ -32,20 +56,10 @@ export default async function SalesReportDetailsPage({
       },
       recordedBy: userSelect,
       approvedBy: userSelect,
+      posBankAccount: bankSelect,
+      transferBankAccount: bankSelect,
       debtRepayments: {
-        select: {
-          id: true,
-          amountPos: true,
-          amountTransfer: true,
-          status: true,
-          logDate: true,
-          posReceiptUrl: true,
-          transferReceiptUrl: true,
-          recordedBy: userSelect,
-          approvedBy: userSelect,
-          reason: true,
-
-        },
+        select: repaymentSelect,
       },
       parentSale: {
         select: {
@@ -62,25 +76,13 @@ export default async function SalesReportDetailsPage({
           recordedBy: userSelect,
           approvedBy: userSelect,
           reason: true,
-
+          posBankAccount: bankSelect,
+          transferBankAccount: bankSelect,
           debtRepayments: {
-            select: {
-              id: true,
-              amountPos: true,
-              amountTransfer: true,
-              status: true,
-              logDate: true,
-              posReceiptUrl: true,
-              transferReceiptUrl: true,
-              recordedBy: userSelect,
-              approvedBy: userSelect,
-              reason: true,
-
-            }
-          }
+            select: repaymentSelect,
+          },
         },
       },
-
     },
   });
 

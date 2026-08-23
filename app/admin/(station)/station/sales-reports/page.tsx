@@ -239,6 +239,7 @@ export default async function SalesReportsPage() {
 
     return {
       ...report,
+      parentSaleId: report.parentdeliveryId ?? null,
       openingDip,
       closingDip,
       pricePerLiter,

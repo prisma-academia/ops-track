@@ -2,14 +2,11 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { addDays, format } from "date-fns";
-import { type DateRange } from "react-day-picker";
 import { Filter } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -51,10 +48,12 @@ export type DippingRow = {
   dippingLiters: number;
   beforeLiters?: number | null;
   afterLiters?: number | null;
+  variance?: number | null;
   recordedAt: string;
 };
 
 type Station = { id: string; name: string; code: string };
+type TankOption = { id: string; name: string; stationId: string; stationName: string; productType: string };
 
 const typeVariant: Record<DippingRow["dippingType"], "default" | "secondary" | "outline"> = {
   OPENING: "default",
@@ -97,43 +96,47 @@ function fmtLiters(n: number) {
 export function DippingsManager({
   initialRows,
   stations,
+  tanks,
 }: {
   initialRows: DippingRow[];
   stations: Station[];
+  tanks: TankOption[];
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [draftDateRange, setDraftDateRange] = React.useState<DateRange | undefined>({
-    from: addDays(new Date(), -30),
-    to: new Date(),
-  });
   const [draftStationIds, setDraftStationIds] = React.useState<string[]>([]);
+  const [draftTankIds, setDraftTankIds] = React.useState<string[]>([]);
   const [draftProduct, setDraftProduct] = React.useState<string>("ALL");
   const [draftType, setDraftType] = React.useState<string>("ALL");
   const [draftSource, setDraftSource] = React.useState<string>("ALL");
 
-  const [appliedDateRange, setAppliedDateRange] = React.useState<DateRange | undefined>(draftDateRange);
   const [appliedStationIds, setAppliedStationIds] = React.useState<string[]>([]);
+  const [appliedTankIds, setAppliedTankIds] = React.useState<string[]>([]);
   const [appliedProduct, setAppliedProduct] = React.useState<string>("ALL");
   const [appliedType, setAppliedType] = React.useState<string>("ALL");
   const [appliedSource, setAppliedSource] = React.useState<string>("ALL");
 
+  const selectableTanks = React.useMemo(() => {
+    if (draftStationIds.length === 0) return tanks;
+    return tanks.filter((tank) => draftStationIds.includes(tank.stationId));
+  }, [tanks, draftStationIds]);
+
   const applyFilters = React.useCallback(() => {
-    setAppliedDateRange(draftDateRange);
     setAppliedStationIds(draftStationIds);
+    setAppliedTankIds(draftTankIds);
     setAppliedProduct(draftProduct);
     setAppliedType(draftType);
     setAppliedSource(draftSource);
     setIsOpen(false);
-  }, [draftDateRange, draftStationIds, draftProduct, draftType, draftSource]);
+  }, [draftStationIds, draftTankIds, draftProduct, draftType, draftSource]);
 
   const clearFilters = React.useCallback(() => {
-    setDraftDateRange(undefined);
     setDraftStationIds([]);
+    setDraftTankIds([]);
     setDraftProduct("ALL");
     setDraftType("ALL");
     setDraftSource("ALL");
-    setAppliedDateRange(undefined);
     setAppliedStationIds([]);
+    setAppliedTankIds([]);
     setAppliedProduct("ALL");
     setAppliedType("ALL");
     setAppliedSource("ALL");
@@ -143,24 +146,13 @@ export function DippingsManager({
   const filteredRows = React.useMemo(() => {
     return initialRows.filter((row) => {
       if (appliedStationIds.length > 0 && !appliedStationIds.includes(row.stationId)) return false;
+      if (appliedTankIds.length > 0 && !appliedTankIds.includes(row.tankId)) return false;
       if (appliedProduct !== "ALL" && row.productType !== appliedProduct) return false;
       if (appliedType !== "ALL" && row.dippingType !== appliedType) return false;
       if (appliedSource !== "ALL" && row.source !== appliedSource) return false;
-
-      const recordedAt = new Date(row.recordedAt);
-      if (appliedDateRange?.from) {
-        const start = new Date(appliedDateRange.from);
-        start.setHours(0, 0, 0, 0);
-        if (recordedAt < start) return false;
-      }
-      if (appliedDateRange?.to) {
-        const end = new Date(appliedDateRange.to);
-        end.setHours(23, 59, 59, 999);
-        if (recordedAt > end) return false;
-      }
       return true;
     });
-  }, [initialRows, appliedStationIds, appliedProduct, appliedType, appliedSource, appliedDateRange]);
+  }, [initialRows, appliedStationIds, appliedTankIds, appliedProduct, appliedType, appliedSource]);
 
   const metrics = React.useMemo(() => {
     let openings = 0;
@@ -215,6 +207,10 @@ export function DippingsManager({
         header: ({ column }) => <DataTableColumnHeader column={column} title="Tank" />,
         meta: { label: "Tank" },
         cell: ({ row }) => <span>{row.original.tankName}</span>,
+        filterFn: (row, id, value) => {
+          if (!Array.isArray(value)) return true;
+          return value.includes(row.getValue(id));
+        },
       },
       {
         accessorKey: "productType",
@@ -241,26 +237,59 @@ export function DippingsManager({
         },
       },
       {
-        accessorKey: "dippingLiters",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Volume (L)" />,
-        meta: { label: "Volume (L)" },
+        accessorKey: "beforeLiters",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Before" />,
+        meta: { label: "Before" },
+        cell: ({ row }) =>
+          row.original.beforeLiters != null ? (
+            <span className="font-mono tabular-nums text-muted-foreground">
+              {fmtLiters(row.original.beforeLiters)}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          ),
+      },
+      {
+        accessorKey: "variance",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Variance" />,
+        meta: { label: "Variance" },
         cell: ({ row }) => {
-          const rowData = row.original;
-          if (rowData.dippingType === "WAYBILL" && rowData.beforeLiters != null) {
-            return (
-              <div className="font-mono tabular-nums">
-                <span className={cn(rowData.dippingLiters >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                  {rowData.dippingLiters >= 0 ? "+" : ""}
-                  {fmtLiters(rowData.dippingLiters)}
-                </span>
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {rowData.beforeLiters.toLocaleString()} → {rowData.afterLiters?.toLocaleString() ?? "—"}
-                </span>
-              </div>
-            );
-          }
-          return <span className="font-mono tabular-nums">{fmtLiters(rowData.dippingLiters)}</span>;
+          const variance = row.original.variance;
+          if (variance == null) return <span className="text-muted-foreground">—</span>;
+          return (
+            <span
+              className={cn(
+                "font-mono font-semibold tabular-nums",
+                variance > 0 ? "text-emerald-600" : variance < 0 ? "text-rose-600" : "text-muted-foreground"
+              )}
+            >
+              {variance > 0 ? "+" : ""}
+              {fmtLiters(variance)}
+            </span>
+          );
         },
+        footer: ({ table }) => {
+          const total = table
+            .getFilteredRowModel()
+            .rows.reduce((sum, row) => sum + (row.original.variance ?? 0), 0);
+          return (
+            <span className={cn("font-mono", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
+              {total > 0 ? "+" : ""}
+              {fmtLiters(total)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "afterLiters",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="After" />,
+        meta: { label: "After" },
+        cell: ({ row }) =>
+          row.original.afterLiters != null ? (
+            <span className="font-mono tabular-nums">{fmtLiters(row.original.afterLiters)}</span>
+          ) : (
+            <span className="font-mono tabular-nums">{fmtLiters(row.original.dippingLiters)}</span>
+          ),
       },
       {
         accessorKey: "reason",
@@ -302,8 +331,16 @@ export function DippingsManager({
         label: "Product",
         options: ["PMS", "AGO", "DPK", "LPG"].map((p) => ({ label: p, value: p })),
       },
+      {
+        id: "tankName",
+        label: "Tank",
+        options: tanks.map((tank) => ({
+          label: stations.length > 1 ? `${tank.name} (${tank.stationName})` : tank.name,
+          value: tank.name,
+        })),
+      },
     ],
-    []
+    [tanks, stations.length]
   );
 
   const filterSheet = (
@@ -359,7 +396,14 @@ export function DippingsManager({
                           if (checked) {
                             setDraftStationIds([...draftStationIds, s.id]);
                           } else {
-                            setDraftStationIds(draftStationIds.filter((id) => id !== s.id));
+                            const nextStationIds = draftStationIds.filter((id) => id !== s.id);
+                            setDraftStationIds(nextStationIds);
+                            setDraftTankIds((current) =>
+                              current.filter((tankId) => {
+                                const tank = tanks.find((item) => item.id === tankId);
+                                return tank && (nextStationIds.length === 0 || nextStationIds.includes(tank.stationId));
+                              })
+                            );
                           }
                         }}
                       />
@@ -376,36 +420,64 @@ export function DippingsManager({
             </Popover>
           </div>
 
-          <div className="w-full space-y-3">
-            <Label className="text-sm font-semibold">Date Range</Label>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">From</Label>
-                <Input
-                  type="date"
-                  value={draftDateRange?.from ? format(draftDateRange.from, "yyyy-MM-dd") : ""}
-                  onChange={(e) =>
-                    setDraftDateRange((prev) => ({
-                      from: e.target.value ? new Date(e.target.value) : undefined,
-                      to: prev?.to,
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">To</Label>
-                <Input
-                  type="date"
-                  value={draftDateRange?.to ? format(draftDateRange.to, "yyyy-MM-dd") : ""}
-                  onChange={(e) =>
-                    setDraftDateRange((prev) => ({
-                      from: prev?.from,
-                      to: e.target.value ? new Date(e.target.value) : undefined,
-                    }))
-                  }
-                />
-              </div>
-            </div>
+          <div className="w-full space-y-1">
+            <Label className="text-xs font-medium text-muted-foreground">Tank</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "h-9 w-full justify-start text-left font-normal",
+                    draftTankIds.length === 0 && "text-muted-foreground"
+                  )}
+                >
+                  {draftTankIds.length === 0
+                    ? "All Tanks"
+                    : `${draftTankIds.length} tank(s)`}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-2" align="start">
+                <div className="max-h-64 space-y-2 overflow-y-auto">
+                  <div className="flex items-center space-x-2 p-1">
+                    <Checkbox
+                      id="tank-all"
+                      checked={draftTankIds.length === 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) setDraftTankIds([]);
+                      }}
+                    />
+                    <label htmlFor="tank-all" className="cursor-pointer text-sm font-medium leading-none">
+                      All Tanks
+                    </label>
+                  </div>
+                  {selectableTanks.map((tank) => (
+                    <div key={tank.id} className="flex items-center space-x-2 p-1">
+                      <Checkbox
+                        id={`tank-${tank.id}`}
+                        checked={draftTankIds.includes(tank.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setDraftTankIds([...draftTankIds, tank.id]);
+                          } else {
+                            setDraftTankIds(draftTankIds.filter((id) => id !== tank.id));
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor={`tank-${tank.id}`}
+                        className="cursor-pointer text-sm font-medium leading-none"
+                      >
+                        {tank.name}
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          {tank.productType}
+                          {stations.length > 1 ? ` · ${tank.stationName}` : ""}
+                        </span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="w-full space-y-1">

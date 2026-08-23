@@ -27,7 +27,6 @@ const DOCUMENT_TYPE_CODES: Record<string, string> = {
   "station-sales-reports": "SLR",
   "station-stock-report": "STKR",
   "station-delivery-pnl": "DLR",
-  "station-pnl-report": "PLR",
 };
 
 export function getPrintDocumentTitle(tableId: string) {

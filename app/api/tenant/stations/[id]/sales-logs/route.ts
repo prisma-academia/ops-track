@@ -26,7 +26,15 @@ const CreateSalesLogSchema = z.object({
   dippingClosingId: z.string().optional(),
   clientId: z.string().optional(),
   isDebtRepayment: z.boolean().optional().default(false),
+  parentSaleId: z.string().nullable().optional(),
 });
+
+function serializeSalesLog<T extends { parentdeliveryId?: string | null }>(log: T) {
+  return {
+    ...log,
+    parentSaleId: log.parentdeliveryId ?? null,
+  };
+}
 
 export async function GET(
   request: Request,
@@ -65,7 +73,7 @@ export async function GET(
           include,
         }),
       ]);
-      return ok(rows, buildOffsetPageMeta(totalCount, page, take));
+      return ok(rows.map(serializeSalesLog), buildOffsetPageMeta(totalCount, page, take));
     }
 
     const salesLogs = await prisma.salesLog.findMany({
@@ -74,7 +82,7 @@ export async function GET(
       include,
     });
 
-    return ok(salesLogs);
+    return ok(salesLogs.map(serializeSalesLog));
   } catch (e) {
     return handleError(e);
   }
@@ -117,7 +125,20 @@ export async function POST(
         where: { id: body.clientId },
       });
       if (existingLog) {
-        return ok(existingLog);
+        return ok({ salesLog: serializeSalesLog(existingLog) });
+      }
+    }
+
+    const parentSaleId = body.parentSaleId || null;
+    if (body.isDebtRepayment) {
+      if (!parentSaleId) {
+        throw new DomainError(400, "invalid_input", "A parent sale is required for debt repayments.");
+      }
+      const parentSale = await prisma.salesLog.findFirst({
+        where: { id: parentSaleId, stationId, tenantId: actor.tenantId },
+      });
+      if (!parentSale) {
+        throw new DomainError(400, "invalid_input", "Parent sales report not found.");
       }
     }
 
@@ -161,6 +182,7 @@ export async function POST(
           recordedById: actor.userId,
           dippingClosingId: body.dippingClosingId,
           isDebtRepayment: body.isDebtRepayment,
+          parentdeliveryId: parentSaleId,
         },
       });
 
@@ -202,7 +224,7 @@ export async function POST(
       userAgent: meta.userAgent,
     });
 
-    return ok({ salesLog });
+    return ok({ salesLog: serializeSalesLog(salesLog) });
   } catch (e) {
     return handleError(e);
   }

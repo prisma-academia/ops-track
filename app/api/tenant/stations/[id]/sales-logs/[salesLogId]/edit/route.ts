@@ -82,7 +82,7 @@ export async function PUT(
       userAgent: meta.userAgent,
     });
 
-    return ok({ salesLog: updated });
+    return ok({ salesLog: { ...updated, parentSaleId: updated.parentdeliveryId ?? null } });
   } catch (e) {
     return handleError(e);
   }

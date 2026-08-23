@@ -36,7 +36,6 @@ const NAV: NavItemConfig[] = [
     children: [
       { href: "/admin/station/dippings", key: "dippings", title: "Dippings", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_DIPPINGS_READ.key },
       { href: "/admin/station/stock-movements", key: "stockMovements", title: "Stock Movements", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STATIONS_READ.key },
-      { href: "/admin/station/stock-report", key: "stockReport", title: "Inventory Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
     ],
   },
   {
@@ -47,8 +46,8 @@ const NAV: NavItemConfig[] = [
     permission: null,
     children: [
       { href: "/admin/station/sales-reports", key: "salesReports", title: "Sales Reports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_SALES_REPORTS_READ.key },
-      { href: "/admin/station/delivery-pnl", key: "deliveryPnl", title: "Delivery PnL", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
-      { href: "/admin/station/pnl-report", key: "pnlReport", title: "Profit Report", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_PROFIT_REPORTS_READ.key },
+      { href: "/admin/station/delivery-pnl", key: "deliveryPnl", title: "Delivery Reports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
+      { href: "/admin/station/stock-report", key: "stockReport", title: "Stock Reports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
     ],
   },
   {

@@ -20,11 +20,22 @@ export default async function DippingsPage() {
     ? { station: { organizationId: activeOrgId } }
     : {};
 
-  const [stations, sessions, tankDippings, waybillDippings] = await Promise.all([
+  const [stations, tanks, sessions, tankDippings, waybillDippings] = await Promise.all([
     prisma.station.findMany({
       where: stationWhere,
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" },
+    }),
+    prisma.tank.findMany({
+      where: { tenantId: actor.tenantId, station: stationWhere },
+      select: {
+        id: true,
+        name: true,
+        stationId: true,
+        productType: true,
+        station: { select: { name: true } },
+      },
+      orderBy: [{ station: { name: "asc" } }, { name: "asc" }],
     }),
     prisma.dippingSession.findMany({
       where: {
@@ -90,10 +101,13 @@ export default async function DippingsPage() {
       dippingType: "OPENING",
       reason: "OPENING_DIP",
       dippingLiters: Number(session.openingLiters),
+      afterLiters: Number(session.openingLiters),
       recordedAt: session.openedAt.toISOString(),
     });
 
     for (const closing of session.closings) {
+      const before = Number(session.openingLiters);
+      const after = Number(closing.closingLiters);
       rows.push({
         id: `session-close-${closing.id}`,
         source: "SESSION",
@@ -105,7 +119,10 @@ export default async function DippingsPage() {
         productType: session.tank.productType,
         dippingType: "CLOSING",
         reason: closing.reason,
-        dippingLiters: Number(closing.closingLiters),
+        dippingLiters: after,
+        beforeLiters: before,
+        afterLiters: after,
+        variance: after - before,
         recordedAt: closing.recordedAt.toISOString(),
       });
     }
@@ -132,6 +149,7 @@ export default async function DippingsPage() {
       dippingType,
       reason: dip.reason || dip.shift,
       dippingLiters: Number(dip.dippingLiters),
+      afterLiters: Number(dip.dippingLiters),
       recordedAt: dip.recordedAt.toISOString(),
     });
   }
@@ -155,6 +173,7 @@ export default async function DippingsPage() {
       dippingLiters: after != null ? after - before : 0,
       beforeLiters: before,
       afterLiters: after,
+      variance: after != null ? after - before : null,
       recordedAt: dip.createdAt.toISOString(),
     });
   }
@@ -165,6 +184,17 @@ export default async function DippingsPage() {
     <DippingsManager
       initialRows={JSON.parse(JSON.stringify(rows))}
       stations={JSON.parse(JSON.stringify(stations))}
+      tanks={JSON.parse(
+        JSON.stringify(
+          tanks.map((tank) => ({
+            id: tank.id,
+            name: tank.name,
+            stationId: tank.stationId,
+            stationName: tank.station.name,
+            productType: tank.productType,
+          }))
+        )
+      )}
     />
   );
 }

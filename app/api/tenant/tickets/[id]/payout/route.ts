@@ -2,8 +2,8 @@ import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { resolveTicket } from "@/lib/tickets/ticket-service";
-import { ResolveTicketSchema } from "@/lib/tickets/schemas";
+import { payoutTicket } from "@/lib/tickets/ticket-service";
+import { PayoutTicketSchema } from "@/lib/tickets/schemas";
 
 export async function POST(
   request: Request,
@@ -13,15 +13,17 @@ export async function POST(
     await requireCsrf(request);
     const { id } = await params;
     const actor = await requireTenantActor(PERMISSIONS.TENANT_TICKETS_WRITE.key, "STATION");
-    const body = ResolveTicketSchema.parse(await request.json());
+    const body = PayoutTicketSchema.parse(await request.json());
 
-    const ticket = await resolveTicket({
+    const ticket = await payoutTicket({
       ticketId: id,
       tenantId: actor.tenantId,
       actorUserId: actor.userId,
-      action: body.action,
-      remark: body.remark,
-      approvedAmount: body.approvedAmount,
+      paymentMethod: body.paymentMethod,
+      bankAccountId: body.bankAccountId,
+      amount: body.amount,
+      receiptUrl: body.receiptUrl,
+      description: body.description,
     });
 
     return ok({ ticket });

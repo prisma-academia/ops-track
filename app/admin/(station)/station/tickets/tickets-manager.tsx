@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NumberInput } from "@/components/ui/number-input";
@@ -47,6 +46,24 @@ import {
   Calendar,
   Wrench,
   Plus,
+  MapPin,
+  Smartphone,
+  Monitor,
+  Cpu,
+  Receipt,
+  AlertTriangle,
+  Droplets,
+  Banknote,
+  HandCoins,
+  Wallet,
+  User,
+  Image as ImageIcon,
+  Link2,
+  CircleDot,
+  Clock,
+  BadgeCheck,
+  XCircle,
+  Lock,
 } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
@@ -55,12 +72,48 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { apiPost } from "@/lib/client/api";
 
 function OriginBadge({ origin }: { origin: string }) {
+  const Icon = origin === "SYSTEM" ? Cpu : origin === "MOBILE" ? Smartphone : Monitor;
   const label = origin === "SYSTEM" ? "System" : origin === "MOBILE" ? "Mobile" : "Admin";
   return (
-    <span className="font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-muted rounded">
+    <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-muted rounded">
+      <Icon className="size-3" />
       {label}
     </span>
   );
+}
+
+function personName(person?: { firstName?: string | null; lastName?: string | null; email?: string | null } | null) {
+  if (!person) return "—";
+  const name = [person.firstName, person.lastName].filter(Boolean).join(" ").trim();
+  return name || person.email || "—";
+}
+
+function categoryMeta(category: string) {
+  if (category === "EQUIPMENT_FAULT") return { icon: Wrench, className: "text-orange-600 bg-orange-50" };
+  if (category === "INCIDENT_REPORT" || category === "CASH_DISCREPANCY") {
+    return { icon: AlertTriangle, className: "text-rose-600 bg-rose-50" };
+  }
+  if (category === "INVENTORY_VARIANCE") return { icon: Droplets, className: "text-indigo-600 bg-indigo-50" };
+  if (category === "EXPENSE_REQUEST" || category === "EXPENSE_VERIFY") {
+    return { icon: Receipt, className: "text-emerald-700 bg-emerald-50" };
+  }
+  return { icon: CircleDot, className: "text-slate-600 bg-slate-50" };
+}
+
+function statusMeta(status: string) {
+  if (status === "CLOSED") return { icon: Lock, className: "text-emerald-700 bg-emerald-50" };
+  if (status === "RESOLVED") return { icon: BadgeCheck, className: "text-emerald-600 bg-emerald-50" };
+  if (status === "REJECTED") return { icon: XCircle, className: "text-rose-600 bg-rose-50" };
+  if (status === "APPROVED") return { icon: Banknote, className: "text-indigo-600 bg-indigo-50" };
+  if (status === "PENDING_APPROVAL") return { icon: Clock, className: "text-amber-600 bg-amber-50" };
+  return { icon: AlertCircle, className: "text-amber-700 bg-amber-50" };
+}
+
+function formatNaira(value: unknown) {
+  if (value == null || value === "") return null;
+  const amount = Number(value);
+  if (Number.isNaN(amount)) return null;
+  return `₦${amount.toLocaleString()}`;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -69,16 +122,19 @@ const CATEGORY_LABELS: Record<string, string> = {
   CASH_DISCREPANCY: "Cash discrepancy",
   EXPENSE_REQUEST: "Spend request",
   EXPENSE_VERIFY: "Expense verify",
+  INCIDENT_REPORT: "Incident report",
   OTHER: "Other",
 };
 
 export function TicketsManager({
   initialTickets,
   stations,
+  bankAccounts = [],
   canCreate = false,
 }: {
   initialTickets: any[];
   stations: { id: string; name: string; code: string }[];
+  bankAccounts?: { id: string; bankName: string; accountName: string; accountNumber: string }[];
   canCreate?: boolean;
 }) {
   const router = useRouter();
@@ -94,12 +150,14 @@ export function TicketsManager({
   const [creating, setCreating] = useState(false);
   const [createForm, setCreateForm] = useState({
     stationId: stations[0]?.id ?? "",
-    category: "OTHER",
+    type: "EXPENSE" as "EXPENSE" | "EQUIPMENT_FAULT" | "INCIDENT_REPORT",
     title: "",
     description: "",
-    needSpend: false,
+    spendIntent: "REQUEST" as "REQUEST" | "ALREADY_PAID",
     requestedAmount: "",
     requestedCategory: "OTHER",
+    paymentMethod: "CASH",
+    bankAccountId: "",
   });
 
   const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>({
@@ -191,7 +249,7 @@ export function TicketsManager({
     let inventoryCount = 0;
 
     filteredTickets.forEach((t) => {
-      if (t.status === "OPEN" || t.status === "PENDING_APPROVAL") openCount++;
+      if (t.status === "OPEN" || t.status === "PENDING_APPROVAL" || t.status === "APPROVED") openCount++;
       if (t.status === "RESOLVED" || t.status === "CLOSED") resolvedCount++;
       if (t.category === "INVENTORY_VARIANCE") inventoryCount++;
     });
@@ -207,17 +265,17 @@ export function TicketsManager({
   ];
 
   const getStatusBadge = (status: string) => {
-    const isResolved = status === "RESOLVED" || status === "CLOSED";
-    const isPending = status === "PENDING_APPROVAL" || status === "OPEN";
+    const meta = statusMeta(status);
+    const Icon = meta.icon;
     return (
       <span
         className={cn(
-          "text-[10px] font-bold uppercase tracking-wider whitespace-nowrap print:text-black",
-          isResolved ? "text-emerald-600 bg-emerald-50" : isPending ? "text-amber-600 bg-amber-50" : "text-slate-600 bg-slate-50",
-          "px-2 py-1 rounded print:bg-transparent print:p-0",
+          "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap print:text-black px-2 py-1 rounded print:bg-transparent print:p-0",
+          meta.className,
         )}
       >
-        {status.replace("_", " ")}
+        <Icon className="size-3 print:hidden" />
+        {status.replaceAll("_", " ")}
       </span>
     );
   };
@@ -230,21 +288,35 @@ export function TicketsManager({
       return;
     }
     if (
-      createForm.needSpend &&
+      createForm.type === "EXPENSE" &&
       (!createForm.requestedAmount || Number(createForm.requestedAmount) <= 0 || !createForm.requestedCategory)
     ) {
-      alert("Spend requests need a positive amount and expense category.");
+      alert("Expense tickets need a positive amount and expense category.");
       return;
     }
     setCreating(true);
     try {
+      const category =
+        createForm.type === "EXPENSE"
+          ? createForm.spendIntent === "ALREADY_PAID"
+            ? "EXPENSE_VERIFY"
+            : "EXPENSE_REQUEST"
+          : createForm.type;
       const res = await apiPost<{ ticket: any }>("/api/tenant/tickets", {
         stationId: createForm.stationId,
-        category: createForm.needSpend ? "EXPENSE_REQUEST" : createForm.category,
+        category,
         title: createForm.title.trim() || undefined,
         description: createForm.description.trim(),
-        requestedAmount: createForm.needSpend ? Number(createForm.requestedAmount) : undefined,
-        requestedCategory: createForm.needSpend ? createForm.requestedCategory : undefined,
+        spendIntent: createForm.type === "EXPENSE" ? createForm.spendIntent : "NONE",
+        requestedAmount: createForm.type === "EXPENSE" ? Number(createForm.requestedAmount) : undefined,
+        requestedCategory: createForm.type === "EXPENSE" ? createForm.requestedCategory : undefined,
+        alreadyPaid:
+          createForm.type === "EXPENSE" && createForm.spendIntent === "ALREADY_PAID"
+            ? {
+                paymentMethod: createForm.paymentMethod,
+                bankAccountId: createForm.paymentMethod === "CASH" ? null : createForm.bankAccountId || null,
+              }
+            : undefined,
       });
       if (res.error) {
         alert(res.error.message);
@@ -256,12 +328,14 @@ export function TicketsManager({
       setCreateOpen(false);
       setCreateForm({
         stationId: stations[0]?.id ?? "",
-        category: "OTHER",
+        type: "EXPENSE",
         title: "",
         description: "",
-        needSpend: false,
+        spendIntent: "REQUEST",
         requestedAmount: "",
         requestedCategory: "OTHER",
+        paymentMethod: "CASH",
+        bankAccountId: "",
       });
       router.refresh();
     } finally {
@@ -391,6 +465,8 @@ export function TicketsManager({
                           <SelectItem value="ALL">All Status</SelectItem>
                           <SelectItem value="OPEN">Open</SelectItem>
                           <SelectItem value="PENDING_APPROVAL">Pending Approval</SelectItem>
+                          <SelectItem value="APPROVED">Approved (awaiting payout)</SelectItem>
+                          <SelectItem value="REJECTED">Rejected</SelectItem>
                           <SelectItem value="RESOLVED">Resolved</SelectItem>
                           <SelectItem value="CLOSED">Closed</SelectItem>
                         </SelectContent>
@@ -469,7 +545,11 @@ export function TicketsManager({
                   <div className="flex flex-col">
                     <CardTitle className="text-base flex items-center gap-2">
                       {t.station?.name || "Global"}
-                      <Badge variant="outline" className="text-[10px] font-mono tracking-wider font-semibold">
+                      <Badge variant="outline" className="text-[10px] font-mono tracking-wider font-semibold gap-1">
+                        {(() => {
+                          const TypeIcon = categoryMeta(t.category).icon;
+                          return <TypeIcon className="size-3" />;
+                        })()}
                         {CATEGORY_LABELS[t.category] || t.category}
                       </Badge>
                       <OriginBadge origin={t.origin} />
@@ -484,8 +564,17 @@ export function TicketsManager({
                 <CardContent className="p-4 space-y-3">
                   <h4 className="font-semibold text-sm">{t.title}</h4>
                   <p className="text-xs text-muted-foreground">{t.originStory || t.description}</p>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1"><User className="size-3" />{personName(t.raisedBy)}</span>
+                    {formatNaira(t.requestedAmount) && (
+                      <span className="inline-flex items-center gap-1"><Banknote className="size-3" />{formatNaira(t.requestedAmount)}</span>
+                    )}
+                    {t.children?.length > 0 && (
+                      <span className="inline-flex items-center gap-1"><Link2 className="size-3" />{t.children.length} linked spend</span>
+                    )}
+                  </div>
                   <Button size="sm" variant="outline" onClick={() => openTicket(t.id)}>
-                    {t.status === "RESOLVED" || t.status === "CLOSED" ? "View details" : "Review"}
+                    {t.status === "RESOLVED" || t.status === "CLOSED" || t.status === "REJECTED" ? "View details" : "Review"}
                   </Button>
                 </CardContent>
               </Card>
@@ -499,29 +588,95 @@ export function TicketsManager({
                   <tr>
                     <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r">Date</th>
                     <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r">Station</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r">Type</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r">Ticket</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r">Raised by</th>
                     <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r">Origin</th>
-                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r">Category</th>
-                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r">How it was made</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r">Spend</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r">Linked</th>
+                    <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r">Evidence</th>
                     <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-r">Status</th>
                     <th className="h-9 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-center text-muted-foreground hide-on-print">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredTickets.map((t) => {
-                    const isResolved = t.status === "RESOLVED" || t.status === "CLOSED";
+                    const isResolved = t.status === "RESOLVED" || t.status === "CLOSED" || t.status === "REJECTED";
+                    const type = categoryMeta(t.category);
+                    const TypeIcon = type.icon;
+                    const requested = formatNaira(t.requestedAmount);
+                    const approved = formatNaira(t.approvedAmount);
+                    const paid = formatNaira(t.paidAmount);
+                    const childCount = Array.isArray(t.children) ? t.children.length : 0;
+                    const evidenceCount = Array.isArray(t.evidenceUrls) ? t.evidenceUrls.length : 0;
+                    const intent = t.spendIntent === "ALREADY_PAID" ? "Already paid" : t.spendIntent === "REQUEST" ? "Request" : null;
+                    const IntentIcon = t.spendIntent === "ALREADY_PAID" ? Wallet : HandCoins;
                     return (
                       <tr key={t.id} className="hover:bg-muted/20 bg-background">
-                        <td className="px-3 py-2 whitespace-nowrap border-r align-top">{formatHumanReadableDate(t.createdAt)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap font-semibold border-r align-top">{t.station?.name || "-"}</td>
-                        <td className="px-3 py-2 whitespace-nowrap border-r align-top"><OriginBadge origin={t.origin} /></td>
                         <td className="px-3 py-2 whitespace-nowrap border-r align-top">
-                          <span className="font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-muted rounded">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Calendar className="size-3.5 text-muted-foreground" />
+                            {formatHumanReadableDate(t.createdAt)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap border-r align-top">
+                          <span className="inline-flex items-center gap-1.5 font-semibold">
+                            <MapPin className="size-3.5 text-muted-foreground" />
+                            {t.station?.name || "-"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap border-r align-top">
+                          <span className={cn("inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded", type.className)}>
+                            <TypeIcon className="size-3" />
                             {CATEGORY_LABELS[t.category] || t.category}
                           </span>
                         </td>
-                        <td className="px-3 py-2 border-r align-top max-w-sm">
+                        <td className="px-3 py-2 border-r align-top max-w-xs">
                           <div className="font-medium text-sm">{t.title}</div>
-                          <div className="text-xs text-muted-foreground mt-0.5">{t.originStory || t.description}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.originStory || t.description}</div>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap border-r align-top">
+                          <span className="inline-flex items-center gap-1.5">
+                            <User className="size-3.5 text-muted-foreground" />
+                            {personName(t.raisedBy)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap border-r align-top"><OriginBadge origin={t.origin} /></td>
+                        <td className="px-3 py-2 whitespace-nowrap border-r align-top">
+                          {requested ? (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center gap-1 font-semibold">
+                                <Banknote className="size-3.5 text-muted-foreground" />
+                                {requested}
+                              </span>
+                              {intent && (
+                                <div className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                  <IntentIcon className="size-3" />
+                                  {intent}
+                                </div>
+                              )}
+                              {approved && <div className="text-[11px] text-indigo-700">Cap {approved}</div>}
+                              {paid && <div className="text-[11px] text-emerald-700">Paid {paid}</div>}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap border-r align-top">
+                          {t.parent || childCount > 0 ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs">
+                              <Link2 className="size-3.5 text-muted-foreground" />
+                              {t.parent ? "Child spend" : `${childCount} spend`}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap border-r align-top">
+                          <span className="inline-flex items-center gap-1.5 text-xs">
+                            <ImageIcon className="size-3.5 text-muted-foreground" />
+                            {evidenceCount > 0 ? evidenceCount : "—"}
+                          </span>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap border-r align-top">{getStatusBadge(t.status)}</td>
                         <td className="px-3 py-2 text-center hide-on-print align-top">
@@ -542,11 +697,11 @@ export function TicketsManager({
       )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl overflow-visible">
           <DialogHeader>
             <DialogTitle>Create ticket</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-1">
             <div className="space-y-1.5">
               <Label>Station</Label>
               <Select
@@ -556,7 +711,7 @@ export function TicketsManager({
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select station" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   {stations.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.name} ({s.code})
@@ -566,26 +721,26 @@ export function TicketsManager({
               </Select>
             </div>
 
-            {!createForm.needSpend && (
-              <div className="space-y-1.5">
-                <Label>Category</Label>
-                <Select
-                  value={createForm.category}
-                  onValueChange={(category) => setCreateForm((prev) => ({ ...prev, category }))}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="EQUIPMENT_FAULT">Equipment fault</SelectItem>
-                    <SelectItem value="CASH_DISCREPANCY">Cash discrepancy</SelectItem>
-                    <SelectItem value="OTHER">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
             <div className="space-y-1.5">
+              <Label>Type</Label>
+              <Select
+                value={createForm.type}
+                onValueChange={(type) =>
+                  setCreateForm((prev) => ({ ...prev, type: type as typeof prev.type }))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value="EXPENSE">Expense</SelectItem>
+                  <SelectItem value="EQUIPMENT_FAULT">Equipment fault</SelectItem>
+                  <SelectItem value="INCIDENT_REPORT">Report incident</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
               <Label>Title (optional)</Label>
               <Input
                 value={createForm.title}
@@ -594,34 +749,37 @@ export function TicketsManager({
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 sm:col-span-2">
               <Label>Description</Label>
               <Textarea
                 value={createForm.description}
                 onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
                 placeholder="Describe what happened"
-                rows={4}
+                rows={2}
               />
             </div>
 
-            <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
-              <div>
-                <Label htmlFor="need-spend">Need spend approval</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Approve an amount before an expense is recorded against this ticket.
-                </p>
-              </div>
-              <Switch
-                id="need-spend"
-                checked={createForm.needSpend}
-                onCheckedChange={(needSpend) => setCreateForm((prev) => ({ ...prev, needSpend }))}
-              />
-            </div>
-
-            {createForm.needSpend && (
+            {createForm.type === "EXPENSE" && (
               <>
                 <div className="space-y-1.5">
-                  <Label>Requested amount</Label>
+                  <Label>Intent</Label>
+                  <Select
+                    value={createForm.spendIntent}
+                    onValueChange={(spendIntent) =>
+                      setCreateForm((prev) => ({ ...prev, spendIntent: spendIntent as typeof prev.spendIntent }))
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      <SelectItem value="REQUEST">Request money</SelectItem>
+                      <SelectItem value="ALREADY_PAID">Already paid</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Amount</Label>
                   <NumberInput
                     value={createForm.requestedAmount}
                     onChange={(value) =>
@@ -641,7 +799,7 @@ export function TicketsManager({
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper">
                       <SelectItem value="FUEL_FOR_GEN">Generator fuel</SelectItem>
                       <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
                       <SelectItem value="UTILITIES">Utilities</SelectItem>
@@ -650,6 +808,47 @@ export function TicketsManager({
                     </SelectContent>
                   </Select>
                 </div>
+                {createForm.spendIntent === "ALREADY_PAID" ? (
+                  <div className="space-y-1.5">
+                    <Label>How it was paid</Label>
+                    <Select
+                      value={createForm.paymentMethod}
+                      onValueChange={(paymentMethod) => setCreateForm((prev) => ({ ...prev, paymentMethod }))}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        <SelectItem value="CASH">Cash</SelectItem>
+                        <SelectItem value="POS">POS</SelectItem>
+                        <SelectItem value="BANK_TRANSFER">Bank transfer</SelectItem>
+                        <SelectItem value="CHEQUE">Cheque</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="hidden sm:block" />
+                )}
+                {createForm.spendIntent === "ALREADY_PAID" && createForm.paymentMethod !== "CASH" && (
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label>Account used</Label>
+                    <Select
+                      value={createForm.bankAccountId}
+                      onValueChange={(bankAccountId) => setCreateForm((prev) => ({ ...prev, bankAccountId }))}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select account" />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        {bankAccounts.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.bankName} · {a.accountNumber}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </>
             )}
           </div>

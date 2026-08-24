@@ -56,6 +56,7 @@ interface ExpenseRow {
   station: ExpenseStation;
   recordedBy: ExpenseUser | null;
   approvedBy: ExpenseUser | null;
+  ticket?: { id: string; title: string; status: string; category: string } | null;
 }
 
 const CATEGORY_MAP = {
@@ -183,6 +184,18 @@ export function ExpensesManager({
           </div>
         );
       },
+    },
+    {
+      id: "ticket",
+      header: "Ticket",
+      cell: ({ row }) =>
+        row.original.ticket ? (
+          <a href={`/admin/station/tickets/${row.original.ticket.id}`} className="text-xs font-medium underline">
+            {row.original.ticket.title}
+          </a>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        ),
     },
     {
       accessorKey: "amount",

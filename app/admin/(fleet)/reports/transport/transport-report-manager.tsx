@@ -47,14 +47,25 @@ interface TransportRow {
   deliveries: Array<{
     litersDespatched: number | null;
     litersReceived: number | null;
+    amountPerLiter: number;
   }>;
   expectedFee: number;
   totalFee: number;
   transportExpense: number;
   fleetTripExpense: number;
+  hasLossDeduction: boolean;
   lossDeduction: number;
+  amountToDeduct: number;
   totalExpense: number;
   net: number;
+}
+
+function deductionStatus(row: TransportRow) {
+  const toDeduct = getAmountToDeduct(row);
+  if (row.hasLossDeduction && toDeduct > 0 && row.lossDeduction + 0.005 < toDeduct) return "PARTIAL";
+  if (row.hasLossDeduction) return "DEDUCTED";
+  if (toDeduct > 0) return "PENDING";
+  return "NONE";
 }
 
 function fmtQty(n: number | null) {
@@ -90,7 +101,33 @@ function getShortage(row: TransportRow) {
     const rec = d.litersReceived !== null ? Number(d.litersReceived) : des;
     total += des - rec;
   });
-  return total;
+  const loaded = Number(row.litersCarried || 0);
+  const delivered = getDelivered(row);
+  return Math.max(total, loaded > 0 ? loaded - delivered : 0);
+}
+
+function getAmountToDeduct(row: TransportRow) {
+  let amount = 0;
+  let pricedShortage = 0;
+  let fallbackPrice = 0;
+
+  row.deliveries.forEach((d) => {
+    const price = Number(d.amountPerLiter || 0);
+    if (price > 0 && fallbackPrice === 0) fallbackPrice = price;
+    const des = Number(d.litersDespatched || 0);
+    if (d.litersReceived === null) return;
+    const shortage = des - Number(d.litersReceived);
+    if (shortage <= 0) return;
+    pricedShortage += shortage;
+    amount += shortage * price;
+  });
+
+  const remainingLoss = Math.max(0, getShortage(row) - pricedShortage);
+  if (remainingLoss > 0 && fallbackPrice > 0) {
+    amount += remainingLoss * fallbackPrice;
+  }
+
+  return amount;
 }
 
 export function TransportReportManager({
@@ -151,6 +188,7 @@ export function TransportReportManager({
     let transportExpense = 0;
     let fleetTripExpense = 0;
     let lossDeduction = 0;
+    let amountToDeduct = 0;
     let totalExpense = 0;
 
     filteredRows.forEach((r) => {
@@ -162,6 +200,7 @@ export function TransportReportManager({
       transportExpense += r.transportExpense;
       fleetTripExpense += r.fleetTripExpense;
       lossDeduction += r.lossDeduction;
+      amountToDeduct += getAmountToDeduct(r);
       totalExpense += r.totalExpense;
     });
 
@@ -175,6 +214,7 @@ export function TransportReportManager({
       transportExpense,
       fleetTripExpense,
       lossDeduction,
+      amountToDeduct,
       totalExpense,
       net: totalFee - fleetTripExpense,
     };
@@ -199,9 +239,16 @@ export function TransportReportManager({
         },
         {
           key: "loss",
-          label: "Loss Deduction",
+          label: "Amount Deducted",
           value: metrics.lossDeduction,
           color: "#f43f5e",
+          format: (n) => fmtMoney(n),
+        },
+        {
+          key: "toDeduct",
+          label: "To Be Deducted",
+          value: metrics.amountToDeduct,
+          color: "#e11d48",
           format: (n) => fmtMoney(n),
         },
         {
@@ -324,9 +371,48 @@ export function TransportReportManager({
           ),
       },
       {
-        accessorKey: "lossDeduction",
+        id: "deductionStatus",
+        accessorFn: (row) => deductionStatus(row),
         header: ({ column }) => <DataTableColumnHeader column={column} title="Loss Deduction" />,
         meta: { label: "Loss Deduction" },
+        cell: ({ row }) => {
+          const status = deductionStatus(row.original);
+          if (status === "DEDUCTED") {
+            return (
+              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900">
+                Yes
+              </Badge>
+            );
+          }
+          if (status === "PARTIAL") {
+            return (
+              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900">
+                Partial
+              </Badge>
+            );
+          }
+          if (status === "PENDING") {
+            return (
+              <Badge variant="outline" className="border-rose-200 bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900">
+                To deduct
+              </Badge>
+            );
+          }
+          return (
+            <Badge variant="outline" className="text-muted-foreground">
+              No
+            </Badge>
+          );
+        },
+        filterFn: (row, id, value) => {
+          if (!Array.isArray(value) || value.length === 0) return true;
+          return value.includes(deductionStatus(row.original));
+        },
+      },
+      {
+        accessorKey: "lossDeduction",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Amount Deducted" />,
+        meta: { label: "Amount Deducted" },
         cell: ({ row }) => (
           <span
             className={cn(
@@ -345,6 +431,27 @@ export function TransportReportManager({
             .rows.reduce((sum, row) => sum + row.original.lossDeduction, 0);
           return total > 0 ? `−${fmtMoney(total)}` : fmtMoney(0);
         },
+      },
+      {
+        accessorKey: "amountToDeduct",
+        accessorFn: (row) => getAmountToDeduct(row),
+        header: ({ column }) => <DataTableColumnHeader column={column} title="To Be Deducted" />,
+        meta: { label: "To Be Deducted" },
+        cell: ({ row }) => {
+          const amount = getAmountToDeduct(row.original);
+          return (
+          <span
+            className={cn(
+              "font-mono tabular-nums",
+              amount > 0 ? "text-amber-600" : "text-muted-foreground"
+            )}
+          >
+            {fmtMoney(amount)}
+          </span>
+          );
+        },
+        footer: ({ table }) =>
+          moneyFooter(table, (row) => getAmountToDeduct(row)),
       },
       {
         accessorKey: "transportExpense",
@@ -453,6 +560,16 @@ export function TransportReportManager({
             value: s,
           })),
         },
+        {
+          id: "deductionStatus",
+          label: "Loss Deduction",
+          options: [
+            { label: "Yes", value: "DEDUCTED" },
+            { label: "Partial", value: "PARTIAL" },
+            { label: "To deduct", value: "PENDING" },
+            { label: "No", value: "NONE" },
+          ],
+        },
       ];
     },
     [initialTransports]
@@ -543,7 +660,7 @@ export function TransportReportManager({
       <div>
         <h1 className="text-xl font-semibold text-foreground">Transport & Allocation Report</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Trip volumes, loss deductions, haulage fees, and fleet / trip expenses.
+          Trip volumes, whether a loss was deducted, amounts already deducted or still to deduct, haulage fees, and fleet / trip expenses.
         </p>
       </div>
 

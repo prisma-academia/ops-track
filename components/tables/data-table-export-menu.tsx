@@ -25,13 +25,21 @@ import { usePrintCompany } from "@/components/print/print-company-context";
  * detached iframe) so surrounding nav/toolbar/pagination never show up.
  */
 export function DataTableExportMenu<TData>() {
-  const { table, tableId, tableContainerRef } = useDataTable<TData>();
+  const { table, tableId, tableContainerRef, printExtraHtml } = useDataTable<TData>();
   const company = usePrintCompany();
 
   const handlePrint = () => {
     const tableEl = tableContainerRef.current?.querySelector("table");
     const fileBaseName = getExportFileBaseName(tableId, company?.slug);
-    if (tableEl) printElement(tableEl, getPrintDocumentTitle(tableId), company, fileBaseName);
+    if (tableEl) {
+      printElement(
+        tableEl,
+        getPrintDocumentTitle(tableId),
+        company,
+        fileBaseName,
+        printExtraHtml
+      );
+    }
   };
 
   const exportBaseName = () => getExportFileBaseName(tableId, company?.slug);

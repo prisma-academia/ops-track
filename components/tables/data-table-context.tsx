@@ -13,6 +13,7 @@ interface DataTableContextValue<TData> {
   tableId: string;
   /** Wraps the actual <table> element — used to grab it for print-only output. */
   tableContainerRef: React.RefObject<HTMLDivElement | null>;
+  printExtraHtml?: string;
 }
 
 const DataTableContext = React.createContext<DataTableContextValue<unknown> | null>(
@@ -25,6 +26,7 @@ export function DataTableProvider<TData>({
   enableColumnOrdering = true,
   isLoading,
   tableId = "table",
+  printExtraHtml,
   children,
 }: React.PropsWithChildren<{
   table: Table<TData>;
@@ -32,6 +34,7 @@ export function DataTableProvider<TData>({
   enableColumnOrdering?: boolean;
   isLoading?: boolean;
   tableId?: string;
+  printExtraHtml?: string;
 }>) {
   const tableContainerRef = React.useRef<HTMLDivElement>(null);
 
@@ -43,8 +46,9 @@ export function DataTableProvider<TData>({
       isLoading,
       tableId,
       tableContainerRef,
+      printExtraHtml,
     }),
-    [table, filterFields, enableColumnOrdering, isLoading, tableId]
+    [table, filterFields, enableColumnOrdering, isLoading, tableId, printExtraHtml]
   );
 
   return (

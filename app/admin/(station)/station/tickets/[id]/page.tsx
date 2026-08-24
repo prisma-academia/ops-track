@@ -31,10 +31,17 @@ export default async function TicketDetailsPage({
     notFound();
   }
 
+  const bankAccounts = await prisma.bankAccount.findMany({
+    where: { tenantId: actor.tenantId, scope: "STATION", isActive: true },
+    select: { id: true, bankName: true, accountName: true, accountNumber: true },
+    orderBy: { bankName: "asc" },
+  });
+
   return (
     <TicketDetails
       ticket={JSON.parse(JSON.stringify(withOriginStory(ticket)))}
       canResolve={hasPermission(actor, PERMISSIONS.TENANT_TICKETS_WRITE.key)}
+      bankAccounts={JSON.parse(JSON.stringify(bankAccounts))}
     />
   );
 }

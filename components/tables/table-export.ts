@@ -7,6 +7,9 @@ const PRINT_TITLES: Record<string, string> = {
   "fleet-transport-report": "Transport & Allocation Report",
   "fleet-station-performance": "Station Performance",
   "fleet-pnl-report": "Profit & Loss",
+  "fleet-pnl-report-v3": "Profit & Loss",
+  "fleet-pnl-report-details-v3": "Order Profit & Loss",
+  "fleet-pnl-report-details-v4": "Order Profit & Loss",
   "fleet-ledger-expenses": "Expenses Ledger",
   "fleet-ledger-transports": "Transport Ledger",
   "fleet-ledger-deliveries": "Deliveries Ledger",
@@ -20,6 +23,9 @@ const DOCUMENT_TYPE_CODES: Record<string, string> = {
   "fleet-ledger-deliveries": "DELL",
   "fleet-ledger-expenses": "EXPL",
   "fleet-pnl-report": "SLR",
+  "fleet-pnl-report-v3": "SLR",
+  "fleet-pnl-report-details-v3": "SLR",
+  "fleet-pnl-report-details-v4": "SLR",
   "fleet-transport-report": "TSPR",
   "fleet-station-performance": "STPR",
   "fleet-activity": "ACTL",
@@ -183,7 +189,8 @@ export function printElement(
   element: HTMLElement,
   title = "Table",
   company?: PrintCompanyInfo | null,
-  fileBaseName?: string
+  fileBaseName?: string,
+  extraHeaderHtml?: string
 ) {
   const clone = element.cloneNode(true) as HTMLElement;
   stripHeaderControls(clone);
@@ -270,6 +277,29 @@ export function printElement(
   .print-doc { margin-bottom: 20px; }
   .print-doc h2 { font-size: 20px; margin: 0; text-transform: uppercase; letter-spacing: 0.04em; }
   .print-doc p { font-size: 13px; color: #6b7280; margin: 6px 0 0; }
+  .print-details {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px 16px;
+    margin: 0 0 20px;
+    padding: 12px 14px;
+    border: 1px solid #e5e7eb;
+    background: #f9fafb;
+  }
+  .print-details .item label {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+  .print-details .item p {
+    margin: 3px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #111827;
+  }
   .print-footer {
     margin-top: 24px;
     padding-top: 12px;
@@ -287,6 +317,7 @@ export function printElement(
 </head>
 <body>
 ${headerHtml}
+${extraHeaderHtml ?? ""}
 ${clone.outerHTML}
 ${footerHtml}
 </body>

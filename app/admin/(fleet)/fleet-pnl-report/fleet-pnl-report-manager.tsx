@@ -302,7 +302,7 @@ export function FleetPnlReportManager({
       <DataTable
         columns={columns}
         data={filteredRows}
-        tableId="fleet-pnl-report"
+        tableId="fleet-pnl-report-v3"
         filterFields={filterFields}
         searchPlaceholder="Search order, depot, truck..."
         toolbarActions={filterSheet}

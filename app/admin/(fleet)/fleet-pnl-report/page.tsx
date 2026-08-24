@@ -30,7 +30,15 @@ export default async function FleetPnlReportPage() {
     },
   });
 
-  const orderRows = orders.map((order) => calculateOrderPnlSummary(order).summary);
+  const orderRows = orders.map((order) => {
+    const { summary } = calculateOrderPnlSummary(order);
+    return {
+      ...summary,
+      purchasePricePerLitre: summary.priceBought,
+      purchaseCost: summary.priceBought * summary.litersOrdered,
+      loadingCost: summary.totalLoadingCost,
+    };
+  });
 
   const trucks = await prisma.truck.findMany({
     where: { tenantId: actor.tenantId },

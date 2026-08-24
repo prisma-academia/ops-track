@@ -22,31 +22,36 @@ interface DataTableToolbarProps {
   actions?: React.ReactNode;
   /** Called when the refresh button is clicked. */
   onRefresh?: () => void;
+  hideSearch?: boolean;
+  hideDateFilter?: boolean;
 }
 
 export function DataTableToolbar<TData>({
   searchPlaceholder = "Search data table...",
   actions,
   onRefresh,
+  hideSearch = false,
+  hideDateFilter = false,
 }: DataTableToolbarProps) {
   const { table } = useDataTable<TData>();
-  // TODO: wire this up to an actual "date" column filter once reports have one.
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
   const isFiltered =
     table.getState().columnFilters.length > 0 || !!table.getState().globalFilter;
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="relative w-full max-w-xs">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder={searchPlaceholder}
-            value={(table.getState().globalFilter as string) ?? ""}
-            onChange={(event) => table.setGlobalFilter(event.target.value)}
-            className="h-9 pl-8"
-          />
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {!hideSearch ? (
+          <div className="relative mr-auto w-full max-w-xs">
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder={searchPlaceholder}
+              value={(table.getState().globalFilter as string) ?? ""}
+              onChange={(event) => table.setGlobalFilter(event.target.value)}
+              className="h-9 pl-8"
+            />
+          </div>
+        ) : null}
 
         <div className="flex items-center gap-2">
           <Tooltip>
@@ -64,11 +69,13 @@ export function DataTableToolbar<TData>({
             <TooltipContent>Refresh data</TooltipContent>
           </Tooltip>
 
-          <DateRangeFilter
-            date={dateRange}
-            setDate={setDateRange}
-            tooltip="Filter by date range (coming soon)"
-          />
+          {!hideDateFilter ? (
+            <DateRangeFilter
+              date={dateRange}
+              setDate={setDateRange}
+              tooltip="Filter by date range (coming soon)"
+            />
+          ) : null}
 
           {isFiltered ? (
             <Tooltip>

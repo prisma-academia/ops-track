@@ -36,6 +36,40 @@ import type { DataTableFilterField } from "./types";
 export type { DataTableFilterField, FacetedOption } from "./types";
 export { DataTableColumnHeader } from "./data-table-column-header";
 
+function getLeafColumnIds<TData, TValue>(columns: ColumnDef<TData, TValue>[]): string[] {
+  const ids: string[] = [];
+  for (const column of columns) {
+    if ("columns" in column && Array.isArray(column.columns)) {
+      ids.push(...getLeafColumnIds(column.columns as ColumnDef<TData, TValue>[]));
+    } else {
+      ids.push(column.id ?? (column as { accessorKey?: string }).accessorKey ?? "");
+    }
+  }
+  return ids.filter(Boolean);
+}
+
+function mergeColumnOrder(stored: string[], defaults: string[]): string[] {
+  if (!stored.length) return defaults;
+  const defaultSet = new Set(defaults);
+  const kept = stored.filter((id) => defaultSet.has(id));
+  if (!kept.length) return defaults;
+  const result = [...kept];
+  for (const id of defaults) {
+    if (result.includes(id)) continue;
+    const defIndex = defaults.indexOf(id);
+    let insertAt = result.length;
+    for (let i = defIndex - 1; i >= 0; i--) {
+      const pos = result.indexOf(defaults[i]!);
+      if (pos !== -1) {
+        insertAt = pos + 1;
+        break;
+      }
+    }
+    result.splice(insertAt, 0, id);
+  }
+  return result;
+}
+
 export interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
@@ -59,6 +93,10 @@ export interface DataTableProps<TData, TValue> {
   isLoading?: boolean;
   enableColumnOrdering?: boolean;
   serverPagination?: ServerPagination;
+  /** Extra HTML inserted under the print document title (order details, etc.). */
+  printExtraHtml?: string;
+  hideSearch?: boolean;
+  hideDateFilter?: boolean;
 }
 
 export function DataTable<TData, TValue>({
@@ -78,17 +116,24 @@ export function DataTable<TData, TValue>({
   isLoading = false,
   enableColumnOrdering = true,
   serverPagination,
+  printExtraHtml,
+  hideSearch = false,
+  hideDateFilter = false,
 }: DataTableProps<TData, TValue>) {
   const [columnVisibility, setColumnVisibility] =
     useLocalStorage<VisibilityState>(`${tableId}:column-visibility`, {});
   const defaultColumnOrder = React.useMemo(
-    () => columns.map((c) => c.id ?? (c as { accessorKey?: string }).accessorKey ?? ""),
+    () => getLeafColumnIds(columns),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
-  const [columnOrder, setColumnOrder] = useLocalStorage<string[]>(
+  const [storedColumnOrder, setColumnOrder] = useLocalStorage<string[]>(
     `${tableId}:column-order`,
     defaultColumnOrder
+  );
+  const columnOrder = React.useMemo(
+    () => mergeColumnOrder(storedColumnOrder, defaultColumnOrder),
+    [storedColumnOrder, defaultColumnOrder]
   );
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
@@ -137,6 +182,7 @@ export function DataTable<TData, TValue>({
       enableColumnOrdering={enableColumnOrdering}
       isLoading={isLoading}
       tableId={tableId}
+      printExtraHtml={printExtraHtml}
     >
       <DataTableBody
         columns={columns}
@@ -145,6 +191,8 @@ export function DataTable<TData, TValue>({
         searchPlaceholder={searchPlaceholder}
         toolbarActions={toolbarActions}
         onRefresh={onRefresh}
+        hideSearch={hideSearch}
+        hideDateFilter={hideDateFilter}
         rowHref={rowHref}
         getRowClassName={getRowClassName}
         emptyMessage={emptyMessage}
@@ -163,6 +211,8 @@ function DataTableBody<TData, TValue>({
   searchPlaceholder,
   toolbarActions,
   onRefresh,
+  hideSearch,
+  hideDateFilter,
   rowHref,
   getRowClassName,
   emptyMessage,
@@ -176,6 +226,8 @@ function DataTableBody<TData, TValue>({
   searchPlaceholder?: string;
   toolbarActions?: React.ReactNode;
   onRefresh?: () => void;
+  hideSearch?: boolean;
+  hideDateFilter?: boolean;
   rowHref?: (row: TData) => string | null | undefined;
   getRowClassName?: (row: TData) => string | undefined;
   emptyMessage?: string;
@@ -199,12 +251,17 @@ function DataTableBody<TData, TValue>({
               searchPlaceholder={searchPlaceholder}
               actions={toolbarActions}
               onRefresh={onRefresh}
+              hideSearch={hideSearch}
+              hideDateFilter={hideDateFilter}
             />
           </div>
         ) : null}
 
-        <div ref={tableContainerRef} className="overflow-x-auto border-x border-border">
-          <Table className="border-separate border-spacing-0">
+        <div
+          ref={tableContainerRef}
+          className="overflow-x-auto border-x border-border [&_[data-slot=table-container]]:overflow-visible"
+        >
+          <Table className="min-w-max border-separate border-spacing-0">
             <TableHeader className="sticky top-0 z-10 bg-background">
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow
@@ -214,7 +271,8 @@ function DataTableBody<TData, TValue>({
                   {headerGroup.headers.map((header) => (
                     <TableHead
                       key={header.id}
-                      className="truncate border-t border-b border-border"
+                      colSpan={header.colSpan}
+                      className="whitespace-nowrap border-t border-b border-border"
                     >
                       {header.isPlaceholder
                         ? null
@@ -253,7 +311,7 @@ function DataTableBody<TData, TValue>({
                       onClick={href ? () => router.push(href) : undefined}
                     >
                       {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id} className="truncate border-b border-border">
+                        <TableCell key={cell.id} className="whitespace-nowrap border-b border-border">
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
                       ))}
@@ -273,7 +331,13 @@ function DataTableBody<TData, TValue>({
             </TableBody>
             {hasFooter ? (
               <TableFooter>
-                {table.getFooterGroups().map((footerGroup) => (
+                {table.getFooterGroups()
+                  .filter((group) =>
+                    group.headers.some(
+                      (header) => !header.isPlaceholder && header.column.columnDef.footer
+                    )
+                  )
+                  .map((footerGroup) => (
                   <TableRow
                     key={footerGroup.id}
                     className="bg-muted/50 hover:bg-muted/50 [&>:not(:last-child)]:border-r"
@@ -281,7 +345,8 @@ function DataTableBody<TData, TValue>({
                     {footerGroup.headers.map((header) => (
                       <TableCell
                         key={header.id}
-                        className="truncate border-t border-border font-semibold"
+                        colSpan={header.colSpan}
+                        className="whitespace-nowrap border-t border-border font-semibold"
                       >
                         {header.isPlaceholder
                           ? null

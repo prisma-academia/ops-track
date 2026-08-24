@@ -7,23 +7,12 @@ import { ok } from "@/lib/api/respond";
 import { DomainError, handleError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
-import { createStationTicket, TICKET_INCLUDE, withOriginStory } from "@/lib/tickets/ticket-service";
+import { CATEGORY_TITLES, createStationTicket, TICKET_INCLUDE, withOriginStory } from "@/lib/tickets/ticket-service";
+import { CreateTicketBodySchema } from "@/lib/tickets/schemas";
 import { assertOrgAccess, resolveActiveOrgId } from "@/lib/auth/org-scope";
 
-const CATEGORY_TITLES: Record<string, string> = {
-  EQUIPMENT_FAULT: "Equipment fault",
-  CASH_DISCREPANCY: "Cash discrepancy",
-  EXPENSE_REQUEST: "Spend request",
-  OTHER: "Station ticket",
-};
-
-const CreateAdminTicketSchema = z.object({
+const CreateAdminTicketSchema = CreateTicketBodySchema.extend({
   stationId: z.string().min(1),
-  category: z.enum(["EQUIPMENT_FAULT", "CASH_DISCREPANCY", "EXPENSE_REQUEST", "OTHER"]),
-  title: z.string().min(1).max(200).optional(),
-  description: z.string().min(1),
-  requestedAmount: z.coerce.number().positive().optional(),
-  requestedCategory: z.enum(["FUEL_FOR_GEN", "MAINTENANCE", "UTILITIES", "STATIONERY", "OTHER"]).optional(),
 });
 
 export async function GET(request: Request) {
@@ -93,6 +82,14 @@ export async function POST(request: Request) {
       description: body.description,
       requestedAmount: body.requestedAmount,
       requestedCategory: body.requestedCategory,
+      spendIntent: body.spendIntent,
+      evidenceUrls: body.evidenceUrls,
+      parentTicketId: body.parentTicketId,
+      latitude: body.latitude,
+      longitude: body.longitude,
+      pumpId: body.pumpId,
+      nozzleId: body.nozzleId,
+      alreadyPaid: body.alreadyPaid,
     });
 
     await audit({

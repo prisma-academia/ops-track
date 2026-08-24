@@ -54,6 +54,9 @@ export default async function ExpensesPage() {
             lastName: true,
           },
         },
+        ticket: {
+          select: { id: true, title: true, status: true, category: true },
+        },
       },
     }),
   ]);

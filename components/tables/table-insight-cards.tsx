@@ -51,7 +51,7 @@ export function TableInsightCards({
           <div className="flex items-center gap-4">
             <div className="h-24 w-24 shrink-0">
               {radialData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width={96} height={96} minWidth={96} minHeight={96}>
                   <RadialBarChart
                     data={radialData}
                     innerRadius="30%"

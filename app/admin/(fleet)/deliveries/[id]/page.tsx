@@ -2,8 +2,10 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { notFound } from "next/navigation";
-import { SalesDetailsManager, type SalePnlSummary } from "./deliveries-details-manager";
+import { SalesDetailsManager } from "./deliveries-details-manager";
 import { calculateOrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
+import { toFleetPnlDetailRow } from "@/app/admin/(fleet)/fleet-pnl-report/fleet-pnl-detail-rows";
+import type { FleetPnlTableRow } from "@/app/admin/(fleet)/fleet-pnl-report/fleet-pnl-columns";
 
 export default async function SaleDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_SALES_READ.key);
@@ -33,12 +35,14 @@ export default async function SaleDetailsPage({ params }: { params: Promise<{ id
     notFound();
   }
 
-  let salePnl: SalePnlSummary | null = null;
-  const orderId = delivery.transport?.orderId;
+  let pnlBreakdownRow: FleetPnlTableRow | null = null;
+  let orderId: string | null = null;
+  let orderReference: string | null = null;
+  const transportOrderId = delivery.transport?.orderId;
 
-  if (orderId) {
+  if (transportOrderId) {
     const order = await prisma.order.findFirst({
-      where: { id: orderId, tenantId: actor.tenantId },
+      where: { id: transportOrderId, tenantId: actor.tenantId },
       include: {
         transports: {
           include: {
@@ -60,22 +64,16 @@ export default async function SaleDetailsPage({ params }: { params: Promise<{ id
     });
 
     if (order) {
-      const { transports } = calculateOrderPnlSummary(order);
-      const row = transports.flatMap((t) => t.deliveries).find((d) => d.id === delivery.id);
-      if (row) {
-        salePnl = {
-          orderId: order.id,
-          orderReference: order.reference || "N/A",
-          litersSold: row.litersSold,
-          sellingPrice: row.sellingPrice,
-          purchaseCost: row.purchaseCost,
-          loadingCost: row.loadingCost,
-          depotToPrimaryCost: row.depotToPrimaryCost,
-          deliveryTransportCost: row.deliveryTransportCost,
-          fleetCost: row.fleetCost,
-          totalCost: row.totalCost,
-          pnl: row.pnl,
-        };
+      const { summary, transports } = calculateOrderPnlSummary(order);
+      orderId = order.id;
+      orderReference = summary.orderReference;
+
+      for (const transport of transports) {
+        const deliveryRow = transport.deliveries.find((row) => row.id === delivery.id);
+        if (deliveryRow) {
+          pnlBreakdownRow = toFleetPnlDetailRow(deliveryRow, summary, transport);
+          break;
+        }
       }
     }
   }
@@ -84,9 +82,10 @@ export default async function SaleDetailsPage({ params }: { params: Promise<{ id
     <div className="space-y-6">
       <SalesDetailsManager
         delivery={JSON.parse(JSON.stringify(delivery))}
-        salePnl={salePnl}
+        pnlBreakdownRow={pnlBreakdownRow}
+        orderId={orderId}
+        orderReference={orderReference}
       />
     </div>
   );
 }
-

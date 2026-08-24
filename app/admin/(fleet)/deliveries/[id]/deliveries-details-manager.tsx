@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiPatch, apiPost } from "@/lib/client/api";
@@ -38,46 +38,40 @@ import {
   TrendingDown,
   TrendingUp,
   ArrowRight,
+  Wallet,
 } from "lucide-react";
 import { cn, formatShortCurrency, formatHumanReadableDate } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { AssetTank } from "@/components/asset-tank";
+import { DataTable } from "@/components/tables";
+import {
+  fmtMoney,
+  fmtQty,
+  getFleetPnlDetailsColumns,
+  type FleetPnlTableRow,
+} from "@/app/admin/(fleet)/fleet-pnl-report/fleet-pnl-columns";
 
-function fmtQty(n: number | null) {
+function fmtQtyLocal(n: number | null) {
   if (n === null || Number.isNaN(n)) return "—";
   return n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function fmtMoney(n: number | null) {
+function fmtMoneyLocal(n: number | null) {
   if (n === null || Number.isNaN(n)) return "—";
   return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export type SalePnlSummary = {
-  orderId: string;
-  orderReference: string;
-  litersSold: number;
-  sellingPrice: number;
-  purchaseCost: number;
-  loadingCost: number;
-  depotToPrimaryCost: number;
-  deliveryTransportCost: number;
-  fleetCost: number;
-  totalCost: number;
-  pnl: number;
-};
-
-function perLitre(total: number, qty: number) {
-  return qty > 0 ? total / qty : 0;
-}
-
 export function SalesDetailsManager({
   delivery,
-  salePnl,
+  pnlBreakdownRow,
+  orderId,
+  orderReference,
 }: {
   delivery: any;
-  salePnl?: SalePnlSummary | null;
+  pnlBreakdownRow?: FleetPnlTableRow | null;
+  orderId?: string | null;
+  orderReference?: string | null;
 }) {
   const router = useRouter();
 
@@ -109,6 +103,16 @@ export function SalesDetailsManager({
   const driverName = delivery.transport?.driver
     ? `${delivery.transport.driver.firstName} ${delivery.transport.driver.lastName}`.trim()
     : "N/A";
+
+  const columns = useMemo(() => getFleetPnlDetailsColumns(), []);
+  const breakdownRows = useMemo(
+    () => (pnlBreakdownRow ? [pnlBreakdownRow] : []),
+    [pnlBreakdownRow]
+  );
+
+  const transportCost = pnlBreakdownRow
+    ? (pnlBreakdownRow.depotToPrimaryCost ?? 0) + (pnlBreakdownRow.deliveryTransportCost ?? 0)
+    : 0;
 
   const handleDeduct = async () => {
     setIsDeducting(true);
@@ -170,34 +174,90 @@ export function SalesDetailsManager({
     }
   };
 
-  const statCards = [
+  const volumeStatCards = [
     {
       title: "Despatched",
-      value: `${fmtQty(litersDespatched)} L`,
-      fullValue: `${fmtQty(litersDespatched)} L`,
+      value: `${fmtQtyLocal(litersDespatched)} ${volumeUnit}`,
+      fullValue: `${fmtQtyLocal(litersDespatched)} ${volumeUnit}`,
       icon: Droplets,
       valueColor: "text-foreground",
       iconColor: "text-slate-600",
     },
     {
       title: "Received",
-      value: litersReceived === null ? "Pending" : `${fmtQty(litersReceived)} L`,
-      fullValue: litersReceived === null ? "Not yet confirmed" : `${fmtQty(litersReceived)} L`,
+      value: litersReceived === null ? "Pending" : `${fmtQtyLocal(litersReceived)} ${volumeUnit}`,
+      fullValue: litersReceived === null ? "Not yet confirmed" : `${fmtQtyLocal(litersReceived)} ${volumeUnit}`,
       icon: Droplets,
       valueColor: litersReceived === null ? "text-amber-600" : "text-foreground",
       iconColor: litersReceived === null ? "text-amber-600" : "text-slate-600",
     },
     {
-      title: hasShortage ? "Shortage Deduction" : "Price / Litre",
-      value: hasShortage ? formatShortCurrency(totalDeductionAmount) : fmtMoney(amountPerLiter),
+      title: hasShortage ? "Shortage" : "Price / Litre",
+      value: hasShortage ? `${fmtQtyLocal(variance)} ${volumeUnit}` : fmtMoneyLocal(amountPerLiter),
       fullValue: hasShortage
-        ? `${fmtQty(variance)} L × ${fmtMoney(amountPerLiter)}/L = ${fmtMoney(totalDeductionAmount)}`
-        : `${fmtMoney(amountPerLiter)} per litre`,
+        ? `${fmtQtyLocal(variance)} ${volumeUnit} × ${fmtMoneyLocal(amountPerLiter)}/${volumeUnit} = ${fmtMoneyLocal(totalDeductionAmount)}`
+        : `${fmtMoneyLocal(amountPerLiter)} per ${volumeUnit.toLowerCase()}`,
       icon: hasShortage ? TrendingDown : Receipt,
       valueColor: hasShortage ? "text-rose-600" : "text-foreground",
       iconColor: hasShortage ? "text-rose-600" : "text-slate-600",
     },
   ];
+
+  const pnlStatCards = pnlBreakdownRow
+    ? [
+        {
+          title: "Order Cost",
+          value: formatShortCurrency(pnlBreakdownRow.orderCost),
+          fullValue: fmtMoney(pnlBreakdownRow.orderCost),
+          icon: Wallet,
+          valueColor: "text-amber-600",
+          iconColor: "text-amber-600",
+        },
+        {
+          title: "Transport Cost",
+          value: formatShortCurrency(transportCost),
+          fullValue: fmtMoney(transportCost),
+          icon: Truck,
+          valueColor: "text-slate-600",
+          iconColor: "text-slate-600",
+        },
+        {
+          title: "Fleet Expenses",
+          value: formatShortCurrency(pnlBreakdownRow.totalFleetExpenses),
+          fullValue: fmtMoney(pnlBreakdownRow.totalFleetExpenses),
+          icon: Wallet,
+          valueColor: "text-slate-600",
+          iconColor: "text-slate-600",
+        },
+        {
+          title: "Loss Deduction",
+          value: formatShortCurrency(pnlBreakdownRow.totalLossDeduction),
+          fullValue: fmtMoney(pnlBreakdownRow.totalLossDeduction),
+          icon: TrendingDown,
+          valueColor: "text-rose-600",
+          iconColor: "text-rose-600",
+        },
+        {
+          title: "Sales Revenue",
+          value: formatShortCurrency(pnlBreakdownRow.amountSoldRev),
+          fullValue: fmtMoney(pnlBreakdownRow.amountSoldRev),
+          icon: Receipt,
+          valueColor: "text-indigo-600",
+          iconColor: "text-indigo-600",
+        },
+        {
+          title: "Profit & Loss",
+          value: formatShortCurrency(Math.abs(pnlBreakdownRow.pnl)),
+          fullValue: fmtMoney(pnlBreakdownRow.pnl),
+          valueColor: pnlBreakdownRow.pnl >= 0 ? "text-emerald-600" : "text-rose-600",
+          icon: pnlBreakdownRow.pnl >= 0 ? TrendingUp : TrendingDown,
+          iconColor: pnlBreakdownRow.pnl >= 0 ? "text-emerald-600" : "text-rose-600",
+        },
+      ]
+    : [];
+
+  const statCards = pnlBreakdownRow ? pnlStatCards : volumeStatCards;
+  const statCardCols = pnlBreakdownRow ? "lg:w-1/6 md:w-1/3" : "lg:w-1/3 md:w-1/3";
 
   return (
     <div className="space-y-6">
@@ -227,10 +287,23 @@ export function SalesDetailsManager({
                   {delivery.transport.destination}
                 </span>
               )}
+              {orderReference && (
+                <span className="flex items-center gap-1 font-mono text-xs">
+                  Order {orderReference}
+                </span>
+              )}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+          {orderId && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/admin/fleet-pnl-report/${orderId}`}>
+                Full P&amp;L report
+                <ArrowRight className="size-3.5 ml-1.5" />
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setOpenEditDialog(true)}>
             <Pencil className="size-4" />
           </Button>
@@ -250,10 +323,11 @@ export function SalesDetailsManager({
               <div
                 key={item.title}
                 className={cn(
-                  "w-full lg:w-1/3 md:w-1/3 border-border",
+                  "w-full border-border",
+                  statCardCols,
                   index === statCards.length - 1 ? "border-b-0" : "border-b",
-                  (index + 1) % 3 === 0 ? "md:border-e-0" : "md:border-e",
-                  index >= 3 ? "md:border-b-0" : "md:border-b",
+                  (index + 1) % (pnlBreakdownRow ? 3 : 3) === 0 ? "md:border-e-0" : "md:border-e",
+                  index >= (pnlBreakdownRow ? 3 : 3) ? "md:border-b-0" : "md:border-b",
                   "lg:border-b-0",
                   index === statCards.length - 1 ? "lg:border-e-0" : "lg:border-e"
                 )}
@@ -283,42 +357,83 @@ export function SalesDetailsManager({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         <Card className="lg:col-span-5 shadow-xs border-border/40 bg-card flex flex-col justify-between p-0 overflow-hidden">
           <div className="p-4 border-b border-border/40 bg-muted/20">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Payment & Delivery Overview</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              {pnlBreakdownRow ? "Payment & Cost Overview" : "Payment & Delivery Overview"}
+            </h3>
           </div>
           <CardContent className="p-4 flex-1 flex flex-col justify-between gap-3">
-            <div className="p-3.5 rounded-lg bg-indigo-500/5 border border-indigo-500/10 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Expected Revenue</p>
-                <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-                  {fmtQty(litersDespatched)} L @ {fmtMoney(amountPerLiter)}/L
-                </p>
-              </div>
-              <p className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400">{fmtMoney(totalExpected)}</p>
-            </div>
+            {pnlBreakdownRow ? (
+              <>
+                <div className="p-3.5 rounded-lg bg-amber-500/5 border border-amber-500/10 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Debt Remaining</p>
+                    <p className="text-[11px] text-muted-foreground/70 mt-0.5">Unpaid balance</p>
+                  </div>
+                  <p className={cn(
+                    "text-lg font-bold font-mono",
+                    pnlBreakdownRow.debtRemaining > 0 ? "text-amber-600 dark:text-amber-500" : "text-emerald-600 dark:text-emerald-400"
+                  )}>
+                    {fmtMoney(pnlBreakdownRow.debtRemaining)}
+                  </p>
+                </div>
 
-            <div className="p-3.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Paid</p>
-                <p className="text-[11px] text-muted-foreground/70 mt-0.5">Amount received</p>
-              </div>
-              <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">{fmtMoney(paymentReceived)}</p>
-            </div>
+                <div className="p-3.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Paid</p>
+                    <p className="text-[11px] text-muted-foreground/70 mt-0.5">Amount received</p>
+                  </div>
+                  <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                    {fmtMoney(pnlBreakdownRow.amountPaid)}
+                  </p>
+                </div>
 
-            <div className={cn(
-              "p-3.5 rounded-lg border flex items-center justify-between",
-              outstanding > 0 ? "bg-amber-500/5 border-amber-500/10" : "bg-emerald-500/5 border-emerald-500/10"
-            )}>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Outstanding Balance</p>
-                <p className="text-[11px] text-muted-foreground/70 mt-0.5">Unpaid remainder</p>
-              </div>
-              <p className={cn(
-                "text-lg font-bold font-mono",
-                outstanding > 0 ? "text-amber-600 dark:text-amber-500" : "text-emerald-600 dark:text-emerald-400"
-              )}>
-                {fmtMoney(outstanding)}
-              </p>
-            </div>
+                <div className="p-3.5 rounded-lg bg-slate-500/5 border border-slate-500/10 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Cost</p>
+                    <p className="text-[11px] text-muted-foreground/70 mt-0.5">Order &amp; logistics cost</p>
+                  </div>
+                  <p className="text-lg font-bold font-mono text-foreground">
+                    {fmtMoney(pnlBreakdownRow.totalCost)}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-3.5 rounded-lg bg-indigo-500/5 border border-indigo-500/10 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Expected Revenue</p>
+                    <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                      {fmtQtyLocal(litersDespatched)} {volumeUnit} @ {fmtMoneyLocal(amountPerLiter)}/{volumeUnit}
+                    </p>
+                  </div>
+                  <p className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400">{fmtMoneyLocal(totalExpected)}</p>
+                </div>
+
+                <div className="p-3.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Paid</p>
+                    <p className="text-[11px] text-muted-foreground/70 mt-0.5">Amount received</p>
+                  </div>
+                  <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">{fmtMoneyLocal(paymentReceived)}</p>
+                </div>
+
+                <div className={cn(
+                  "p-3.5 rounded-lg border flex items-center justify-between",
+                  outstanding > 0 ? "bg-amber-500/5 border-amber-500/10" : "bg-emerald-500/5 border-emerald-500/10"
+                )}>
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Outstanding Balance</p>
+                    <p className="text-[11px] text-muted-foreground/70 mt-0.5">Unpaid remainder</p>
+                  </div>
+                  <p className={cn(
+                    "text-lg font-bold font-mono",
+                    outstanding > 0 ? "text-amber-600 dark:text-amber-500" : "text-emerald-600 dark:text-emerald-400"
+                  )}>
+                    {fmtMoneyLocal(outstanding)}
+                  </p>
+                </div>
+              </>
+            )}
 
             {delivery.transport && (
               <div className="pt-2 border-t border-border/40 space-y-3">
@@ -360,110 +475,29 @@ export function SalesDetailsManager({
             lossLitres={hasShortage ? variance ?? undefined : undefined}
           />
 
-          {salePnl && (
-            <Card className="shadow-xs border-border/40 bg-card p-4 space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Profit &amp; Loss
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-                    {fmtQty(salePnl.litersSold)} {volumeUnit} · order {salePnl.orderReference}
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href={`/admin/fleet-pnl-report/${salePnl.orderId}`}>
-                    Full report
-                    <ArrowRight className="size-3.5 ml-1.5" />
-                  </Link>
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/10 space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-600/80 dark:text-indigo-400">Sold</p>
-                  <p className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400">
-                    {fmtMoney(salePnl.sellingPrice)}/{volumeUnit}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">Selling price for this delivery</p>
-                </div>
-                <div className="p-3 rounded-lg bg-slate-500/5 border border-slate-500/10 space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Bought</p>
-                  <p className="text-lg font-bold font-mono text-foreground">
-                    {fmtMoney(perLitre(salePnl.totalCost, salePnl.litersSold))}/{volumeUnit}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">Landed cost of this delivery</p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Bought breakdown</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {[
-                    { label: "Purchase", total: salePnl.purchaseCost },
-                    { label: "Loading", total: salePnl.loadingCost },
-                    { label: "Depot → Primary", total: salePnl.depotToPrimaryCost },
-                    { label: "Delivery Transport", total: salePnl.deliveryTransportCost },
-                    { label: "Fleet", total: salePnl.fleetCost },
-                  ].map((item) => (
-                    <div key={item.label} className="space-y-0.5">
-                      <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">{item.label}</p>
-                      <p className="text-sm font-mono font-medium text-foreground">
-                        {fmtMoney(perLitre(item.total, salePnl.litersSold))}/{volumeUnit}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className={cn(
-                "flex items-center justify-between rounded-lg border px-3.5 py-3",
-                salePnl.pnl >= 0 ? "bg-emerald-500/5 border-emerald-500/10" : "bg-rose-500/5 border-rose-500/10"
-              )}>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  {salePnl.pnl >= 0 ? (
-                    <TrendingUp className="size-3.5 text-emerald-600" />
-                  ) : (
-                    <TrendingDown className="size-3.5 text-rose-600" />
-                  )}
-                  {salePnl.pnl >= 0 ? "Profit" : "Loss"}
-                  <span className="font-mono font-normal normal-case tracking-normal text-muted-foreground/80">
-                    sold − bought
-                  </span>
-                </p>
-                <p className={cn(
-                  "text-base font-bold font-mono",
-                  salePnl.pnl >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
-                )}>
-                  {salePnl.pnl >= 0 ? "+" : ""}{fmtMoney(salePnl.pnl)}
-                </p>
-              </div>
-            </Card>
-          )}
-
           {hasShortage && (
             <Card className="shadow-xs border-border/40 bg-card p-4 space-y-4">
               <div className="grid grid-cols-3 gap-3 text-center sm:text-left items-center">
                 <div className="space-y-1">
                   <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Shortage</p>
                   <p className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">
-                    {fmtQty(variance)} <span className="text-xs font-normal text-muted-foreground">{volumeUnit}</span>
+                    {fmtQtyLocal(variance)} <span className="text-xs font-normal text-muted-foreground">{volumeUnit}</span>
                   </p>
                 </div>
                 <div className="space-y-1 border-x border-border/40 px-2 sm:px-4">
                   <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Price / Litre</p>
-                  <p className="text-base font-bold font-mono text-foreground">{fmtMoney(amountPerLiter)}</p>
+                  <p className="text-base font-bold font-mono text-foreground">{fmtMoneyLocal(amountPerLiter)}</p>
                 </div>
                 <div className="space-y-1 text-right">
                   <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Amount to Deduct</p>
-                  <p className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">{fmtMoney(totalDeductionAmount)}</p>
+                  <p className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">{fmtMoneyLocal(totalDeductionAmount)}</p>
                 </div>
               </div>
 
               {hasDeduction ? (
                 <Badge variant="outline" className="w-full justify-center border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900 py-2 text-sm">
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  Deduction logged ({fmtMoney(totalDeductionAmount)})
+                  Deduction logged ({fmtMoneyLocal(totalDeductionAmount)})
                 </Badge>
               ) : (
                 <Button variant="destructive" className="w-full" onClick={() => setOpenDeductDialog(true)}>
@@ -475,6 +509,25 @@ export function SalesDetailsManager({
           )}
         </div>
       </div>
+
+      {pnlBreakdownRow && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold tracking-tight">Cost &amp; Revenue Breakdown</h2>
+            <p className="text-sm text-muted-foreground">
+              {fmtQty(pnlBreakdownRow.litersDespatched ?? pnlBreakdownRow.litersOrdered)} {volumeUnit} despatched
+            </p>
+          </div>
+          <DataTable
+            columns={columns}
+            data={breakdownRows}
+            tableId="delivery-pnl-breakdown-v1"
+            hideSearch
+            hideDateFilter
+            emptyMessage="No breakdown data available for this delivery."
+          />
+        </div>
+      )}
 
       <div className="space-y-4">
         <h2 className="text-lg font-semibold tracking-tight">Payment History</h2>
@@ -506,7 +559,7 @@ export function SalesDetailsManager({
                     <TableCell className="px-3 py-3 text-muted-foreground">{tx.description || "—"}</TableCell>
                     <TableCell className="px-3 py-3 text-muted-foreground font-mono text-[11px]">{tx.reference || "—"}</TableCell>
                     <TableCell className="px-3 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                      +{fmtMoney(Number(tx.amount))}
+                      +{fmtMoneyLocal(Number(tx.amount))}
                     </TableCell>
                   </TableRow>
                 ))
@@ -564,22 +617,22 @@ export function SalesDetailsManager({
           </DialogHeader>
           <div className="space-y-4 py-4">
             <p className="text-sm text-muted-foreground">
-              A shortage of <strong>{fmtQty(variance)} L</strong> was detected.
+              A shortage of <strong>{fmtQtyLocal(variance)} L</strong> was detected.
               The driver&apos;s transport fee will be deducted by the value of the lost product.
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="p-3 border rounded-md">
                 <p className="text-xs text-muted-foreground uppercase tracking-widest">Shortage</p>
-                <p className="text-lg font-semibold">{fmtQty(variance)} L</p>
+                <p className="text-lg font-semibold">{fmtQtyLocal(variance)} L</p>
               </div>
               <div className="p-3 border rounded-md">
                 <p className="text-xs text-muted-foreground uppercase tracking-widest">Price / Liter</p>
-                <p className="text-lg font-semibold">{fmtMoney(amountPerLiter)}</p>
+                <p className="text-lg font-semibold">{fmtMoneyLocal(amountPerLiter)}</p>
               </div>
             </div>
             <div className="p-3 border rounded-md bg-destructive/10 border-destructive/20 text-destructive">
               <p className="text-xs uppercase tracking-widest">Amount to deduct</p>
-              <p className="text-xl font-bold">{fmtMoney(totalDeductionAmount)}</p>
+              <p className="text-xl font-bold">{fmtMoneyLocal(totalDeductionAmount)}</p>
             </div>
           </div>
           <DialogFooter>

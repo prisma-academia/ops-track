@@ -15,14 +15,19 @@ function getItemFromLocalStorage<T>(key: string, fallback: T): T {
 /**
  * Like `useState`, but persists the value to `localStorage` so column
  * visibility / order survives page reloads.
+ *
+ * Reads storage only after mount so the first client render matches SSR.
  */
 export function useLocalStorage<T>(
   key: string,
   initialValue: T
 ): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [storedValue, setStoredValue] = React.useState<T>(() =>
-    getItemFromLocalStorage(key, initialValue)
-  );
+  const initialRef = React.useRef(initialValue);
+  const [storedValue, setStoredValue] = React.useState<T>(initialValue);
+
+  React.useEffect(() => {
+    setStoredValue(getItemFromLocalStorage(key, initialRef.current));
+  }, [key]);
 
   const setValue: React.Dispatch<React.SetStateAction<T>> = React.useCallback(
     (value) => {

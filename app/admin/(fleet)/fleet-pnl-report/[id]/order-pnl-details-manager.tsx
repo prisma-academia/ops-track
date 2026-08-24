@@ -22,6 +22,8 @@ import {
   getFleetPnlDetailsColumns,
   type FleetPnlTableRow,
 } from "../fleet-pnl-columns";
+import { buildFleetPnlDetailRows } from "../fleet-pnl-detail-rows";
+import type { OrderPnlTransportRow } from "@/lib/fleet/order-pnl-summary";
 
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
@@ -142,81 +144,46 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
     return lossLitresToDisplay * stationSellingPriceForLoss;
   }, [summary.totalLossAmount, lossLitresToDisplay, stationSellingPriceForLoss]);
 
-  const breakdownRows = useMemo<FleetPnlTableRow[]>(() => {
-    return transports.flatMap((transport): FleetPnlTableRow[] => {
-      const truckLabels =
-        transport.truckNo && transport.truckNo !== "Unknown" ? [transport.truckNo] : [];
-      const truckIds = transport.truckId ? [transport.truckId] : [];
-
-      if (transport.deliveries.length === 0) {
-        const totalCost =
-          transport.depotToPrimaryCost +
-          transport.deliveryTransportCost +
-          transport.fleetExpenses;
-        return [
-          {
-            id: transport.id,
-            orderDate: summary.orderDate,
-            orderReference: transport.transporterName,
-            depot: summary.depot,
-            productType: summary.productType,
-            litersOrdered: transport.litersCarried,
-            litersDespatched: transport.litersCarried,
-            litersReceived: null,
-            purchaseCost: 0,
-            purchasePricePerLitre: summary.priceBought,
-            loadingCost: 0,
-            sellingPrice: 0,
-            orderCost: 0,
-            depotToPrimaryCost: transport.depotToPrimaryCost,
-            deliveryTransportCost: transport.deliveryTransportCost,
-            totalTransportCost: transport.transportTotalCost,
-            totalFleetExpenses: transport.fleetExpenses,
-            totalLossDeduction: transport.lossDeduction,
-            totalCost,
-            totalAmountSoldQty: 0,
-            amountSoldRev: 0,
-            amountPaid: 0,
-            debtRemaining: 0,
-            pnl: -totalCost,
-            truckIds,
-            truckLabels,
-          },
-        ];
-      }
-
-      return transport.deliveries.map((delivery) => ({
-        id: delivery.id,
-        orderDate: delivery.createdAt,
-        orderReference: delivery.soldTo,
-        depot: summary.depot,
-        productType: summary.productType,
-        litersOrdered: delivery.litersSold,
-        litersDespatched: delivery.litersSold,
-        litersReceived: delivery.litersReceived ?? null,
-        purchaseCost: delivery.purchaseCost,
-        purchasePricePerLitre: summary.priceBought,
-        loadingCost: delivery.loadingCost,
-        sellingPrice: delivery.sellingPrice,
-        orderCost: delivery.orderCost,
-        depotToPrimaryCost: delivery.depotToPrimaryCost,
-        deliveryTransportCost: delivery.deliveryTransportCost,
-        totalTransportCost: delivery.transportCost,
-        totalFleetExpenses: delivery.fleetCost,
-        totalLossDeduction: delivery.lossAmount ?? 0,
-        totalCost: delivery.totalCost,
-        totalAmountSoldQty: delivery.litersReceived ?? delivery.litersSold,
-        amountSoldRev: delivery.salesRevenue,
-        amountPaid: delivery.paymentReceived,
-        debtRemaining: delivery.debtRemaining,
-        pnl: delivery.pnl,
-        truckIds,
-        truckLabels,
-      }));
-    });
-  }, [transports, summary]);
+  const breakdownRows = useMemo<FleetPnlTableRow[]>(
+    () => buildFleetPnlDetailRows(summary, transports as OrderPnlTransportRow[]),
+    [transports, summary]
+  );
 
   const columns = useMemo(() => getFleetPnlDetailsColumns(), []);
+
+  const printExtraHtml = useMemo(() => {
+    const escape = (value: string) =>
+      value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    const item = (label: string, value: string) =>
+      `<div class="item"><label>${escape(label)}</label><p>${escape(value)}</p></div>`;
+    const items = [
+      item("Order", summary.orderReference),
+      item("Date", fmtDate(summary.orderDate)),
+      item("Depot", summary.depot),
+      item("Product", summary.productType),
+      item("Volume Ordered", `${fmtQty(summary.litersOrdered)} L`),
+      item("Volume Sold", `${fmtQty(summary.totalAmountSoldQty)} L`),
+      item("Balance", `${fmtQty(summary.qtyBalance)} L`),
+      item("Purchase Price", `${fmtMoney(summary.priceBought)}/L`),
+      item("Purchase Cost", fmtMoney(summary.priceBought * summary.litersOrdered)),
+      item("Loading Price", `${fmtMoney(summary.loadingCostPerLitre)}/L`),
+      item("Loading Cost", fmtMoney(summary.totalLoadingCost)),
+      item("Order Cost", fmtMoney(summary.orderCost)),
+      item("Depot → Primary", fmtMoney(summary.totalDepotToPrimaryCost ?? 0)),
+      item("Delivery Transport", fmtMoney(summary.totalDeliveryTransportCost ?? 0)),
+      item("Fleet Cost", fmtMoney(summary.totalFleetExpenses)),
+      item("Loss Deduction", fmtMoney(summary.totalLossDeduction)),
+      item("Total Cost", fmtMoney(summary.totalCost)),
+      item("Sales Revenue", fmtMoney(summary.amountSoldRev)),
+      item("Sales Collected", fmtMoney(summary.amountPaid)),
+      item("Profit / Loss", fmtMoney(summary.pnl)),
+    ].join("");
+    return `<div class="print-details">${items}</div>`;
+  }, [summary]);
 
   const statCards = [
     {
@@ -464,8 +431,10 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
         <DataTable
           columns={columns}
           data={breakdownRows}
-          tableId="fleet-pnl-report-details"
-          hideToolbar
+          tableId="fleet-pnl-report-details-v4"
+          printExtraHtml={printExtraHtml}
+          hideSearch
+          hideDateFilter
           emptyMessage="No transports found for this order."
         />
       </div>

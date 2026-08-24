@@ -1,21 +1,10 @@
-import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
-import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 
-const CreateExpenseSchema = z.object({
-  stationId: z.string().min(1),
-  category: z.enum(["FUEL_FOR_GEN", "MAINTENANCE", "UTILITIES", "STATIONERY", "OTHER"]),
-  paymentMethod: z.enum(["CASH", "POS", "BANK_TRANSFER", "CHEQUE"]),
-  amount: z.coerce.number().positive(),
-  description: z.string().min(1).max(500),
-  receiptUrl: z.string().optional().nullable(),
-  bankAccountId: z.string().optional(),
-});
 
 export async function GET(request: Request) {
   try {
@@ -53,6 +42,9 @@ export async function GET(request: Request) {
           firstName: true,
           lastName: true,
         },
+      },
+      ticket: {
+        select: { id: true, title: true, status: true, category: true },
       },
     };
 
@@ -116,47 +108,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_EXPENSES_WRITE.key, "STATION");
-    const body = CreateExpenseSchema.parse(await request.json());
-    const meta = requestMeta(request);
-
-    // Verify station ownership
-    const station = await prisma.station.findUnique({ where: { id: body.stationId } });
-    if (!station || station.tenantId !== actor.tenantId) {
-      throw new DomainError(404, "not_found", "Station not found.");
-    }
-
-    if (body.paymentMethod !== "CASH" && !body.bankAccountId) {
-      throw new DomainError(400, "invalid_input", "Bank account is required for non-cash payments.");
-    }
-
-    const expense = await prisma.expense.create({
-      data: {
-        tenantId: actor.tenantId,
-        stationId: body.stationId,
-        category: body.category,
-        paymentMethod: body.paymentMethod,
-        amount: body.amount,
-        description: body.description,
-        receiptUrl: body.receiptUrl ?? null,
-        bankAccountId: body.bankAccountId,
-        recordedById: actor.userId,
-      },
-    });
-
-    await audit({
-      actorType: "TENANT_USER",
-      actorId: actor.userId,
-      action: "expense.record",
-      tenantId: actor.tenantId,
-      targetType: "Expense",
-      targetId: expense.id,
-      after: { amount: expense.amount, category: expense.category, stationId: expense.stationId } as object,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-    });
-
-    return ok({ expense });
+    await requireTenantActor(PERMISSIONS.TENANT_EXPENSES_WRITE.key, "STATION");
+    throw new DomainError(
+      400,
+      "use_tickets",
+      "Create a ticket first. Station expenses are paid out from the ticket inbox.",
+    );
   } catch (e) {
     return handleError(e);
   }

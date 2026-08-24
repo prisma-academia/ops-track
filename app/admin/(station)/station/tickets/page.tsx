@@ -47,6 +47,12 @@ export default async function TicketsPage() {
     orderBy: { name: "asc" },
   });
 
+  const bankAccounts = await prisma.bankAccount.findMany({
+    where: { tenantId: actor.tenantId, scope: "STATION", isActive: true },
+    select: { id: true, bankName: true, accountName: true, accountNumber: true },
+    orderBy: { bankName: "asc" },
+  });
+
   const serializedTickets = JSON.parse(JSON.stringify(tickets.map(withOriginStory)));
   const serializedStations = JSON.parse(JSON.stringify(stations));
 
@@ -55,6 +61,7 @@ export default async function TicketsPage() {
       <TicketsManager
         initialTickets={serializedTickets}
         stations={serializedStations}
+        bankAccounts={JSON.parse(JSON.stringify(bankAccounts))}
         canCreate={hasPermission(actor, PERMISSIONS.TENANT_TICKETS_WRITE.key)}
       />
     </Suspense>

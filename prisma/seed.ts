@@ -28,7 +28,7 @@ async function main() {
   );
 
   console.log("Seeding Platform Admin...");
-  const adminEmail = process.env.PLATFORM_ADMIN_EMAIL || "admin@rafuel.com";
+  const adminEmail = "amuhmammadmusaa@gmail.com";
   const adminPassword = process.env.PLATFORM_ADMIN_PASSWORD || "password123";
 
   const passwordHash = await argon2.hash(adminPassword, {
@@ -38,25 +38,35 @@ async function main() {
     parallelism: 1,
   });
 
-  await prisma.platformUser.upsert({
-    where: { email: adminEmail },
-    update: {
-      passwordHash: passwordHash,
-      isSuperAdmin: true,
-      mustChangePassword: false,
-      permissions: ALL_PLATFORM_PERMISSION_KEYS,
-    },
-    create: {
-      email: adminEmail,
-      passwordHash: passwordHash,
-      firstName: "Super",
-      lastName: "Admin",
-      mustChangePassword: false,
-      isSuperAdmin: true,
-      status: "ACTIVE",
-      permissions: ALL_PLATFORM_PERMISSION_KEYS,
-    },
-  });
+  const adminData = {
+    email: adminEmail,
+    passwordHash,
+    firstName: "Auwal",
+    lastName: "Muhammad",
+    mustChangePassword: false,
+    isSuperAdmin: true,
+    status: "ACTIVE" as const,
+    permissions: ALL_PLATFORM_PERMISSION_KEYS,
+  };
+
+  const existingAdmin =
+    (await prisma.platformUser.findUnique({ where: { email: adminEmail } })) ??
+    (await prisma.platformUser.findFirst({
+      where: {
+        email: {
+          in: ["admin@rafuel.com", "admin@prismaforge.ng"],
+        },
+      },
+    }));
+
+  if (existingAdmin) {
+    await prisma.platformUser.update({
+      where: { id: existingAdmin.id },
+      data: adminData,
+    });
+  } else {
+    await prisma.platformUser.create({ data: adminData });
+  }
 
   console.log("Platform admin seeded.");
 
@@ -73,7 +83,7 @@ async function main() {
     update: {
       name: "SAHAF NIG LTD",
       status: "ACTIVE",
-      companyEmail: "khalifamaigoro+sahaf@gmail.com",
+      companyEmail: "assunusi@gmail.com",
       city: "Kano",
       region: "Kano",
       country: "NG",
@@ -83,7 +93,7 @@ async function main() {
       slug: "sahaf",
       name: "SAHAF NIG LTD",
       status: "ACTIVE",
-      companyEmail: "khalifamaigoro+sahaf@gmail.com",
+      companyEmail: "assunusi@gmail.com",
       city: "Kano",
       region: "Kano",
       country: "NG",
@@ -113,38 +123,41 @@ async function main() {
     });
   }
 
-  const owner = await prisma.tenantUser.upsert({
-    where: {
-      tenantId_email: {
+  const ownerEmail = "assunusi@gmail.com";
+  const ownerData = {
+    email: ownerEmail,
+    passwordHash: tenantPasswordHash,
+    firstName: "Chairman",
+    lastName: "SAHAF",
+    mustChangePassword: false,
+    isOwner: true,
+    status: "ACTIVE" as const,
+    stationPermissions: [...ALL_TENANT_PERMISSION_KEYS],
+    fleetPermissions: [...ALL_TENANT_PERMISSION_KEYS],
+    activeModules: ["STATION", "FLEET"],
+  };
+
+  const existingOwner =
+    (await prisma.tenantUser.findUnique({
+      where: {
+        tenantId_email: { tenantId: tenant.id, email: ownerEmail },
+      },
+    })) ??
+    (await prisma.tenantUser.findFirst({
+      where: {
         tenantId: tenant.id,
         email: "khalifamaigoro+sahaf@gmail.com",
       },
-    },
-    update: {
-      passwordHash: tenantPasswordHash,
-      firstName: "Khalifa",
-      lastName: "Maigoro",
-      mustChangePassword: false,
-      isOwner: true,
-      status: "ACTIVE",
-      stationPermissions: [...ALL_TENANT_PERMISSION_KEYS],
-      fleetPermissions: [...ALL_TENANT_PERMISSION_KEYS],
-      activeModules: ["STATION", "FLEET"],
-    },
-    create: {
-      tenantId: tenant.id,
-      email: "khalifamaigoro+sahaf@gmail.com",
-      passwordHash: tenantPasswordHash,
-      firstName: "Khalifa",
-      lastName: "Maigoro",
-      mustChangePassword: false,
-      isOwner: true,
-      status: "ACTIVE",
-      stationPermissions: [...ALL_TENANT_PERMISSION_KEYS],
-      fleetPermissions: [...ALL_TENANT_PERMISSION_KEYS],
-      activeModules: ["STATION", "FLEET"],
-    },
-  });
+    }));
+
+  const owner = existingOwner
+    ? await prisma.tenantUser.update({
+        where: { id: existingOwner.id },
+        data: ownerData,
+      })
+    : await prisma.tenantUser.create({
+        data: { tenantId: tenant.id, ...ownerData },
+      });
 
   await prisma.tenant.update({
     where: { id: tenant.id },
@@ -176,35 +189,90 @@ async function main() {
     },
   });
 
-  const station = await prisma.station.upsert({
-    where: {
-      tenantId_code: {
-        tenantId: tenant.id,
-        code: "ASA-TAK-01",
+  const stationsSeed = [
+    { code: "ASA-TAK-01", place: "TAKAI", location: "Takai, Kano", state: "Kano", lga: "Takai" },
+    {
+      code: "ASA-KHU-01",
+      place: "KWANAR HUGUMA",
+      location: "Kwanar Huguma, Kano",
+      state: "Kano",
+      lga: "Kwanar Huguma",
+    },
+    {
+      code: "ASA-BKD-01",
+      place: "BIRNIN KUDU",
+      location: "Birnin Kudu, Jigawa",
+      state: "Jigawa",
+      lga: "Birnin Kudu",
+    },
+    { code: "ASA-BYP-01", place: "BYPASS", location: "Bypass, Kano", state: "Kano", lga: "Kano Municipal" },
+    { code: "ASA-FAN-01", place: "FANISAU", location: "Fanisau, Kano", state: "Kano", lga: "Ungogo" },
+    { code: "ASA-NIN-01", place: "NINGI", location: "Ningi, Bauchi", state: "Bauchi", lga: "Ningi" },
+  ];
+
+  const stationIds: string[] = [];
+
+  for (const s of stationsSeed) {
+    const name = `A.S.A OIL ${s.place}`;
+    const station = await prisma.station.upsert({
+      where: {
+        tenantId_code: {
+          tenantId: tenant.id,
+          code: s.code,
+        },
       },
-    },
-    update: {
-      name: "A.S.A OIL NIG TAKAI",
-      location: "Takai, Kano",
-      state: "Kano",
-      lga: "Takai",
-      organizationId: organization.id,
-    },
-    create: {
-      tenantId: tenant.id,
-      organizationId: organization.id,
-      code: "ASA-TAK-01",
-      name: "A.S.A OIL NIG TAKAI",
-      location: "Takai, Kano",
-      state: "Kano",
-      lga: "Takai",
-    },
-  });
+      update: {
+        name,
+        location: s.location,
+        state: s.state,
+        lga: s.lga,
+        organizationId: organization.id,
+      },
+      create: {
+        tenantId: tenant.id,
+        organizationId: organization.id,
+        code: s.code,
+        name,
+        location: s.location,
+        state: s.state,
+        lga: s.lga,
+      },
+    });
+
+    stationIds.push(station.id);
+
+    const existingTank = await prisma.tank.findFirst({
+      where: { stationId: station.id, productType: "PMS" },
+    });
+    if (existingTank) {
+      await prisma.tank.update({
+        where: { id: existingTank.id },
+        data: {
+          name: "PMS Tank 1",
+          productType: "PMS",
+          capacity: 60000,
+          status: "ACTIVE",
+        },
+      });
+    } else {
+      await prisma.tank.create({
+        data: {
+          tenantId: tenant.id,
+          stationId: station.id,
+          name: "PMS Tank 1",
+          productType: "PMS",
+          capacity: 60000,
+          currentLiters: 0,
+          status: "ACTIVE",
+        },
+      });
+    }
+  }
 
   await prisma.tenantUser.update({
     where: { id: owner.id },
     data: {
-      stations: { connect: { id: station.id } },
+      stations: { connect: stationIds.map((id) => ({ id })) },
     },
   });
 
@@ -312,7 +380,7 @@ async function main() {
   }
 
   console.log(
-    `Tenant ${tenant.slug} seeded with org ${organization.name}, station ${station.name}, transporter ${transporter.name} (3 trucks, 1 driver).`,
+    `Tenant ${tenant.slug} seeded with org ${organization.name}, ${stationIds.length} stations (60,000 L PMS each), transporter ${transporter.name} (3 trucks, 1 driver).`,
   );
 }
 

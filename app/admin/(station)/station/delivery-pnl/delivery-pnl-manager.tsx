@@ -43,9 +43,12 @@ interface DeliveryPnlRow {
   cycleEndDate: string;
   truckPlate: string;
   productType: string;
-  deliveryQty: number;
+  dispatchedQty: number;
+  receivedQty: number | null;
   purchasePrice: number;
   deliveryCost: number;
+  deliveryRate: number;
+  transportTotal: number;
   cycleRevenue: number;
   cycleExpenses: number;
   netProfit: number;
@@ -122,19 +125,17 @@ export function DeliveryPnlManager({
   }, [initialRows, appliedStationIds, appliedProduct, appliedDateRange]);
 
   const metrics = React.useMemo(() => {
-    let totalVolume = 0;
+    let totalReceived = 0;
     let totalRevenue = 0;
-    let totalExpenses = 0;
     let totalProfit = 0;
 
     filteredRows.forEach((r) => {
-      totalVolume += r.deliveryQty;
+      totalReceived += r.receivedQty ?? 0;
       totalRevenue += r.cycleRevenue;
-      totalExpenses += r.cycleExpenses;
       totalProfit += r.netProfit;
     });
 
-    return { count: filteredRows.length, totalVolume, totalRevenue, totalExpenses, totalProfit };
+    return { count: filteredRows.length, totalReceived, totalRevenue, totalProfit };
   }, [filteredRows]);
 
   const insightStats = React.useMemo(
@@ -143,21 +144,21 @@ export function DeliveryPnlManager({
         { key: "deliveries", label: "Deliveries", value: metrics.count, color: "#0d9488" },
         {
           key: "volume",
-          label: "Volume Delivered",
-          value: metrics.totalVolume,
+          label: "Received Volume",
+          value: metrics.totalReceived,
           color: "#3b82f6",
           format: (n) => fmtQty(n),
         },
         {
           key: "revenue",
-          label: "Cycle Revenue",
+          label: "Gross Revenue",
           value: metrics.totalRevenue,
           color: "#6366f1",
           format: (n) => fmtMoney(n),
         },
         {
           key: "profit",
-          label: "Net Profit",
+          label: "Net Revenue",
           value: metrics.totalProfit,
           color: metrics.totalProfit >= 0 ? "#10b981" : "#ef4444",
           format: (n) => fmtMoney(n),
@@ -220,15 +221,29 @@ export function DeliveryPnlManager({
         },
       },
       {
-        accessorKey: "deliveryQty",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Volume (L)" />,
-        meta: { label: "Volume (L)" },
+        accessorKey: "dispatchedQty",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Dispatched Vol." />,
+        meta: { label: "Dispatched Volume" },
         cell: ({ row }) => (
-          <span className="font-mono tabular-nums">{fmtQty(row.original.deliveryQty)}</span>
+          <span className="font-mono tabular-nums">{fmtQty(row.original.dispatchedQty)}</span>
         ),
         footer: ({ table }) =>
           fmtQty(
-            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.deliveryQty, 0)
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.dispatchedQty, 0)
+          ),
+      },
+      {
+        accessorKey: "receivedQty",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Received Vol." />,
+        meta: { label: "Received Volume" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums">{fmtQty(row.original.receivedQty)}</span>
+        ),
+        footer: ({ table }) =>
+          fmtQty(
+            table
+              .getFilteredRowModel()
+              .rows.reduce((sum, row) => sum + (row.original.receivedQty ?? 0), 0)
           ),
       },
       {
@@ -244,7 +259,7 @@ export function DeliveryPnlManager({
       {
         accessorKey: "deliveryCost",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Delivery Cost" />,
-        meta: { label: "Delivery Cost" },
+        meta: { label: "Delivery Cost (Total Purchase)" },
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-muted-foreground">
             {fmtMoney(row.original.deliveryCost)}
@@ -256,9 +271,45 @@ export function DeliveryPnlManager({
           ),
       },
       {
+        accessorKey: "transportTotal",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Transport Cost" />,
+        meta: { label: "Transport Cost" },
+        cell: ({ row }) => (
+          <div className="flex flex-col">
+            <span className="font-mono tabular-nums text-muted-foreground">
+              {fmtMoney(row.original.transportTotal)}
+            </span>
+            <span className="font-mono text-[11px] tabular-nums text-muted-foreground/70">
+              {fmtMoney(row.original.deliveryRate)}/L
+            </span>
+          </div>
+        ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.transportTotal, 0)
+          ),
+      },
+      {
+        id: "landedCost",
+        accessorFn: (row) => row.deliveryCost + row.transportTotal,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Landed Cost" />,
+        meta: { label: "Landed Cost (Purchase + Transport)" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums">
+            {fmtMoney(row.original.deliveryCost + row.original.transportTotal)}
+          </span>
+        ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table
+              .getFilteredRowModel()
+              .rows.reduce((sum, row) => sum + row.original.deliveryCost + row.original.transportTotal, 0)
+          ),
+      },
+      {
         accessorKey: "cycleRevenue",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Cycle Revenue" />,
-        meta: { label: "Cycle Revenue" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Gross Revenue" />,
+        meta: { label: "Gross Revenue" },
         cell: ({ row }) => (
           <span className="font-mono tabular-nums">{fmtMoney(row.original.cycleRevenue)}</span>
         ),
@@ -283,8 +334,8 @@ export function DeliveryPnlManager({
       },
       {
         accessorKey: "netProfit",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Net Profit" />,
-        meta: { label: "Net Profit" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Net Revenue" />,
+        meta: { label: "Net Revenue" },
         cell: ({ row }) => {
           const val = row.original.netProfit;
           return (
@@ -463,7 +514,7 @@ export function DeliveryPnlManager({
       <div>
         <h1 className="text-xl font-semibold text-foreground">Delivery Profit &amp; Loss</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Per-delivery cycle revenue, expenses, and profitability by station.
+          Per-delivery product purchase, transport, cycle sales, and net revenue by station.
         </p>
       </div>
 
@@ -472,7 +523,7 @@ export function DeliveryPnlManager({
       <DataTable
         columns={columns}
         data={filteredRows}
-        tableId="station-delivery-pnl"
+        tableId="station-delivery-pnl-v4"
         searchPlaceholder="Search station, truck..."
         toolbarActions={filterSheet}
         emptyMessage="No delivery records found for the selected filters."

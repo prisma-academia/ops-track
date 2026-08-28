@@ -15,6 +15,8 @@ const PRINT_TITLES: Record<string, string> = {
   "fleet-ledger-deliveries": "Deliveries Ledger",
   "fleet-activity": "Activity Log",
   "fleet-bank-account-transactions": "Bank Account Transactions",
+  "station-delivery-pnl": "Delivery Profit & Loss",
+  "station-delivery-pnl-v2": "Delivery Profit & Loss",
 };
 
 /** Type codes: subject abbreviation + L (ledger) or R (report). */
@@ -33,6 +35,7 @@ const DOCUMENT_TYPE_CODES: Record<string, string> = {
   "station-sales-reports": "SLR",
   "station-stock-report": "STKR",
   "station-delivery-pnl": "DLR",
+  "station-delivery-pnl-v2": "DLR",
 };
 
 export function getPrintDocumentTitle(tableId: string) {

@@ -4,7 +4,7 @@ import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
-import { requireCsrf } from "@/lib/api/csrf-guard";
+import { computeStationOverpayment } from "@/lib/sales/payments";
 
 const UpdateStationSchema = z.object({
   code: z.string().min(2).max(50).optional(),
@@ -55,18 +55,7 @@ export async function GET(
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
-    // Calculate derived balance using an immutable ledger approach
-    // Total Payments Received - Expected Value of Liters Sold
-    const salesLogs = await prisma.salesLog.findMany({
-      where: { stationId: id, status: { not: "REJECTED" } },
-      select: { amountPos: true, amountTransfer: true, litersSold: true, pricePerLiter: true },
-    });
-
-    const derivedBalance = salesLogs.reduce((acc, log) => {
-      const paid = Number(log.amountPos || 0) + Number(log.amountTransfer || 0);
-      const expected = Number(log.litersSold || 0) * Number(log.pricePerLiter || 0);
-      return acc + (paid - expected);
-    }, 0);
+    const derivedBalance = await computeStationOverpayment(id, actor.tenantId);
 
     return ok({ ...station, derivedBalance });
   } catch (e) {

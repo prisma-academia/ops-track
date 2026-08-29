@@ -108,6 +108,8 @@ model Tenant {
   tanks                      Tank[]
   priceControls              PriceControl[]
   SalesLogs                  SalesLog[]
+  salesPayments              SalesPayment[]
+  salesPaymentReviews        SalesPaymentReview[]
   dailyStockReports          DailyStockReport[]
   tankDippings               TankDipping[]
   tickets                    Ticket[]
@@ -193,6 +195,7 @@ model TenantUser {
   stations                Station[]        @relation("StationStaff")
   recordedSalesLogs       SalesLog[]       @relation("SalesRecordedBy")
   approvedSalesLogs       SalesLog[]       @relation("SalesApprovedBy")
+  salesPaymentReviews     SalesPaymentReview[]
   raisedTickets           Ticket[]         @relation("TicketRaiser")
   approvedTickets         Ticket[]         @relation("TicketApprover")
   ticketSpendRevisions    TicketSpendRevision[]
@@ -429,6 +432,12 @@ enum SalesLogStatus {
   PENDING
   APPROVED
   REJECTED
+  PARTIAL
+}
+
+enum SalesPaymentMethod {
+  POS
+  TRANSFER
 }
 
 enum DipShift {
@@ -612,8 +621,9 @@ model SalesLog {
   productType        ProductType
   litersSold         Decimal        @db.Decimal(12, 2)
   pricePerLiter      Decimal        @default(0.00) @db.Decimal(10, 2)
-  amountPos          Decimal        @db.Decimal(12, 2) // POS payments
-  amountTransfer     Decimal        @db.Decimal(12, 2) // Bank transfers
+  amountPos          Decimal        @db.Decimal(12, 2) // POS payments (denormalized sum)
+  amountTransfer     Decimal        @db.Decimal(12, 2) // Bank transfers (denormalized sum)
+  appliedCredit      Decimal        @default(0.00) @db.Decimal(12, 2)
   posReceiptUrl      String?
   transferReceiptUrl String?
   logDate            DateTime       @db.Date
@@ -628,6 +638,7 @@ model SalesLog {
   parentSale       SalesLog?     @relation("DebtRepayments", fields: [parentdeliveryId], references: [id])
   debtRepayments   SalesLog[]    @relation("DebtRepayments")
   transactions     Transaction[]
+  payments         SalesPayment[]
 
   dippingClosing   DippingClosing?
   dippingClosingId String?         @unique
@@ -642,6 +653,50 @@ model SalesLog {
   @@index([recordedById])
   @@index([approvedById])
   @@map("sales_logs")
+}
+
+model SalesPayment {
+  id            String             @id @default(uuid())
+  tenantId      String
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salesLogId    String
+  salesLog      SalesLog           @relation(fields: [salesLogId], references: [id], onDelete: Cascade)
+  method        SalesPaymentMethod
+  amount        Decimal            @db.Decimal(12, 2)
+  bankAccountId String
+  bankAccount   BankAccount        @relation("SalesPaymentBankAccount", fields: [bankAccountId], references: [id], onDelete: Restrict)
+  receiptUrl    String?
+  status        SalesLogStatus     @default(PENDING)
+  reason        String?            @db.Text
+  clientId      String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  reviews SalesPaymentReview[]
+
+  @@unique([salesLogId, clientId])
+  @@index([tenantId])
+  @@index([salesLogId])
+  @@index([bankAccountId])
+  @@map("sales_payments")
+}
+
+model SalesPaymentReview {
+  id           String         @id @default(uuid())
+  tenantId     String
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  paymentId    String
+  payment      SalesPayment   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  status       SalesLogStatus
+  reason       String?        @db.Text
+  reviewedById String
+  reviewedBy   TenantUser     @relation(fields: [reviewedById], references: [id])
+  reviewedAt   DateTime       @default(now())
+
+  @@index([tenantId])
+  @@index([paymentId])
+  @@index([reviewedById])
+  @@map("sales_payment_reviews")
 }
 
 model DailyStockReport {
@@ -1489,6 +1544,7 @@ model BankAccount {
 
   posSalesLogs      SalesLog[]    @relation("SalesLogPosBankAccount")
   transferSalesLogs SalesLog[]    @relation("SalesLogTransferBankAccount")
+  salesPayments     SalesPayment[] @relation("SalesPaymentBankAccount")
   expenses          Expense[]     @relation("ExpenseBankAccount")
   transactions      Transaction[] @relation("TransactionBankAccount")
 

@@ -40,12 +40,24 @@ export async function formatStationRows(rawRows: any[]) {
   // Calculate balances (All time)
   const allStationLogs = await prisma.salesLog.findMany({
     where: { stationId: { in: stationIds }, status: { not: "REJECTED" } },
-    select: { stationId: true, litersSold: true, pricePerLiter: true, amountPos: true, amountTransfer: true }
+    select: {
+      stationId: true,
+      litersSold: true,
+      pricePerLiter: true,
+      amountPos: true,
+      amountTransfer: true,
+      payments: { select: { amount: true, status: true } },
+    },
   });
 
   const balanceByStation = allStationLogs.reduce((acc, log) => {
     const expected = Number(log.litersSold) * Number(log.pricePerLiter);
-    const collected = Number(log.amountPos) + Number(log.amountTransfer);
+    const collected =
+      log.payments.length > 0
+        ? log.payments
+            .filter((p) => p.status !== "REJECTED")
+            .reduce((sum, p) => sum + Number(p.amount), 0)
+        : Number(log.amountPos) + Number(log.amountTransfer);
     const balance = collected - expected;
     acc[log.stationId] = (acc[log.stationId] || 0) + balance;
     return acc;

@@ -7,21 +7,40 @@ import { requireTenantActor } from "@/lib/auth/guards";
 import { prisma } from "@/lib/db/client";
 import { StockMovementService } from "@/lib/inventory/stock-movement-service";
 import { FinanceService } from "@/lib/finance/finance-service";
+import {
+  computeStationOverpayment,
+  firstBankIds,
+  resolvePaymentInputs,
+  salesPaymentInclude,
+  sumsFromPayments,
+  validatePaymentInputs,
+} from "@/lib/sales/payments";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
+const PaymentInputSchema = z.object({
+  id: z.string().optional(),
+  clientId: z.string().nullable().optional(),
+  method: z.enum(["POS", "TRANSFER"]),
+  amount: z.coerce.number().min(0),
+  bankAccountId: z.string(),
+  receiptUrl: z.string().nullable().optional(),
+});
+
 const CreateSalesLogSchema = z.object({
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
-  litersSold: z.coerce.number().min(0), // Changed from .positive() to allow 0 for debt repayments
+  litersSold: z.coerce.number().min(0),
   pricePerLiter: z.coerce.number().min(0).default(0),
-  amountPos: z.coerce.number().min(0),
-  amountTransfer: z.coerce.number().min(0).default(0),
+  amountPos: z.coerce.number().min(0).optional(),
+  amountTransfer: z.coerce.number().min(0).optional().default(0),
   posBankAccountId: z.string().nullable().optional(),
   transferBankAccountId: z.string().nullable().optional(),
   posReceiptUrl: z.string().nullable().optional(),
   transferReceiptUrl: z.string().nullable().optional(),
+  payments: z.array(PaymentInputSchema).optional(),
+  appliedCredit: z.coerce.number().min(0).optional().default(0),
   logDate: z.string().optional(),
   dippingClosingId: z.string().optional(),
   clientId: z.string().optional(),
@@ -36,6 +55,13 @@ function serializeSalesLog<T extends { parentdeliveryId?: string | null }>(log: 
   };
 }
 
+const salesLogInclude = {
+  recordedBy: { select: { firstName: true, lastName: true } },
+  posBankAccount: { select: { id: true, accountName: true, accountNumber: true, bankName: true } },
+  transferBankAccount: { select: { id: true, accountName: true, accountNumber: true, bankName: true } },
+  payments: { include: salesPaymentInclude },
+};
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -49,17 +75,12 @@ export async function GET(
     const station = await prisma.station.findUnique({
       where: { id: stationId },
     });
-    
+
     if (!station || station.tenantId !== actor.tenantId) {
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
     const where = { stationId, tenantId: actor.tenantId };
-    const include = {
-      recordedBy: { select: { firstName: true, lastName: true } },
-      posBankAccount: { select: { id: true, accountName: true, accountNumber: true } },
-      transferBankAccount: { select: { id: true, accountName: true, accountNumber: true } },
-    };
 
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
@@ -70,7 +91,7 @@ export async function GET(
           orderBy: { logDate: "desc" },
           take,
           skip,
-          include,
+          include: salesLogInclude,
         }),
       ]);
       return ok(rows.map(serializeSalesLog), buildOffsetPageMeta(totalCount, page, take));
@@ -79,7 +100,7 @@ export async function GET(
     const salesLogs = await prisma.salesLog.findMany({
       where,
       orderBy: { logDate: "desc" },
-      include,
+      include: salesLogInclude,
     });
 
     return ok(salesLogs.map(serializeSalesLog));
@@ -104,18 +125,30 @@ export async function POST(
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
-    if (body.amountPos <= 0 && body.amountTransfer <= 0) {
-      throw new DomainError(400, "invalid_input", "At least one revenue amount must be greater than zero.");
+    const payments = validatePaymentInputs(resolvePaymentInputs(body));
+    const { amountPos, amountTransfer } = sumsFromPayments(payments);
+    const banks = firstBankIds(payments);
+
+    const appliedCredit = Number(body.appliedCredit || 0);
+    if (appliedCredit > 0) {
+      const available = await computeStationOverpayment(stationId, actor.tenantId);
+      const expected = Number(body.litersSold) * Number(body.pricePerLiter);
+      const maxCredit = Math.max(0, Math.min(available, expected));
+      if (appliedCredit > maxCredit + 0.01) {
+        throw new DomainError(
+          400,
+          "invalid_input",
+          `Applied credit cannot exceed available overpayment (₦${maxCredit.toLocaleString("en-NG", { minimumFractionDigits: 2 })}).`,
+        );
+      }
     }
 
-
-
-    if (body.amountPos > 0 && !body.posBankAccountId) {
-      throw new DomainError(400, "invalid_input", "POS bank account is required for POS payments.");
-    }
-
-    if (body.amountTransfer > 0 && !body.transferBankAccountId) {
-      throw new DomainError(400, "invalid_input", "Transfer bank account is required for bank transfer payments.");
+    const bankIds = [...new Set(payments.map((p) => p.bankAccountId))];
+    const accounts = await prisma.bankAccount.findMany({
+      where: { id: { in: bankIds }, tenantId: actor.tenantId, isActive: true },
+    });
+    if (accounts.length !== bankIds.length) {
+      throw new DomainError(400, "invalid_input", "One or more bank accounts are invalid.");
     }
 
     const logDate = body.logDate ? new Date(body.logDate) : new Date();
@@ -123,6 +156,7 @@ export async function POST(
     if (body.clientId) {
       const existingLog = await prisma.salesLog.findUnique({
         where: { id: body.clientId },
+        include: salesLogInclude,
       });
       if (existingLog) {
         return ok({ salesLog: serializeSalesLog(existingLog) });
@@ -155,7 +189,7 @@ export async function POST(
 
     if (!tankId) {
       const tank = await prisma.tank.findFirst({
-        where: { stationId, tenantId: actor.tenantId, productType: body.productType as any },
+        where: { stationId, tenantId: actor.tenantId, productType: body.productType as never },
         orderBy: { currentLiters: "desc" },
       });
       if (tank) {
@@ -172,26 +206,40 @@ export async function POST(
           productType: body.productType,
           litersSold: body.litersSold,
           pricePerLiter: body.pricePerLiter,
-          amountPos: body.amountPos,
-          amountTransfer: body.amountTransfer,
-          posBankAccountId: body.posBankAccountId || null,
-          transferBankAccountId: body.transferBankAccountId || null,
-          posReceiptUrl: body.posReceiptUrl,
-          transferReceiptUrl: body.transferReceiptUrl,
+          amountPos,
+          amountTransfer,
+          appliedCredit,
+          posBankAccountId: banks.posBankAccountId,
+          transferBankAccountId: banks.transferBankAccountId,
+          posReceiptUrl: banks.posReceiptUrl,
+          transferReceiptUrl: banks.transferReceiptUrl,
           logDate,
           recordedById: actor.userId,
           dippingClosingId: body.dippingClosingId,
           isDebtRepayment: body.isDebtRepayment,
           parentdeliveryId: parentSaleId,
+          payments: {
+            create: payments.map((p) => ({
+              id: p.id || p.clientId || undefined,
+              tenantId: actor.tenantId,
+              method: p.method,
+              amount: p.amount,
+              bankAccountId: p.bankAccountId,
+              receiptUrl: p.receiptUrl ?? null,
+              clientId: p.clientId ?? p.id ?? null,
+              status: "PENDING",
+            })),
+          },
         },
+        include: salesLogInclude,
       });
 
       if (tankId && body.litersSold > 0) {
-        await StockMovementService.recordRetailSale(tx as any, {
+        await StockMovementService.recordRetailSale(tx as never, {
           tenantId: actor.tenantId,
           stationId,
           tankId,
-          productType: body.productType as any,
+          productType: body.productType as never,
           quantity: body.litersSold,
           referenceId: log.id,
           notes: `Retail sale ${body.dippingClosingId ? "from dipping" : ""}`,
@@ -199,14 +247,11 @@ export async function POST(
         });
       }
 
-      await FinanceService.recordRetailSaleRevenue(tx as any, {
+      await FinanceService.recordRetailSaleRevenue(tx as never, {
         tenantId: actor.tenantId,
         stationId,
         salesLogId: log.id,
-        amountPos: body.amountPos,
-        amountTransfer: body.amountTransfer,
-        posBankAccountId: body.posBankAccountId || null,
-        transferBankAccountId: body.transferBankAccountId || null,
+        payments,
       });
 
       return log;
@@ -219,7 +264,12 @@ export async function POST(
       tenantId: actor.tenantId,
       targetType: "SalesLog",
       targetId: salesLog.id,
-      after: { productType: salesLog.productType, litersSold: salesLog.litersSold, amountPos: salesLog.amountPos, amountTransfer: salesLog.amountTransfer } as object,
+      after: {
+        productType: salesLog.productType,
+        litersSold: salesLog.litersSold,
+        amountPos: salesLog.amountPos,
+        amountTransfer: salesLog.amountTransfer,
+      } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });

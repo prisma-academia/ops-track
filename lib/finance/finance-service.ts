@@ -15,18 +15,44 @@ export const FinanceService = {
       tenantId: string;
       stationId: string;
       salesLogId: string;
-      amountPos: Prisma.Decimal | number;
-      amountTransfer: Prisma.Decimal | number;
+      amountPos?: Prisma.Decimal | number;
+      amountTransfer?: Prisma.Decimal | number;
       posBankAccountId?: string | null;
       transferBankAccountId?: string | null;
+      payments?: {
+        method: "POS" | "TRANSFER";
+        amount: Prisma.Decimal | number;
+        bankAccountId?: string | null;
+      }[];
       description?: string;
     },
   ) {
-    const transactions = [];
+    const lines =
+      params.payments && params.payments.length > 0
+        ? params.payments.filter((p) => Number(p.amount) > 0)
+        : [
+            ...(Number(params.amountPos) > 0
+              ? [
+                  {
+                    method: "POS" as const,
+                    amount: params.amountPos!,
+                    bankAccountId: params.posBankAccountId || null,
+                  },
+                ]
+              : []),
+            ...(Number(params.amountTransfer) > 0
+              ? [
+                  {
+                    method: "TRANSFER" as const,
+                    amount: params.amountTransfer!,
+                    bankAccountId: params.transferBankAccountId || null,
+                  },
+                ]
+              : []),
+          ];
 
-    // Log POS Payment INFLOW
-    if (Number(params.amountPos) > 0) {
-      transactions.push(
+    return Promise.all(
+      lines.map((line) =>
         tx.transaction.create({
           data: {
             tenantId: params.tenantId,
@@ -34,35 +60,19 @@ export const FinanceService = {
             salesLogId: params.salesLogId,
             type: TransactionType.INFLOW,
             category: TransactionCategory.STATION_SALE,
-            amount: params.amountPos,
-            paymentPurpose: "Retail Sale POS Settlement",
-            description: params.description || "Retail sale via POS",
-            bankAccountId: params.posBankAccountId || null,
+            amount: line.amount,
+            paymentPurpose:
+              line.method === "POS"
+                ? "Retail Sale POS Settlement"
+                : "Retail Sale Transfer Settlement",
+            description:
+              params.description ||
+              (line.method === "POS" ? "Retail sale via POS" : "Retail sale via Bank Transfer"),
+            bankAccountId: line.bankAccountId || null,
           },
         }),
-      );
-    }
-
-    // Log Transfer Payment INFLOW
-    if (Number(params.amountTransfer) > 0) {
-      transactions.push(
-        tx.transaction.create({
-          data: {
-            tenantId: params.tenantId,
-            stationId: params.stationId,
-            salesLogId: params.salesLogId,
-            type: TransactionType.INFLOW,
-            category: TransactionCategory.STATION_SALE,
-            amount: params.amountTransfer,
-            paymentPurpose: "Retail Sale Transfer Settlement",
-            description: params.description || "Retail sale via Bank Transfer",
-            bankAccountId: params.transferBankAccountId || null,
-          },
-        }),
-      );
-    }
-
-    return Promise.all(transactions);
+      ),
+    );
   },
 
   /**

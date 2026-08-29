@@ -45,7 +45,7 @@ import {
 import { DataTable, DataTableColumnHeader } from "@/components/tables";
 import { FileViewerModal } from "@/components/file-viewer-modal";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
-import { apiPatch } from "@/lib/client/api";
+import { apiPatch, apiPost } from "@/lib/client/api";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
 
 interface SalesReportUser {
@@ -62,12 +62,32 @@ interface BankAccount {
   bankName: string;
 }
 
-type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
+type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED" | "PARTIAL";
+
+interface PaymentReviewEvent {
+  id: string;
+  status: "APPROVED" | "REJECTED" | "PENDING" | "PARTIAL";
+  reason?: string | null;
+  reviewedAt: string | Date;
+  reviewedBy?: SalesReportUser | null;
+}
+
+interface SalesPaymentRow {
+  id: string;
+  method: "POS" | "TRANSFER";
+  amount: number;
+  receiptUrl?: string | null;
+  status: ReviewStatus;
+  reason?: string | null;
+  bankAccount?: BankAccount | null;
+  reviews?: PaymentReviewEvent[];
+}
 
 interface PaymentEntry {
   id: string;
   amountPos: number;
   amountTransfer: number;
+  appliedCredit?: number;
   status: ReviewStatus;
   logDate: string | Date;
   posReceiptUrl?: string | null;
@@ -77,6 +97,7 @@ interface PaymentEntry {
   reason?: string | null;
   posBankAccount?: BankAccount | null;
   transferBankAccount?: BankAccount | null;
+  payments?: SalesPaymentRow[];
   litersSold?: number;
   pricePerLiter?: number;
 }
@@ -104,6 +125,7 @@ interface SalesReportRow extends PaymentEntry {
 type PaymentLine = {
   id: string;
   sourceId: string;
+  paymentId: string;
   logDate: string;
   sourceType: "INITIAL_SALE" | "DEBT_REPAYMENT";
   method: "POS" | "TRANSFER";
@@ -117,12 +139,14 @@ type PaymentLine = {
   approvedBy: SalesReportUser | null;
   reason: string | null;
   isCurrent: boolean;
+  reviews: PaymentReviewEvent[];
 };
 
-const statusVariant: Record<ReviewStatus, "default" | "secondary" | "destructive"> = {
+const statusVariant: Record<ReviewStatus, "default" | "secondary" | "destructive" | "outline"> = {
   APPROVED: "default",
   PENDING: "secondary",
   REJECTED: "destructive",
+  PARTIAL: "outline",
 };
 
 function fmtMoney(n: number) {
@@ -134,11 +158,42 @@ function userName(user?: SalesReportUser | null) {
   return `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email;
 }
 
+function approvedReceived(entry: PaymentEntry) {
+  if (entry.payments && entry.payments.length > 0) {
+    return entry.payments
+      .filter((p) => p.status === "APPROVED")
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+  }
+  return Number(entry.amountPos) + Number(entry.amountTransfer);
+}
+
 function buildPaymentLines(
   entry: PaymentEntry,
   sourceType: PaymentLine["sourceType"],
   currentId: string
 ): PaymentLine[] {
+  if (entry.payments && entry.payments.length > 0) {
+    return entry.payments.map((payment) => ({
+      id: payment.id,
+      sourceId: entry.id,
+      paymentId: payment.id,
+      logDate: String(entry.logDate),
+      sourceType,
+      method: payment.method,
+      amount: Number(payment.amount),
+      bankName: payment.bankAccount?.bankName ?? "—",
+      accountName: payment.bankAccount?.accountName ?? "—",
+      accountNumber: payment.bankAccount?.accountNumber ?? "—",
+      receiptUrl: payment.receiptUrl ?? null,
+      status: payment.status,
+      recordedBy: entry.recordedBy ?? null,
+      approvedBy: entry.approvedBy ?? null,
+      reason: payment.reason ?? null,
+      isCurrent: entry.id === currentId,
+      reviews: payment.reviews ?? [],
+    }));
+  }
+
   const lines: PaymentLine[] = [];
   const pos = Number(entry.amountPos);
   const transfer = Number(entry.amountTransfer);
@@ -147,6 +202,7 @@ function buildPaymentLines(
     lines.push({
       id: `${entry.id}-pos`,
       sourceId: entry.id,
+      paymentId: entry.id,
       logDate: String(entry.logDate),
       sourceType,
       method: "POS",
@@ -160,6 +216,7 @@ function buildPaymentLines(
       approvedBy: entry.approvedBy ?? null,
       reason: entry.reason ?? null,
       isCurrent: entry.id === currentId,
+      reviews: [],
     });
   }
 
@@ -167,6 +224,7 @@ function buildPaymentLines(
     lines.push({
       id: `${entry.id}-transfer`,
       sourceId: entry.id,
+      paymentId: entry.id,
       logDate: String(entry.logDate),
       sourceType,
       method: "TRANSFER",
@@ -180,6 +238,7 @@ function buildPaymentLines(
       approvedBy: entry.approvedBy ?? null,
       reason: entry.reason ?? null,
       isCurrent: entry.id === currentId,
+      reviews: [],
     });
   }
 
@@ -217,15 +276,15 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
 
   const metrics = React.useMemo(() => {
     const expected = Number(flowParent.litersSold) * Number(flowParent.pricePerLiter);
-    const parentReceived = Number(flowParent.amountPos) + Number(flowParent.amountTransfer);
+    const parentReceived = approvedReceived(flowParent);
     const approvedRepayments = flowChildren
-      .filter((child) => child.status === "APPROVED")
-      .reduce((sum, child) => sum + Number(child.amountPos) + Number(child.amountTransfer), 0);
+      .reduce((sum, child) => sum + approvedReceived(child), 0);
     const pos = paymentLines.filter((line) => line.method === "POS").reduce((sum, line) => sum + line.amount, 0);
     const transfer = paymentLines
       .filter((line) => line.method === "TRANSFER")
       .reduce((sum, line) => sum + line.amount, 0);
-    const received = parentReceived + approvedRepayments;
+    const appliedCredit = Number(flowParent.appliedCredit || 0);
+    const received = parentReceived + approvedRepayments + appliedCredit;
     const outstanding = expected - received;
 
     return {
@@ -237,7 +296,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
       litersSold: Number(flowParent.litersSold),
       pricePerLiter: Number(flowParent.pricePerLiter),
       repayments: flowChildren.length,
-      pendingApprovals: [flowParent, ...flowChildren].filter((entry) => entry.status === "PENDING").length,
+      pendingApprovals: paymentLines.filter((line) => line.status === "PENDING").length,
     };
   }, [flowParent, flowChildren, paymentLines]);
 
@@ -247,8 +306,8 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     setIsFileViewerOpen(true);
   };
 
-  const handleOpenReviewModal = (targetId: string, initialStatus: string) => {
-    setReviewTargetId(targetId);
+  const handleOpenReviewModal = (paymentId: string, initialStatus: string) => {
+    setReviewTargetId(paymentId);
     setReviewStatus(initialStatus === "REJECTED" ? "REJECTED" : "APPROVED");
     setReason("");
     setApiError(null);
@@ -267,10 +326,13 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     setApiError(null);
     setIsSubmitting(true);
 
-    const res = await apiPatch(`/api/tenant/stations/${report.stationId}/sales-logs/${reviewTargetId}`, {
-      status: reviewStatus,
-      reason: reason.trim() || null,
-    });
+    const res = await apiPatch(
+      `/api/tenant/stations/${report.stationId}/sales-logs/${report.id}/payments/${reviewTargetId}`,
+      {
+        status: reviewStatus,
+        reason: reason.trim() || null,
+      }
+    );
 
     setIsSubmitting(false);
 
@@ -280,6 +342,49 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
       setReviewModalOpen(false);
       router.refresh();
     }
+  };
+
+  const handleUploadReceipt = async (paymentId: string, file: File) => {
+    const sig = await apiPost<{
+      uploadType: string;
+      url: string;
+      apiKey: string;
+      timestamp: number;
+      signature: string;
+      publicUrl?: string;
+    }>("/api/tenant/upload/signature", { contentType: file.type });
+
+    if (sig.error || !sig.data) {
+      throw new Error(sig.error?.message ?? "Upload could not be started.");
+    }
+
+    let publicUrl = "";
+    if (sig.data.uploadType === "cloudinary") {
+      const formDataObj = new FormData();
+      formDataObj.append("file", file);
+      formDataObj.append("api_key", sig.data.apiKey);
+      formDataObj.append("timestamp", sig.data.timestamp.toString());
+      formDataObj.append("signature", sig.data.signature);
+      const uploadRes = await fetch(sig.data.url, { method: "POST", body: formDataObj });
+      if (!uploadRes.ok) throw new Error("Cloudinary upload failed.");
+      const cloudinaryData = await uploadRes.json();
+      publicUrl = cloudinaryData.secure_url;
+    } else {
+      const put = await fetch(sig.data.url, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!put.ok) throw new Error("Upload failed.");
+      publicUrl = sig.data.publicUrl ?? "";
+    }
+
+    const res = await apiPatch(
+      `/api/tenant/stations/${report.stationId}/sales-logs/${report.id}/payments/${paymentId}`,
+      { receiptUrl: publicUrl }
+    );
+    if (res.error) throw new Error(res.error.message);
+    router.refresh();
   };
 
   const columns = React.useMemo<ColumnDef<PaymentLine>[]>(

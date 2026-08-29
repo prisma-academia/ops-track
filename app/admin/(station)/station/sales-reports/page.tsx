@@ -57,6 +57,9 @@ export default async function SalesReportsPage() {
           lastName: true,
         },
       },
+      payments: {
+        select: { amount: true, method: true, status: true },
+      },
 
     },
   });

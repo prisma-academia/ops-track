@@ -26,6 +26,7 @@ const repaymentSelect = {
   id: true,
   amountPos: true,
   amountTransfer: true,
+  appliedCredit: true,
   status: true,
   logDate: true,
   posReceiptUrl: true,
@@ -35,6 +36,15 @@ const repaymentSelect = {
   reason: true,
   posBankAccount: bankSelect,
   transferBankAccount: bankSelect,
+  payments: {
+    include: {
+      bankAccount: bankSelect,
+      reviews: {
+        orderBy: { reviewedAt: "asc" as const },
+        include: { reviewedBy: userSelect },
+      },
+    },
+  },
 };
 
 export default async function SalesReportDetailsPage({
@@ -58,6 +68,15 @@ export default async function SalesReportDetailsPage({
       approvedBy: userSelect,
       posBankAccount: bankSelect,
       transferBankAccount: bankSelect,
+      payments: {
+        include: {
+          bankAccount: bankSelect,
+          reviews: {
+            orderBy: { reviewedAt: "asc" as const },
+            include: { reviewedBy: userSelect },
+          },
+        },
+      },
       debtRepayments: {
         select: repaymentSelect,
       },
@@ -70,6 +89,7 @@ export default async function SalesReportDetailsPage({
           pricePerLiter: true,
           amountPos: true,
           amountTransfer: true,
+          appliedCredit: true,
           posReceiptUrl: true,
           transferReceiptUrl: true,
           status: true,
@@ -78,6 +98,15 @@ export default async function SalesReportDetailsPage({
           reason: true,
           posBankAccount: bankSelect,
           transferBankAccount: bankSelect,
+          payments: {
+            include: {
+              bankAccount: bankSelect,
+              reviews: {
+                orderBy: { reviewedAt: "asc" as const },
+                include: { reviewedBy: userSelect },
+              },
+            },
+          },
           debtRepayments: {
             select: repaymentSelect,
           },

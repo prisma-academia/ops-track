@@ -63,20 +63,18 @@ export async function getBankAccountDetailsData({
   } else {
     // STATION scope bank account
     // 1. SalesLogs where bankAccountId, posBankAccountId, or transferBankAccountId is this account
-    const salesLogs = await prisma.salesLog.findMany({
+    const salesPayments = await prisma.salesPayment.findMany({
       where: {
         tenantId,
-        OR: [
-
-          { posBankAccountId: bankAccountId },
-          { transferBankAccountId: bankAccountId },
-        ],
+        bankAccountId,
         status: "APPROVED",
       },
-      orderBy: { logDate: "desc" },
+      include: {
+        salesLog: { select: { productType: true, logDate: true } },
+      },
+      orderBy: { createdAt: "desc" },
     });
 
-    // 2. Expenses where bankAccountId matches
     const expenses = await prisma.expense.findMany({
       where: {
         tenantId,
@@ -86,24 +84,19 @@ export async function getBankAccountDetailsData({
       orderBy: { createdAt: "desc" },
     });
 
-    const salesTxItems: BankTransactionItem[] = salesLogs.map((s) => {
-      let amount = 0;
-
-      if (s.posBankAccountId === bankAccountId) amount += Number(s.amountPos || 0);
-      if (s.transferBankAccountId === bankAccountId) amount += Number(s.amountTransfer || 0);
-
-      return {
-        id: s.id,
-        type: "CREDIT",
-        amount,
-        date: s.logDate ? new Date(s.logDate).toISOString() : s.approvedAt?.toISOString() || new Date().toISOString(),
-        category: "STATION_SALE",
-        description: `Approved Sale (${s.productType})`,
-        reference: s.id.slice(0, 8),
-        sourceModule: "STATION_SALE",
-        status: s.status,
-      };
-    });
+    const salesTxItems: BankTransactionItem[] = salesPayments.map((p) => ({
+      id: p.id,
+      type: "CREDIT",
+      amount: Number(p.amount),
+      date: p.salesLog.logDate
+        ? new Date(p.salesLog.logDate).toISOString()
+        : p.createdAt.toISOString(),
+      category: "STATION_SALE",
+      description: `Approved ${p.method} sale (${p.salesLog.productType})`,
+      reference: p.id.slice(0, 8),
+      sourceModule: "STATION_SALE",
+      status: p.status,
+    }));
 
     const expenseTxItems: BankTransactionItem[] = expenses.map((e) => ({
       id: e.id,

@@ -49,11 +49,13 @@ interface SalesReportRow {
   amountPos: number;
   amountTransfer: number;
   logDate: string | Date;
-  status: "PENDING" | "APPROVED" | "REJECTED";
+  status: "PENDING" | "APPROVED" | "REJECTED" | "PARTIAL";
   station: { id: string; name: string; code: string };
   stationManagerName?: string;
   isDebtRepayment?: boolean;
   parentSaleId?: string | null;
+  appliedCredit?: number;
+  payments?: { amount: number; method: string; status: string }[];
 }
 
 type GroupedSale = SalesReportRow & {
@@ -63,11 +65,21 @@ type GroupedSale = SalesReportRow & {
   expectedRevenue: number;
 };
 
-const statusVariant: Record<SalesReportRow["status"], "default" | "secondary" | "destructive"> = {
+const statusVariant: Record<SalesReportRow["status"], "default" | "secondary" | "destructive" | "outline"> = {
   APPROVED: "default",
   PENDING: "secondary",
   REJECTED: "destructive",
+  PARTIAL: "outline",
 };
+
+function receivedForReport(r: SalesReportRow) {
+  if (r.payments && r.payments.length > 0) {
+    return r.payments
+      .filter((p) => p.status === "APPROVED")
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+  }
+  return Number(r.amountPos) + Number(r.amountTransfer);
+}
 
 function fmtMoney(n: number) {
   return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -160,12 +172,10 @@ export function SalesReportsManager({
         .sort((a, b) => new Date(a.logDate).getTime() - new Date(b.logDate).getTime());
 
       const expectedRevenue = Number(p.litersSold) * Number(p.pricePerLiter);
-      const parentReceived = Number(p.amountPos) + Number(p.amountTransfer);
-      const childRepaidTotal = childRepayments.reduce(
-        (sum, c) => sum + Number(c.amountPos) + Number(c.amountTransfer),
-        0
-      );
-      const totalReceived = parentReceived + childRepaidTotal;
+      const parentReceived = receivedForReport(p);
+      const childRepaidTotal = childRepayments.reduce((sum, c) => sum + receivedForReport(c), 0);
+      const appliedCredit = Number(p.appliedCredit || 0);
+      const totalReceived = parentReceived + childRepaidTotal + appliedCredit;
 
       return {
         ...p,
@@ -218,7 +228,7 @@ export function SalesReportsManager({
       if (g.overallBalance > 0) overpayment += g.overallBalance;
       if (g.overallBalance < 0) underpayment += Math.abs(g.overallBalance);
       if (g.status === "APPROVED") approved += 1;
-      if (g.status === "PENDING") pending += 1;
+      if (g.status === "PENDING" || g.status === "PARTIAL") pending += 1;
       if (g.status === "REJECTED") rejected += 1;
     });
 
@@ -404,6 +414,7 @@ export function SalesReportsManager({
         options: [
           { label: "Approved", value: "APPROVED" },
           { label: "Pending", value: "PENDING" },
+          { label: "Partial", value: "PARTIAL" },
           { label: "Rejected", value: "REJECTED" },
         ],
       },
@@ -524,6 +535,7 @@ export function SalesReportsManager({
               <SelectContent>
                 <SelectItem value="ALL">All Status</SelectItem>
                 <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="PARTIAL">Partial</SelectItem>
                 <SelectItem value="APPROVED">Approved</SelectItem>
                 <SelectItem value="REJECTED">Rejected</SelectItem>
               </SelectContent>

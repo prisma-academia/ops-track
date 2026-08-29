@@ -1,5 +1,5 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../lib/generated/prisma/client";
+import { PrismaClient, type AppModule } from "../lib/generated/prisma/client";
 import argon2 from "argon2";
 import "dotenv/config";
 
@@ -87,7 +87,7 @@ async function main() {
       city: "Kano",
       region: "Kano",
       country: "NG",
-      activeModules: ["FLEET", "STATION"],
+      activeModules: ["FLEET", "STATION"] as AppModule[],
     },
     create: {
       slug: "sahaf",
@@ -97,7 +97,7 @@ async function main() {
       city: "Kano",
       region: "Kano",
       country: "NG",
-      activeModules: ["FLEET", "STATION"],
+      activeModules: ["FLEET", "STATION"] as AppModule[],
     },
   });
 
@@ -134,7 +134,7 @@ async function main() {
     status: "ACTIVE" as const,
     stationPermissions: [...ALL_TENANT_PERMISSION_KEYS],
     fleetPermissions: [...ALL_TENANT_PERMISSION_KEYS],
-    activeModules: ["STATION", "FLEET"],
+    activeModules: ["STATION", "FLEET"] as AppModule[],
   };
 
   const existingOwner =

@@ -8,16 +8,15 @@ import { PageHeader } from "@/components/shell";
 export default async function StationBankAccountsPage() {
   const actor = await requireTenantPage(undefined, "STATION");
   const canReadStation = hasPermission(actor, PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key);
-  if (!canReadStation) {
+  const canReadFleet = hasPermission(actor, PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key);
+  if (!canReadStation && !canReadFleet) {
     redirect("/admin/unauthorized");
   }
 
   const take = 25;
   const skip = 0;
-  const scopeFilter = "STATION";
   const where: { tenantId: string; scope?: "FLEET" | "STATION" } = {
     tenantId: actor.tenantId,
-    scope: scopeFilter,
   };
 
   const [totalCount, rawRows] = await Promise.all([
@@ -56,7 +55,9 @@ export default async function StationBankAccountsPage() {
           tenantSlug={actor.tenantId}
           initialData={rows}
           initialMeta={initialMeta}
-          scopeFilter={scopeFilter}
+          scopeFilter={undefined}
+          createScope="STATION"
+          detailBase="/admin/station/bank-accounts"
         />
       </div>
     </div>

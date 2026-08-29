@@ -5,7 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
+import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 
 const CreateBankAccountSchema = z.object({
   scope: z.enum(["STATION", "FLEET"]),
@@ -19,11 +19,12 @@ export async function GET(request: Request) {
   try {
     const actor = await requireTenantActor();
     const url = new URL(request.url);
-    const { cursor, take } = parsePagination(url.searchParams);
     const scope = url.searchParams.get("scope");
     const isActive = url.searchParams.get("isActive");
 
-    const where: any = { tenantId: actor.tenantId };
+    const where: { tenantId: string; scope?: "STATION" | "FLEET"; isActive?: boolean } = {
+      tenantId: actor.tenantId,
+    };
     if (scope === "STATION" || scope === "FLEET") {
       where.scope = scope;
     }
@@ -31,6 +32,21 @@ export async function GET(request: Request) {
       where.isActive = isActive === "true";
     }
 
+    if (url.searchParams.has("page")) {
+      const { page, take, skip } = parseOffsetPagination(url.searchParams);
+      const [totalCount, rawRows] = await Promise.all([
+        prisma.bankAccount.count({ where }),
+        prisma.bankAccount.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          take,
+          skip,
+        }),
+      ]);
+      return ok(rawRows, buildOffsetPageMeta(totalCount, page, take));
+    }
+
+    const { cursor, take } = parsePagination(url.searchParams);
     const rawRows = await prisma.bankAccount.findMany({
       where,
       orderBy: { createdAt: "desc" },

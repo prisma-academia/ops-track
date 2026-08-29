@@ -35,11 +35,15 @@ export function BankAccountsTable({
   initialMeta,
   tenantSlug,
   scopeFilter,
+  createScope,
+  detailBase,
 }: {
   initialData: BankAccountRow[];
   initialMeta: any;
   tenantSlug: string;
   scopeFilter?: "STATION" | "FLEET";
+  createScope?: "STATION" | "FLEET";
+  detailBase?: string;
 }) {
   const router = useRouter();
   const [editingAccount, setEditingAccount] = useState<BankAccountRow | null>(null);
@@ -129,10 +133,12 @@ export function BankAccountsTable({
         }}
         filterColumnId="bankName"
         searchPlaceholder="Search by bank name..."
-        rowHref={(row) => scopeFilter === "STATION" 
-          ? `/admin/station/bank-accounts/${row.id}`
-          : `/admin/bank-accounts/${row.id}`
-        }
+        rowHref={(row) => {
+          if (detailBase) return `${detailBase}/${row.id}`;
+          return scopeFilter === "STATION"
+            ? `/admin/station/bank-accounts/${row.id}`
+            : `/admin/bank-accounts/${row.id}`;
+        }}
         headerAction={
           <Button onClick={() => {
             setEditingAccount(null);
@@ -149,7 +155,7 @@ export function BankAccountsTable({
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => router.refresh()}
         initialData={editingAccount}
-        fixedScope={scopeFilter}
+        fixedScope={createScope ?? scopeFilter}
       />
 
       <AlertDialog open={!!deletingId} onOpenChange={(open) => !open && setDeletingId(null)}>

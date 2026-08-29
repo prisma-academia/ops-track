@@ -22,6 +22,17 @@ const bankSelect = {
   },
 };
 
+const paymentListInclude = {
+  orderBy: { createdAt: "asc" as const },
+  include: {
+    bankAccount: bankSelect,
+    reviews: {
+      orderBy: { reviewedAt: "asc" as const },
+      include: { reviewedBy: userSelect },
+    },
+  },
+};
+
 const repaymentSelect = {
   id: true,
   amountPos: true,
@@ -36,15 +47,7 @@ const repaymentSelect = {
   reason: true,
   posBankAccount: bankSelect,
   transferBankAccount: bankSelect,
-  payments: {
-    include: {
-      bankAccount: bankSelect,
-      reviews: {
-        orderBy: { reviewedAt: "asc" as const },
-        include: { reviewedBy: userSelect },
-      },
-    },
-  },
+  payments: paymentListInclude,
 };
 
 export default async function SalesReportDetailsPage({
@@ -68,15 +71,7 @@ export default async function SalesReportDetailsPage({
       approvedBy: userSelect,
       posBankAccount: bankSelect,
       transferBankAccount: bankSelect,
-      payments: {
-        include: {
-          bankAccount: bankSelect,
-          reviews: {
-            orderBy: { reviewedAt: "asc" as const },
-            include: { reviewedBy: userSelect },
-          },
-        },
-      },
+      payments: paymentListInclude,
       debtRepayments: {
         select: repaymentSelect,
       },
@@ -98,15 +93,7 @@ export default async function SalesReportDetailsPage({
           reason: true,
           posBankAccount: bankSelect,
           transferBankAccount: bankSelect,
-          payments: {
-            include: {
-              bankAccount: bankSelect,
-              reviews: {
-                orderBy: { reviewedAt: "asc" as const },
-                include: { reviewedBy: userSelect },
-              },
-            },
-          },
+          payments: paymentListInclude,
           debtRepayments: {
             select: repaymentSelect,
           },

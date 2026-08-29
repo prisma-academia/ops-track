@@ -63,7 +63,9 @@ export async function PATCH(
       throw new DomainError(400, "invalid_input", "A review status or receipt URL is required.");
     }
 
-    if (body.status === "REJECTED" && !body.reason?.trim()) {
+    const reviewStatus = body.status;
+
+    if (reviewStatus === "REJECTED" && !body.reason?.trim()) {
       throw new DomainError(400, "reason_required", "A reason is required when rejecting a payment.");
     }
 
@@ -73,7 +75,7 @@ export async function PATCH(
       const updated = await tx.salesPayment.update({
         where: { id: paymentId },
         data: {
-          status: body.status,
+          status: reviewStatus,
           reason: body.reason || null,
         },
         include: salesPaymentInclude,
@@ -83,7 +85,7 @@ export async function PATCH(
         data: {
           tenantId: actor.tenantId,
           paymentId,
-          status: body.status,
+          status: reviewStatus,
           reason: body.reason || null,
           reviewedById: actor.userId,
         },
@@ -96,7 +98,7 @@ export async function PATCH(
         where: { id: salesLogId },
         data: {
           status: rollup,
-          reason: body.status === "REJECTED" ? body.reason || null : payment.salesLog.reason,
+          reason: reviewStatus === "REJECTED" ? body.reason || null : payment.salesLog.reason,
           approvedById: actor.userId,
           approvedAt: new Date(),
         },
@@ -129,7 +131,7 @@ export async function PATCH(
       targetType: "SalesPayment",
       targetId: paymentId,
       after: {
-        status: body.status,
+        status: reviewStatus,
         method: payment.method,
         reason: body.reason,
         salesLogId,
@@ -139,7 +141,7 @@ export async function PATCH(
       userAgent: meta.userAgent,
     });
 
-    if (body.status === "REJECTED" && salesLog?.recordedBy?.expoPushTokens?.length) {
+    if (reviewStatus === "REJECTED" && salesLog?.recordedBy?.expoPushTokens?.length) {
       try {
         const formattedDate = new Date(salesLog.logDate).toLocaleDateString("en-US", {
           month: "short",
@@ -149,8 +151,8 @@ export async function PATCH(
         const remarks = body.reason ? `: "${body.reason}"` : "";
         await sendPushNotification(
           salesLog.recordedBy.expoPushTokens,
-          `${methodLabel} payment rejected`,
-          `Your ${salesLog.productType} ${methodLabel.toLowerCase()} payment for ${formattedDate} was rejected${remarks}.`,
+          `${methodLabel} of ₦${Number(payment.amount).toLocaleString("en-NG")} rejected`,
+          `Your ${salesLog.productType} ${methodLabel.toLowerCase()} payment of ₦${Number(payment.amount).toLocaleString("en-NG")} for ${formattedDate} was rejected${remarks}.`,
           {
             salesLogId,
             paymentId,

@@ -59,7 +59,7 @@ const salesLogInclude = {
   recordedBy: { select: { firstName: true, lastName: true } },
   posBankAccount: { select: { id: true, accountName: true, accountNumber: true, bankName: true } },
   transferBankAccount: { select: { id: true, accountName: true, accountNumber: true, bankName: true } },
-  payments: { include: salesPaymentInclude },
+  payments: { orderBy: { createdAt: "asc" as const }, include: salesPaymentInclude },
 };
 
 export async function GET(

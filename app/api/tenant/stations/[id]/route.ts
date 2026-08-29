@@ -4,6 +4,7 @@ import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
+import { requireCsrf } from "@/lib/api/csrf-guard";
 import { computeStationOverpayment } from "@/lib/sales/payments";
 
 const UpdateStationSchema = z.object({

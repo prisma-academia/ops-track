@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Image as ImageIcon,
+  Upload,
   User,
   Droplets,
   CircleDollarSign,
@@ -129,6 +130,7 @@ type PaymentLine = {
   logDate: string;
   sourceType: "INITIAL_SALE" | "DEBT_REPAYMENT";
   method: "POS" | "TRANSFER";
+  label: string;
   amount: number;
   bankName: string;
   accountName: string;
@@ -180,6 +182,7 @@ function buildPaymentLines(
       logDate: String(entry.logDate),
       sourceType,
       method: payment.method,
+      label: payment.method === "POS" ? "POS" : "Transfer",
       amount: Number(payment.amount),
       bankName: payment.bankAccount?.bankName ?? "—",
       accountName: payment.bankAccount?.accountName ?? "—",
@@ -206,6 +209,7 @@ function buildPaymentLines(
       logDate: String(entry.logDate),
       sourceType,
       method: "POS",
+      label: "POS",
       amount: pos,
       bankName: entry.posBankAccount?.bankName ?? "—",
       accountName: entry.posBankAccount?.accountName ?? "—",
@@ -228,6 +232,7 @@ function buildPaymentLines(
       logDate: String(entry.logDate),
       sourceType,
       method: "TRANSFER",
+      label: "Transfer",
       amount: transfer,
       bankName: entry.transferBankAccount?.bankName ?? "—",
       accountName: entry.transferBankAccount?.accountName ?? "—",
@@ -245,11 +250,30 @@ function buildPaymentLines(
   return lines;
 }
 
+function numberPaymentLines(lines: PaymentLine[]): PaymentLine[] {
+  const totals: Record<string, number> = {};
+  for (const line of lines) {
+    totals[line.method] = (totals[line.method] || 0) + 1;
+  }
+  const seen: Record<string, number> = {};
+  return lines.map((line) => {
+    seen[line.method] = (seen[line.method] || 0) + 1;
+    const n = seen[line.method];
+    const kind = line.method === "POS" ? "POS" : "Transfer";
+    return {
+      ...line,
+      label: totals[line.method] > 1 ? `${kind} ${n}` : kind,
+    };
+  });
+}
+
 export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   const router = useRouter();
 
   const [reviewModalOpen, setReviewModalOpen] = React.useState(false);
   const [reviewTargetId, setReviewTargetId] = React.useState<string | null>(null);
+  const [reviewLogId, setReviewLogId] = React.useState<string | null>(null);
+  const [reviewLine, setReviewLine] = React.useState<PaymentLine | null>(null);
   const [reviewStatus, setReviewStatus] = React.useState<"APPROVED" | "REJECTED">("APPROVED");
   const [reason, setReason] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -268,10 +292,10 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   }, [flowParent]);
 
   const paymentLines = React.useMemo<PaymentLine[]>(() => {
-    return [
+    return numberPaymentLines([
       ...buildPaymentLines(flowParent, "INITIAL_SALE", report.id),
       ...flowChildren.flatMap((child) => buildPaymentLines(child, "DEBT_REPAYMENT", report.id)),
-    ];
+    ]);
   }, [flowParent, flowChildren, report.id]);
 
   const metrics = React.useMemo(() => {
@@ -297,6 +321,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
       pricePerLiter: Number(flowParent.pricePerLiter),
       repayments: flowChildren.length,
       pendingApprovals: paymentLines.filter((line) => line.status === "PENDING").length,
+      appliedCredit,
     };
   }, [flowParent, flowChildren, paymentLines]);
 
@@ -306,9 +331,11 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     setIsFileViewerOpen(true);
   };
 
-  const handleOpenReviewModal = (paymentId: string, initialStatus: string) => {
-    setReviewTargetId(paymentId);
-    setReviewStatus(initialStatus === "REJECTED" ? "REJECTED" : "APPROVED");
+  const handleOpenReviewModal = (line: PaymentLine) => {
+    setReviewTargetId(line.paymentId);
+    setReviewLogId(line.sourceId);
+    setReviewLine(line);
+    setReviewStatus(line.status === "REJECTED" ? "REJECTED" : "APPROVED");
     setReason("");
     setApiError(null);
     setReviewModalOpen(true);
@@ -326,8 +353,9 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     setApiError(null);
     setIsSubmitting(true);
 
+    const logId = reviewLogId || report.id;
     const res = await apiPatch(
-      `/api/tenant/stations/${report.stationId}/sales-logs/${report.id}/payments/${reviewTargetId}`,
+      `/api/tenant/stations/${report.stationId}/sales-logs/${logId}/payments/${reviewTargetId}`,
       {
         status: reviewStatus,
         reason: reason.trim() || null,
@@ -344,7 +372,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     }
   };
 
-  const handleUploadReceipt = async (paymentId: string, file: File) => {
+  const handleUploadReceipt = async (paymentId: string, salesLogId: string, file: File) => {
     const sig = await apiPost<{
       uploadType: string;
       url: string;
@@ -380,7 +408,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     }
 
     const res = await apiPatch(
-      `/api/tenant/stations/${report.stationId}/sales-logs/${report.id}/payments/${paymentId}`,
+      `/api/tenant/stations/${report.stationId}/sales-logs/${salesLogId}/payments/${paymentId}`,
       { receiptUrl: publicUrl }
     );
     if (res.error) throw new Error(res.error.message);
@@ -410,12 +438,10 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
       },
       {
         accessorKey: "method",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Method" />,
-        meta: { label: "Method" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Payment" />,
+        meta: { label: "Payment" },
         cell: ({ row }) => (
-          <Badge variant="outline">
-            {row.original.method === "POS" ? "POS" : "Transfer"}
-          </Badge>
+          <Badge variant="outline">{row.original.label}</Badge>
         ),
       },
       {
@@ -452,25 +478,51 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
         id: "receipt",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Receipt" />,
         meta: { label: "Receipt" },
-        cell: ({ row }) =>
-          row.original.receiptUrl ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8"
-              onClick={() =>
-                handleOpenReceipt(
-                  row.original.receiptUrl!,
-                  row.original.method === "POS" ? "POS Receipt" : "Transfer Receipt"
-                )
-              }
-            >
-              <ImageIcon className="mr-1.5 size-3.5" />
-              View
-            </Button>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          ),
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            {row.original.receiptUrl ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() =>
+                  handleOpenReceipt(
+                    row.original.receiptUrl!,
+                    row.original.method === "POS" ? "POS Receipt" : "Transfer Receipt"
+                  )
+                }
+              >
+                <ImageIcon className="mr-1.5 size-3.5" />
+                View
+              </Button>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+            <label className="inline-flex">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  try {
+                    await handleUploadReceipt(row.original.paymentId, row.original.sourceId, file);
+                  } catch (err) {
+                    setApiError(err instanceof Error ? err.message : "Upload failed");
+                  }
+                }}
+              />
+              <Button variant="ghost" size="sm" className="h-8" type="button" asChild>
+                <span>
+                  <Upload className="mr-1.5 size-3.5" />
+                  Upload
+                </span>
+              </Button>
+            </label>
+          </div>
+        ),
       },
       {
         id: "actions",
@@ -482,7 +534,8 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => handleOpenReviewModal(row.original.sourceId, row.original.status)}
+              disabled={row.original.paymentId === row.original.sourceId}
+              onClick={() => handleOpenReviewModal(row.original)}
             >
               Review
             </Button>
@@ -529,9 +582,15 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
       title: receivedLabel,
       value: fmtMoney(metrics.received),
       hint:
-        metrics.repayments > 0
-          ? `POS ${fmtMoney(metrics.pos)} · Transfer ${fmtMoney(metrics.transfer)} · ${metrics.repayments} repayment${metrics.repayments === 1 ? "" : "s"}`
-          : `POS ${fmtMoney(metrics.pos)} · Transfer ${fmtMoney(metrics.transfer)}`,
+        [
+          `POS ${fmtMoney(metrics.pos)} · Transfer ${fmtMoney(metrics.transfer)}`,
+          metrics.repayments > 0
+            ? `${metrics.repayments} repayment${metrics.repayments === 1 ? "" : "s"}`
+            : null,
+          metrics.appliedCredit > 0 ? `Credit ${fmtMoney(metrics.appliedCredit)}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
       icon: Wallet,
       valueColor: "text-emerald-600",
       iconColor: "text-emerald-600",
@@ -570,6 +629,10 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
         ) : report.status === "REJECTED" ? (
           <Badge variant="outline" className="border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10">
             <AlertCircle className="mr-1.5 size-4" /> Rejected
+          </Badge>
+        ) : report.status === "PARTIAL" ? (
+          <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-500/30 dark:bg-amber-500/10">
+            Partial
           </Badge>
         ) : (
           <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-500/30 dark:bg-amber-500/10">
@@ -639,7 +702,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
               <div className="grid grid-cols-2 gap-3 rounded-xl border p-4 text-sm">
                 <div>
                   <span className="block text-xs text-muted-foreground">Method</span>
-                  <span>{detailsRow.method === "POS" ? "POS" : "Transfer"}</span>
+                  <span>{detailsRow.label}</span>
                 </div>
                 <div>
                   <span className="block text-xs text-muted-foreground">Amount sent</span>
@@ -674,7 +737,52 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                   </div>
                 </div>
 
-                {detailsRow.status !== "PENDING" && (
+                {detailsRow.reviews.map((event) => {
+                  const approved = event.status === "APPROVED";
+                  return (
+                    <div key={event.id} className="relative">
+                      <div
+                        className={cn(
+                          "absolute top-1 -left-5 size-3 rounded-full border-2 border-background",
+                          approved ? "bg-emerald-600" : "bg-rose-600"
+                        )}
+                      />
+                      <div
+                        className={cn(
+                          "rounded-xl border bg-card p-4 shadow-sm",
+                          approved
+                            ? "border-emerald-500/20 bg-emerald-500/5"
+                            : "border-rose-500/20 bg-rose-500/5"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "mb-1 block text-sm font-semibold",
+                            approved ? "text-emerald-600" : "text-rose-600"
+                          )}
+                        >
+                          {detailsRow.label} {approved ? "approved" : "rejected"}
+                        </span>
+                        <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+                          <User className="size-3.5" />
+                          <span>
+                            By <strong className="text-foreground">{userName(event.reviewedBy)}</strong>
+                            {event.reviewedBy?.email ? ` (${event.reviewedBy.email})` : ""}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(event.reviewedAt), "LLL dd, y p")}
+                        </p>
+                        {event.reason && (
+                          <div className="mt-2 whitespace-pre-wrap rounded-lg border bg-background/60 p-3 text-sm italic text-muted-foreground">
+                            {event.reason}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {detailsRow.reviews.length === 0 && detailsRow.status !== "PENDING" && (
                   <div className="relative">
                     <div
                       className={cn(
@@ -696,7 +804,8 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                           detailsRow.status === "APPROVED" ? "text-emerald-600" : "text-rose-600"
                         )}
                       >
-                        {detailsRow.status === "APPROVED" ? "Report approved" : "Report rejected"}
+                        {detailsRow.label}{" "}
+                        {detailsRow.status === "APPROVED" ? "approved" : "rejected"}
                       </span>
                       <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
                         <User className="size-3.5" />
@@ -729,9 +838,11 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
       <Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Review Decision</DialogTitle>
+            <DialogTitle>Review this payment</DialogTitle>
             <DialogDescription>
-              Review the report details and provide an approval decision.
+              {reviewLine
+                ? `This decision applies only to ${reviewLine.label} of ${fmtMoney(reviewLine.amount)} (${reviewLine.bankName} ${reviewLine.accountNumber}). Other POS or transfer lines on this sale are reviewed separately.`
+                : "Approve or reject this POS or transfer payment. Other payments on the sale are reviewed separately."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleReviewReport} className="space-y-5 py-4">
@@ -742,8 +853,8 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="APPROVED">Approve Report</SelectItem>
-                  <SelectItem value="REJECTED">Reject Report</SelectItem>
+                  <SelectItem value="APPROVED">Approve this payment</SelectItem>
+                  <SelectItem value="REJECTED">Reject this payment</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -759,7 +870,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                 id="review-reason"
                 placeholder={
                   reviewStatus === "REJECTED"
-                    ? "Specify why the report is rejected..."
+                    ? "Specify why this payment is rejected..."
                     : "Add any notes or remarks..."
                 }
                 value={reason}

@@ -59,6 +59,7 @@ export default async function FleetBankAccountsPage() {
           initialData={rows}
           initialMeta={initialMeta}
           scopeFilter={scopeFilter}
+          detailBase="/admin/bank-accounts"
         />
       </div>
     </div>

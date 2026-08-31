@@ -334,7 +334,7 @@ export function UpdatePricesManager({
     }
 
     toast.success(
-      `Price changes applied successfully to ${selectedStationIds.length} station(s)`
+      `Price changes applied and notifications dispatched to ${selectedStationIds.length} station(s)`
     )
     setShowConfirmDialog(false)
     router.push("/admin/station/prices")
@@ -709,6 +709,9 @@ export function UpdatePricesManager({
                     <strong className="text-foreground">immediately</strong>.
                   </p>
                 )}
+                <p className="text-xs text-muted-foreground bg-muted/40 p-2.5 rounded-md border">
+                  Station managers using the mobile app at the selected station(s) will receive an instant notification.
+                </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

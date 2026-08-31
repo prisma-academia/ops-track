@@ -74,6 +74,28 @@ export async function POST(request: Request) {
       throw new DomainError(400, "invalid_input", "A Delivery cannot belong to both a customer and a station.");
     }
 
+    // Capacity validation against transport
+    const transportRecord = await prisma.transport.findUnique({
+      where: { id: body.transportId },
+      include: { deliveries: { select: { id: true, litersDespatched: true } } },
+    });
+    if (!transportRecord || transportRecord.tenantId !== actor.tenantId) {
+      throw new DomainError(404, "not_found", "Transport not found.");
+    }
+    const carried = Number(transportRecord.litersCarried || 0);
+    const distributed = (transportRecord.deliveries || []).reduce(
+      (acc: number, s: { litersDespatched: unknown }) => acc + Number(s.litersDespatched || 0),
+      0
+    );
+    const available = Math.max(0, carried - distributed);
+    if (body.litersDespatched > available) {
+      throw new DomainError(
+        400,
+        "invalid_volume",
+        `Dispatch volume exceeds transport's available quantity (${available.toLocaleString()} L)`
+      );
+    }
+
     // null = not yet received (will be set after dipping). 0 is a valid received value.
     const litersReceivedForCalc = body.litersReceived !== undefined && body.litersReceived !== null ? body.litersReceived : body.litersDespatched;
     const totalExpectedAmount = litersReceivedForCalc * body.amountPerLiter;

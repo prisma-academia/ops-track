@@ -6,6 +6,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { ProductType } from "@/lib/generated/prisma/client";
+import { notifyStationManagersPriceChange } from "@/lib/notifications/price-notifications";
 
 const BulkPriceSchema = z.object({
   prices: z.object({
@@ -76,6 +77,22 @@ export async function POST(request: Request) {
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
+
+    // Notify station managers using the mobile app for each affected station
+    const pricesPayload: Record<string, number> = {};
+    for (const [fuelType, price] of Object.entries(body.prices)) {
+      if (price !== undefined) pricesPayload[fuelType] = price;
+    }
+
+    for (const station of stations) {
+      await notifyStationManagersPriceChange({
+        tenantId: actor.tenantId,
+        actorId: actor.userId,
+        station: { id: station.id, name: station.name },
+        prices: pricesPayload,
+        effectiveDate,
+      });
+    }
 
     return ok({ count: result.length, prices: result });
   } catch (e) {

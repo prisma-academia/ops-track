@@ -5,6 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { notifyStationManagersPriceChange } from "@/lib/notifications/price-notifications";
 
 const SetPriceSchema = z.object({
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
@@ -76,6 +77,14 @@ export async function POST(
       } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
+    });
+
+    await notifyStationManagersPriceChange({
+      tenantId: actor.tenantId,
+      actorId: actor.userId,
+      station: { id: station.id, name: station.name },
+      prices: { [body.productType]: body.pricePerLiter },
+      effectiveDate: body.effectiveFrom,
     });
 
     return ok({ priceControl });

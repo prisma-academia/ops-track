@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useMemo, useRef, useCallback } from "react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -284,7 +285,7 @@ export function InventoryAlertsManager({
   async function resolveAlert(id: string, action: "APPROVE" | "REJECT") {
     const remark = remarks[id] || "";
     if (!remark && action === "APPROVE") {
-      alert("Please provide a remark/reason before acknowledging.");
+      toast.error("Please provide a remark/reason before acknowledging.");
       return;
     }
 
@@ -296,10 +297,11 @@ export function InventoryAlertsManager({
     setProcessing(null);
 
     if (res.error) {
-      alert(res.error.message);
+      toast.error(res.error.message || "Failed to update alert.");
       return;
     }
 
+    toast.success(`Alert ${action.toLowerCase()}d successfully.`);
     if (res.data) {
       setAlertList(prev => prev.map(a => a.id === id ? { ...a, ...res.data!.ticket, status: res.data!.ticket.status } : a));
       setRemarks(prev => ({ ...prev, [id]: "" }));

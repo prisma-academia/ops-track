@@ -25,7 +25,7 @@ export default async function TenantLandingPage() {
   return (
     <div className="min-h-screen bg-stone-50">
       <HeroSection slug={tenant?.slug || "App"} name={tenant?.name || "App"} logoUrl={logoUrl} backgroundUrl={backgroundUrl} />
-      <OrgFeatures />
+      {/* <OrgFeatures /> */}
       <FooterSection slug={tenant?.slug || "App"} name={tenant?.name || "App"} logoUrl={logoUrl} />
     </div>
   );

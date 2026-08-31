@@ -39,10 +39,22 @@ import {
   TrendingUp,
   ArrowRight,
   Wallet,
+  Lock,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
 import { DataTable } from "@/components/tables";
 import {
   fmtMoney,
@@ -66,11 +78,13 @@ export function SalesDetailsManager({
   pnlBreakdownRow,
   orderId,
   orderReference,
+  stations = [],
 }: {
   delivery: any;
   pnlBreakdownRow?: FleetPnlTableRow | null;
   orderId?: string | null;
   orderReference?: string | null;
+  stations?: { id: string; name: string; code?: string | null }[];
 }) {
   const router = useRouter();
 
@@ -80,12 +94,30 @@ export function SalesDetailsManager({
   const [isDeducting, setIsDeducting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [openStationSelect, setOpenStationSelect] = useState(false);
+  const [editLitersDespatched, setEditLitersDespatched] = useState(delivery.litersDespatched?.toString() || "");
+  const [editStationId, setEditStationId] = useState(delivery.stationId || delivery.station?.id || "");
   const [editLitersReceived, setEditLitersReceived] = useState(delivery.litersReceived?.toString() || "");
   const [editAmountPerLiter, setEditAmountPerLiter] = useState(delivery.amountPerLiter?.toString() || "");
+
+  const isReceived = delivery.litersReceived !== null;
+  const selectedStation =
+    stations.find((s) => s.id === editStationId) ||
+    (delivery.station ? { id: delivery.station.id, name: delivery.station.name, code: delivery.station.code } : null);
 
   const totalExpected = Number(delivery.totalExpectedAmount);
   const paymentReceived = Number(delivery.paymentReceived);
   const outstanding = Math.max(0, totalExpected - paymentReceived);
+
+  const carried = Number(delivery.transport?.litersCarried || 0);
+  const otherDeliveries = (delivery.transport?.deliveries || []).filter(
+    (d: { id: string; litersDespatched: unknown }) => d.id !== delivery.id
+  );
+  const otherDistributed = otherDeliveries.reduce(
+    (sum: number, d: { litersDespatched: unknown }) => sum + Number(d.litersDespatched || 0),
+    0
+  );
+  const maxAvailableVolume = carried > 0 ? Math.max(0, carried - otherDistributed) : null;
 
   const litersDespatched = Number(delivery.litersDespatched || 0);
   const litersReceived = delivery.litersReceived !== null ? Number(delivery.litersReceived) : null;
@@ -139,9 +171,27 @@ export function SalesDetailsManager({
     setIsSubmitting(true);
     setError(null);
 
-    const payload: Record<string, number> = {};
-    if (editLitersReceived) payload.litersReceived = Number(editLitersReceived);
+    const payload: Record<string, any> = {};
     if (editAmountPerLiter) payload.amountPerLiter = Number(editAmountPerLiter);
+
+    if (!isReceived) {
+      if (editLitersDespatched) {
+        const numDespatched = Number(editLitersDespatched);
+        if (maxAvailableVolume !== null && numDespatched > maxAvailableVolume) {
+          setError(
+            `Dispatch volume exceeds transport's available quantity (${fmtQtyLocal(maxAvailableVolume)} ${volumeUnit}).`
+          );
+          setIsSubmitting(false);
+          return;
+        }
+        payload.litersDespatched = numDespatched;
+      }
+      if (editStationId && editStationId !== delivery.stationId) payload.stationId = editStationId;
+    }
+
+    if (!delivery.station && editLitersReceived) {
+      payload.litersReceived = Number(editLitersReceived);
+    }
 
     const res = await apiPatch(`/api/tenant/fleet/deliveries/${delivery.id}`, payload);
     setIsSubmitting(false);
@@ -644,12 +694,137 @@ export function SalesDetailsManager({
         </div>
       </div>
 
-      <Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>
+      <Dialog
+        open={openEditDialog}
+        onOpenChange={(open: boolean) => {
+          if (!isSubmitting) {
+            setOpenEditDialog(open);
+            if (open) {
+              setEditLitersDespatched(delivery.litersDespatched?.toString() || "");
+              setEditStationId(delivery.stationId || delivery.station?.id || "");
+              setEditLitersReceived(delivery.litersReceived?.toString() || "");
+              setEditAmountPerLiter(delivery.amountPerLiter?.toString() || "");
+              setError(null);
+            }
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Update volumes & pricing</DialogTitle>
+            <DialogTitle>Update Delivery Details</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Station selection */}
+            {(delivery.station || stations.length > 0) && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="stationId">Station</Label>
+                  {isReceived && (
+                    <span className="text-[11px] font-medium text-amber-600 dark:text-amber-500 flex items-center gap-1">
+                      <Lock className="w-3 h-3" /> Locked (Received)
+                    </span>
+                  )}
+                </div>
+                {isReceived ? (
+                  <div className="p-2.5 rounded-lg border bg-muted/40 flex items-center justify-between text-sm">
+                    <span className="font-medium text-foreground">
+                      {delivery.station?.name || selectedStation?.name || "Station"}
+                      {(delivery.station?.code || selectedStation?.code) && ` (${delivery.station?.code || selectedStation?.code})`}
+                    </span>
+                    <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                  </div>
+                ) : (
+                  <Popover open={openStationSelect} onOpenChange={setOpenStationSelect}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        id="stationId"
+                        className="w-full justify-between font-normal text-left"
+                      >
+                        <span className="truncate">
+                          {selectedStation
+                            ? `${selectedStation.name}${selectedStation.code ? ` (${selectedStation.code})` : ""}`
+                            : "Select station..."}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search station..." />
+                        <CommandList className="max-h-[200px] overflow-y-auto">
+                          <CommandEmpty>No station found.</CommandEmpty>
+                          <CommandGroup>
+                            {stations.map((s) => (
+                              <CommandItem
+                                key={s.id}
+                                value={`${s.name} ${s.code || ""} ${s.id}`.toLowerCase()}
+                                onSelect={() => {
+                                  setEditStationId(s.id);
+                                  setOpenStationSelect(false);
+                                }}
+                              >
+                                <div className="flex flex-col text-left">
+                                  <span className="font-semibold text-sm">{s.name}</span>
+                                  {s.code && <span className="text-xs text-muted-foreground mt-0.5">Code: {s.code}</span>}
+                                </div>
+                                {editStationId === s.id && (
+                                  <Check className="ml-auto h-4 w-4 text-primary" />
+                                )}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                )}
+                {isReceived && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Station cannot be changed after delivery has been received.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Dispatch Volume */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="litersDespatched">Dispatch Volume ({volumeUnit})</Label>
+                {isReceived ? (
+                  <span className="text-[11px] font-medium text-amber-600 dark:text-amber-500 flex items-center gap-1">
+                    <Lock className="w-3 h-3" /> Locked (Received)
+                  </span>
+                ) : maxAvailableVolume !== null ? (
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    Available: <strong className="text-foreground">{fmtQtyLocal(maxAvailableVolume)} {volumeUnit}</strong>
+                  </span>
+                ) : null}
+              </div>
+              <FormattedNumberInput
+                id="litersDespatched"
+                min="0"
+                value={editLitersDespatched}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setEditLitersDespatched(e.target.value);
+                  if (error) setError(null);
+                }}
+                disabled={isReceived}
+                prefixIcon={<Droplets className="w-4 h-4 text-muted-foreground" />}
+              />
+              {isReceived ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Dispatch volume cannot be modified after delivery has been received.
+                </p>
+              ) : maxAvailableVolume !== null ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Truck loaded capacity: {fmtQtyLocal(carried)} {volumeUnit} (Max available for this delivery: {fmtQtyLocal(maxAvailableVolume)} {volumeUnit})
+                </p>
+              ) : null}
+            </div>
+
+            {/* Received Volume */}
             {delivery.station ? (
               <div className="space-y-2">
                 <Label>Liters Received</Label>
@@ -659,25 +834,35 @@ export function SalesDetailsManager({
               </div>
             ) : (
               <div className="space-y-2">
-                <Label>Liters Received</Label>
+                <Label htmlFor="litersReceived">Liters Received</Label>
                 <FormattedNumberInput
+                  id="litersReceived"
                   min="0"
                   value={editLitersReceived}
-                  onChange={(e) => setEditLitersReceived(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditLitersReceived(e.target.value)}
                   prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
                 />
               </div>
             )}
 
+            {/* Price per Liter */}
             <div className="space-y-2">
-              <Label>Price per Liter (₦)</Label>
-              <FormattedNumberInput min="0" value={editAmountPerLiter} onChange={(e) => setEditAmountPerLiter(e.target.value)} prefixText="₦" />
+              <Label htmlFor="amountPerLiter">Price per {volumeUnit === "KG" ? "KG" : "Litre"} (₦)</Label>
+              <FormattedNumberInput
+                id="amountPerLiter"
+                min="0"
+                value={editAmountPerLiter}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditAmountPerLiter(e.target.value)}
+                prefixText="₦"
+              />
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenEditDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setOpenEditDialog(false)} disabled={isSubmitting}>
+              Cancel
+            </Button>
             <Button onClick={handleEditSale} disabled={isSubmitting}>
               {isSubmitting ? <SpinnerEllipsis /> : "Save Changes"}
             </Button>
@@ -685,7 +870,7 @@ export function SalesDetailsManager({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={openDeductDialog} onOpenChange={(val) => { if (!isDeducting) setOpenDeductDialog(val); }}>
+      <Dialog open={openDeductDialog} onOpenChange={(val: boolean) => { if (!isDeducting) setOpenDeductDialog(val); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Log shortage deduction</DialogTitle>

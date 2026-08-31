@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Image as ImageIcon,
   Upload,
+  Loader2,
   User,
   Droplets,
   CircleDollarSign,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -283,6 +285,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   const [activeFileName, setActiveFileName] = React.useState<string | undefined>();
   const [isFileViewerOpen, setIsFileViewerOpen] = React.useState(false);
   const [detailsRow, setDetailsRow] = React.useState<PaymentLine | null>(null);
+  const [uploadingPaymentId, setUploadingPaymentId] = React.useState<string | null>(null);
 
   const flowParent = report.isDebtRepayment && report.parentSale ? report.parentSale : report;
   const flowChildren = React.useMemo(() => {
@@ -373,46 +376,56 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   };
 
   const handleUploadReceipt = async (paymentId: string, salesLogId: string, file: File) => {
-    const sig = await apiPost<{
-      uploadType: string;
-      url: string;
-      apiKey: string;
-      timestamp: number;
-      signature: string;
-      publicUrl?: string;
-    }>("/api/tenant/upload/signature", { contentType: file.type });
+    setUploadingPaymentId(paymentId);
+    try {
+      const sig = await apiPost<{
+        uploadType: string;
+        url: string;
+        apiKey: string;
+        timestamp: number;
+        signature: string;
+        publicUrl?: string;
+      }>("/api/tenant/upload/signature", { contentType: file.type });
 
-    if (sig.error || !sig.data) {
-      throw new Error(sig.error?.message ?? "Upload could not be started.");
+      if (sig.error || !sig.data) {
+        throw new Error(sig.error?.message ?? "Upload could not be started.");
+      }
+
+      let publicUrl = "";
+      if (sig.data.uploadType === "cloudinary") {
+        const formDataObj = new FormData();
+        formDataObj.append("file", file);
+        formDataObj.append("api_key", sig.data.apiKey);
+        formDataObj.append("timestamp", sig.data.timestamp.toString());
+        formDataObj.append("signature", sig.data.signature);
+        const uploadRes = await fetch(sig.data.url, { method: "POST", body: formDataObj });
+        if (!uploadRes.ok) throw new Error("Cloudinary upload failed.");
+        const cloudinaryData = await uploadRes.json();
+        publicUrl = cloudinaryData.secure_url;
+      } else {
+        const put = await fetch(sig.data.url, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        if (!put.ok) throw new Error("Upload failed.");
+        publicUrl = sig.data.publicUrl ?? "";
+      }
+
+      const res = await apiPatch(
+        `/api/tenant/stations/${report.stationId}/sales-logs/${salesLogId}/payments/${paymentId}`,
+        { receiptUrl: publicUrl }
+      );
+      if (res.error) throw new Error(res.error.message);
+
+      toast.success("Receipt uploaded successfully.");
+      router.refresh();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Upload failed.";
+      toast.error(msg);
+    } finally {
+      setUploadingPaymentId(null);
     }
-
-    let publicUrl = "";
-    if (sig.data.uploadType === "cloudinary") {
-      const formDataObj = new FormData();
-      formDataObj.append("file", file);
-      formDataObj.append("api_key", sig.data.apiKey);
-      formDataObj.append("timestamp", sig.data.timestamp.toString());
-      formDataObj.append("signature", sig.data.signature);
-      const uploadRes = await fetch(sig.data.url, { method: "POST", body: formDataObj });
-      if (!uploadRes.ok) throw new Error("Cloudinary upload failed.");
-      const cloudinaryData = await uploadRes.json();
-      publicUrl = cloudinaryData.secure_url;
-    } else {
-      const put = await fetch(sig.data.url, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!put.ok) throw new Error("Upload failed.");
-      publicUrl = sig.data.publicUrl ?? "";
-    }
-
-    const res = await apiPatch(
-      `/api/tenant/stations/${report.stationId}/sales-logs/${salesLogId}/payments/${paymentId}`,
-      { receiptUrl: publicUrl }
-    );
-    if (res.error) throw new Error(res.error.message);
-    router.refresh();
   };
 
   const columns = React.useMemo<ColumnDef<PaymentLine>[]>(
@@ -478,51 +491,70 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
         id: "receipt",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Receipt" />,
         meta: { label: "Receipt" },
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            {row.original.receiptUrl ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8"
-                onClick={() =>
-                  handleOpenReceipt(
-                    row.original.receiptUrl!,
-                    row.original.method === "POS" ? "POS Receipt" : "Transfer Receipt"
-                  )
-                }
-              >
-                <ImageIcon className="mr-1.5 size-3.5" />
-                View
-              </Button>
-            ) : (
-              <span className="text-muted-foreground">—</span>
-            )}
-            <label className="inline-flex">
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/jpg,image/webp"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file) return;
-                  try {
-                    await handleUploadReceipt(row.original.paymentId, row.original.sourceId, file);
-                  } catch (err) {
-                    setApiError(err instanceof Error ? err.message : "Upload failed");
+        cell: ({ row }) => {
+          const isUploading = uploadingPaymentId === row.original.paymentId;
+          const anyUploading = uploadingPaymentId !== null;
+
+          return (
+            <div className="flex items-center gap-2">
+              {row.original.receiptUrl ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  disabled={isUploading}
+                  onClick={() =>
+                    handleOpenReceipt(
+                      row.original.receiptUrl!,
+                      row.original.method === "POS" ? "POS Receipt" : "Transfer Receipt"
+                    )
                   }
-                }}
-              />
-              <Button variant="ghost" size="sm" className="h-8" type="button" asChild>
-                <span>
-                  <Upload className="mr-1.5 size-3.5" />
-                  Upload
-                </span>
-              </Button>
-            </label>
-          </div>
-        ),
+                >
+                  <ImageIcon className="mr-1.5 size-3.5" />
+                  View
+                </Button>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
+              <label className={cn("inline-flex", (isUploading || anyUploading) && "pointer-events-none")}>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+                  className="hidden"
+                  disabled={isUploading || anyUploading}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    await handleUploadReceipt(row.original.paymentId, row.original.sourceId, file);
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8"
+                  type="button"
+                  disabled={isUploading || anyUploading}
+                  asChild
+                >
+                  <span>
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-1.5 size-3.5" />
+                        Upload
+                      </>
+                    )}
+                  </span>
+                </Button>
+              </label>
+            </div>
+          );
+        },
       },
       {
         id: "actions",
@@ -546,7 +578,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
         ),
       },
     ],
-    []
+    [uploadingPaymentId]
   );
 
   const isDebt = metrics.outstanding > 0;
@@ -717,6 +749,25 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                   <span className="font-mono">{detailsRow.accountNumber}</span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">{detailsRow.accountName}</span>
                 </div>
+                {detailsRow.receiptUrl && (
+                  <div className="col-span-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-full gap-1.5"
+                      onClick={() =>
+                        handleOpenReceipt(
+                          detailsRow.receiptUrl!,
+                          detailsRow.method === "POS" ? "POS Receipt" : "Transfer Receipt"
+                        )
+                      }
+                    >
+                      <ImageIcon className="size-3.5" />
+                      View Receipt Document
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div className="relative space-y-6 pl-6 before:absolute before:top-2 before:bottom-2 before:left-[11px] before:w-0.5 before:bg-border/60">

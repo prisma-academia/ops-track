@@ -14,8 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import { ArrowLeft, Truck, AlertTriangle, CheckCircle, Droplets, Wallet, FileText, Link2, ChevronsUpDown, Coins, CircleCheck, Receipt, CircleDollarSign, Printer } from "lucide-react";
+import { ArrowLeft, Truck, AlertTriangle, CheckCircle, Droplets, FileText, Link2, ChevronsUpDown, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
@@ -23,7 +22,6 @@ import { AssetTank } from "@/components/asset-tank";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Droplet } from "lucide-react";
 import { TransportFeeBreakdown, getTransactionFeeLegLabel } from "@/components/fleet/transport-fee-breakdown";
-import { getFeeLegBreakdown } from "@/lib/fleet/transport-fees";
 import { PRODUCT_LOSS_TYPES, getLossTypeLabel, getProductLossType, isNotesRequiredForLossType } from "@/lib/fleet/loss-types";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -360,165 +358,15 @@ export function TransportDetailsManager({
 
               <Separator />
 
-              {/* Section 2: Financial Overview */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                      <Wallet className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
-                      Financial Overview
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      High-level summary of trip finances. See the fee breakdown below for leg-by-leg detail.
-                    </p>
+              {transport.comment ? (
+                <div className="p-5 rounded-2xl border bg-muted/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="w-4 h-4 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Trip Notes</p>
                   </div>
+                  <p className="text-sm text-foreground/90 leading-relaxed">{transport.comment}</p>
                 </div>
-
-                {(() => {
-                  const feeTransactions = (transport.transactions || []).filter(
-                    (txn: any) => txn.category === "TRANSPORT_PAYMENT"
-                  );
-                  const feeBreakdown = getFeeLegBreakdown(transport, feeTransactions, { originToDepotFee });
-                  const fullTripRow = feeBreakdown.find((row) => row.feeLeg === "FULL_TRIP");
-                  const grossTransportFee = fullTripRow?.expected ?? 0;
-                  const transportFeesPaid = feeTransactions.reduce(
-                    (sum: number, txn: any) => sum + Number(txn.amount || 0),
-                    0
-                  );
-                  const totalLossDeductions = lossLogs.reduce(
-                    (sum: number, log: any) => sum + Number(log.expensesIncurred || 0),
-                    0
-                  );
-                  const fleetExpenses = (transport.transactions || [])
-                    .filter((txn: any) => txn.category === "EXPENSE")
-                    .reduce((sum: number, txn: any) => sum + Number(txn.amount || 0), 0);
-                  const netOutstanding = grossTransportFee - transportFeesPaid - totalLossDeductions - fleetExpenses;
-                  const paymentProgress = grossTransportFee > 0
-                    ? Math.min(100, Math.round((transportFeesPaid / grossTransportFee) * 100))
-                    : 0;
-
-                  const fmt = (amount: number) => `₦${amount.toLocaleString()}`;
-
-                  return (
-                    <div className="space-y-4">
-                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                        <Card>
-                          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                            <CardDescription className="text-sm font-medium">Gross Transport Fee</CardDescription>
-                            <Coins className="h-4 w-4 text-muted-foreground" />
-                          </CardHeader>
-                          <CardContent>
-                            <div className="text-2xl font-bold tabular-nums">{fmt(grossTransportFee)}</div>
-                            <p className="text-xs text-muted-foreground mt-1">Total expected transporter payout</p>
-                          </CardContent>
-                        </Card>
-
-                        <Card>
-                          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                            <CardDescription className="text-sm font-medium">Transport Fees Paid</CardDescription>
-                            <CircleCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
-                          </CardHeader>
-                          <CardContent>
-                            <div className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-500">
-                              {fmt(transportFeesPaid)}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {paymentProgress}% of gross fee settled
-                            </p>
-                          </CardContent>
-                        </Card>
-
-                        <Card>
-                          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                            <CardDescription className="text-sm font-medium">Loss Deductions</CardDescription>
-                            <AlertTriangle className="h-4 w-4 text-destructive" />
-                          </CardHeader>
-                          <CardContent>
-                            <div className={cn(
-                              "text-2xl font-bold tabular-nums",
-                              totalLossDeductions > 0 ? "text-destructive" : "text-foreground"
-                            )}>
-                              {fmt(totalLossDeductions)}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {loggedLostVolume.toLocaleString()} L · {lossLogs.length} incident{lossLogs.length === 1 ? "" : "s"}
-                            </p>
-                          </CardContent>
-                        </Card>
-
-                        <Card>
-                          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                            <CardDescription className="text-sm font-medium">Fleet Expenses</CardDescription>
-                            <Receipt className="h-4 w-4 text-muted-foreground" />
-                          </CardHeader>
-                          <CardContent>
-                            <div className={cn(
-                              "text-2xl font-bold tabular-nums",
-                              fleetExpenses > 0 ? "text-amber-600 dark:text-amber-500" : "text-foreground"
-                            )}>
-                              {fmt(fleetExpenses)}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">Operational costs on this trip</p>
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      <Card className="border-primary/20 bg-primary/5 dark:bg-primary/10">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                          <div>
-                            <CardDescription className="text-sm font-medium">Net Outstanding</CardDescription>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Remaining balance after payments, losses, and fleet expenses
-                            </p>
-                          </div>
-                          <CircleDollarSign className="h-5 w-5 text-primary" />
-                        </CardHeader>
-                        <CardContent>
-                          <div className={cn(
-                            "text-3xl font-bold tabular-nums",
-                            netOutstanding > 0
-                              ? "text-primary"
-                              : netOutstanding < 0
-                                ? "text-destructive"
-                                : "text-emerald-600 dark:text-emerald-500"
-                          )}>
-                            {fmt(netOutstanding)}
-                          </div>
-                          {grossTransportFee > 0 && (
-                            <div className="mt-4 space-y-2">
-                              <div className="flex justify-between text-xs text-muted-foreground">
-                                <span>Payment progress</span>
-                                <span className="font-medium">{paymentProgress}%</span>
-                              </div>
-                              <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                                <div
-                                  className="h-full rounded-full bg-primary transition-all duration-500"
-                                  style={{ width: `${paymentProgress}%` }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {transport.comment && (
-                <>
-                  <Separator />
-                  <div className="p-5 rounded-2xl border bg-muted/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileText className="w-4 h-4 text-muted-foreground" />
-                      <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Trip Notes</p>
-                    </div>
-                    <p className="text-sm text-foreground/90 leading-relaxed">{transport.comment}</p>
-                  </div>
-                </>
-              )}
-
-              <Separator />
+              ) : null}
 
               <TransportFeeBreakdown transport={transport} originToDepotFee={originToDepotFee} />
             </TabsContent>

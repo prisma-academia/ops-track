@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { redirect } from "next/navigation";
 import { OrderDetailsManager } from "./order-details-manager";
 import { calculateOrderPnL } from "@/lib/fleet/financials";
+import { parseTenantSettings } from "@/lib/tenant/settings";
 
 export default async function OrderDetailPage({
   params,
@@ -23,6 +24,22 @@ export default async function OrderDetailPage({
           transporter: { select: { id: true, name: true } },
           truck: { select: { id: true, name: true, plateNumber: true } },
           driver: { select: { id: true, firstName: true, lastName: true } },
+          deliveries: {
+            include: {
+              customer: { select: { id: true, name: true } },
+              station: { select: { id: true, name: true } },
+            },
+          },
+          transactions: {
+            where: { category: "TRANSPORT_PAYMENT" },
+            select: {
+              id: true,
+              amount: true,
+              category: true,
+              feeLeg: true,
+              deliveryId: true,
+            },
+          },
         },
       },
     },
@@ -32,14 +49,28 @@ export default async function OrderDetailPage({
     redirect("/admin/orders");
   }
 
-  const suppliers = await prisma.supplier.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
-  const depots = await prisma.depot.findMany({ 
-    select: { id: true, name: true, latitude: true, longitude: true }, 
-    orderBy: { name: "asc" } 
-  });
+  const [suppliers, depots, tenant] = await Promise.all([
+    prisma.supplier.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.depot.findMany({
+      select: { id: true, name: true, latitude: true, longitude: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.tenant.findUnique({
+      where: { id: actor.tenantId },
+      select: { settingsJson: true },
+    }),
+  ]);
 
   const serializedOrder = JSON.parse(JSON.stringify(order));
   const pnl = await calculateOrderPnL(order.id);
+  const originToDepotFee = parseTenantSettings(tenant?.settingsJson).originToDepotFee;
 
-  return <OrderDetailsManager order={serializedOrder} lookups={{ suppliers, depots }} pnl={pnl} />;
+  return (
+    <OrderDetailsManager
+      order={serializedOrder}
+      lookups={{ suppliers, depots }}
+      pnl={pnl}
+      originToDepotFee={originToDepotFee}
+    />
+  );
 }

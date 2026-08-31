@@ -54,6 +54,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
+import { feeLegStatusBadge } from "@/components/fleet/transport-fee-breakdown";
+import {
+  getFeeLegBreakdown,
+  type TransportFeeDelivery,
+  type TransportFeeTransaction,
+  type TransportFeeTransport,
+} from "@/lib/fleet/transport-fees";
 
 const EditOrderSchema = z.object({
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
@@ -79,10 +86,12 @@ export function OrderDetailsManager({
   order,
   lookups,
   pnl,
+  originToDepotFee = 0,
 }: {
   order: any;
   lookups: { suppliers: LookupItem[]; depots: LookupItem[] };
   pnl?: any;
+  originToDepotFee?: number;
 }) {
   const router = useRouter();
   
@@ -455,66 +464,13 @@ export function OrderDetailsManager({
             </Card>
           ) : (
             <div className="space-y-4">
-              {transports.map((t: any) => (
-                <Card key={t.id} className="border-stone-200 dark:border-stone-800 shadow-sm hover:shadow-md transition-shadow overflow-hidden py-0 gap-0">
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-border/50 bg-muted/20">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="size-11 flex items-center justify-center shrink-0 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs">
-                        <Image
-                          src="/assets/icons/gas-truck.png"
-                          alt="Truck"
-                          width={28}
-                          height={28}
-                          className="object-contain"
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-foreground text-sm truncate">
-                          {t.truck?.plateNumber || t.truck?.name || "Unknown Truck"}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                          <Building2 size={11} className="shrink-0" />
-                          {t.transporter?.name || "Unknown Company"}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="secondary" className={cn("px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize shrink-0",
-                      t.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
-                      t.status === "IN_TRANSIT" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
-                      "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300"
-                    )}>
-                      {t.status.replace(/_/g, ' ').toLowerCase()}
-                    </Badge>
-                  </div>
-
-                  <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <div className="col-span-2 sm:col-span-2">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Route</p>
-                      <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                        <span className="truncate">{order.sourceDepot || "Unknown"}</span>
-                        <span className="text-muted-foreground shrink-0">→</span>
-                        <span className="truncate">{t.destination}</span>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Volume</p>
-                      <p className="text-sm font-bold text-foreground">{Number(t.litersCarried).toLocaleString()} L</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Dispatched</p>
-                      <p className="text-sm font-medium text-foreground">{formatHumanReadableDate(t.createdAt)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="px-5 py-3 border-t border-border/50 bg-muted/10 flex items-center justify-end">
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/admin/transports/${t.id}`}>View Details</Link>
-                    </Button>
-                  </div>
-                </Card>
+              {transports.map((t: DispatchTransport) => (
+                <DispatchedTransportCard
+                  key={t.id}
+                  transport={t}
+                  sourceDepot={order.sourceDepot}
+                  originToDepotFee={originToDepotFee}
+                />
               ))}
             </div>
           )}
@@ -708,5 +664,182 @@ export function OrderDetailsManager({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function formatFee(amount: number) {
+  return `₦${amount.toLocaleString()}`;
+}
+
+function transportStatusClass(status: string) {
+  if (status === "COMPLETED") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
+  if (status === "IN_TRANSIT") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+  if (status === "LOSS") return "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400";
+  return "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300";
+}
+
+type DispatchTransport = TransportFeeTransport & {
+  status: string;
+  createdAt: string | Date;
+  truck?: { plateNumber?: string | null; name?: string | null } | null;
+  transporter?: { name?: string | null } | null;
+  deliveries?: TransportFeeDelivery[];
+  transactions?: TransportFeeTransaction[];
+};
+
+function DispatchedTransportCard({
+  transport,
+  sourceDepot,
+  originToDepotFee,
+}: {
+  transport: DispatchTransport;
+  sourceDepot?: string | null;
+  originToDepotFee: number;
+}) {
+  const feeTransactions = (transport.transactions || []).filter(
+    (txn: { category?: string }) => txn.category === "TRANSPORT_PAYMENT"
+  );
+  const breakdown = getFeeLegBreakdown(transport, feeTransactions, { originToDepotFee });
+  const primaryRow = breakdown.find((row) => row.feeLeg === "DEPOT_TO_PRIMARY");
+  const subsequentRows = breakdown.filter(
+    (row) => row.feeLeg === "PRIMARY_TO_SUBSEQUENT" && row.expected > 0
+  );
+  const fullTripRow = breakdown.find((row) => row.feeLeg === "FULL_TRIP");
+  const ratePerLiter = Number(transport.ratePerLiter) || 0;
+  const deliveries = transport.deliveries || [];
+
+  return (
+    <Card className="border-stone-200 dark:border-stone-800 shadow-sm hover:shadow-md transition-shadow overflow-hidden py-0 gap-0">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border/50 bg-muted/20">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="size-11 flex items-center justify-center shrink-0 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs">
+            <Image
+              src="/assets/icons/gas-truck.png"
+              alt="Truck"
+              width={28}
+              height={28}
+              className="object-contain"
+            />
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-foreground text-sm truncate">
+              {transport.truck?.plateNumber || transport.truck?.name || "Unknown Truck"}
+            </p>
+            <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+              <Building2 size={11} className="shrink-0" />
+              {transport.transporter?.name || "Unknown Company"}
+            </p>
+          </div>
+        </div>
+        <Badge
+          variant="secondary"
+          className={cn(
+            "px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize shrink-0",
+            transportStatusClass(transport.status)
+          )}
+        >
+          {String(transport.status || "").replace(/_/g, " ").toLowerCase()}
+        </Badge>
+      </div>
+
+      <div className="px-5 py-4 space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="col-span-2">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Primary route</p>
+            <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <span className="truncate">{sourceDepot || "Depot"}</span>
+              <span className="text-muted-foreground shrink-0">→</span>
+              <span className="truncate">{transport.destination}</span>
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Volume</p>
+            <p className="text-sm font-bold text-foreground">{Number(transport.litersCarried).toLocaleString()} L</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Dispatched</p>
+            <p className="text-sm font-medium text-foreground">{formatHumanReadableDate(transport.createdAt)}</p>
+            <p className="text-xs text-muted-foreground">
+              {new Date(transport.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border/60 overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-muted/40">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Depot → Primary</p>
+              <p className="text-sm font-medium truncate">
+                {sourceDepot || "Depot"} → {transport.destination}
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-sm font-mono font-semibold">{formatFee(primaryRow?.expected ?? 0)}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {ratePerLiter > 0 ? `${formatFee(ratePerLiter)}/L` : "No rate"}
+              </p>
+            </div>
+            <div className="shrink-0">{primaryRow ? feeLegStatusBadge(primaryRow.status) : null}</div>
+          </div>
+
+          <div className="px-3.5 py-2.5 border-t border-border/50">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+              Subsequent transport
+            </p>
+            {subsequentRows.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No subsequent deliveries from the primary destination.</p>
+            ) : (
+              <div className="space-y-1">
+                <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-3 px-0.5 pb-1">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Route</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-right w-20">Volume</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-right w-24">Fee</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-right w-16">Status</span>
+                </div>
+                {subsequentRows.map((row) => {
+                  const delivery = deliveries.find((d: { id: string }) => d.id === row.deliveryId);
+                  const liters =
+                    delivery?.litersReceived != null
+                      ? Number(delivery.litersReceived)
+                      : Number(delivery?.litersDespatched || 0);
+                  const rate = Number(delivery?.transportRate || 0);
+                  return (
+                    <div
+                      key={`${row.feeLeg}-${row.deliveryId}`}
+                      className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-1 sm:gap-3 sm:items-center py-1.5 border-t border-border/40 first:border-0 sm:first:border-t"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{row.label}</p>
+                        {rate > 0 ? (
+                          <p className="text-[11px] text-muted-foreground">{formatFee(rate)}/L</p>
+                        ) : null}
+                      </div>
+                      <p className="text-sm font-medium sm:text-right sm:w-20">
+                        {liters.toLocaleString()} L
+                      </p>
+                      <p className="text-sm font-mono font-semibold sm:text-right sm:w-24">{formatFee(row.expected)}</p>
+                      <div className="sm:flex sm:justify-end sm:w-16">{feeLegStatusBadge(row.status)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="px-5 py-3 border-t border-border/50 bg-muted/10 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total fee</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-mono font-bold">{formatFee(fullTripRow?.expected ?? 0)}</p>
+            {fullTripRow ? feeLegStatusBadge(fullTripRow.status) : null}
+          </div>
+        </div>
+        <Button variant="outline" size="sm" asChild>
+          <Link href={`/admin/transports/${transport.id}`}>View Details</Link>
+        </Button>
+      </div>
+    </Card>
   );
 }

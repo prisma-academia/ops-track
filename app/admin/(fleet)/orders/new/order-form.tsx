@@ -377,7 +377,7 @@ export function CreateOrderForm() {
                           {...field}
                           className={formState.errors.loadingCostPerLitre ? "border-destructive" : ""}
                           prefixText="₦"
-                          maxLength={4}
+                          maxLength={6}
                         />
                       )}
                     />

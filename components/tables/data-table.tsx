@@ -97,6 +97,8 @@ export interface DataTableProps<TData, TValue> {
   printExtraHtml?: string;
   hideSearch?: boolean;
   hideDateFilter?: boolean;
+  /** Extra row content rendered under a parent row (full table width). */
+  renderSubRow?: (row: TData) => React.ReactNode | null;
 }
 
 export function DataTable<TData, TValue>({
@@ -119,6 +121,7 @@ export function DataTable<TData, TValue>({
   printExtraHtml,
   hideSearch = false,
   hideDateFilter = false,
+  renderSubRow,
 }: DataTableProps<TData, TValue>) {
   const [columnVisibility, setColumnVisibility] =
     useLocalStorage<VisibilityState>(`${tableId}:column-visibility`, {});
@@ -199,6 +202,7 @@ export function DataTable<TData, TValue>({
         isLoading={isLoading}
         pageSize={pagination.pageSize}
         serverPagination={serverPagination}
+        renderSubRow={renderSubRow}
       />
     </DataTableProvider>
   );
@@ -219,6 +223,7 @@ function DataTableBody<TData, TValue>({
   isLoading,
   pageSize,
   serverPagination,
+  renderSubRow,
 }: {
   columns: ColumnDef<TData, TValue>[];
   hideToolbar: boolean;
@@ -234,6 +239,7 @@ function DataTableBody<TData, TValue>({
   isLoading?: boolean;
   pageSize: number;
   serverPagination?: ServerPagination;
+  renderSubRow?: (row: TData) => React.ReactNode | null;
 }) {
   const router = useRouter();
   const { table, tableContainerRef } = useDataTable<TData>();
@@ -272,7 +278,10 @@ function DataTableBody<TData, TValue>({
                     <TableHead
                       key={header.id}
                       colSpan={header.colSpan}
-                      className="whitespace-nowrap border-t border-b border-border"
+                      className={cn(
+                        "whitespace-nowrap border-t border-b border-border",
+                        header.colSpan > 1 && "text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                      )}
                     >
                       {header.isPlaceholder
                         ? null
@@ -299,23 +308,35 @@ function DataTableBody<TData, TValue>({
               ) : table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => {
                   const href = rowHref?.(row.original);
+                  const subRowContent = renderSubRow?.(row.original) ?? null;
                   return (
-                    <TableRow
-                      key={row.id}
-                      data-state={row.getIsSelected() && "selected"}
-                      className={cn(
-                        "[&>:not(:last-child)]:border-r",
-                        href && "cursor-pointer",
-                        getRowClassName?.(row.original)
-                      )}
-                      onClick={href ? () => router.push(href) : undefined}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id} className="whitespace-nowrap border-b border-border">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
+                    <React.Fragment key={row.id}>
+                      <TableRow
+                        data-state={row.getIsSelected() && "selected"}
+                        className={cn(
+                          "[&>:not(:last-child)]:border-r",
+                          href && "cursor-pointer",
+                          getRowClassName?.(row.original)
+                        )}
+                        onClick={href ? () => router.push(href) : undefined}
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id} className="whitespace-nowrap border-b border-border">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                      {subRowContent ? (
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell
+                            colSpan={visibleColumnCount || columns.length}
+                            className="p-0 border-b border-border"
+                          >
+                            {subRowContent}
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </React.Fragment>
                   );
                 })
               ) : (

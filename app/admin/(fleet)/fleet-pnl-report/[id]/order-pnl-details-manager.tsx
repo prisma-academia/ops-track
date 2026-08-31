@@ -5,9 +5,9 @@ import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Truck, Calendar, Wallet, Receipt, TrendingUp, TrendingDown, MapPin } from "lucide-react";
+import { ChevronLeft, Calendar, Wallet, Receipt, TrendingUp, TrendingDown, MapPin } from "lucide-react";
 import Link from "next/link";
-import { cn, formatShortCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -105,44 +105,15 @@ interface Props {
 }
 
 export function OrderPnlDetailsManager({ summary, transports }: Props) {
-  // Station selling price for lost fuel
-  const stationSellingPriceForLoss = useMemo(() => {
-    let lossRev = 0;
-    let lossQty = 0;
-
-    transports.forEach((t) => {
-      t.deliveries.forEach((s) => {
-        if (s.lossLiters && s.lossLiters > 0 && s.sellingPrice > 0) {
-          lossQty += s.lossLiters;
-          lossRev += s.lossLiters * s.sellingPrice;
-        }
-      });
-    });
-
-    if (lossQty > 0 && lossRev > 0) {
-      return lossRev / lossQty;
-    }
-
-    if (summary.totalAmountSoldQty > 0 && summary.amountSoldRev > 0) {
-      return summary.amountSoldRev / summary.totalAmountSoldQty;
-    }
-
-    return summary.priceBought || 0;
-  }, [transports, summary.amountSoldRev, summary.totalAmountSoldQty, summary.priceBought]);
-
-  const lossLitresToDisplay = useMemo(() => {
-    if (summary.totalLitersLost !== undefined && summary.totalLitersLost > 0) {
-      return summary.totalLitersLost;
-    }
-    return Math.max(0, summary.qtyBalance);
-  }, [summary.totalLitersLost, summary.qtyBalance]);
-
-  const calculatedTotalLoss = useMemo(() => {
-    if (summary.totalLossAmount && summary.totalLossAmount > 0) {
-      return summary.totalLossAmount;
-    }
-    return lossLitresToDisplay * stationSellingPriceForLoss;
-  }, [summary.totalLossAmount, lossLitresToDisplay, stationSellingPriceForLoss]);
+  const volumeUnit = summary.productType === "LPG" ? "KG" : "L";
+  const hasLossDeduction = summary.totalLossDeduction > 0;
+  const soldPrice =
+    summary.totalAmountSoldQty > 0 ? summary.amountSoldRev / summary.totalAmountSoldQty : 0;
+  const lossLitres = summary.totalLitersLost && summary.totalLitersLost > 0 ? summary.totalLitersLost : 0;
+  const lossAmount =
+    summary.totalLossAmount && summary.totalLossAmount > 0
+      ? summary.totalLossAmount
+      : summary.totalLossDeduction;
 
   const breakdownRows = useMemo<FleetPnlTableRow[]>(
     () => buildFleetPnlDetailRows(summary, transports as OrderPnlTransportRow[]),
@@ -187,49 +158,33 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
 
   const statCards = [
     {
-      title: "Total Order Cost",
-      value: formatShortCurrency(summary.orderCost),
-      fullValue: fmtMoney(summary.orderCost),
+      title: "Total Cost",
+      value: fmtMoney(summary.totalCost),
+      fullValue: fmtMoney(summary.totalCost),
       icon: Wallet,
-      valueColor: "text-amber-600",
-      iconColor: "text-amber-600",
-    },
-    {
-      title: "Transport Cost",
-      value: formatShortCurrency(summary.totalTransportCost),
-      fullValue: fmtMoney(summary.totalTransportCost),
-      icon: Truck,
-      valueColor: "text-slate-600",
+      valueColor: "text-foreground",
       iconColor: "text-slate-600",
     },
     {
-      title: "Fleet Expenses",
-      value: formatShortCurrency(summary.totalFleetExpenses),
-      fullValue: fmtMoney(summary.totalFleetExpenses),
-      icon: Wallet,
-      valueColor: "text-slate-600",
-      iconColor: "text-slate-600",
-    },
-    {
-      title: "Loss Deduction",
-      value: formatShortCurrency(summary.totalLossDeduction),
-      fullValue: fmtMoney(summary.totalLossDeduction),
-      icon: TrendingDown,
-      valueColor: "text-rose-600",
-      iconColor: "text-rose-600",
-    },
-    {
-      title: "deliveries Revenue",
-      value: formatShortCurrency(summary.amountSoldRev),
+      title: "Sales Revenue",
+      value: fmtMoney(summary.amountSoldRev),
       fullValue: fmtMoney(summary.amountSoldRev),
       icon: Receipt,
       valueColor: "text-indigo-600",
       iconColor: "text-indigo-600",
     },
     {
+      title: "Amount Paid",
+      value: fmtMoney(summary.amountPaid),
+      fullValue: fmtMoney(summary.amountPaid),
+      icon: Wallet,
+      valueColor: "text-emerald-600",
+      iconColor: "text-emerald-600",
+    },
+    {
       title: "Profit & Loss",
-      value: formatShortCurrency(Math.abs(summary.pnl)),
-      fullValue: fmtMoney(Math.abs(summary.pnl)),
+      value: fmtMoney(summary.pnl),
+      fullValue: fmtMoney(summary.pnl),
       valueColor: summary.pnl >= 0 ? "text-emerald-600" : "text-rose-600",
       icon: summary.pnl >= 0 ? TrendingUp : TrendingDown,
       iconColor: summary.pnl >= 0 ? "text-emerald-600" : "text-rose-600",
@@ -291,10 +246,10 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
               <div
                 key={index}
                 className={cn(
-                  "w-full lg:w-1/6 md:w-1/3 border-border print:border-none print:w-auto",
+                  "w-full lg:w-1/4 md:w-1/2 border-border print:border-none print:w-auto",
                   index === statCards.length - 1 ? "border-b-0" : "border-b",
-                  (index + 1) % 3 === 0 ? "md:border-e-0" : "md:border-e",
-                  index >= 3 ? "md:border-b-0" : "md:border-b",
+                  (index + 1) % 2 === 0 ? "md:border-e-0" : "md:border-e",
+                  index >= 2 ? "md:border-b-0" : "md:border-b",
                   "lg:border-b-0",
                   index === statCards.length - 1 ? "lg:border-e-0" : "lg:border-e"
                 )}
@@ -347,28 +302,79 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
         </Card>
       </TooltipProvider>
       
-      {/* Financial & Sold Tank Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Left Card (5 cols): Vertically arranged Debt Remaining, Total Paid, Total Cost */}
-        <Card className="lg:col-span-5 shadow-xs border-border/40 bg-card flex flex-col justify-between p-0 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="flex flex-col gap-4">
+          <AssetTank
+            currentLitres={Math.max(0, summary.qtyBalance)}
+            maxCapacity={summary.litersOrdered || 1}
+            label="Quantity Remaining"
+            type={summary.productType === "LPG" ? "gas" : "fuel"}
+            // className="h-full"
+          />
+          <Card className="shadow-xs border-border/40 bg-card p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sold</p>
+                <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1">
+                  {fmtQty(summary.totalAmountSoldQty)}{" "}
+                  <span className="text-xs font-normal text-muted-foreground">{volumeUnit}</span>
+                </p>
+              </div>
+              <div className="p-3.5 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Remaining</p>
+                <p className="text-lg font-bold font-mono text-amber-600 dark:text-amber-500 mt-1">
+                  {fmtQty(summary.qtyBalance)}{" "}
+                  <span className="text-xs font-normal text-muted-foreground">{volumeUnit}</span>
+                </p>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <Card className="shadow-xs border-border/40 bg-card flex flex-col justify-between p-0 overflow-hidden">
           <div className="p-4 border-b border-border/40 bg-muted/20">
             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
               Payment & Cost Overview
             </h3>
           </div>
           <CardContent className="p-4 flex-1 flex flex-col justify-between gap-3">
-            {/* Debt Remaining */}
-            <div className="p-3.5 rounded-lg bg-amber-500/5 border border-amber-500/10 flex items-center justify-between">
+            <div className="p-3.5 rounded-lg bg-slate-500/5 border border-slate-500/10 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Debt Remaining</p>
-                <p className="text-[11px] text-muted-foreground/70 mt-0.5">Unpaid balance</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Order</p>
+                <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                  {fmtQty(summary.litersOrdered)} {volumeUnit} @ {fmtMoney(summary.priceBought)}/{volumeUnit}
+                </p>
               </div>
-              <p className={cn("text-lg font-bold font-mono", summary.debtRemaining > 0 ? "text-amber-600 dark:text-amber-500" : "text-emerald-600 dark:text-emerald-400")}>
-                {fmtMoney(summary.debtRemaining)}
+              <p className="text-lg font-bold font-mono text-foreground">
+                {fmtMoney(summary.orderCost)}
               </p>
             </div>
 
-            {/* Total Paid */}
+            <div className="p-3.5 rounded-lg bg-slate-500/5 border border-slate-500/10 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Transport</p>
+                <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                  Depot → Primary {fmtMoney(summary.totalDepotToPrimaryCost ?? 0)} · Delivery {fmtMoney(summary.totalDeliveryTransportCost ?? 0)}
+                </p>
+              </div>
+              <p className="text-lg font-bold font-mono text-foreground">
+                {fmtMoney(summary.totalTransportCost)}
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-lg bg-indigo-500/5 border border-indigo-500/10 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Amount Sold</p>
+                <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                  {fmtQty(summary.totalAmountSoldQty)} {volumeUnit}
+                  {soldPrice > 0 ? ` @ ${fmtMoney(soldPrice)}/${volumeUnit}` : ""}
+                </p>
+              </div>
+              <p className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400">
+                {fmtMoney(summary.amountSoldRev)}
+              </p>
+            </div>
+
             <div className="p-3.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Paid</p>
@@ -379,11 +385,26 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
               </p>
             </div>
 
-            {/* Total Cost */}
+            <div className={cn(
+              "p-3.5 rounded-lg border flex items-center justify-between",
+              summary.debtRemaining > 0 ? "bg-amber-500/5 border-amber-500/10" : "bg-emerald-500/5 border-emerald-500/10"
+            )}>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Debt Remaining</p>
+                <p className="text-[11px] text-muted-foreground/70 mt-0.5">Unpaid balance</p>
+              </div>
+              <p className={cn(
+                "text-lg font-bold font-mono",
+                summary.debtRemaining > 0 ? "text-amber-600 dark:text-amber-500" : "text-emerald-600 dark:text-emerald-400"
+              )}>
+                {fmtMoney(summary.debtRemaining)}
+              </p>
+            </div>
+
             <div className="p-3.5 rounded-lg bg-slate-500/5 border border-slate-500/10 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Cost</p>
-                <p className="text-[11px] text-muted-foreground/70 mt-0.5">Order & logistics cost</p>
+                <p className="text-[11px] text-muted-foreground/70 mt-0.5">Order &amp; logistics cost</p>
               </div>
               <p className="text-lg font-bold font-mono text-foreground">
                 {fmtMoney(summary.totalCost)}
@@ -391,39 +412,26 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
             </div>
           </CardContent>
         </Card>
+      </div>
 
-        {/* Right (7 cols): Asset Tank + Loss Breakdown Card */}
-        <div className="lg:col-span-7 flex flex-col justify-between gap-4">
-          <AssetTank
-            currentLitres={summary.totalAmountSoldQty}
-            maxCapacity={summary.litersOrdered}
-            label="Quantity Sold"
-            type={summary.productType === "LPG" ? "gas" : "fuel"}
-            // lossLitres={lossLitresToDisplay}
-          />
-
-          {/* Loss Calculation Card below AssetTank */}
-          <Card className="shadow-xs border-border/40 bg-card p-4">            
-            <div className="grid grid-cols-3 gap-3 text-center sm:text-left items-center">
-              {/* Litres Loss */}
+      {hasLossDeduction && (
+          <Card className="shadow-xs border-border/40 bg-card p-4">
+            <div className="grid grid-cols-2 gap-3 text-center sm:text-left items-center">
               <div className="space-y-1">
-                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Litres Loss</p>
+                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Litres Lost</p>
                 <p className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">
-                  {fmtQty(lossLitresToDisplay)} <span className="text-xs font-normal text-muted-foreground">{summary.productType === "LPG" ? "KG" : "L"}</span>
+                  {fmtQty(lossLitres)} <span className="text-xs font-normal text-muted-foreground">{volumeUnit}</span>
                 </p>
               </div>
-
-              {/* Total Loss */}
               <div className="space-y-1 text-right">
-                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Total Loss</p>
+                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Loss Deduction</p>
                 <p className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">
-                  {fmtMoney(calculatedTotalLoss)}
+                  {fmtMoney(lossAmount)}
                 </p>
               </div>
             </div>
           </Card>
-        </div>
-      </div>
+        )}
 
       {/* Transports & deliveries Breakdown */}
       <div className="space-y-4">
@@ -431,7 +439,7 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
         <DataTable
           columns={columns}
           data={breakdownRows}
-          tableId="fleet-pnl-report-details-v4"
+          tableId="fleet-pnl-report-details-v6"
           printExtraHtml={printExtraHtml}
           hideSearch
           hideDateFilter

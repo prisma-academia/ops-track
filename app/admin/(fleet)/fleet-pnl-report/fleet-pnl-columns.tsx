@@ -350,7 +350,44 @@ export function getFleetPnlDetailsColumns(): ColumnDef<FleetPnlTableRow>[] {
           meta: { label: "Sold To" },
           cell: ({ row }) => <span>{row.original.orderReference}</span>,
         },
-        productColumn(),
+    productColumn(),
+        {
+          accessorKey: "litersDespatched",
+          header: ({ column }) => <DataTableColumnHeader column={column} title="Volume Despatched" />,
+          meta: { label: "Volume Despatched" },
+          cell: ({ row }) => (
+            <span className="font-mono tabular-nums">
+              {fmtQty(row.original.litersDespatched ?? row.original.litersOrdered)} L
+            </span>
+          ),
+          footer: ({ table }) =>
+            `${fmtQty(
+              table
+                .getFilteredRowModel()
+                .rows.reduce(
+                  (sum, row) => sum + (row.original.litersDespatched ?? row.original.litersOrdered),
+                  0
+                )
+            )} L`,
+        },
+        {
+          accessorKey: "litersReceived",
+          header: ({ column }) => <DataTableColumnHeader column={column} title="Volume Received" />,
+          meta: { label: "Volume Received" },
+          cell: ({ row }) => {
+            const received = row.original.litersReceived;
+            if (received === null || received === undefined) {
+              return <span className="text-muted-foreground">—</span>;
+            }
+            return <span className="font-mono tabular-nums">{fmtQty(received)} L</span>;
+          },
+          footer: ({ table }) =>
+            `${fmtQty(
+              table
+                .getFilteredRowModel()
+                .rows.reduce((sum, row) => sum + (row.original.litersReceived ?? 0), 0)
+            )} L`,
+        },
         {
           accessorKey: "purchasePricePerLitre",
           header: ({ column }) => <DataTableColumnHeader column={column} title="Purchase Price" />,
@@ -437,43 +474,6 @@ export function getFleetPnlDetailsColumns(): ColumnDef<FleetPnlTableRow>[] {
             <span className="font-mono tabular-nums">{fmtMoney(row.original.totalFleetExpenses)}</span>
           ),
           footer: moneyFooter("totalFleetExpenses"),
-        },
-        {
-          accessorKey: "litersDespatched",
-          header: ({ column }) => <DataTableColumnHeader column={column} title="Volume Despatched" />,
-          meta: { label: "Volume Despatched" },
-          cell: ({ row }) => (
-            <span className="font-mono tabular-nums">
-              {fmtQty(row.original.litersDespatched ?? row.original.litersOrdered)} L
-            </span>
-          ),
-          footer: ({ table }) =>
-            `${fmtQty(
-              table
-                .getFilteredRowModel()
-                .rows.reduce(
-                  (sum, row) => sum + (row.original.litersDespatched ?? row.original.litersOrdered),
-                  0
-                )
-            )} L`,
-        },
-        {
-          accessorKey: "litersReceived",
-          header: ({ column }) => <DataTableColumnHeader column={column} title="Volume Received" />,
-          meta: { label: "Volume Received" },
-          cell: ({ row }) => {
-            const received = row.original.litersReceived;
-            if (received === null || received === undefined) {
-              return <span className="text-muted-foreground">—</span>;
-            }
-            return <span className="font-mono tabular-nums">{fmtQty(received)} L</span>;
-          },
-          footer: ({ table }) =>
-            `${fmtQty(
-              table
-                .getFilteredRowModel()
-                .rows.reduce((sum, row) => sum + (row.original.litersReceived ?? 0), 0)
-            )} L`,
         },
         {
           accessorKey: "sellingPrice",

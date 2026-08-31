@@ -139,13 +139,16 @@ export type OrderPnlResult = {
 /**
  * Computes an order's full profit & loss breakdown.
  *
- * Cost stack (company P&L):
+ * Order / transport totals (company P&L):
  *  1. Purchase: pricePerLitre × liters ordered
- *  2. Loading:  loadingCostPerLitre × liters ordered, then divided across
- *     deliveries by despatched volume share
+ *  2. Loading:  loadingCostPerLitre × liters ordered
  *  3. Transport: depot → primary (ratePerLiter × liters carried) plus any
  *     primary → subsequent delivery fee; always a company cost
- *  4. Fleet:    transport maintenance, allocated to deliveries by volume share
+ *  4. Fleet:    full transport maintenance
+ *
+ * Delivery rows are scoped to litres despatched on that delivery only:
+ *  purchase / loading / depot→primary = qty × per-litre rates
+ *  fleet = (qty / liters carried) × maintenance (fallback: trip despatched qty)
  *
  * Total cost = purchase + loading + depot→primary + delivery transport + fleet.
  * Profit/Loss = sales revenue − total cost.
@@ -176,12 +179,6 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
   const truckIds = new Set<string>();
   const truckLabels = new Set<string>();
 
-  const orderDespatchedQty = order.transports.reduce(
-    (sum, transport) =>
-      sum + transport.deliveries.reduce((dSum, delivery) => dSum + toNum(delivery.litersDespatched), 0),
-    0
-  );
-
   const transportsData: OrderPnlTransportRow[] = order.transports.map((transport) => {
     const fleetExpenses = toNum(transport.maintenanceCost);
     const ratePerLiter = toNum(transport.ratePerLiter);
@@ -191,9 +188,7 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
     let transportTotalQty = 0;
     let transportTotalRev = 0;
     let transportTotalPaid = 0;
-    let allocatedDepotCost = 0;
     let allocatedDeliveryTransport = 0;
-    let transportAllocatedCost = 0;
 
     if (transport.truck?.id) truckIds.add(transport.truck.id);
     const truckLabel = transport.truck?.plateNumber || transport.truck?.name;
@@ -203,17 +198,17 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
     const distributedQty = deliveryVolumes.reduce((sum, qty) => sum + qty, 0);
     const depotToPrimaryVolume = litersCarried > 0 ? litersCarried : distributedQty;
     const depotToPrimaryCost = ratePerLiter * depotToPrimaryVolume;
+    const fleetBase = litersCarried > 0 ? litersCarried : distributedQty;
 
     const deliveriesData: OrderPnlDeliveryRow[] = transport.deliveries.map((delivery, index) => {
       const saleQty = deliveryVolumes[index] ?? 0;
-      const qtyShare = distributedQty > 0 ? saleQty / distributedQty : 0;
-      const depotToPrimaryShare = qtyShare * depotToPrimaryCost;
+      const depotToPrimaryShare = saleQty * ratePerLiter;
       const subsequentRate = toNum(delivery.transportRate);
       const subsequentCost =
         toNum(delivery.transportCost) || (subsequentRate > 0 ? saleQty * subsequentRate : 0);
       // Company always bears depot → primary plus any onward delivery transport.
       const saleTransportCost = depotToPrimaryShare + subsequentCost;
-      const fleetShare = qtyShare * fleetExpenses;
+      const fleetShare = fleetBase > 0 ? (saleQty / fleetBase) * fleetExpenses : 0;
 
       const sellingPrice = toNum(delivery.amountPerLiter);
       const litersReceived =
@@ -227,8 +222,7 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
       const saleLossAmount = saleLossLiters * sellingPrice;
 
       const salePurchase = saleQty * pricePerLitre;
-      const saleLoading =
-        orderDespatchedQty > 0 ? (saleQty / orderDespatchedQty) * totalLoadingCost : 0;
+      const saleLoading = saleQty * loadingCostPerLitre;
       const saleOrderCost = salePurchase + saleLoading;
       const saleTotalCost =
         salePurchase + saleLoading + depotToPrimaryShare + subsequentCost + fleetShare;
@@ -249,9 +243,7 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
       transportTotalQty += saleQty;
       transportTotalRev += saleRev;
       transportTotalPaid += salePaid;
-      allocatedDepotCost += depotToPrimaryShare;
       allocatedDeliveryTransport += subsequentCost;
-      transportAllocatedCost += saleTransportCost;
 
       return {
         id: delivery.id,
@@ -285,9 +277,8 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
       lossDeduction = transportLitersLost * pricePerLitre;
     }
 
-    const unallocatedDepotCost = distributedQty > 0 ? 0 : depotToPrimaryCost;
-    const transportDepotToPrimaryCost = allocatedDepotCost + unallocatedDepotCost;
-    const transportTotalCost = transportAllocatedCost + unallocatedDepotCost;
+    const transportDepotToPrimaryCost = depotToPrimaryCost;
+    const transportTotalCost = depotToPrimaryCost + allocatedDeliveryTransport;
 
     totalFleetExpenses += fleetExpenses;
     totalLossDeduction += lossDeduction;

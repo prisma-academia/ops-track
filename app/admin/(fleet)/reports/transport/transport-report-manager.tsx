@@ -34,37 +34,14 @@ import {
   type DataTableFilterField,
 } from "@/components/tables";
 import { cn } from "@/lib/utils";
+import type { TransportReportRow } from "@/lib/fleet/transport-report";
 
-interface TransportRow {
-  id: string;
-  createdAt: string;
-  status: string;
-  litersCarried: number;
-  truck?: { plateNumber: string | null };
-  transporter?: { id: string; name: string };
-  driver?: { firstName: string; lastName: string };
-  order?: { reference: string };
-  deliveries: Array<{
-    litersDespatched: number | null;
-    litersReceived: number | null;
-    amountPerLiter: number;
-  }>;
-  expectedFee: number;
-  totalFee: number;
-  transportExpense: number;
-  fleetTripExpense: number;
-  hasLossDeduction: boolean;
-  lossDeduction: number;
-  amountToDeduct: number;
-  totalExpense: number;
-  net: number;
-}
+type TransportRow = TransportReportRow;
 
 function deductionStatus(row: TransportRow) {
-  const toDeduct = getAmountToDeduct(row);
-  if (row.hasLossDeduction && toDeduct > 0 && row.lossDeduction + 0.005 < toDeduct) return "PARTIAL";
+  if (row.hasLossDeduction && row.amountToDeduct > 0.005) return "PARTIAL";
   if (row.hasLossDeduction) return "DEDUCTED";
-  if (toDeduct > 0) return "PENDING";
+  if (row.amountToDeduct > 0) return "PENDING";
   return "NONE";
 }
 
@@ -83,51 +60,6 @@ function moneyFooter(
   pick: (row: TransportRow) => number
 ) {
   return fmtMoney(table.getFilteredRowModel().rows.reduce((sum, row) => sum + pick(row.original), 0));
-}
-
-function getDelivered(row: TransportRow) {
-  let total = 0;
-  row.deliveries.forEach((d) => {
-    const des = Number(d.litersDespatched || 0);
-    total += d.litersReceived !== null ? Number(d.litersReceived) : des;
-  });
-  return total;
-}
-
-function getShortage(row: TransportRow) {
-  let total = 0;
-  row.deliveries.forEach((d) => {
-    const des = Number(d.litersDespatched || 0);
-    const rec = d.litersReceived !== null ? Number(d.litersReceived) : des;
-    total += des - rec;
-  });
-  const loaded = Number(row.litersCarried || 0);
-  const delivered = getDelivered(row);
-  return Math.max(total, loaded > 0 ? loaded - delivered : 0);
-}
-
-function getAmountToDeduct(row: TransportRow) {
-  let amount = 0;
-  let pricedShortage = 0;
-  let fallbackPrice = 0;
-
-  row.deliveries.forEach((d) => {
-    const price = Number(d.amountPerLiter || 0);
-    if (price > 0 && fallbackPrice === 0) fallbackPrice = price;
-    const des = Number(d.litersDespatched || 0);
-    if (d.litersReceived === null) return;
-    const shortage = des - Number(d.litersReceived);
-    if (shortage <= 0) return;
-    pricedShortage += shortage;
-    amount += shortage * price;
-  });
-
-  const remainingLoss = Math.max(0, getShortage(row) - pricedShortage);
-  if (remainingLoss > 0 && fallbackPrice > 0) {
-    amount += remainingLoss * fallbackPrice;
-  }
-
-  return amount;
 }
 
 export function TransportReportManager({
@@ -193,14 +125,14 @@ export function TransportReportManager({
 
     filteredRows.forEach((r) => {
       totalCarried += Number(r.litersCarried || 0);
-      totalDelivered += getDelivered(r);
-      totalShortage += getShortage(r);
+      totalDelivered += r.litersDelivered;
+      totalShortage += r.shortage;
       expectedFee += r.expectedFee;
       totalFee += r.totalFee;
       transportExpense += r.transportExpense;
       fleetTripExpense += r.fleetTripExpense;
       lossDeduction += r.lossDeduction;
-      amountToDeduct += getAmountToDeduct(r);
+      amountToDeduct += r.amountToDeduct;
       totalExpense += r.totalExpense;
     });
 
@@ -235,20 +167,6 @@ export function TransportReportManager({
           label: "Total Fee",
           value: metrics.totalFee,
           color: "#10b981",
-          format: (n) => fmtMoney(n),
-        },
-        {
-          key: "loss",
-          label: "Amount Deducted",
-          value: metrics.lossDeduction,
-          color: "#f43f5e",
-          format: (n) => fmtMoney(n),
-        },
-        {
-          key: "toDeduct",
-          label: "To Be Deducted",
-          value: metrics.amountToDeduct,
-          color: "#e11d48",
           format: (n) => fmtMoney(n),
         },
         {
@@ -336,38 +254,38 @@ export function TransportReportManager({
         id: "delivered",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Delivered" />,
         meta: { label: "Delivered" },
-        accessorFn: (row) => getDelivered(row),
+        accessorFn: (row) => row.litersDelivered,
         cell: ({ row }) => (
           <span className="font-mono font-semibold text-emerald-600 tabular-nums">
-            {fmtQty(getDelivered(row.original))}
+            {fmtQty(row.original.litersDelivered)}
           </span>
         ),
         footer: ({ table }) =>
           fmtQty(
-            table.getFilteredRowModel().rows.reduce((sum, row) => sum + getDelivered(row.original), 0)
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.litersDelivered, 0)
           ),
       },
       {
-        id: "shortage",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Shortage" />,
-        meta: { label: "Shortage" },
-        accessorFn: (row) => getShortage(row),
+        id: "remaining",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Remaining" />,
+        meta: { label: "Remaining" },
+        accessorFn: (row) => row.remaining,
         cell: ({ row }) => {
-          const shortage = getShortage(row.original);
+          const remaining = row.original.remaining;
           return (
             <span
               className={cn(
                 "font-mono font-bold tabular-nums",
-                shortage > 0 ? "text-rose-600" : "text-muted-foreground"
+                remaining > 0 ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"
               )}
             >
-              {fmtQty(shortage)}
+              {fmtQty(remaining)}
             </span>
           );
         },
         footer: ({ table }) =>
           fmtQty(
-            table.getFilteredRowModel().rows.reduce((sum, row) => sum + getShortage(row.original), 0)
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.remaining, 0)
           ),
       },
       {
@@ -408,50 +326,6 @@ export function TransportReportManager({
           if (!Array.isArray(value) || value.length === 0) return true;
           return value.includes(deductionStatus(row.original));
         },
-      },
-      {
-        accessorKey: "lossDeduction",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Amount Deducted" />,
-        meta: { label: "Amount Deducted" },
-        cell: ({ row }) => (
-          <span
-            className={cn(
-              "font-mono tabular-nums",
-              row.original.lossDeduction > 0 ? "text-rose-600" : "text-muted-foreground"
-            )}
-          >
-            {row.original.lossDeduction > 0
-              ? `−${fmtMoney(row.original.lossDeduction)}`
-              : fmtMoney(0)}
-          </span>
-        ),
-        footer: ({ table }) => {
-          const total = table
-            .getFilteredRowModel()
-            .rows.reduce((sum, row) => sum + row.original.lossDeduction, 0);
-          return total > 0 ? `−${fmtMoney(total)}` : fmtMoney(0);
-        },
-      },
-      {
-        accessorKey: "amountToDeduct",
-        accessorFn: (row) => getAmountToDeduct(row),
-        header: ({ column }) => <DataTableColumnHeader column={column} title="To Be Deducted" />,
-        meta: { label: "To Be Deducted" },
-        cell: ({ row }) => {
-          const amount = getAmountToDeduct(row.original);
-          return (
-          <span
-            className={cn(
-              "font-mono tabular-nums",
-              amount > 0 ? "text-amber-600" : "text-muted-foreground"
-            )}
-          >
-            {fmtMoney(amount)}
-          </span>
-          );
-        },
-        footer: ({ table }) =>
-          moneyFooter(table, (row) => getAmountToDeduct(row)),
       },
       {
         accessorKey: "transportExpense",
@@ -660,7 +534,7 @@ export function TransportReportManager({
       <div>
         <h1 className="text-xl font-semibold text-foreground">Transport & Allocation Report</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Trip volumes, whether a loss was deducted, amounts already deducted or still to deduct, haulage fees, and fleet / trip expenses.
+          Trip volumes, remaining product on the truck, haulage fees, and fleet / trip expenses. Open a row for subsequent deliveries and logged shortage.
         </p>
       </div>
 
@@ -669,11 +543,12 @@ export function TransportReportManager({
       <DataTable
         columns={columns}
         data={filteredRows}
-        tableId="fleet-transport-report"
+        tableId="fleet-transport-report-v4"
         filterFields={filterFields}
         searchPlaceholder="Search order, truck, driver, transporter..."
         toolbarActions={filterSheet}
         emptyMessage="No transport records found for the selected filters."
+        rowHref={(row) => `/admin/reports/transport/${row.id}`}
       />
     </div>
   );

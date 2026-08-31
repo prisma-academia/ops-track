@@ -148,6 +148,11 @@ const columns: ColumnDef<SaleRow>[] = [
       );
     }
   },
+  {
+    accessorKey: "amountPerLiter",
+    header: "Sold Price (₦/L)",
+    cell: ({ row }) => row.original.amountPerLiter.toLocaleString(),
+  },
   { 
     accessorKey: "totalExpectedAmount", 
     header: "Expected Amt (₦)",

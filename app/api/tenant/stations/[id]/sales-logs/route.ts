@@ -6,6 +6,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { requireTenantActor } from "@/lib/auth/guards";
 import { prisma } from "@/lib/db/client";
 import { StockMovementService } from "@/lib/inventory/stock-movement-service";
+import { reconcileTankCurrentLiters } from "@/lib/inventory/tank-balance";
 import { FinanceService } from "@/lib/finance/finance-service";
 import {
   computeStationOverpayment,
@@ -245,6 +246,7 @@ export async function POST(
           notes: `Retail sale ${body.dippingClosingId ? "from dipping" : ""}`,
           recordedById: actor.userId,
         });
+        await reconcileTankCurrentLiters(tx as never, tankId);
       }
 
       await FinanceService.recordRetailSaleRevenue(tx as never, {

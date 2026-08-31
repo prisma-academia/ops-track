@@ -98,9 +98,10 @@ export async function POST(
         },
       });
 
+      const nextLiters = Math.max(0, tankCurrentLiters - litersSold);
       await tx.tank.update({
         where: { id: tankId },
-        data: { currentLiters: { decrement: litersSold } },
+        data: { currentLiters: nextLiters },
       });
 
       return updated;

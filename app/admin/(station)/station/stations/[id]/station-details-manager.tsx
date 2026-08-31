@@ -697,12 +697,14 @@ export function StationDetailsManager({
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {station.tanks.map((tank: any) => {
               const currentLitres = Number(tank.currentLiters || 0);
               const capacity = Number(tank.capacity);
               const tankPumps = station.pumps.filter((p: any) => p.tankId === tank.id);
               const nozzleCount = tankPumps.reduce((sum: number, p: any) => sum + (p.nozzles?.length ?? 0), 0);
+
+              const lastClosing = tank.dippingSessions?.[0]?.closings?.[0];
 
               return (
                 <div key={tank.id} className="flex flex-col gap-2">
@@ -714,6 +716,11 @@ export function StationDetailsManager({
                         maxCapacity={capacity}
                         label={tank.name}
                         type={tank.productType === "LPG" ? "gas" : "fuel"}
+                        productLabel={tank.productType}
+                        waterLevel={tank.waterLevel == null ? null : Number(tank.waterLevel)}
+                        temperature={tank.temperature == null ? null : Number(tank.temperature)}
+                        lastClosingDip={lastClosing ? Number(lastClosing.closingLiters) : null}
+                        lastClosingAt={lastClosing ? formatHumanReadableDate(lastClosing.recordedAt) : null}
                         className="group-hover:border-primary/40 group-hover:shadow-md transition-all duration-200 pt-8"
                       />
                       <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-1">
@@ -724,15 +731,9 @@ export function StationDetailsManager({
                       </div>
                     </div>
                   </Link>
-                  {(tankPumps.length > 0 || nozzleCount > 0 || tank.waterLevel != null || tank.temperature != null) && (
+                  {(tankPumps.length > 0 || nozzleCount > 0) && (
                     <p className="text-[10px] text-center text-muted-foreground">
-                      {[
-                        tankPumps.length > 0 || nozzleCount > 0
-                          ? `${tankPumps.length} pump${tankPumps.length !== 1 ? "s" : ""} · ${nozzleCount} nozzle${nozzleCount !== 1 ? "s" : ""}`
-                          : null,
-                        tank.waterLevel != null ? `Water ${Number(tank.waterLevel).toLocaleString()} L` : null,
-                        tank.temperature != null ? `${Number(tank.temperature)}°C` : null,
-                      ].filter(Boolean).join(" · ")}
+                      {`${tankPumps.length} pump${tankPumps.length !== 1 ? "s" : ""} · ${nozzleCount} nozzle${nozzleCount !== 1 ? "s" : ""}`}
                     </p>
                   )}
                 </div>

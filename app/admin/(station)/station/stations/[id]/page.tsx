@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { reconcileNegativeTanks } from "@/lib/inventory/tank-balance";
 import { redirect } from "next/navigation";
 import { StationDetailsManager } from "./station-details-manager";
 
@@ -23,7 +24,22 @@ export default async function StationDetailPage({
           lastName: true,
         },
       },
-      tanks: true,
+      tanks: {
+        include: {
+          dippingSessions: {
+            where: { closings: { some: {} } },
+            orderBy: { openedAt: "desc" as const },
+            take: 1,
+            include: {
+              closings: {
+                orderBy: { recordedAt: "desc" as const },
+                take: 1,
+                select: { closingLiters: true, recordedAt: true },
+              },
+            },
+          },
+        },
+      },
       pumps: {
         include: {
           nozzles: true,
@@ -45,6 +61,32 @@ export default async function StationDetailPage({
 
   if (!station || station.tenantId !== actor.tenantId) {
     redirect("/admin/station/stations");
+  }
+
+  const negativeTankIds = station.tanks
+    .filter((tank) => Number(tank.currentLiters) < 0)
+    .map((tank) => tank.id);
+
+  if (negativeTankIds.length > 0) {
+    await prisma.$transaction((tx) => reconcileNegativeTanks(tx as never, negativeTankIds));
+    const repairedTanks = await prisma.tank.findMany({
+      where: { stationId: id },
+      include: {
+        dippingSessions: {
+          where: { closings: { some: {} } },
+          orderBy: { openedAt: "desc" },
+          take: 1,
+          include: {
+            closings: {
+              orderBy: { recordedAt: "desc" },
+              take: 1,
+              select: { closingLiters: true, recordedAt: true },
+            },
+          },
+        },
+      },
+    });
+    station.tanks = repairedTanks;
   }
 
   const users = await prisma.tenantUser.findMany({

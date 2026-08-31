@@ -104,9 +104,10 @@ export async function PATCH(
       });
 
       if (litersDifference !== 0) {
+        const nextLiters = Math.max(0, tankCurrentLiters - litersDifference);
         await tx.tank.update({
           where: { id: tankId },
-          data: { currentLiters: { decrement: litersDifference } },
+          data: { currentLiters: nextLiters },
         });
       }
 

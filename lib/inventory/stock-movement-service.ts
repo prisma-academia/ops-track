@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/db/client";
 import { Prisma, StockMovementType, ProductType } from "@/lib/generated/prisma/client";
 
 /**
@@ -15,6 +14,11 @@ export interface CreateStockMovementParams {
   recordedById?: string;
 }
 
+export interface ExecuteStockMovementOptions {
+  /** When false, log the movement but leave tank.currentLiters unchanged. */
+  applyToTank?: boolean;
+}
+
 /**
  * Creates a stock movement record AND updates the tank's current liters
  * in a single transaction.
@@ -23,8 +27,11 @@ async function executeStockMovement(
   tx: Prisma.TransactionClient,
   type: StockMovementType,
   params: CreateStockMovementParams,
-  referenceType: string
+  referenceType: string,
+  options?: ExecuteStockMovementOptions
 ) {
+  const applyToTank = options?.applyToTank !== false;
+
   // 1. Get current tank balance
   const tank = await tx.tank.findFirstOrThrow({
     where: {
@@ -35,9 +42,14 @@ async function executeStockMovement(
     select: { id: true, currentLiters: true },
   });
 
-  // 2. Calculate new balance
+  // 2. Calculate new balance. Treat a phantom negative book figure as 0 so a
+  // delivery cannot be added onto a double-counted sales decrement.
   const quantity = new Prisma.Decimal(params.quantity);
-  const balanceAfter = tank.currentLiters.add(quantity);
+  const starting = tank.currentLiters.lt(0) ? new Prisma.Decimal(0) : tank.currentLiters;
+  let balanceAfter = starting.add(quantity);
+  if (balanceAfter.lt(0)) {
+    balanceAfter = new Prisma.Decimal(0);
+  }
 
   // 3. Create the movement log
   const movement = await tx.stockMovement.create({
@@ -48,7 +60,7 @@ async function executeStockMovement(
       movementType: type,
       productType: params.productType,
       quantity: quantity,
-      balanceAfter: balanceAfter,
+      balanceAfter: applyToTank ? balanceAfter : starting,
       referenceId: params.referenceId,
       referenceType: referenceType,
       notes: params.notes,
@@ -56,13 +68,15 @@ async function executeStockMovement(
     },
   });
 
-  // 4. Update the actual tank capacity
-  await tx.tank.update({
-    where: { id: tank.id },
-    data: {
-      currentLiters: balanceAfter,
-    },
-  });
+  // 4. Update the actual tank level
+  if (applyToTank) {
+    await tx.tank.update({
+      where: { id: tank.id },
+      data: {
+        currentLiters: balanceAfter,
+      },
+    });
+  }
 
   return movement;
 }
@@ -81,12 +95,18 @@ export const StockMovementService = {
     }, "Delivery");
   },
 
-  async recordRetailSale(tx: Prisma.TransactionClient, params: CreateStockMovementParams) {
-    // Sales remove from the tank
+  async recordRetailSale(
+    tx: Prisma.TransactionClient,
+    params: CreateStockMovementParams,
+    options?: ExecuteStockMovementOptions
+  ) {
+    // Sales reports are financial. Tank volume is already set by dipping (and
+    // adjusted by shifts / waybills). Applying this decrement a second time
+    // is what produced negative currentLiters.
     return executeStockMovement(tx, StockMovementType.SALE, {
       ...params,
       quantity: new Prisma.Decimal(params.quantity).abs().negated(), // Ensure negative
-    }, "RetailSale");
+    }, "RetailSale", { applyToTank: options?.applyToTank ?? false });
   },
 
   async recordAdjustment(tx: Prisma.TransactionClient, params: CreateStockMovementParams) {

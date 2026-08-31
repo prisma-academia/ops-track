@@ -344,6 +344,7 @@ export function TransportDetailsManager({
                         
                         <div className="">
                           <AssetTank 
+                            layout="fleet"
                             currentLitres={remainingVolume} 
                             maxCapacity={carriedVolume} 
                             label="Remaining in Transport" 

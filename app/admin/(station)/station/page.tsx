@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card"
 import { DatePickerWithRange } from "@/components/date-range-picker"
 import { AssetTank } from "@/components/asset-tank"
+import { reconcileNegativeTanks } from "@/lib/inventory/tank-balance"
 import { DashboardClient, TopStats, MonthlyData, ProductVolumeTotals } from "./dashboard-client"
 import { DashboardContentSkeleton } from "./dashboard-content-skeleton"
 import { DashboardDatePicker } from "./dashboard-date-picker"
@@ -178,6 +179,16 @@ async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate
   };
 
   // 2. Fetch Tanks Aggregated Data
+  const negativeTanks = await prisma.tank.findMany({
+    where: { ...tankWhere, currentLiters: { lt: 0 } },
+    select: { id: true },
+  });
+  if (negativeTanks.length > 0) {
+    await prisma.$transaction((tx) =>
+      reconcileNegativeTanks(tx as never, negativeTanks.map((tank) => tank.id))
+    );
+  }
+
   const tanksData = await prisma.tank.groupBy({
     by: ['productType'],
     where: tankWhere,
@@ -196,6 +207,7 @@ async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate
       currentLitres: Number(tank?._sum.currentLiters || 0),
       maxCapacity: Number(tank?._sum.capacity || 0),
       type: productType === "LPG" ? ("gas" as const) : ("fuel" as const),
+      productLabel: productType,
     };
   });
 
@@ -285,6 +297,7 @@ async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate
               currentLitres={tank.currentLitres}
               maxCapacity={tank.maxCapacity}
               type={tank.type}
+              productLabel={tank.productLabel}
             />
           ))}
         </div>

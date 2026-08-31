@@ -305,11 +305,11 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="flex flex-col gap-4">
           <AssetTank
+            layout="fleet"
             currentLitres={Math.max(0, summary.qtyBalance)}
             maxCapacity={summary.litersOrdered || 1}
             label="Quantity Remaining"
             type={summary.productType === "LPG" ? "gas" : "fuel"}
-            // className="h-full"
           />
           <Card className="shadow-xs border-border/40 bg-card p-4">
             <div className="grid grid-cols-2 gap-3">

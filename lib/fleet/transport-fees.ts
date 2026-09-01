@@ -71,7 +71,7 @@ function deliveryExpectedFee(delivery: TransportFeeDelivery): number {
   return 0;
 }
 
-function deliveryLabel(delivery: TransportFeeDelivery): string {
+function deliveryLabel(delivery: Pick<TransportFeeDelivery, "station" | "customer">): string {
   return delivery.station?.name || delivery.customer?.name || "Secondary stop";
 }
 
@@ -85,7 +85,7 @@ export function getTransportLegContext(transport?: TransportFeeTransport | null)
 
 export function getFeeLegLabel(
   feeLeg: TransportFeeLeg,
-  delivery?: TransportFeeDelivery | null,
+  delivery?: Pick<TransportFeeDelivery, "station" | "customer"> | null,
   context?: TransportFeeLegContext | null
 ): string {
   const depot = context?.sourceDepot || "Depot";

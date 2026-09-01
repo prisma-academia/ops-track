@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db/client";
 import { StockMovementService } from "@/lib/inventory/stock-movement-service";
 import { reconcileTankCurrentLiters } from "@/lib/inventory/tank-balance";
 import { FinanceService } from "@/lib/finance/finance-service";
+import { assertBankAccountsUsableForStation } from "@/lib/bank-accounts/assert-usable";
 import {
   computeStationOverpayment,
   firstBankIds,
@@ -145,12 +146,11 @@ export async function POST(
     }
 
     const bankIds = [...new Set(payments.map((p) => p.bankAccountId))];
-    const accounts = await prisma.bankAccount.findMany({
-      where: { id: { in: bankIds }, tenantId: actor.tenantId, isActive: true },
+    await assertBankAccountsUsableForStation({
+      accountIds: bankIds,
+      tenantId: actor.tenantId,
+      stationId,
     });
-    if (accounts.length !== bankIds.length) {
-      throw new DomainError(400, "invalid_input", "One or more bank accounts are invalid.");
-    }
 
     const logDate = body.logDate ? new Date(body.logDate) : new Date();
 

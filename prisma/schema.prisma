@@ -135,6 +135,7 @@ model Tenant {
   transportLossLogs    TransportLossLog[]
   dippingSessions      DippingSession[]
   bankAccounts         BankAccount[]
+  stationBankAccounts  StationBankAccount[]
   varianceLogs         VarianceLog[]
   transportTripLegs    TransportTripLeg[]
   driverAssignments    DriverAssignment[]
@@ -193,6 +194,7 @@ model TenantUser {
   ownedOrganizations  Organization[] @relation("OrgOwner")
 
   stations                Station[]        @relation("StationStaff")
+  assignedBankAccounts    StationBankAccount[] @relation("BankAccountAssignedBy")
   recordedSalesLogs       SalesLog[]       @relation("SalesRecordedBy")
   approvedSalesLogs       SalesLog[]       @relation("SalesApprovedBy")
   salesPaymentReviews     SalesPaymentReview[]
@@ -267,19 +269,21 @@ model PendingClientRegistration {
 }
 
 model RoleTemplate {
-  id          String    @id @default(cuid())
-  scope       RoleScope
-  tenantId    String?
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
-  module      AppModule @default(STATION)
-  permissions String[]
-  isSystem    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
+  id             String        @id @default(cuid())
+  scope          RoleScope
+  tenantId       String?
+  tenant         Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  module         AppModule     @default(STATION)
+  permissions    String[]
+  isSystem       Boolean       @default(false)
+  createdAt      DateTime      @default(now())
 
-  @@unique([scope, tenantId, module, name])
   @@index([scope, tenantId, module])
+  @@index([organizationId])
 }
 
 model Permission {
@@ -415,6 +419,8 @@ model Organization {
   deliveries    Delivery[]
   priceControls PriceControl[]
   transactions  Transaction[]
+  bankAccounts  BankAccount[]
+  roleTemplates RoleTemplate[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -545,6 +551,7 @@ model Station {
 
   // Relations
   staff              TenantUser[]        @relation("StationStaff")
+  bankAccountAssignments StationBankAccount[]
   tanks              Tank[]
   priceControls      PriceControl[]
   dailyReports       DailyStockReport[]
@@ -1531,25 +1538,48 @@ enum AccountScope {
 }
 
 model BankAccount {
-  id            String       @id @default(uuid())
-  tenantId      String
-  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  scope         AccountScope
-  accountName   String
-  accountNumber String
-  bankName      String
-  isActive      Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id             String        @id @default(uuid())
+  tenantId       String
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  scope          AccountScope
+  accountName    String
+  accountNumber  String
+  bankName       String
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  posSalesLogs      SalesLog[]    @relation("SalesLogPosBankAccount")
-  transferSalesLogs SalesLog[]    @relation("SalesLogTransferBankAccount")
-  salesPayments     SalesPayment[] @relation("SalesPaymentBankAccount")
-  expenses          Expense[]     @relation("ExpenseBankAccount")
-  transactions      Transaction[] @relation("TransactionBankAccount")
+  posSalesLogs         SalesLog[]           @relation("SalesLogPosBankAccount")
+  transferSalesLogs    SalesLog[]           @relation("SalesLogTransferBankAccount")
+  salesPayments        SalesPayment[]       @relation("SalesPaymentBankAccount")
+  expenses             Expense[]            @relation("ExpenseBankAccount")
+  transactions         Transaction[]        @relation("TransactionBankAccount")
+  stationAssignments   StationBankAccount[]
 
   @@index([tenantId])
+  @@index([organizationId])
   @@map("bank_accounts")
+}
+
+model StationBankAccount {
+  id            String      @id @default(cuid())
+  tenantId      String
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  stationId     String
+  station       Station     @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  assignedById  String?
+  assignedBy    TenantUser? @relation("BankAccountAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+
+  @@unique([stationId, bankAccountId])
+  @@index([tenantId, stationId])
+  @@index([bankAccountId])
+  @@map("station_bank_accounts")
 }
 
 // ==========================================

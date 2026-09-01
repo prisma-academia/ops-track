@@ -54,7 +54,7 @@ export function RoleDetailEditor({
   };
 
   const filteredPermissions = allPermissions.filter((key) => {
-    if (moduleContext === "STATION") return !key.startsWith("tenant.fleet");
+    if (moduleContext === "STATION") return !isFleetPermissionKey(key);
     if (moduleContext === "FLEET") return isFleetPermissionKey(key);
     return true;
   });

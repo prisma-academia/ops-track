@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PageHeader } from "@/components/shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ALL_TENANT_PERMISSION_KEYS, PERMISSIONS } from "@/lib/auth/permissions";
+import { ALL_FLEET_PERMISSION_KEYS, PERMISSIONS } from "@/lib/auth/permissions";
 import { UserDetailsPanel } from "./user-details-panel";
 import { Badge } from "@/components/ui/badge";
 
@@ -17,13 +17,10 @@ export default async function TenantUserDetailPage({
   const user = await prisma.tenantUser.findUnique({ where: { id } });
   if (!user || user.tenantId !== actor.tenantId) notFound();
   const roles = await prisma.roleTemplate.findMany({
-    where: { scope: "TENANT", tenantId: actor.tenantId },
+    where: { scope: "TENANT", tenantId: actor.tenantId, module: "FLEET", organizationId: null },
     orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     select: { id: true, name: true, permissions: true, module: true },
   });
-  const combinedPermissions = Array.from(
-    new Set([...user.fleetPermissions, ...user.stationPermissions])
-  );
   const displayName = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email;
 
   return (
@@ -35,9 +32,10 @@ export default async function TenantUserDetailPage({
         isOwner={user.isOwner}
         status={user.status}
         bannedReason={user.bannedReason}
-        permissions={combinedPermissions}
-        allPermissions={ALL_TENANT_PERMISSION_KEYS}
+        permissions={user.fleetPermissions}
+        allPermissions={ALL_FLEET_PERMISSION_KEYS}
         roles={roles}
+        moduleContext="FLEET"
         profile={
           <Card className="border-border/40 shadow-sm lg:col-span-2">
             <CardHeader className="pb-4 border-b border-border/40">

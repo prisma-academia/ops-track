@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PageHeader, Card } from "@/components/shell";
-import { ALL_TENANT_PERMISSION_KEYS, hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
+import { ALL_FLEET_PERMISSION_KEYS, hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 import { RoleDetailEditor } from "@/app/(platform)/(dashboard)/role-templates/[id]/editor";
 
 export default async function TenantRoleDetailPage({
@@ -17,7 +17,7 @@ export default async function TenantRoleDetailPage({
   const actor = await requireTenantPage(PERMISSIONS.TENANT_ROLES_READ.key, "FLEET");
   const canEdit = hasPermission(actor, PERMISSIONS.TENANT_ROLES_WRITE.key);
   const role = await prisma.roleTemplate.findUnique({ where: { id } });
-  if (!role || role.scope !== "TENANT" || role.tenantId !== actor.tenantId) {
+  if (!role || role.scope !== "TENANT" || role.tenantId !== actor.tenantId || role.module !== "FLEET" || role.organizationId) {
     notFound();
   }
   const readOnly = !canEdit || edit !== "1";
@@ -30,7 +30,7 @@ export default async function TenantRoleDetailPage({
           name={role.name}
           isSystem={role.isSystem}
           initial={role.permissions}
-          allPermissions={ALL_TENANT_PERMISSION_KEYS}
+          allPermissions={ALL_FLEET_PERMISSION_KEYS}
           endpoint={`/api/tenant/role-templates/${role.id}`}
           moduleContext="FLEET"
           readOnly={readOnly}

@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/shell";
-import { ALL_TENANT_PERMISSION_KEYS, PERMISSIONS } from "@/lib/auth/permissions";
+import { ALL_FLEET_PERMISSION_KEYS, PERMISSIONS } from "@/lib/auth/permissions";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { RoleEditor } from "@/app/(platform)/(dashboard)/role-templates/editor";
 
@@ -8,7 +8,7 @@ export default async function NewFleetRolePage() {
   return (
     <div className="space-y-6">
       <PageHeader title="New Fleet Role Template" backHref="/admin/role-templates" />
-      <RoleEditor permissions={ALL_TENANT_PERMISSION_KEYS} scope="tenant" moduleContext="FLEET" />
+      <RoleEditor permissions={ALL_FLEET_PERMISSION_KEYS} scope="tenant" moduleContext="FLEET" />
     </div>
   );
 }

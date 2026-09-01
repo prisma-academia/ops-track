@@ -14,6 +14,7 @@ export function UserDetailsPanel({
   permissions,
   allPermissions,
   roles,
+  moduleContext = "FLEET",
 }: {
   profile: ReactNode;
   userId: string;
@@ -24,6 +25,7 @@ export function UserDetailsPanel({
   permissions: string[];
   allPermissions: readonly string[];
   roles: { id: string; name: string; permissions: string[]; module: string }[];
+  moduleContext?: "STATION" | "FLEET";
 }) {
   const [isEditMode, setIsEditMode] = useState(false);
 
@@ -44,7 +46,7 @@ export function UserDetailsPanel({
       <UserDetailActions
         userId={userId}
         scope="tenant"
-        moduleContext="FLEET"
+        moduleContext={moduleContext}
         permissions={permissions}
         allPermissions={allPermissions}
         roles={roles}

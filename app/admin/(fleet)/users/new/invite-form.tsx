@@ -43,9 +43,15 @@ type PermModule = { moduleName: string; perms: (typeof PERMISSIONS)[keyof typeof
 export function InviteTenantUserForm({
   roles,
   allPermissions,
+  moduleContext = "FLEET",
+  organizationId,
+  successRedirect,
 }: {
   roles: { id: string; name: string; permissions: string[]; module: string }[];
   allPermissions: readonly string[];
+  moduleContext?: "STATION" | "FLEET";
+  organizationId?: string | null;
+  successRedirect?: (userId: string) => string;
 }) {
   const router = useRouter();
   const { register, handleSubmit, formState: { errors, isSubmitting }, control, setValue } = useForm<Values>({
@@ -100,14 +106,20 @@ export function InviteTenantUserForm({
     );
     const payload = {
       ...values,
-      activeModules: activeModules.length > 0 ? activeModules : ["STATION", "FLEET"],
+      activeModules: moduleContext === "STATION"
+        ? ["STATION"]
+        : (activeModules.length > 0 ? activeModules : ["FLEET"]),
+      inviteContext: moduleContext,
+      organizationId: moduleContext === "STATION" ? organizationId : undefined,
     };
     const res = await apiPost<{ user: { id: string } }>("/api/tenant/users", payload);
     if (res.error) {
       setError(res.error.message);
       return;
     }
-    if (res.data?.user.id) router.push(`/admin/users/${res.data.user.id}`);
+    if (res.data?.user.id) {
+      router.push(successRedirect ? successRedirect(res.data.user.id) : `/admin/users/${res.data.user.id}`);
+    }
   });
 
   const groupedPermissions = allPermissions.reduce((acc, key) => {
@@ -337,9 +349,18 @@ export function InviteTenantUserForm({
 
       {/* Permissions Matrix - Right Column */}
       <div className="lg:col-span-2 space-y-6">
-        {renderPermissionsCard(stationModulesList, "Station")}
-        {renderPermissionsCard(fleetModulesList, "Fleet")}
-        {renderPermissionsCard(mobileModulesList, "Mobile Station")}
+        {moduleContext === "STATION" ? (
+          <>
+            {renderPermissionsCard(stationModulesList.filter((m) => !m.moduleName.startsWith("tenant.fleet")), "Station")}
+            {renderPermissionsCard(mobileModulesList, "Mobile Station")}
+          </>
+        ) : (
+          <>
+            {renderPermissionsCard(stationModulesList, "Station")}
+            {renderPermissionsCard(fleetModulesList, "Fleet")}
+            {renderPermissionsCard(mobileModulesList, "Mobile Station")}
+          </>
+        )}
       </div>
     </form>
   );

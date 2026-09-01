@@ -3,6 +3,7 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { ExpensesManager } from "./expenses-manager";
 import { resolveActiveOrgId } from "@/lib/auth/org-scope";
+import { orgStationBankAccountWhere } from "@/lib/bank-accounts/queries";
 
 export default async function ExpensesPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_EXPENSES_READ.key);
@@ -72,7 +73,11 @@ export default async function ExpensesPage() {
   });
 
   const bankAccounts = await prisma.bankAccount.findMany({
-    where: { tenantId: actor.tenantId, scope: "STATION", isActive: true },
+    where: orgStationBankAccountWhere({
+      tenantId: actor.tenantId,
+      organizationId: actor.organizationId ?? activeOrgId,
+      isActive: true,
+    }),
     select: {
       id: true,
       bankName: true,

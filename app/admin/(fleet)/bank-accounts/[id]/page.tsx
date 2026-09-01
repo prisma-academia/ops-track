@@ -9,10 +9,8 @@ export default async function FleetBankAccountDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const actor = await requireTenantPage(undefined, "FLEET");
-  const canReadFleet = hasPermission(actor, PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key);
-  const canReadStation = hasPermission(actor, PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key);
-  if (!canReadFleet && !canReadStation) {
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key, "FLEET");
+  if (!hasPermission(actor, PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key)) {
     redirect("/admin/unauthorized");
   }
 
@@ -28,8 +26,7 @@ export default async function FleetBankAccountDetailPage({
     notFound();
   }
 
-  const canViewAccount =
-    details.account.scope === "FLEET" ? canReadFleet : canReadStation || canReadFleet;
+  const canViewAccount = details.account.scope === "FLEET";
   if (!canViewAccount) {
     redirect("/admin/unauthorized");
   }

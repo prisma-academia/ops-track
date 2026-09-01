@@ -6,8 +6,9 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
 import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 import { Button } from "@/components/ui/button";
-import { Edit2, Trash2, CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Building2 } from "lucide-react";
 import { BankAccountFormModal } from "./bank-account-form-modal";
+import { AssignStationsModal } from "./assign-stations-modal";
 import { toast } from "sonner";
 import { apiDelete } from "@/lib/client/api";
 import {
@@ -28,6 +29,7 @@ export type BankAccountRow = {
   accountNumber: string;
   bankName: string;
   isActive: boolean;
+  stationAssignments?: { stationId: string; station: { id: string; name: string; code: string } }[];
 };
 
 export function BankAccountsTable({
@@ -48,6 +50,7 @@ export function BankAccountsTable({
   const router = useRouter();
   const [editingAccount, setEditingAccount] = useState<BankAccountRow | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [assigningAccount, setAssigningAccount] = useState<BankAccountRow | null>(null);
   
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -117,7 +120,42 @@ export function BankAccountsTable({
         </div>
       ),
     },
-    // Actions column removed based on user request
+    ...(createScope === "STATION" || scopeFilter === "STATION"
+      ? [{
+          id: "stations",
+          header: "Stations",
+          cell: ({ row }: { row: { original: BankAccountRow } }) => {
+            const names = (row.original.stationAssignments ?? []).map((a) => a.station?.name).filter(Boolean);
+            return (
+              <span className="text-sm text-muted-foreground">
+                {names.length > 0 ? names.join(", ") : "Unassigned"}
+              </span>
+            );
+          },
+        } satisfies ColumnDef<BankAccountRow>]
+      : []),
+    ...(createScope === "STATION" || scopeFilter === "STATION"
+      ? [{
+          id: "assign",
+          header: "",
+          cell: ({ row }: { row: { original: BankAccountRow } }) => (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setAssigningAccount(row.original);
+              }}
+            >
+              <Building2 className="size-3.5" />
+              Assign
+            </Button>
+          ),
+        } satisfies ColumnDef<BankAccountRow>]
+      : []),
   ];
 
   return (
@@ -157,6 +195,17 @@ export function BankAccountsTable({
         initialData={editingAccount}
         fixedScope={createScope ?? scopeFilter}
       />
+
+      {assigningAccount && (
+        <AssignStationsModal
+          accountId={assigningAccount.id}
+          accountLabel={`${assigningAccount.bankName} · ${assigningAccount.accountNumber}`}
+          isOpen={!!assigningAccount}
+          onClose={() => setAssigningAccount(null)}
+          onSuccess={() => router.refresh()}
+          initiallyAssignedIds={(assigningAccount.stationAssignments ?? []).map((a) => a.stationId)}
+        />
+      )}
 
       <AlertDialog open={!!deletingId} onOpenChange={(open) => !open && setDeletingId(null)}>
         <AlertDialogContent>

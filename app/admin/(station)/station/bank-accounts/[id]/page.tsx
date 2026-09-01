@@ -9,11 +9,9 @@ export default async function StationBankAccountDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const actor = await requireTenantPage(undefined, "STATION");
-  const canReadStation = hasPermission(actor, PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key);
-  const canReadFleet = hasPermission(actor, PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key);
-  if (!canReadStation && !canReadFleet) {
-    redirect("/admin/unauthorized");
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key, "STATION");
+  if (!hasPermission(actor, PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key)) {
+    redirect("/admin/station/unauthorized");
   }
 
   const { id } = await params;
@@ -28,10 +26,9 @@ export default async function StationBankAccountDetailPage({
     notFound();
   }
 
-  const canViewAccount =
-    details.account.scope === "STATION" ? canReadStation || canReadFleet : canReadFleet || canReadStation;
+  const canViewAccount = details.account.scope === "STATION";
   if (!canViewAccount) {
-    redirect("/admin/unauthorized");
+    redirect("/admin/station/unauthorized");
   }
 
   return (

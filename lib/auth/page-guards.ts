@@ -93,6 +93,7 @@ export async function requireTenantPage(
     tenantId: user.tenantId,
     isOwner: user.isOwner,
     organizationId: user.organizationId,
+    activeModules: user.activeModules as Array<"STATION" | "FLEET">,
     permissions: new Set([...user.stationPermissions, ...user.fleetPermissions]),
   };
   const scopedPermissions =

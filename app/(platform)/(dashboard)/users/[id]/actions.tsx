@@ -111,7 +111,12 @@ export function UserDetailActions({
     setInfo(null);
     const keys = Array.from(selected);
     const res = isTenant
-      ? await apiPatch<{ permissions: string[] }>(permissionsEndpoint, splitTenantPermissions(keys))
+      ? await apiPatch<{ permissions: string[] }>(
+          permissionsEndpoint,
+          moduleContext
+            ? { module: moduleContext, permissions: keys }
+            : splitTenantPermissions(keys),
+        )
       : await apiPatch<{ permissions: string[] }>(permissionsEndpoint, {
           permissions: keys,
           module: moduleContext,

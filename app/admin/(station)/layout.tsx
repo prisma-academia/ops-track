@@ -63,6 +63,8 @@ const NAV: NavItemConfig[] = [
     ],
   },
   { href: "/admin/station/clients", key: "clients", title: "Clients", module: "operations" as ModuleKey, icon: "IconUsers", permission: PERMISSIONS.TENANT_CLIENTS_READ.key },
+  { href: "/admin/station/users", key: "users", title: "Users", module: "users" as ModuleKey, icon: "IconUsers", permission: PERMISSIONS.TENANT_STATION_USERS_READ.key },
+  { href: "/admin/station/role-templates", key: "roles", title: "Roles & Permissions", module: "roles" as ModuleKey, icon: "IconShield", permission: PERMISSIONS.TENANT_STATION_ROLES_READ.key },
   // { href: "/admin/station/table-demo", key: "tableDemo", title: "Table Demo", module: null, icon: "IconTable", permission: null },
 ];
 

@@ -18,8 +18,15 @@ export function stationModuleFilter(actor: TenantActor, tenantInternalOrgId: str
 /**
  * For Fleet module queries: fleet-wide users see ALL orgs.
  * Org-scoped users see only their org.
+ * Dual membership (FLEET + STATION): fleet stays tenant-wide even if
+ * organizationId is set for the station side.
  */
 export function fleetModuleFilter(actor: TenantActor) {
+  const hasFleet = actor.activeModules.includes("FLEET");
+  const hasStation = actor.activeModules.includes("STATION");
+  if (hasFleet && hasStation) {
+    return {};
+  }
   if (actor.organizationId) {
     return { organizationId: actor.organizationId };
   }

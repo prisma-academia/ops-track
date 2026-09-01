@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
-import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
+import { requireTenantActor } from "@/lib/auth/guards";
 import { revokeAllSessionsForUser } from "@/lib/auth/session";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { requireUserWriteAccess } from "@/lib/auth/membership";
 
 const BanBody = z.object({
   reason: z.string().trim().min(3, "Reason must be at least 3 characters.").max(500),
@@ -14,7 +15,7 @@ const BanBody = z.object({
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_USERS_WRITE.key);
+    const actor = await requireTenantActor();
     const { id } = await ctx.params;
     const { reason } = BanBody.parse(await request.json());
     const meta = requestMeta(request);
@@ -29,6 +30,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (target.id === actor.userId) {
       throw new DomainError(409, "self_forbidden", "You cannot ban your own account.");
     }
+    requireUserWriteAccess(actor, target);
     if (target.status === "SUSPENDED") {
       throw new DomainError(409, "already_banned", "This user is already banned.");
     }

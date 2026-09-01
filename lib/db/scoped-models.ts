@@ -34,6 +34,8 @@ export const STRICT_SCOPED: ReadonlySet<string> = new Set([
   "ShiftLog",
   "Expense",
   "Organization",
+  "BankAccount",
+  "StationBankAccount",
   "NotificationChannelSetting",
   "NotificationMessage",
   "NotificationDelivery",

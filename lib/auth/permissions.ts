@@ -11,10 +11,14 @@ export const PERMISSIONS = {
   // Tenant-scope
   TENANT_USERS_READ: { key: "tenant.users:read", module: "tenant.users", description: "View tenant users" },
   TENANT_USERS_WRITE: { key: "tenant.users:write", module: "tenant.users", description: "Invite / modify tenant users" },
+  TENANT_STATION_USERS_READ: { key: "tenant.station.users:read", module: "tenant.station.users", description: "View organization station users" },
+  TENANT_STATION_USERS_WRITE: { key: "tenant.station.users:write", module: "tenant.station.users", description: "Invite / modify organization station users" },
   TENANT_CLIENTS_READ: { key: "tenant.clients:read", module: "tenant.clients", description: "View clients" },
   TENANT_CLIENTS_WRITE: { key: "tenant.clients:write", module: "tenant.clients", description: "Create / modify clients" },
   TENANT_ROLES_READ: { key: "tenant.roles:read", module: "tenant.roles", description: "View tenant role templates" },
   TENANT_ROLES_WRITE: { key: "tenant.roles:write", module: "tenant.roles", description: "Modify tenant role templates" },
+  TENANT_STATION_ROLES_READ: { key: "tenant.station.roles:read", module: "tenant.station.roles", description: "View organization station role templates" },
+  TENANT_STATION_ROLES_WRITE: { key: "tenant.station.roles:write", module: "tenant.station.roles", description: "Modify organization station role templates" },
   TENANT_STATIONS_READ: { key: "tenant.stations:read", module: "tenant.stations", description: "View stations, tanks & pricing" },
   TENANT_STATIONS_WRITE: { key: "tenant.stations:write", module: "tenant.stations", description: "Manage stations, tanks & pricing" },
   TENANT_WAYBILLS_READ: { key: "tenant.waybills:read", module: "tenant.waybills", description: "View waybills" },
@@ -133,6 +137,9 @@ export const ALL_TENANT_PERMISSION_KEYS: PermissionKey[] = ALL_PERMISSIONS
   .filter((p) => p.key.startsWith("tenant.") || p.key.startsWith("mobile.tenant."))
   .map((p) => p.key as PermissionKey);
 
+export const ALL_STATION_PERMISSION_KEYS: PermissionKey[] = ALL_TENANT_PERMISSION_KEYS
+  .filter((k) => !isFleetPermissionKey(k));
+
 // Built-in tenant role templates seeded per-tenant on tenant creation.
 export const TENANT_BUILTIN_ROLES = [
   { name: "Owner", permissions: ALL_TENANT_PERMISSION_KEYS, isSystem: true, module: "STATION" },
@@ -184,6 +191,7 @@ export type TenantActor = {
   tenantId: string;
   isOwner: boolean;
   organizationId: string | null;
+  activeModules: Array<"STATION" | "FLEET">;
   permissions: ReadonlySet<string>;
 };
 

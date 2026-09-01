@@ -6,6 +6,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
+import { assertOptionalBankAccount } from "@/lib/bank-accounts/assert-usable";
 
 const CreateTransactionSchema = z.object({
   type: z.enum(["INFLOW", "OUTFLOW"]),
@@ -76,6 +77,11 @@ export async function POST(request: Request) {
         "Bank account is required for non-cash payments.",
       );
     }
+    await assertOptionalBankAccount({
+      accountId: body.bankAccountId,
+      tenantId: actor.tenantId,
+      context: "FLEET",
+    });
 
     const transaction = await prisma.transaction.create({
       data: {

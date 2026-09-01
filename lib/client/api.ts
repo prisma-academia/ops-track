@@ -69,6 +69,25 @@ export async function apiDelete<T>(url: string): Promise<ApiResponse<T>> {
   return (await res.json()) as ApiResponse<T>;
 }
 
+export async function apiPut<T>(
+  url: string,
+  body: unknown,
+  init?: { headers?: Record<string, string> }
+): Promise<ApiResponse<T>> {
+  const token = await ensureCsrf();
+  const res = await fetch(url, {
+    method: "PUT",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      [CSRF_HEADER]: token,
+      ...init?.headers,
+    },
+    body: JSON.stringify(body),
+  });
+  return (await res.json()) as ApiResponse<T>;
+}
+
 export async function apiGet<T>(url: string): Promise<ApiResponse<T>> {
   const res = await fetch(url, { credentials: "include" });
   return (await res.json()) as ApiResponse<T>;

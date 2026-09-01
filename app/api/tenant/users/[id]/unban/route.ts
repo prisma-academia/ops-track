@@ -1,14 +1,15 @@
 import { prisma } from "@/lib/db/client";
-import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
+import { requireTenantActor } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { requireUserWriteAccess } from "@/lib/auth/membership";
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_USERS_WRITE.key);
+    const actor = await requireTenantActor();
     const { id } = await ctx.params;
     const meta = requestMeta(request);
 
@@ -19,6 +20,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (target.status === "ACTIVE") {
       throw new DomainError(409, "not_banned", "This user is not banned.");
     }
+    requireUserWriteAccess(actor, target);
 
     await prisma.tenantUser.update({
       where: { id },

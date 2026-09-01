@@ -16,10 +16,14 @@ export function RoleEditor({
   permissions,
   scope,
   moduleContext,
+  organizationId,
+  successRedirect,
 }: {
   permissions: readonly string[];
   scope: "platform" | "tenant";
   moduleContext?: "STATION" | "FLEET";
+  organizationId?: string | null;
+  successRedirect?: string;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -35,7 +39,7 @@ export function RoleEditor({
   };
 
   const filteredPermissions = permissions.filter((key) => {
-    if (moduleContext === "STATION") return !key.startsWith("tenant.fleet");
+    if (moduleContext === "STATION") return !isFleetPermissionKey(key);
     if (moduleContext === "FLEET") return isFleetPermissionKey(key);
     return true;
   });
@@ -196,7 +200,7 @@ export function RoleEditor({
     setPending(true);
     const res = await apiPost<{ role: { id: string } }>(
       scope === "platform" ? "/api/platform/role-templates" : "/api/tenant/role-templates",
-      { name: name.trim(), permissions: Array.from(selected), module: moduleContext }
+      { name: name.trim(), permissions: Array.from(selected), module: moduleContext, organizationId }
     );
     setPending(false);
     if (res.error) {
@@ -204,7 +208,8 @@ export function RoleEditor({
       return;
     }
     if (res.data?.role.id) {
-      router.push(scope === "platform" ? `/role-templates/${res.data.role.id}` : `/admin/role-templates/${res.data.role.id}`);
+      const fallback = scope === "platform" ? `/role-templates/${res.data.role.id}` : `/admin/role-templates/${res.data.role.id}`;
+      router.push(successRedirect ? `${successRedirect}/${res.data.role.id}` : fallback);
     }
   }
 

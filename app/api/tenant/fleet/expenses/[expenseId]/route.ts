@@ -6,6 +6,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { FinanceService } from "@/lib/finance/finance-service";
+import { assertOptionalBankAccount } from "@/lib/bank-accounts/assert-usable";
 
 const UpdateFleetExpenseSchema = z.object({
   status: z.enum(["PENDING", "APPROVED", "REJECTED"]),
@@ -30,6 +31,12 @@ export async function PATCH(
     if (!expense) {
       throw new DomainError(404, "not_found", "Fleet Expense not found.");
     }
+
+    await assertOptionalBankAccount({
+      accountId: body.bankAccountId,
+      tenantId: actor.tenantId,
+      context: "FLEET",
+    });
 
     if (expense.status === "APPROVED") {
       throw new DomainError(400, "invalid_state", "Expense is already approved.");

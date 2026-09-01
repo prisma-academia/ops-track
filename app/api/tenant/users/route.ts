@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
-import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
+import { requireTenantActor } from "@/lib/auth/guards";
 import { hashPassword, generateTempPassword, recordPassword } from "@/lib/auth/password";
 import { sendEmail } from "@/lib/email/send";
 import { inviteEmail } from "@/lib/email/templates";
@@ -12,8 +12,19 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 import { ALL_TENANT_PERMISSION_KEYS } from "@/lib/auth/permissions";
-import { genericOrgFilter, assertOrgAccess } from "@/lib/auth/org-scope";
 import { cookies } from "next/headers";
+import {
+  assertRoleUsable,
+  canManageFleetUsers,
+  canManageStationUsers,
+  canWriteFleetUsers,
+  canWriteStationUsers,
+  filterPermissionsForModule,
+  requireAnyPermission,
+  type MembershipMode,
+} from "@/lib/auth/membership";
+import { resolveActiveOrgIdFromCookie } from "@/lib/auth/org-scope";
+import type { AppModule } from "@/lib/generated/prisma/client";
 
 const InviteBody = z.object({
   email: z.email(),
@@ -22,55 +33,68 @@ const InviteBody = z.object({
   otherName: z.string().max(100).optional(),
   phone: z.string().max(40).optional(),
   roleTemplateId: z.string().min(1),
-  activeModules: z.array(z.enum(["STATION", "FLEET"])).min(1),
+  activeModules: z.array(z.enum(["STATION", "FLEET"])).min(1).optional(),
   permissions: z.array(z.string()).optional(),
   organizationId: z.string().optional().nullable(),
   stationId: z.string().optional().nullable(),
+  inviteContext: z.enum(["STATION", "FLEET"]).optional(),
 });
+
+async function resolveStationOrgId(actor: Awaited<ReturnType<typeof requireTenantActor>>, requested?: string | null) {
+  if (actor.organizationId) {
+    if (requested && requested !== actor.organizationId) {
+      throw new DomainError(403, "forbidden", "You can only invite users to your own organization.");
+    }
+    return actor.organizationId;
+  }
+  if (requested) return requested;
+  const cookieOrg = await resolveActiveOrgIdFromCookie(actor);
+  if (cookieOrg) return cookieOrg;
+  throw new DomainError(400, "invalid_input", "An organization is required for station users.");
+}
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_USERS_READ.key);
+    const actor = await requireTenantActor();
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
-    const moduleFilter = url.searchParams.get("module") as "STATION" | "FLEET" | null;
+    const moduleFilter = (url.searchParams.get("module") as "STATION" | "FLEET" | null) ?? null;
+
+    if (moduleFilter === "STATION") {
+      requireAnyPermission(actor, canManageStationUsers(actor));
+    } else {
+      requireAnyPermission(actor, canManageFleetUsers(actor));
+    }
 
     const jar = await cookies();
     const activeStationId = jar.get("active-station-id")?.value || "all";
 
-    const whereClause: any = { 
+    const whereClause: Record<string, unknown> = {
       tenantId: actor.tenantId,
-      ...(moduleFilter ? { activeModules: { has: moduleFilter } } : {})
+      ...(moduleFilter ? { activeModules: { has: moduleFilter } } : {}),
     };
 
-    if (moduleFilter === "STATION" && activeStationId !== "all") {
-      const activeStation = await prisma.station.findUnique({
-        where: { id: activeStationId },
-        select: { organizationId: true }
-      });
-      const targetOrgId = activeStation?.organizationId || (await prisma.organization.findUnique({ where: { id: activeStationId } }))?.id || actor.organizationId;
+    if (moduleFilter === "STATION") {
+      const activeStation = activeStationId !== "all"
+        ? await prisma.station.findUnique({
+            where: { id: activeStationId },
+            select: { organizationId: true },
+          })
+        : null;
+      const targetOrgId =
+        actor.organizationId ||
+        activeStation?.organizationId ||
+        (activeStationId !== "all"
+          ? (await prisma.organization.findUnique({ where: { id: activeStationId } }))?.id
+          : null) ||
+        (await resolveActiveOrgIdFromCookie(actor));
 
       if (targetOrgId) {
         whereClause.OR = [
-          { isOwner: true },
           { organizationId: targetOrgId },
-          { ownedOrganizations: { some: { id: targetOrgId } } },
-          { stations: { some: { id: activeStationId } } },
           { stations: { some: { organizationId: targetOrgId } } },
         ];
-      } else {
-        whereClause.OR = [
-          { isOwner: true },
-          { stations: { some: { id: activeStationId } } }
-        ];
       }
-    } else if (actor.organizationId) {
-      whereClause.OR = [
-        { isOwner: true },
-        { organizationId: actor.organizationId },
-        { ownedOrganizations: { some: { id: actor.organizationId } } },
-        { stations: { some: { organizationId: actor.organizationId } } },
-      ];
     }
 
     const userSelect = {
@@ -97,7 +121,7 @@ export async function GET(request: Request) {
         },
       },
     };
-    
+
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
       const [totalCount, rows] = await Promise.all([
@@ -130,37 +154,109 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_USERS_WRITE.key);
+    const actor = await requireTenantActor();
     const body = InviteBody.parse(await request.json());
     const meta = requestMeta(request);
 
-    const role = await prisma.roleTemplate.findUnique({ where: { id: body.roleTemplateId } });
-    if (!role || role.scope !== "TENANT" || role.tenantId !== actor.tenantId) {
-      throw new DomainError(400, "invalid_role", "Role template not in this tenant.");
-    }
-    const allowed = new Set<string>(ALL_TENANT_PERMISSION_KEYS);
-    
-    // Org access control:
-    // 1. If actor is org-scoped, they can only invite to their own org.
-    // 2. If actor is fleet-wide, they can invite to any org or fleet-wide (null).
-    if (actor.organizationId) {
-      if (body.organizationId !== actor.organizationId) {
-        throw new DomainError(403, "forbidden", "You can only invite users to your own organization.");
-      }
-    } else if (body.organizationId) {
-      assertOrgAccess(actor, body.organizationId); // though this is no-op for fleet-wide, good for consistency
+    const inviteContext: MembershipMode = body.inviteContext
+      ?? (body.activeModules?.length === 1 && body.activeModules[0] === "STATION" ? "STATION" : "FLEET");
+
+    if (inviteContext === "STATION") {
+      requireAnyPermission(actor, canWriteStationUsers(actor));
+    } else {
+      requireAnyPermission(actor, canWriteFleetUsers(actor));
     }
 
-    const requestedPerms = body.permissions ?? role.permissions;
-    const perms = requestedPerms.filter((p) => allowed.has(p));
+    const role = await assertRoleUsable({ actor, roleId: body.roleTemplateId, mode: inviteContext });
+    const allowed = new Set<string>(ALL_TENANT_PERMISSION_KEYS);
+    const requestedPerms = (body.permissions ?? role.permissions).filter((p) => allowed.has(p));
+    const perms = filterPermissionsForModule(requestedPerms, inviteContext);
+
+    const stationOrgId = inviteContext === "STATION"
+      ? await resolveStationOrgId(actor, body.organizationId ?? role.organizationId)
+      : null;
+
+    if (inviteContext === "STATION") {
+      if (body.activeModules?.includes("FLEET") && !canWriteFleetUsers(actor)) {
+        throw new DomainError(403, "forbidden", "Station admins cannot grant fleet access.");
+      }
+    }
+
+    if (body.stationId && stationOrgId) {
+      const station = await prisma.station.findFirst({
+        where: { id: body.stationId, tenantId: actor.tenantId, organizationId: stationOrgId },
+        select: { id: true },
+      });
+      if (!station) {
+        throw new DomainError(400, "invalid_input", "Station does not belong to this organization.");
+      }
+    }
 
     const existing = await prisma.tenantUser.findUnique({
       where: { tenantId_email: { tenantId: actor.tenantId, email: body.email.toLowerCase() } },
     });
-    if (existing) throw new DomainError(409, "email_taken", "Email already in use in this tenant.");
 
     const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId } });
     if (!tenant) throw new DomainError(404, "not_found", "Tenant not found.");
+
+    if (existing) {
+      if (inviteContext === "STATION") {
+        if (existing.organizationId && existing.organizationId !== stationOrgId) {
+          throw new DomainError(409, "org_conflict", "This user already belongs to a different organization.");
+        }
+        const activeModules = Array.from(new Set<AppModule>([...existing.activeModules, "STATION"]));
+        const stationPermissions = Array.from(new Set([...existing.stationPermissions, ...perms]));
+        const user = await prisma.tenantUser.update({
+          where: { id: existing.id },
+          data: {
+            activeModules,
+            organizationId: existing.organizationId ?? stationOrgId,
+            stationPermissions,
+            ...(body.stationId ? { stations: { connect: { id: body.stationId } } } : {}),
+          },
+        });
+        await audit({
+          actorType: "TENANT_USER",
+          actorId: actor.userId,
+          action: "tenant_user.attach_station",
+          tenantId: actor.tenantId,
+          targetType: "TenantUser",
+          targetId: user.id,
+          module: "STATION",
+          after: { email: user.email, role: role.name, permissions: stationPermissions } as object,
+          ip: meta.ip,
+          userAgent: meta.userAgent,
+        });
+        return ok({ user, attached: true });
+      }
+
+      const activeModules = Array.from(new Set<AppModule>([...existing.activeModules, "FLEET"]));
+      const fleetPermissions = Array.from(new Set([...existing.fleetPermissions, ...perms]));
+      const user = await prisma.tenantUser.update({
+        where: { id: existing.id },
+        data: {
+          activeModules,
+          fleetPermissions,
+        },
+      });
+      await audit({
+        actorType: "TENANT_USER",
+        actorId: actor.userId,
+        action: "tenant_user.attach_fleet",
+        tenantId: actor.tenantId,
+        targetType: "TenantUser",
+        targetId: user.id,
+        module: "FLEET",
+        after: { email: user.email, role: role.name, permissions: fleetPermissions } as object,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+      });
+      return ok({ user, attached: true });
+    }
+
+    const activeModules: AppModule[] = inviteContext === "STATION"
+      ? ["STATION"]
+      : (body.activeModules && body.activeModules.length > 0 ? body.activeModules : ["FLEET"]);
 
     const tempPassword = generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
@@ -174,10 +270,10 @@ export async function POST(request: Request) {
         phone: body.phone ?? null,
         passwordHash,
         mustChangePassword: true,
-        activeModules: body.activeModules,
-        organizationId: body.organizationId || null,
+        activeModules,
+        organizationId: stationOrgId,
         ...(body.stationId ? { stations: { connect: { id: body.stationId } } } : {}),
-        ...(role.module === "STATION" ? { stationPermissions: perms } : { fleetPermissions: perms }),
+        ...(inviteContext === "STATION" ? { stationPermissions: perms } : { fleetPermissions: perms }),
       },
     });
     await recordPassword("TENANT", user.id, passwordHash);
@@ -188,7 +284,7 @@ export async function POST(request: Request) {
       tenantId: actor.tenantId,
       targetType: "TenantUser",
       targetId: user.id,
-      module: role.module,
+      module: inviteContext,
       after: { email: user.email, role: role.name, permissions: perms } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,

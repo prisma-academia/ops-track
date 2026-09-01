@@ -12,6 +12,7 @@ import {
   sumsFromPayments,
   validatePaymentInputs,
 } from "@/lib/sales/payments";
+import { assertBankAccountsUsableForStation } from "@/lib/bank-accounts/assert-usable";
 import { z } from "zod";
 
 const PaymentInputSchema = z.object({
@@ -64,6 +65,11 @@ export async function PUT(
     }
 
     const incoming = validatePaymentInputs(resolvePaymentInputs(body));
+    await assertBankAccountsUsableForStation({
+      accountIds: incoming.map((p) => p.bankAccountId),
+      tenantId: actor.tenantId,
+      stationId,
+    });
     const approvedPayments = salesLog.payments.filter((p) => p.status === "APPROVED");
 
     for (const approved of approvedPayments) {

@@ -8,12 +8,25 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 
 const UpdateBankAccountSchema = z.object({
-  scope: z.enum(["STATION", "FLEET"]).optional(),
   accountName: z.string().min(2).max(255).optional(),
   accountNumber: z.string().min(2).max(50).optional(),
   bankName: z.string().min(2).max(255).optional(),
   isActive: z.boolean().optional(),
 });
+
+function writePermissionForScope(scope: "STATION" | "FLEET") {
+  return scope === "STATION"
+    ? PERMISSIONS.TENANT_BANK_ACCOUNTS_WRITE.key
+    : PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_WRITE.key;
+}
+
+async function loadOwnedAccount(id: string, tenantId: string) {
+  const existingAccount = await prisma.bankAccount.findUnique({ where: { id } });
+  if (!existingAccount || existingAccount.tenantId !== tenantId) {
+    throw new DomainError(404, "not_found", "Bank account not found.");
+  }
+  return existingAccount;
+}
 
 export async function PATCH(
   request: Request,
@@ -26,19 +39,16 @@ export async function PATCH(
     const meta = requestMeta(request);
     const { id } = await params;
 
-    const existingAccount = await prisma.bankAccount.findUnique({
-      where: { id },
-    });
+    const existingAccount = await loadOwnedAccount(id, actor.tenantId);
 
-    if (!existingAccount || existingAccount.tenantId !== actor.tenantId) {
-      throw new DomainError(404, "not_found", "Bank account not found.");
+    if (!hasPermission(actor, writePermissionForScope(existingAccount.scope))) {
+      throw new AuthError(403, "Forbidden.");
     }
-
-    const requiredPermission =
-      existingAccount.scope === "STATION"
-        ? PERMISSIONS.TENANT_BANK_ACCOUNTS_WRITE.key
-        : PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_WRITE.key;
-    if (!hasPermission(actor, requiredPermission)) {
+    if (
+      existingAccount.scope === "STATION" &&
+      actor.organizationId &&
+      existingAccount.organizationId !== actor.organizationId
+    ) {
       throw new AuthError(403, "Forbidden.");
     }
 
@@ -60,7 +70,6 @@ export async function PATCH(
     const bankAccount = await prisma.bankAccount.update({
       where: { id },
       data: {
-        ...(body.scope && { scope: body.scope }),
         ...(body.accountName && { accountName: body.accountName }),
         ...(body.accountNumber && { accountNumber: body.accountNumber }),
         ...(body.bankName && { bankName: body.bankName }),
@@ -97,19 +106,16 @@ export async function DELETE(
     const meta = requestMeta(request);
     const { id } = await params;
 
-    const existingAccount = await prisma.bankAccount.findUnique({
-      where: { id },
-    });
+    const existingAccount = await loadOwnedAccount(id, actor.tenantId);
 
-    if (!existingAccount || existingAccount.tenantId !== actor.tenantId) {
-      throw new DomainError(404, "not_found", "Bank account not found.");
+    if (!hasPermission(actor, writePermissionForScope(existingAccount.scope))) {
+      throw new AuthError(403, "Forbidden.");
     }
-
-    const requiredPermission =
-      existingAccount.scope === "STATION"
-        ? PERMISSIONS.TENANT_BANK_ACCOUNTS_WRITE.key
-        : PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_WRITE.key;
-    if (!hasPermission(actor, requiredPermission)) {
+    if (
+      existingAccount.scope === "STATION" &&
+      actor.organizationId &&
+      existingAccount.organizationId !== actor.organizationId
+    ) {
       throw new AuthError(403, "Forbidden.");
     }
 

@@ -34,7 +34,7 @@ const columns: ColumnDef<TenantUserRow>[] = [
   },
 ];
 
-export function TenantUsersTable({ initialData, initialMeta, moduleContext }: { initialData: TenantUserRow[], initialMeta: any, moduleContext: "STATION" | "FLEET" }) {
+export function TenantUsersTable({ initialData, initialMeta, moduleContext, detailBase = "/admin/users" }: { initialData: TenantUserRow[], initialMeta: any, moduleContext: "STATION" | "FLEET", detailBase?: string }) {
   const { data, meta, isLoading, setPage, setPageSize, setInitialData } = usePaginatedQuery<TenantUserRow>({
     baseUrl: "/api/tenant/users",
     additionalParams: { module: moduleContext },
@@ -54,7 +54,7 @@ export function TenantUsersTable({ initialData, initialMeta, moduleContext }: { 
         onPageChange: setPage,
         onPageSizeChange: setPageSize,
       }}
-      rowHref={(u) => `/admin/users/${u.id}`}
+      rowHref={(u) => `${detailBase}/${u.id}`}
       filterColumnId="email"
       searchPlaceholder="Search by email…"
     />

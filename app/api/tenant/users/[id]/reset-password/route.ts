@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
-import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
+import { requireTenantActor } from "@/lib/auth/guards";
 import {
   hashPassword,
   generateTempPassword,
@@ -18,6 +18,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { displayName } from "@/lib/auth/display";
+import { requireUserWriteAccess } from "@/lib/auth/membership";
 
 const Body = z.object({
   password: z.string().min(1).optional(),
@@ -28,7 +29,7 @@ const Body = z.object({
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_USERS_WRITE.key);
+    const actor = await requireTenantActor();
     const { id } = await ctx.params;
     const body = Body.parse(await request.json().catch(() => ({})));
     const meta = requestMeta(request);
@@ -37,6 +38,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (!target || target.tenantId !== actor.tenantId) {
       throw new DomainError(404, "not_found", "User not found.");
     }
+    requireUserWriteAccess(actor, target);
     const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId } });
     if (!tenant) throw new DomainError(404, "not_found", "Tenant not found.");
 

@@ -102,25 +102,32 @@ async function main() {
   });
 
   for (const r of TENANT_BUILTIN_ROLES) {
-    await prisma.roleTemplate.upsert({
+    const existingRole = await prisma.roleTemplate.findFirst({
       where: {
-        scope_tenantId_module_name: {
-          scope: "TENANT",
-          tenantId: tenant.id,
-          module: r.module,
-          name: r.name,
-        },
-      },
-      update: { permissions: [...r.permissions], isSystem: true },
-      create: {
         scope: "TENANT",
         tenantId: tenant.id,
-        name: r.name,
-        permissions: [...r.permissions],
-        isSystem: true,
         module: r.module,
+        name: r.name,
+        organizationId: null,
       },
     });
+    if (existingRole) {
+      await prisma.roleTemplate.update({
+        where: { id: existingRole.id },
+        data: { permissions: [...r.permissions], isSystem: true },
+      });
+    } else {
+      await prisma.roleTemplate.create({
+        data: {
+          scope: "TENANT",
+          tenantId: tenant.id,
+          name: r.name,
+          permissions: [...r.permissions],
+          isSystem: true,
+          module: r.module,
+        },
+      });
+    }
   }
 
   const ownerEmail = "assunusi@gmail.com";
@@ -276,6 +283,8 @@ async function main() {
     },
   });
 
+  await backfillStationBankAccounts(tenant.id, organization.id, stationIds);
+
   const transporter =
     (await prisma.transporter.findFirst({
       where: { tenantId: tenant.id, name: "ATLAS TRANSPORT NIG LTD" },
@@ -382,6 +391,48 @@ async function main() {
   console.log(
     `Tenant ${tenant.slug} seeded with org ${organization.name}, ${stationIds.length} stations (60,000 L PMS each), transporter ${transporter.name} (3 trucks, 1 driver).`,
   );
+}
+
+async function backfillStationBankAccounts(
+  tenantId: string,
+  internalOrgId: string,
+  stationIds: string[],
+) {
+  await prisma.bankAccount.updateMany({
+    where: { tenantId, scope: "STATION", organizationId: null },
+    data: { organizationId: internalOrgId },
+  });
+
+  const stationAccounts = await prisma.bankAccount.findMany({
+    where: { tenantId, scope: "STATION" },
+    select: { id: true, organizationId: true },
+  });
+
+  for (const account of stationAccounts) {
+    const orgStationIds =
+      account.organizationId === internalOrgId
+        ? stationIds
+        : (
+            await prisma.station.findMany({
+              where: { tenantId, organizationId: account.organizationId ?? undefined },
+              select: { id: true },
+            })
+          ).map((s) => s.id);
+
+    for (const stationId of orgStationIds) {
+      await prisma.stationBankAccount.upsert({
+        where: {
+          stationId_bankAccountId: { stationId, bankAccountId: account.id },
+        },
+        update: {},
+        create: {
+          tenantId,
+          stationId,
+          bankAccountId: account.id,
+        },
+      });
+    }
+  }
 }
 
 async function ensurePlatformRole(name: string, permissions: string[]) {

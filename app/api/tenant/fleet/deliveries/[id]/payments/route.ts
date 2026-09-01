@@ -6,6 +6,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { FinanceService } from "@/lib/finance/finance-service";
+import { assertOptionalBankAccount } from "@/lib/bank-accounts/assert-usable";
 
 const CreatePaymentSchema = z.object({
   amount: z.number().positive(),
@@ -30,6 +31,11 @@ export async function POST(
     if (body.paymentMethod !== "CASH" && body.paymentMethod !== "DEPOSIT" && !body.bankAccountId) {
       throw new DomainError(400, "invalid_input", "Bank account is required for this payment method.");
     }
+    await assertOptionalBankAccount({
+      accountId: body.bankAccountId,
+      tenantId: actor.tenantId,
+      context: "FLEET",
+    });
 
     const Delivery = await prisma.$transaction(async (tx) => {
       const existingSale = await tx.delivery.findFirst({

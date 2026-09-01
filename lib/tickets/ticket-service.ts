@@ -3,6 +3,7 @@ import { DomainError } from "@/lib/api/errors";
 import { sendPushNotification } from "@/lib/notifications";
 import { applyExpenseStatus } from "@/lib/finance/expense-approval";
 import { TICKET_INCLUDE } from "@/lib/tickets/includes";
+import { assertOptionalBankAccount } from "@/lib/bank-accounts/assert-usable";
 import type {
   ExpenseCategory,
   PaymentMethod,
@@ -263,6 +264,19 @@ export async function payoutTicket(params: {
     throw new DomainError(400, "invalid_input", "Bank account is required for non-cash outflows.");
   }
 
+  const ticketForStation = await prisma.ticket.findUnique({
+    where: { id: params.ticketId },
+    select: { stationId: true, tenantId: true },
+  });
+  if (ticketForStation?.tenantId === params.tenantId) {
+    await assertOptionalBankAccount({
+      accountId: params.bankAccountId,
+      tenantId: params.tenantId,
+      context: "STATION",
+      stationId: ticketForStation.stationId,
+    });
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const ticket = await tx.ticket.findUnique({
       where: { id: params.ticketId },
@@ -500,6 +514,19 @@ export async function reviewExpense(params: {
       "use_payout",
       "Approve the ticket, then pay out from the ticket to post the outflow.",
     );
+  }
+
+  if (params.bankAccountId) {
+    const expenseRow = await prisma.expense.findFirst({
+      where: { id: params.expenseId, tenantId: params.tenantId },
+      select: { stationId: true, context: true },
+    });
+    await assertOptionalBankAccount({
+      accountId: params.bankAccountId,
+      tenantId: params.tenantId,
+      context: expenseRow?.context === "FLEET" ? "FLEET" : "STATION",
+      stationId: expenseRow?.stationId,
+    });
   }
 
   const expense = await prisma.$transaction(async (tx) =>

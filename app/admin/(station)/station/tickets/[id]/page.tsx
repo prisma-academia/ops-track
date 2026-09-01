@@ -5,6 +5,7 @@ import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 import { TICKET_INCLUDE } from "@/lib/tickets/includes";
 import { withOriginStory } from "@/lib/tickets/ticket-service";
 import { TicketDetails } from "./ticket-details";
+import { orgStationBankAccountWhere } from "@/lib/bank-accounts/queries";
 
 export const metadata = { title: "Ticket details" };
 
@@ -32,7 +33,11 @@ export default async function TicketDetailsPage({
   }
 
   const bankAccounts = await prisma.bankAccount.findMany({
-    where: { tenantId: actor.tenantId, scope: "STATION", isActive: true },
+    where: orgStationBankAccountWhere({
+      tenantId: actor.tenantId,
+      stationId: ticket.stationId,
+      isActive: true,
+    }),
     select: { id: true, bankName: true, accountName: true, accountNumber: true },
     orderBy: { bankName: "asc" },
   });

@@ -5,6 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { assertOptionalBankAccount } from "@/lib/bank-accounts/assert-usable";
 
 const InflowSchema = z.object({
   customerId: z.string(),
@@ -44,6 +45,11 @@ export async function POST(request: Request) {
         "Bank account is required for this payment method.",
       );
     }
+    await assertOptionalBankAccount({
+      accountId: body.bankAccountId,
+      tenantId: actor.tenantId,
+      context: "FLEET",
+    });
 
     const transaction = await prisma.$transaction(async (tx) => {
       const deliveryId = body.deliveryId ?? body.saleId ?? null;

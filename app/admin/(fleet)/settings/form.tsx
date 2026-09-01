@@ -7,11 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { AlertCircleIcon, ImagePlusIcon, XIcon, Loader2 } from "lucide-react";
-import { MODULE_KEYS, type ModuleKey, type TenantSettings } from "@/lib/tenant/settings";
-import { Card, CardContent } from "@/components/ui/card";
+import { type TenantSettings } from "@/lib/tenant/settings";
 import {
   Dialog,
   DialogContent,
@@ -62,8 +60,7 @@ export function SettingsForm({
   const [currency, setCurrency] = useState(initial.settings.currency);
   const [varianceThreshold, setVarianceThreshold] = useState(initial.settings.varianceThreshold);
   const [blockOnUnresolvedVariance, setBlockOnUnresolvedVariance] = useState(initial.settings.blockOnUnresolvedVariance);
-  const [enabled, setEnabled] = useState<ModuleKey[]>(initial.settings.enabledModules);
-  
+
   const [logoKey, setLogoKey] = useState<string | undefined>(initial.settings.logoKey);
   const [logoUrl, setLogoUrl] = useState<string | null>(initial.logoUrl);
   const [backgroundKey, setBackgroundKey] = useState<string | undefined>(initial.settings.backgroundKey);
@@ -81,12 +78,6 @@ export function SettingsForm({
   const [bgToRemove, setBgToRemove] = useState(false);
   const [logoToRemove, setLogoToRemove] = useState(false);
   const [signatureToRemove, setSignatureToRemove] = useState(false);
-
-  function toggleModule(key: ModuleKey) {
-    setEnabled((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-    );
-  }
 
   const maxSizeMB = 2;
   const maxSize = maxSizeMB * 1024 * 1024;
@@ -289,7 +280,6 @@ export function SettingsForm({
         currency,
         varianceThreshold,
         blockOnUnresolvedVariance,
-        enabledModules: enabled,
         ...(logoKey ? { logoKey } : {}),
         ...(backgroundKey ? { backgroundKey } : {}),
         ...(signatureKey ? { signatureKey } : {}),
@@ -304,10 +294,7 @@ export function SettingsForm({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      {/* Main Settings Column */}
-      <div className="lg:col-span-2 space-y-8">
-        
+    <div className="space-y-8">
         {/* Branding Images */}
         <div>
           <div className="h-48 rounded-t-xl overflow-hidden relative group">
@@ -624,39 +611,6 @@ export function SettingsForm({
             {pending ? "Saving…" : "Save All Changes"}
           </Button>
         </div>
-      </div>
-
-      {/* Modules Column */}
-      <div className="lg:col-span-1">
-        <Card className="sticky top-6">
-          <CardContent className="p-6">
-            <div className="mb-6">
-              <h3 className="font-semibold text-lg">Enabled Modules</h3>
-              <p className="text-sm text-muted-foreground mt-1">Toggle features and modules available for your tenant.</p>
-            </div>
-            
-            <div className="space-y-4">
-              {MODULE_KEYS.map((key) => (
-                <div key={key} className="flex items-center justify-between space-x-2">
-                  <Label
-                    htmlFor={`module-${key}`}
-                    className="flex flex-col gap-1 cursor-pointer"
-                  >
-                    <span className="text-sm font-medium leading-none capitalize">
-                      {key}
-                    </span>
-                  </Label>
-                  <Switch
-                    id={`module-${key}`}
-                    checked={enabled.includes(key)}
-                    onCheckedChange={() => toggleModule(key)}
-                  />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Confirmation Dialogs */}
       <Dialog open={bgToRemove} onOpenChange={setBgToRemove}>

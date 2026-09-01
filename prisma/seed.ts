@@ -54,7 +54,7 @@ async function main() {
     (await prisma.platformUser.findFirst({
       where: {
         email: {
-          in: ["admin@rafuel.com", "admin@prismaforge.ng"],
+          in: ["admin@opstrack.com", "admin@prismaforge.ng"],
         },
       },
     }));

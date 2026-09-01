@@ -42,7 +42,7 @@ export default async function TenantSettingsEditPage() {
       : null;
 
   return (
-    <div className="container px-0 max-w-5xl mx-auto pb-10">
+    <div className="w-full pb-10">
       <div className="mb-6 flex items-center justify-between">
         <PageHeader title="Edit Settings" />
         <Link

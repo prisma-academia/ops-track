@@ -72,7 +72,7 @@ export function AuthHeader() {
             <Zap className="h-5 w-5 text-white" />
           </div>
           <span className="text-lg font-semibold text-white tracking-tight hidden sm:inline">
-            Rafuel
+            OpsTrack
           </span>
         </a>
 
@@ -146,12 +146,12 @@ export function LeftInfoSection({ logoUrl, tenantName }: { logoUrl?: string | nu
       <div className="pb-8 mt-12 w-full flex flex-col items-center justify-center">
         <p className="text-[15px] font-semibold text-white mb-2 text-center">Powered By</p>
         <div className="flex justify-center items-center gap-6 text-white flex-wrap">
-          {/* PrismaForge */}
+          {/* OpsTrack */}
           <div className="flex items-center gap-1.5">
             <svg viewBox="0 0 24 24" fill="currentColor" className="h-[22px] w-[22px]">
               <path d="M22.28 11.23a7.27 7.27 0 0 0-1.04-4.83 7.37 7.37 0 0 0-5.87-3.5 7.25 7.25 0 0 0-4.04-1.2 7.25 7.25 0 0 0-4.04 1.2 7.37 7.37 0 0 0-5.87 3.5 7.27 7.27 0 0 0-1.04 4.83 7.27 7.27 0 0 0 1.04 4.83 7.37 7.37 0 0 0 5.87 3.5 7.25 7.25 0 0 0 4.04 1.2 7.25 7.25 0 0 0 4.04-1.2 7.37 7.37 0 0 0 5.87-3.5 7.27 7.27 0 0 0 1.04-4.83zm-10.28 9.3c-2.3 0-4.32-1.3-5.38-3.18h7.97c2.46 0 4.45-2 4.45-4.46V8.14l1.24.71c.72.42 1.17 1.2 1.17 2.03 0 2.92-2.36 5.28-5.28 5.28h-4.17v4.37zm-7.6-5.46c-1.15-2-1.15-4.36 0-6.36l1.24.72v7.97c0 2.46 2 4.45 4.46 4.45h3.76v1.44c-.72.42-1.57.54-2.42.34-2.58-.62-4.52-2.9-4.87-5.56H3.6c.15-.36.5-.72.8-1zm14.16-5.63v7.97l-1.24.71V10.8a4.46 4.46 0 0 0-4.46-4.45H6.96V4.9c.72-.42 1.57-.54 2.42-.34 2.58.62 4.52 2.9 4.87 5.56h4.15v-1.44c-.16.36-.5.73-.8 1h1.24v-.25z"/>
             </svg>
-            <span className="font-medium text-sm tracking-tight">PrismaForge</span>
+            <span className="font-medium text-sm tracking-tight">OpsTrack</span>
           </div>
         </div>
       </div>

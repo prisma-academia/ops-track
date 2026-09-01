@@ -46,14 +46,15 @@
   --chart-3: oklch(0.6 0.14 225);
   --chart-4: oklch(0.75 0.15 70);
   --chart-5: oklch(0.6 0.2 25);
-  --sidebar: oklch(0.98 0.003 240);
-  --sidebar-foreground: oklch(0.18 0.012 240);
-  --sidebar-primary: oklch(0.62 0.14 175);
-  --sidebar-primary-foreground: oklch(0.985 0.005 175);
-  --sidebar-accent: oklch(0.96 0.004 240);
-  --sidebar-accent-foreground: oklch(0.18 0.012 240);
-  --sidebar-border: oklch(0.9 0.006 240);
-  --sidebar-ring: oklch(0.62 0.14 175 / 45%);
+  /* Sidenav stays on the dark theme in both light and dark mode */
+  --sidebar: oklch(0.185 0.014 240);
+  --sidebar-foreground: oklch(0.94 0.004 240);
+  --sidebar-primary: oklch(0.78 0.15 175);
+  --sidebar-primary-foreground: oklch(0.14 0.02 175);
+  --sidebar-accent: oklch(0.26 0.012 240);
+  --sidebar-accent-foreground: oklch(0.94 0.004 240);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.78 0.15 175 / 50%);
 
   --radius: 0.375rem;
   --shadow-x: 0;

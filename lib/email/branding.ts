@@ -8,7 +8,7 @@ export type EmailBrand = {
 };
 
 export const PLATFORM_EMAIL_BRAND: EmailBrand = {
-  companyName: "Rafuel",
+  companyName: "OpsTrack",
   logoUrl: null,
   primaryColor: DEFAULT_PRIMARY_COLOR,
 };

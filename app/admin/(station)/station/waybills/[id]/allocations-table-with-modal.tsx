@@ -78,7 +78,7 @@ export function ConfirmArrivalModal({ allocation, onSuccess }: { allocation: any
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="w-full md:w-auto" variant="default">
+        <Button className="w-full sm:w-auto shrink-0 whitespace-nowrap" variant="default">
           <MapPin className="mr-2 h-4 w-4" /> Confirm Arrival
         </Button>
       </DialogTrigger>
@@ -331,7 +331,7 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
         }}
       >
         <DialogTrigger asChild>
-          <Button className="w-full md:w-auto" variant="default">
+          <Button className="w-full sm:w-auto shrink-0 whitespace-nowrap" variant="default">
             <ClipboardCheck className="mr-2 h-4 w-4" /> Log Physical Dipping
           </Button>
         </DialogTrigger>
@@ -725,8 +725,8 @@ export function AllocationsTableWithModal({
 
                 {selectedAlloc?.id === a.id && (
                   <TableRow className="bg-muted/10 hover:bg-muted/10">
-                    <TableCell colSpan={8} className="p-0 border-b">
-                      <div className="p-6 max-w-4xl mx-auto space-y-6">
+                    <TableCell colSpan={8} className="p-0 border-b whitespace-normal">
+                      <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6 w-full whitespace-normal overflow-hidden">
                         <div className="flex items-center justify-between border-b pb-2 text-xs">
                           <span className="text-muted-foreground font-mono">Code: {a.station.code}</span>
                           <span className="text-sm font-semibold text-foreground">Delivery Progress: {a.station.name}</span>
@@ -840,26 +840,30 @@ export function AllocationsTableWithModal({
                           </div>
                           
                           {a.status === "DISPATCHED" && (
-                            <div className="bg-background rounded-lg p-4 border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-4">
-                              <div>
+                            <div className="bg-background rounded-lg p-4 border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 w-full">
+                              <div className="space-y-1 flex-1 min-w-0">
                                 <h4 className="font-semibold text-emerald-800 dark:text-emerald-400">Ready to Receive</h4>
-                                <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1">
+                                <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1 leading-relaxed whitespace-normal break-words">
                                   This allocation has been dispatched and is pending receipt at the station.
                                 </p>
                               </div>
-                              <ConfirmArrivalModal allocation={a} onSuccess={() => router.refresh()} />
+                              <div className="shrink-0 w-full sm:w-auto">
+                                <ConfirmArrivalModal allocation={a} onSuccess={() => router.refresh()} />
+                              </div>
                             </div>
                           )}
 
                           {a.status === "DELIVERED" && (
-                            <div className="bg-background rounded-lg p-4 border border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/20 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-4">
-                              <div>
+                            <div className="bg-background rounded-lg p-4 border border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 w-full">
+                              <div className="space-y-1 flex-1 min-w-0">
                                 <h4 className="font-semibold text-blue-800 dark:text-blue-400">Log Physical Dipping</h4>
-                                <p className="text-xs text-blue-600 dark:text-blue-500/80 mt-1">
+                                <p className="text-xs text-blue-600 dark:text-blue-500/80 mt-1 leading-relaxed whitespace-normal break-words">
                                   Record tank dips. If a tank fills before the dispatch is empty, select another tank. Complete only when finished — remaining volume is recorded as variance.
                                 </p>
                               </div>
-                              <LogDippingModal allocation={a} onSuccess={() => router.refresh()} />
+                              <div className="shrink-0 w-full sm:w-auto">
+                                <LogDippingModal allocation={a} onSuccess={() => router.refresh()} />
+                              </div>
                             </div>
                           )}
                         </div>

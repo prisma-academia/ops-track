@@ -23,6 +23,9 @@ export default async function SaleDetailsPage({ params }: { params: Promise<{ id
           driver: true,
           order: true,
           lossLogs: true,
+          deliveries: {
+            select: { id: true, litersDespatched: true },
+          },
         }
       },
       transactions: {
@@ -69,7 +72,7 @@ export default async function SaleDetailsPage({ params }: { params: Promise<{ id
       orderReference = summary.orderReference;
 
       for (const transport of transports) {
-        const deliveryRow = transport.deliveries.find((row) => row.id === delivery.id);
+        const deliveryRow = transport.deliveries.find((row: { id: string }) => row.id === delivery.id);
         if (deliveryRow) {
           pnlBreakdownRow = toFleetPnlDetailRow(deliveryRow, summary, transport);
           break;
@@ -78,6 +81,12 @@ export default async function SaleDetailsPage({ params }: { params: Promise<{ id
     }
   }
 
+  const stations = await prisma.station.findMany({
+    where: { tenantId: actor.tenantId },
+    select: { id: true, name: true, code: true },
+    orderBy: { name: "asc" },
+  });
+
   return (
     <div className="space-y-6">
       <SalesDetailsManager
@@ -85,6 +94,7 @@ export default async function SaleDetailsPage({ params }: { params: Promise<{ id
         pnlBreakdownRow={pnlBreakdownRow}
         orderId={orderId}
         orderReference={orderReference}
+        stations={stations}
       />
     </div>
   );

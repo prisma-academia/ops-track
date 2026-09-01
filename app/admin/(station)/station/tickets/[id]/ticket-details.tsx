@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { ArrowLeft, AlertTriangle, Calendar, ClipboardList, Gauge, MapPin, TrendingDown, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -154,7 +155,7 @@ export function TicketDetails({
 
   async function resolve(action: "APPROVE" | "REJECT" | "RESOLVE") {
     if (!remark.trim()) {
-      alert("Please provide a remark/reason.");
+      toast.error("Please provide a remark/reason.");
       return;
     }
     setProcessing(true);
@@ -165,15 +166,16 @@ export function TicketDetails({
     });
     setProcessing(false);
     if (res.error) {
-      alert(res.error.message);
+      toast.error(res.error.message || "Failed to update ticket.");
       return;
     }
+    toast.success(`Ticket ${action.toLowerCase()}d successfully.`);
     refresh();
   }
 
   async function payout() {
     if (paymentMethod !== "CASH" && !bankAccountId) {
-      alert("Select the outflow bank account.");
+      toast.error("Select the outflow bank account.");
       return;
     }
     setProcessing(true);
@@ -184,15 +186,16 @@ export function TicketDetails({
     });
     setProcessing(false);
     if (res.error) {
-      alert(res.error.message);
+      toast.error(res.error.message || "Failed to record payout.");
       return;
     }
+    toast.success("Payout recorded successfully.");
     refresh();
   }
 
   async function requestIncrease() {
     if (!increaseAmount || !increaseReason.trim()) {
-      alert("New amount and reason are required.");
+      toast.error("New amount and reason are required.");
       return;
     }
     setProcessing(true);
@@ -202,9 +205,10 @@ export function TicketDetails({
     });
     setProcessing(false);
     if (res.error) {
-      alert(res.error.message);
+      toast.error(res.error.message || "Failed to request increase.");
       return;
     }
+    toast.success("Amount increase requested.");
     setIncreaseAmount("");
     setIncreaseReason("");
     refresh();
@@ -212,7 +216,7 @@ export function TicketDetails({
 
   async function attachSpend() {
     if (!spendAmount || !spendDescription.trim()) {
-      alert("Amount and description are required.");
+      toast.error("Amount and description are required.");
       return;
     }
     setProcessing(true);
@@ -224,9 +228,10 @@ export function TicketDetails({
     });
     setProcessing(false);
     if (res.error) {
-      alert(res.error.message);
+      toast.error(res.error.message || "Failed to attach spend.");
       return;
     }
+    toast.success("Expense request attached.");
     refresh(res.data?.ticket?.id);
   }
 

@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useMemo, useRef, useCallback } from "react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -284,14 +285,14 @@ export function TicketsManager({
 
   async function handleCreateTicket() {
     if (!createForm.stationId || !createForm.description.trim()) {
-      alert("Station and description are required.");
+      toast.error("Station and description are required.");
       return;
     }
     if (
       createForm.type === "EXPENSE" &&
       (!createForm.requestedAmount || Number(createForm.requestedAmount) <= 0 || !createForm.requestedCategory)
     ) {
-      alert("Expense tickets need a positive amount and expense category.");
+      toast.error("Expense tickets need a positive amount and expense category.");
       return;
     }
     setCreating(true);
@@ -319,9 +320,10 @@ export function TicketsManager({
             : undefined,
       });
       if (res.error) {
-        alert(res.error.message);
+        toast.error(res.error.message || "Failed to create ticket.");
         return;
       }
+      toast.success("Ticket created successfully!");
       if (res.data?.ticket) {
         setTicketList((prev) => [res.data!.ticket, ...prev]);
       }

@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/client";
 import { env, isProd, apexHostname } from "@/lib/env";
@@ -66,9 +66,24 @@ function cookieDomain(userType: SessionUserType): string | undefined {
   return undefined;
 }
 
+function bearerFromAuthorization(value: string | null): string | null {
+  if (!value?.startsWith("Bearer ")) return null;
+  const token = value.slice("Bearer ".length).trim();
+  return token || null;
+}
+
 export async function readSessionToken(userType: SessionUserType): Promise<string | null> {
   const jar = await cookies();
-  return jar.get(cookieNameFor(userType))?.value ?? null;
+  const cookieToken = jar.get(cookieNameFor(userType))?.value ?? null;
+
+  const h = await headers();
+  const bearer = bearerFromAuthorization(h.get("authorization"));
+
+  // Mobile stores the session id and sends it as Bearer. Prefer it over cookies so a
+  // stale Set-Cookie from a previous login cannot shadow the token the app persists.
+  if (h.get("x-mobile-app") === "1" && bearer) return bearer;
+
+  return cookieToken ?? bearer ?? null;
 }
 
 export type LoadedSession = {

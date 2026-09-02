@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db/client";
-import { resolveHost, resolveTenantFromHeaders } from "@/lib/auth/context";
+import { resolveTenantFromHeaders } from "@/lib/auth/context";
 import { hashOpaqueToken } from "@/lib/auth/tokens";
+import { findActiveOtpReset } from "@/lib/auth/password-reset-otp";
 import { hashPassword, validatePolicy, assertNotReused, recordPassword } from "@/lib/auth/password";
 import { revokeAllSessionsForUser } from "@/lib/auth/session";
 import { audit, requestMeta } from "@/lib/auth/audit";
@@ -12,27 +13,82 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 import { enterContext } from "@/lib/db/tenant-context";
 import { enforceRateLimit, RATE_PRESETS } from "@/lib/auth/rate-limit";
 
-const Body = z.object({
+const LinkBody = z.object({
   token: z.string().min(10),
   password: z.string().min(1),
 });
 
+const OtpBody = z.object({
+  email: z.email(),
+  otp: z.string().regex(/^\d{6}$/),
+  newPassword: z.string().min(1),
+  surface: z.enum(["platform", "tenant_admin", "tenant_client"]).optional(),
+});
+
+const Body = z.union([LinkBody, OtpBody]);
+
+const INVALID_RESET = new DomainError(400, "invalid_token", "This reset is invalid or has expired.");
+
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const { token, password } = Body.parse(await request.json());
+    const parsed = Body.parse(await request.json());
+    const password = "password" in parsed ? parsed.password : parsed.newPassword;
+    const rateKey = "token" in parsed ? parsed.token : `${parsed.email}:${parsed.otp}`;
     const meta = requestMeta(request);
-    await enforceRateLimit(RATE_PRESETS.RESET_PASSWORD, [meta.ip, token]);
+    await enforceRateLimit(RATE_PRESETS.RESET_PASSWORD, [meta.ip, rateKey]);
     const policy = validatePolicy(password);
     if (!policy.ok) throw new DomainError(400, "weak_password", policy.reason);
 
     const h = await headers();
     const xTenantSlug = h.get("x-tenant-slug");
     const ctx = resolveTenantFromHeaders(h.get("host"), xTenantSlug);
-    const tokenHash = hashOpaqueToken(token);
-    const row = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+
+    let row =
+      "token" in parsed
+        ? await prisma.passwordResetToken.findUnique({
+            where: { tokenHash: hashOpaqueToken(parsed.token) },
+          })
+        : null;
+
+    if ("otp" in parsed) {
+      const surface =
+        parsed.surface ?? (ctx.mode === "platform" ? "platform" : "tenant_admin");
+      if (surface === "platform") {
+        if (ctx.mode !== "platform") throw INVALID_RESET;
+        enterContext({ mode: "platform", tenantId: null });
+        const user = await prisma.platformUser.findUnique({
+          where: { email: parsed.email.toLowerCase() },
+        });
+        if (user?.status === "ACTIVE") {
+          row = await findActiveOtpReset({ userType: "PLATFORM", userId: user.id, code: parsed.otp });
+        }
+      } else if (ctx.mode === "tenant") {
+        const tenant = await prisma.tenant.findUnique({ where: { slug: ctx.slug } });
+        if (tenant?.status === "ACTIVE") {
+          if (surface === "tenant_client") {
+            enterContext({ mode: "tenant-client", tenantId: tenant.id });
+            const client = await prisma.client.findUnique({
+              where: { tenantId_email: { tenantId: tenant.id, email: parsed.email.toLowerCase() } },
+            });
+            if (client?.status === "ACTIVE") {
+              row = await findActiveOtpReset({ userType: "CLIENT", userId: client.id, code: parsed.otp });
+            }
+          } else {
+            enterContext({ mode: "tenant-admin", tenantId: tenant.id });
+            const user = await prisma.tenantUser.findUnique({
+              where: { tenantId_email: { tenantId: tenant.id, email: parsed.email.toLowerCase() } },
+            });
+            if (user?.status === "ACTIVE") {
+              row = await findActiveOtpReset({ userType: "TENANT", userId: user.id, code: parsed.otp });
+            }
+          }
+        }
+      }
+    }
+
     if (!row || row.consumedAt || row.expiresAt.getTime() < Date.now()) {
-      throw new DomainError(400, "invalid_token", "This link is invalid or has expired.");
+      throw INVALID_RESET;
     }
 
     const tenant = row.tenantId

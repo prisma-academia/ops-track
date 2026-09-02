@@ -25,8 +25,8 @@ function ctaButton(href: string, label: string, bg: string): string {
 
 function codeBox(code: string, primary: string, label = "Temporary login code"): string {
   const bg = tint(primary, 0.9);
-  const tracking = /^\d{8,10}$/.test(code) ? "0.28em" : "0.04em";
-  const size = /^\d{8,10}$/.test(code) ? "32px" : "18px";
+  const tracking = /^\d{6,10}$/.test(code) ? "0.28em" : "0.04em";
+  const size = /^\d{6,10}$/.test(code) ? "32px" : "18px";
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 24px 0;">
       <tr>
         <td style="background:${bg};border:1px solid ${primary};border-radius:10px;padding:18px 16px;text-align:center;">
@@ -191,6 +191,30 @@ export function otpEmail(input: {
   return shell({
     title: isReg ? "Verify your email" : "Your sign-in code",
     preview: `Your ${isReg ? "verification" : "sign-in"} code is ${input.code}`,
+    brand,
+    body,
+  });
+}
+
+export function passwordResetCodeEmail(input: {
+  name?: string | null;
+  code: string;
+  tenantName: string;
+  brand?: Partial<EmailBrand> | null;
+}): string {
+  const brand = resolveEmailBrand({ companyName: input.tenantName, ...input.brand });
+  const body = `
+    <p style="margin:0 0 8px 0;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${brand.primaryColor};">Password reset</p>
+    <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.3;color:#0f172a;">Reset your password</h1>
+    <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#334155;">${greeting(input.name)}</p>
+    <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#334155;">Use this code in the app to choose a new password. It expires in 15 minutes.</p>
+    ${codeBox(input.code, brand.primaryColor, "Your reset code")}
+    <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;">If you did not request this, you can ignore this email.</p>
+  `;
+
+  return shell({
+    title: "Reset your password",
+    preview: `Your password reset code is ${input.code}`,
     brand,
     body,
   });

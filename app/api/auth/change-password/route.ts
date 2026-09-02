@@ -72,7 +72,7 @@ export async function POST(request: Request) {
       });
       await recordPassword("PLATFORM", user.id, newHash);
       await revokeAllSessionsForUser("PLATFORM", user.id);
-      await createSession({
+      const { token } = await createSession({
         userId: user.id,
         userType: "PLATFORM",
         tenantId: null,
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
         ip: meta.ip,
         userAgent: meta.userAgent,
       });
-      return ok({ redirect: "/dashboard" });
+      return ok({ redirect: "/dashboard", token });
     }
 
     if (session.userType === "TENANT") {
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
       });
       await recordPassword("TENANT", user.id, newHash);
       await revokeAllSessionsForUser("TENANT", user.id);
-      await createSession({
+      const { token } = await createSession({
         userId: user.id,
         userType: "TENANT",
         tenantId: user.tenantId,
@@ -138,7 +138,7 @@ export async function POST(request: Request) {
           : modules.includes("STATION")
             ? "/admin/station"
             : "/admin/auth/login?error=no_access";
-      return ok({ redirect });
+      return ok({ redirect, token });
     }
 
     if (session.userType === "CLIENT") {
@@ -157,7 +157,7 @@ export async function POST(request: Request) {
       });
       await recordPassword("CLIENT", user.id, newHash);
       await revokeAllSessionsForUser("CLIENT", user.id);
-      await createSession({
+      const { token } = await createSession({
         userId: user.id,
         userType: "CLIENT",
         tenantId: user.tenantId,
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
         userAgent: meta.userAgent,
       });
       const profileIncomplete = clientProfileIncomplete(user.profileJson);
-      return ok({ redirect: profileIncomplete ? "/profile" : "/dashboard" });
+      return ok({ redirect: profileIncomplete ? "/profile" : "/dashboard", token });
     }
 
     throw new DomainError(400, "not_supported", "Unsupported session type.");

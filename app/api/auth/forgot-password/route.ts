@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db/client";
-import { resolveHost, resolveTenantFromHeaders } from "@/lib/auth/context";
+import { resolveTenantFromHeaders } from "@/lib/auth/context";
 import { hashOpaqueToken, newOpaqueToken } from "@/lib/auth/tokens";
 import { sendEmail } from "@/lib/email/send";
 import { passwordResetEmail } from "@/lib/email/templates";
@@ -16,10 +16,11 @@ import { enterContext } from "@/lib/db/tenant-context";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { enforceRateLimit, RATE_PRESETS } from "@/lib/auth/rate-limit";
 import type { SessionUserType } from "@/lib/generated/prisma/enums";
+import { issuePasswordResetOtp } from "@/lib/auth/password-reset-otp";
 
 const Body = z.object({
   email: z.email(),
-  surface: z.enum(["platform", "tenant_admin", "tenant_client"]),
+  surface: z.enum(["platform", "tenant_admin", "tenant_client"]).optional(),
 });
 
 const RESET_TTL_MS = 1000 * 60 * 60;
@@ -72,8 +73,11 @@ export async function POST(request: Request) {
     const h = await headers();
     const xTenantSlug = h.get("x-tenant-slug");
     const ctx = resolveTenantFromHeaders(h.get("host"), xTenantSlug);
+    const isMobile = request.headers.get("x-mobile-app") === "1";
+    const surface =
+      body.surface ?? (ctx.mode === "platform" ? "platform" : "tenant_admin");
 
-    if (body.surface === "platform") {
+    if (surface === "platform") {
       enterContext({ mode: "platform", tenantId: null });
       if (ctx.mode !== "platform") {
         throw new DomainError(400, "bad_surface", "Use the main app domain for platform password reset.");
@@ -82,15 +86,26 @@ export async function POST(request: Request) {
         where: { email: body.email.toLowerCase() },
       });
       if (user && user.status === "ACTIVE") {
-        await queuePasswordReset({
-          userType: "PLATFORM",
-          userId: user.id,
-          tenantId: null,
-          tenantSlug: null,
-          email: user.email,
-          name: displayName(user),
-          resetPath: "/auth/reset-password",
-        });
+        if (isMobile) {
+          await issuePasswordResetOtp({
+            userType: "PLATFORM",
+            userId: user.id,
+            tenantId: null,
+            email: user.email,
+            name: displayName(user),
+            tenantName: "OpsTrack",
+          });
+        } else {
+          await queuePasswordReset({
+            userType: "PLATFORM",
+            userId: user.id,
+            tenantId: null,
+            tenantSlug: null,
+            email: user.email,
+            name: displayName(user),
+            resetPath: "/auth/reset-password",
+          });
+        }
         await audit({
           actorType: "SYSTEM",
           actorId: null,
@@ -113,25 +128,37 @@ export async function POST(request: Request) {
       return ok({ sent: true });
     }
     enterContext({
-      mode: body.surface === "tenant_client" ? "tenant-client" : "tenant-admin",
+      mode: surface === "tenant_client" ? "tenant-client" : "tenant-admin",
       tenantId: tenant.id,
     });
 
-    if (body.surface === "tenant_admin") {
+    if (surface === "tenant_admin") {
       const user = await prisma.tenantUser.findUnique({
         where: { tenantId_email: { tenantId: tenant.id, email: body.email.toLowerCase() } },
       });
       if (user && user.status === "ACTIVE") {
-        await queuePasswordReset({
-          userType: "TENANT",
-          userId: user.id,
-          tenantId: tenant.id,
-          tenantSlug: tenant.slug,
-          email: user.email,
-          name: displayName(user),
-          resetPath: "/admin/auth/reset-password",
-          brand: emailBrandFromTenant(tenant),
-        });
+        if (isMobile) {
+          await issuePasswordResetOtp({
+            userType: "TENANT",
+            userId: user.id,
+            tenantId: tenant.id,
+            email: user.email,
+            name: displayName(user),
+            tenantName: tenant.name,
+            brand: emailBrandFromTenant(tenant),
+          });
+        } else {
+          await queuePasswordReset({
+            userType: "TENANT",
+            userId: user.id,
+            tenantId: tenant.id,
+            tenantSlug: tenant.slug,
+            email: user.email,
+            name: displayName(user),
+            resetPath: "/admin/auth/reset-password",
+            brand: emailBrandFromTenant(tenant),
+          });
+        }
         await audit({
           actorType: "SYSTEM",
           actorId: null,
@@ -146,25 +173,41 @@ export async function POST(request: Request) {
       return ok({ sent: true });
     }
 
-    if (body.surface === "tenant_client") {
+    if (surface === "tenant_client") {
       const client = await prisma.client.findUnique({
         where: { tenantId_email: { tenantId: tenant.id, email: body.email.toLowerCase() } },
       });
       if (client && client.status === "ACTIVE") {
-        await queuePasswordReset({
-          userType: "CLIENT",
-          userId: client.id,
-          tenantId: tenant.id,
-          tenantSlug: tenant.slug,
-          email: client.email,
-          name: displayName({
-            firstName: client.firstName,
-            lastName: client.lastName,
+        if (isMobile) {
+          await issuePasswordResetOtp({
+            userType: "CLIENT",
+            userId: client.id,
+            tenantId: tenant.id,
             email: client.email,
-          }),
-          resetPath: "/c/auth/reset-password",
-          brand: emailBrandFromTenant(tenant),
-        });
+            name: displayName({
+              firstName: client.firstName,
+              lastName: client.lastName,
+              email: client.email,
+            }),
+            tenantName: tenant.name,
+            brand: emailBrandFromTenant(tenant),
+          });
+        } else {
+          await queuePasswordReset({
+            userType: "CLIENT",
+            userId: client.id,
+            tenantId: tenant.id,
+            tenantSlug: tenant.slug,
+            email: client.email,
+            name: displayName({
+              firstName: client.firstName,
+              lastName: client.lastName,
+              email: client.email,
+            }),
+            resetPath: "/c/auth/reset-password",
+            brand: emailBrandFromTenant(tenant),
+          });
+        }
         await audit({
           actorType: "SYSTEM",
           actorId: null,

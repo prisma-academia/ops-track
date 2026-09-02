@@ -4,6 +4,7 @@ import { runWithContext, enterContext } from "@/lib/db/tenant-context";
 import { getSession, readSessionToken } from "@/lib/auth/session";
 import {
   PERMISSIONS,
+  MOBILE_EQUIVALENT_PERMISSIONS,
   hasPermission,
   type PermissionKey,
   type PlatformActor,
@@ -91,11 +92,15 @@ export async function requireTenantActor(
       : module === "STATION"
         ? user.stationPermissions
         : [...user.stationPermissions, ...user.fleetPermissions];
-  if (
-    permission &&
-    !hasPermission({ ...actor, permissions: new Set(scopedPermissions) }, permission)
-  ) {
-    throw new AuthError(403, "Forbidden.");
+  if (permission) {
+    const scopedActor = { ...actor, permissions: new Set(scopedPermissions) };
+    const alternatives = MOBILE_EQUIVALENT_PERMISSIONS[permission] ?? [];
+    const allowed =
+      hasPermission(scopedActor, permission) ||
+      alternatives.some((key) => hasPermission(scopedActor, key));
+    if (!allowed) {
+      throw new AuthError(403, "Forbidden.");
+    }
   }
   return actor;
 }

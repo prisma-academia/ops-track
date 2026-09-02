@@ -21,7 +21,14 @@ import { issuePasswordResetOtp } from "@/lib/auth/password-reset-otp";
 const Body = z.object({
   email: z.email(),
   surface: z.enum(["platform", "tenant_admin", "tenant_client"]).optional(),
+  channel: z.enum(["otp", "link"]).optional(),
 });
+
+function wantsOtpCode(request: Request, channel?: "otp" | "link"): boolean {
+  if (channel === "link") return false;
+  if (channel === "otp") return true;
+  return request.headers.get("x-mobile-app") === "1";
+}
 
 const RESET_TTL_MS = 1000 * 60 * 60;
 
@@ -73,7 +80,7 @@ export async function POST(request: Request) {
     const h = await headers();
     const xTenantSlug = h.get("x-tenant-slug");
     const ctx = resolveTenantFromHeaders(h.get("host"), xTenantSlug);
-    const isMobile = request.headers.get("x-mobile-app") === "1";
+    const isMobile = wantsOtpCode(request, body.channel);
     const surface =
       body.surface ?? (ctx.mode === "platform" ? "platform" : "tenant_admin");
 

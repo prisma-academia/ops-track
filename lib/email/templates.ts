@@ -205,16 +205,23 @@ export function passwordResetCodeEmail(input: {
   const brand = resolveEmailBrand({ companyName: input.tenantName, ...input.brand });
   const body = `
     <p style="margin:0 0 8px 0;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${brand.primaryColor};">Password reset</p>
-    <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.3;color:#0f172a;">Reset your password</h1>
+    <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.3;color:#0f172a;">Your password reset code</h1>
     <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#334155;">${greeting(input.name)}</p>
-    <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#334155;">Use this code in the app to choose a new password. It expires in 15 minutes.</p>
+    <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#334155;">Enter this 6-digit code in the app to choose a new password. It expires in 15 minutes.</p>
     ${codeBox(input.code, brand.primaryColor, "Your reset code")}
-    <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;">If you did not request this, you can ignore this email.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px 0;">
+      <tr>
+        <td style="background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:14px 16px;">
+          <p style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#9a3412;">Keep this code private</p>
+          <p style="margin:0;font-size:13px;line-height:1.55;color:#9a3412;">Never share this OTP with anyone. ${escape(brand.companyName)} staff will never ask you for it. If you did not request a reset, you can ignore this email.</p>
+        </td>
+      </tr>
+    </table>
   `;
 
   return shell({
-    title: "Reset your password",
-    preview: `Your password reset code is ${input.code}`,
+    title: "Your password reset code",
+    preview: `Your password reset code is ${input.code}. Do not share it.`,
     brand,
     body,
   });

@@ -25,19 +25,7 @@ const NAV: NavItemConfig[] = [
   { href: "/admin/station/stations", key: "stations", title: "Stations", module: "stations" as ModuleKey, icon: "IconGasStation", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/station/waybills", key: "waybills", title: "Waybills", module: "operations" as ModuleKey, icon: "IconTruck", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   { href: "/admin/station/expenses", key: "expenses", title: "Expenses", module: "operations" as ModuleKey, icon: "IconReceiptDollar", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },
-  { href: "/admin/station/bank-accounts", key: "bankAccounts", title: "Bank Accounts", module: "operations" as ModuleKey, icon: "IconBuildingBank", permission: PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key },
   { href: "/admin/station/prices", key: "prices", title: "Prices", module: "operations" as ModuleKey, icon: "IconReportAnalytics", permission: PERMISSIONS.TENANT_PRICES_READ.key },
-  {
-    key: "monitoring",
-    title: "Monitoring",
-    module: "operations" as ModuleKey,
-    icon: "IconActivity",
-    permission: null,
-    children: [
-      { href: "/admin/station/dippings", key: "dippings", title: "Dippings", module: "operations" as ModuleKey, icon: "IconActivity", permission: PERMISSIONS.TENANT_DIPPINGS_READ.key },
-      { href: "/admin/station/stock-movements", key: "stockMovements", title: "Stock Movements", module: "operations" as ModuleKey, icon: "IconTable", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
-    ],
-  },
   {
     key: "reports",
     title: "Reports",
@@ -51,6 +39,18 @@ const NAV: NavItemConfig[] = [
     ],
   },
   {
+    key: "monitoring",
+    title: "Monitoring",
+    module: "operations" as ModuleKey,
+    icon: "IconActivity",
+    permission: null,
+    children: [
+      { href: "/admin/station/dippings", key: "dippings", title: "Dippings", module: "operations" as ModuleKey, icon: "IconActivity", permission: PERMISSIONS.TENANT_DIPPINGS_READ.key },
+      { href: "/admin/station/stock-movements", key: "stockMovements", title: "Stock Movements", module: "operations" as ModuleKey, icon: "IconTable", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
+    ],
+  },
+  { href: "/admin/station/bank-accounts", key: "bankAccounts", title: "Bank Accounts", module: "operations" as ModuleKey, icon: "IconBuildingBank", permission: PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key },
+  {
     key: "alertsAndNotifications",
     title: "Alert & Notification",
     module: "operations" as ModuleKey,
@@ -62,9 +62,18 @@ const NAV: NavItemConfig[] = [
       // TENANT_TICKETS_READ is preferred; owners always see this. Existing roles keep waybills access via page fallback.
     ],
   },
-  { href: "/admin/station/clients", key: "clients", title: "Clients", module: "operations" as ModuleKey, icon: "IconUsers", permission: PERMISSIONS.TENANT_CLIENTS_READ.key },
-  { href: "/admin/station/users", key: "users", title: "Users", module: "users" as ModuleKey, icon: "IconUsers", permission: PERMISSIONS.TENANT_STATION_USERS_READ.key },
-  { href: "/admin/station/role-templates", key: "roles", title: "Roles & Permissions", module: "roles" as ModuleKey, icon: "IconShield", permission: PERMISSIONS.TENANT_STATION_ROLES_READ.key },
+  {
+    key: "management",
+    title: "Management",
+    module: null,
+    icon: "IconUsersGroup",
+    permission: null,
+    children: [
+      { href: "/admin/station/users", key: "users", title: "Users", module: "users" as ModuleKey, icon: "IconUsers", permission: PERMISSIONS.TENANT_STATION_USERS_READ.key },
+      { href: "/admin/station/role-templates", key: "roles", title: "Roles & Permissions", module: "roles" as ModuleKey, icon: "IconShield", permission: PERMISSIONS.TENANT_STATION_ROLES_READ.key },
+      { href: "/admin/station/clients", key: "clients", title: "Clients", module: "operations" as ModuleKey, icon: "IconUsers", permission: PERMISSIONS.TENANT_CLIENTS_READ.key },
+    ],
+  },
   // { href: "/admin/station/table-demo", key: "tableDemo", title: "Table Demo", module: null, icon: "IconTable", permission: null },
 ];
 
@@ -269,7 +278,7 @@ export default async function StationDashboardLayout({ children }: { children: R
 
   const nav = NAV.filter(
     (n) => (n.module === null || enabled.includes(n.module)) && (!n.permission || hasPermission(actor, n.permission as any))
-  ).map(mapNavItem);
+  ).map(mapNavItem).filter((n) => !n.children || n.children.length > 0);
 
   const label = `${userWithStations.firstName ?? ""} ${userWithStations.lastName ?? ""}`.trim() || userWithStations.email;
   return (

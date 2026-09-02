@@ -31,26 +31,18 @@ const FLEET_NAV = [
     permission: PERMISSIONS.TENANT_FLEET_TRANSPORTS_READ.key,
   },
   {
-    key: "salesManagement",
-    title: "Point of Sale",
+    href: "/admin/deliveries",
+    key: "deliveries",
+    title: "Sales Deliveries",
     icon: "IconReceiptDollar",
     permission: PERMISSIONS.TENANT_FLEET_SALES_READ.key,
-    children: [
-      {
-        href: "/admin/deliveries",
-        key: "deliveries",
-        title: "Sales Deliveries",
-        icon: "IconReceiptDollar",
-        permission: PERMISSIONS.TENANT_FLEET_SALES_READ.key,
-      },
-      {
-        href: "/admin/payments",
-        key: "payments",
-        title: "Payments",
-        icon: "IconCreditCard",
-        permission: PERMISSIONS.TENANT_FLEET_PAYMENTS_READ.key,
-      },
-    ],
+  },
+  {
+    href: "/admin/payments",
+    key: "payments",
+    title: "Payments",
+    icon: "IconCreditCard",
+    permission: PERMISSIONS.TENANT_FLEET_PAYMENTS_READ.key,
   },
   {
     key: "reportsAndAnalytics",

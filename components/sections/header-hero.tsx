@@ -11,6 +11,7 @@ const menuItems = [
     { name: 'Bussiness', href: '#link' },
     { name: 'Pricing', href: '#link' },
     { name: 'About', href: '#link' },
+    { name: 'Contact', href: '#contact' },
 ]
 
 export const HeroHeader = ({ slug = "App", logoUrl }: { slug?: string, logoUrl?: string | null }) => {

@@ -14,7 +14,20 @@ import {
  */
 
 export type TenantPageContext = {
-  tenant: { id: string; slug: string; name: string; status: string; settingsJson: any } | null;
+  tenant: {
+    id: string;
+    slug: string;
+    name: string;
+    status: string;
+    settingsJson: any;
+    companyEmail: string | null;
+    companyPhone: string | null;
+    addressLine1: string | null;
+    addressLine2: string | null;
+    city: string | null;
+    region: string | null;
+    country: string | null;
+  } | null;
   /** "tenant" | "platform" | "unknown" from host resolution. */
   mode: "platform" | "tenant" | "unknown";
 };
@@ -29,7 +42,20 @@ export async function loadTenantPageContext(): Promise<TenantPageContext> {
   if (ctx.mode !== "tenant") return { tenant: null, mode: ctx.mode };
   const tenant = await prisma.tenant.findUnique({
     where: { slug: ctx.slug },
-    select: { id: true, slug: true, name: true, status: true, settingsJson: true },
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      status: true,
+      settingsJson: true,
+      companyEmail: true,
+      companyPhone: true,
+      addressLine1: true,
+      addressLine2: true,
+      city: true,
+      region: true,
+      country: true,
+    },
   });
   return { tenant, mode: "tenant" };
 }

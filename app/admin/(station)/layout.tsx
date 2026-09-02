@@ -16,7 +16,7 @@ interface NavItemConfig {
   module: ModuleKey | null;
   icon?: string;
   permission: string | null;
-  children?: { href: string; key: string; title: string; module: ModuleKey | null; permission: string | null }[];
+  children?: { href: string; key: string; title: string; module: ModuleKey | null; permission: string | null; icon?: string }[];
 }
 
 // `module: null` = always shown (Overview, Settings).
@@ -34,8 +34,8 @@ const NAV: NavItemConfig[] = [
     icon: "IconActivity",
     permission: null,
     children: [
-      { href: "/admin/station/dippings", key: "dippings", title: "Dippings", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_DIPPINGS_READ.key },
-      { href: "/admin/station/stock-movements", key: "stockMovements", title: "Stock Movements", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STATIONS_READ.key },
+      { href: "/admin/station/dippings", key: "dippings", title: "Dippings", module: "operations" as ModuleKey, icon: "IconActivity", permission: PERMISSIONS.TENANT_DIPPINGS_READ.key },
+      { href: "/admin/station/stock-movements", key: "stockMovements", title: "Stock Movements", module: "operations" as ModuleKey, icon: "IconTable", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
     ],
   },
   {
@@ -45,9 +45,9 @@ const NAV: NavItemConfig[] = [
     icon: "IconFileText",
     permission: null,
     children: [
-      { href: "/admin/station/sales-reports", key: "salesReports", title: "Sales Reports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_SALES_REPORTS_READ.key },
-      { href: "/admin/station/delivery-pnl", key: "deliveryPnl", title: "Delivery Reports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
-      { href: "/admin/station/stock-report", key: "stockReport", title: "Stock Reports", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
+      { href: "/admin/station/sales-reports", key: "salesReports", title: "Sales Reports", module: "operations" as ModuleKey, icon: "IconReportAnalytics", permission: PERMISSIONS.TENANT_SALES_REPORTS_READ.key },
+      { href: "/admin/station/delivery-pnl", key: "deliveryPnl", title: "Delivery Reports", module: "operations" as ModuleKey, icon: "IconTruck", permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
+      { href: "/admin/station/stock-report", key: "stockReport", title: "Stock Reports", module: "operations" as ModuleKey, icon: "IconFileText", permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
     ],
   },
   {
@@ -57,8 +57,8 @@ const NAV: NavItemConfig[] = [
     icon: "IconBell",
     permission: null,
     children: [
-      { href: "/admin/station/notifications", key: "notifications", title: "Notifications", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_NOTIFICATIONS_READ.key },
-      { href: "/admin/station/tickets", key: "tickets", title: "Tickets", module: "operations" as ModuleKey, permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
+      { href: "/admin/station/notifications", key: "notifications", title: "Notifications", module: "operations" as ModuleKey, icon: "IconBell", permission: PERMISSIONS.TENANT_NOTIFICATIONS_READ.key },
+      { href: "/admin/station/tickets", key: "tickets", title: "Tickets", module: "operations" as ModuleKey, icon: "IconTicket", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
       // TENANT_TICKETS_READ is preferred; owners always see this. Existing roles keep waybills access via page fallback.
     ],
   },
@@ -261,6 +261,7 @@ export default async function StationDashboardLayout({ children }: { children: R
             .map((c) => ({
               href: c.href,
               title: c.title,
+              icon: c.icon,
             }))
         : undefined,
     };

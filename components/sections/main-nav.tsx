@@ -98,7 +98,7 @@ function hrefMatchesNav(
   return true;
 }
 
-const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+export const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   PieChart,
   Building2,
   Building,
@@ -164,6 +164,54 @@ export type NavItem = {
   href?: string;
   children?: NavItem[];
 };
+
+export type SearchNavEntry = {
+  title: string;
+  href: string;
+  icon?: NavItem["icon"];
+  group: string;
+};
+
+export function resolveNavIcon(icon?: NavItem["icon"]) {
+  if (!icon) return undefined;
+  return typeof icon === "string" ? iconMap[icon] : icon;
+}
+
+function collectNavEntries(
+  items: NavItem[],
+  group: string,
+  acc: SearchNavEntry[],
+  inheritedIcon?: NavItem["icon"]
+) {
+  for (const item of items) {
+    if (item.isSection && item.label) {
+      group = item.label;
+      continue;
+    }
+
+    const icon = item.icon ?? inheritedIcon;
+
+    if (item.children?.length) {
+      collectNavEntries(item.children, item.title || group, acc, icon);
+      continue;
+    }
+
+    if (item.title && item.href && item.href !== "#") {
+      acc.push({
+        title: item.title,
+        href: item.href,
+        icon,
+        group,
+      });
+    }
+  }
+}
+
+export function flattenNavForSearch(items: NavItem[], defaultGroup = "Pages"): SearchNavEntry[] {
+  const acc: SearchNavEntry[] = [];
+  collectNavEntries(items, defaultGroup, acc);
+  return acc;
+}
 
 export function NavMain({ items }: { items: NavItem[] }) {
   const pathname = usePathname();

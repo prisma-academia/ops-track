@@ -16,6 +16,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { LogPaymentModal } from "@/components/fleet/payments/log-payment-modal";
 import { cn, formatShortCurrency } from "@/lib/utils";
+import { fleetLedgerWhere, STATION_LEDGER_CATEGORIES } from "@/lib/finance/fleet-ledger";
 
 export default async function PaymentsPage({
   searchParams,
@@ -29,9 +30,12 @@ export default async function PaymentsPage({
   const take = Math.min(100, Math.max(1, parseInt(takeParam || "25", 10) || 25));
   const skip = (page - 1) * take;
 
-  const where: any = { tenantId: actor.tenantId };
+  const fleetBase = fleetLedgerWhere({ tenantId: actor.tenantId });
+  const where: any = { ...fleetBase };
   if (type) where.type = type;
-  if (category) where.category = category;
+  if (category && !STATION_LEDGER_CATEGORIES.includes(category as (typeof STATION_LEDGER_CATEGORIES)[number])) {
+    where.category = category;
+  }
   if (bankAccountId) where.bankAccountId = bankAccountId;
   if (minAmt || maxAmt) {
     where.amount = {
@@ -46,9 +50,9 @@ export default async function PaymentsPage({
     };
   }
 
-  // Aggregates: always computed on ALL data regardless of filters/pagination
+  // Aggregates: fleet ledger only (exclude station retail sales / station expenses)
   const allTransactions = await prisma.transaction.findMany({
-    where: { tenantId: actor.tenantId },
+    where: fleetBase,
     select: { type: true, amount: true },
   });
 
@@ -59,7 +63,7 @@ export default async function PaymentsPage({
 
   // Get distinct categories for filter options
   const categories = await prisma.transaction.findMany({
-    where: { tenantId: actor.tenantId },
+    where: fleetBase,
     select: { category: true },
     distinct: ["category"],
     orderBy: { category: "asc" },
@@ -69,9 +73,9 @@ export default async function PaymentsPage({
     label: c.category.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
   }));
 
-  // Get bank accounts for combobox
+  // Get fleet bank accounts for combobox
   const banks = await prisma.bankAccount.findMany({
-    where: { tenantId: actor.tenantId },
+    where: { tenantId: actor.tenantId, scope: "FLEET" },
     select: { id: true, bankName: true, accountNumber: true },
     orderBy: { bankName: "asc" },
   });

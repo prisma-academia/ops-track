@@ -9,6 +9,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import { InvoiceReceipt } from "./invoice-receipt";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
+import { isStationLedgerTransaction } from "@/lib/finance/fleet-ledger";
 
 export default async function PaymentDetailsPage({
   params,
@@ -45,7 +46,7 @@ export default async function PaymentDetailsPage({
     },
   });
 
-  if (!transaction || transaction.tenantId !== actor.tenantId) {
+  if (!transaction || transaction.tenantId !== actor.tenantId || isStationLedgerTransaction(transaction)) {
     redirect("/admin/payments");
   }
 

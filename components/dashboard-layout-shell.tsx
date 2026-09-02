@@ -12,35 +12,12 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import {
-  Search,
-  Calendar,
-  Smile,
-  Calculator,
-  User,
-  CreditCard,
-  Settings
-} from "lucide-react";
 import { useEffect, useState } from "react";
 import type { NavItem } from "@/components/sections/main-nav";
+import { NavSearchCommand } from "@/components/sections/nav-search-command";
 import { PrintCompanyProvider } from "@/components/print/print-company-context";
 import { apiPost } from "@/lib/client/api";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-  CommandShortcut,
-} from "@/components/ui/command";
 
 interface DashboardLayoutShellProps {
   children: React.ReactNode;
@@ -175,57 +152,11 @@ export function DashboardLayoutShell({
             </AlertDialogContent>
           </AlertDialog>
 
-          {/* Global Search Dialog */}
-          <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
-            <DialogContent className="p-0 border-none sm:max-w-xl gap-0 rounded-none shadow-lg overflow-hidden" showCloseButton={false}>
-              <DialogTitle className="sr-only">Global Search</DialogTitle>
-              <Command className="rounded-none">
-                <div className="flex items-center border-b px-3">
-                  <Search className="mr-2 size-4 shrink-0 opacity-50 text-muted-foreground" />
-                  <CommandInput
-                    placeholder="Type a command or search..."
-                    autoFocus
-                    className="flex h-12 w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground border-none"
-                  />
-                </div>
-                <CommandList className="max-h-[300px] p-2">
-                  <CommandEmpty>No results found.</CommandEmpty>
-                  <CommandGroup heading="Suggestions">
-                    <CommandItem className="flex items-center gap-2.5 cursor-pointer py-2 px-3 hover:bg-muted/50 rounded-none transition-colors">
-                      <Calendar className="size-4 text-muted-foreground" />
-                      <span>Calendar</span>
-                    </CommandItem>
-                    <CommandItem className="flex items-center gap-2.5 cursor-pointer py-2 px-3 hover:bg-muted/50 rounded-none transition-colors">
-                      <Smile className="size-4 text-muted-foreground" />
-                      <span>Search Emoji</span>
-                    </CommandItem>
-                    <CommandItem className="flex items-center gap-2.5 cursor-pointer py-2 px-3 hover:bg-muted/50 rounded-none opacity-50 pointer-events-none" disabled>
-                      <Calculator className="size-4 text-muted-foreground" />
-                      <span>Calculator</span>
-                    </CommandItem>
-                  </CommandGroup>
-                  <CommandSeparator />
-                  <CommandGroup heading="Settings">
-                    <CommandItem className="flex items-center gap-2.5 cursor-pointer py-2 px-3 hover:bg-muted/50 rounded-none transition-colors">
-                      <User className="size-4 text-muted-foreground" />
-                      <span>Profile</span>
-                      <CommandShortcut>⌘P</CommandShortcut>
-                    </CommandItem>
-                    <CommandItem className="flex items-center gap-2.5 cursor-pointer py-2 px-3 hover:bg-muted/50 rounded-none transition-colors">
-                      <CreditCard className="size-4 text-muted-foreground" />
-                      <span>Billing</span>
-                      <CommandShortcut>⌘B</CommandShortcut>
-                    </CommandItem>
-                    <CommandItem className="flex items-center gap-2.5 cursor-pointer py-2 px-3 hover:bg-muted/50 rounded-none transition-colors">
-                      <Settings className="size-4 text-muted-foreground" />
-                      <span>Settings</span>
-                      <CommandShortcut>⌘S</CommandShortcut>
-                    </CommandItem>
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </DialogContent>
-          </Dialog>
+          <NavSearchCommand
+            open={searchOpen}
+            onOpenChange={setSearchOpen}
+            navItems={navItems}
+          />
         </SidebarInset>
       </div>
     </SidebarProvider>

@@ -19,7 +19,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-function isStationAdminPath(pathname: string | null): boolean {
+export function isStationAdminPath(pathname: string | null): boolean {
   if (!pathname) return false;
   return pathname === "/admin/station" || pathname.startsWith("/admin/station/");
 }

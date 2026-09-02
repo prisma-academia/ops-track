@@ -7,6 +7,7 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
 import { assertOptionalBankAccount } from "@/lib/bank-accounts/assert-usable";
+import { fleetLedgerWhere } from "@/lib/finance/fleet-ledger";
 
 const CreateTransactionSchema = z.object({
   type: z.enum(["INFLOW", "OUTFLOW"]),
@@ -33,10 +34,10 @@ export async function GET(request: Request) {
     const type = url.searchParams.get("type");
 
     const rows = await prisma.transaction.findMany({
-      where: {
+      where: fleetLedgerWhere({
         tenantId: actor.tenantId,
         ...(type ? { type: type as any } : {}),
-      },
+      }),
       orderBy: { createdAt: "desc" },
       take,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),

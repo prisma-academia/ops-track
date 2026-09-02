@@ -5,7 +5,7 @@ import ProfileDropdown from "@/components/sections/dropdown-profile"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { Moon, Sun, Bell, Info, Check } from "lucide-react"
+import { Moon, Sun, Bell, Info, Check, Search } from "lucide-react"
 import { useTheme } from "next-themes"
 import { apiGet, apiPost } from "@/lib/client/api"
 
@@ -55,14 +55,22 @@ interface HeaderV2Props {
 export default function HeaderV2({
   user,
   onLogout,
+  onSearchClick,
   stations = [],
   activeStationId = "all"
 }: HeaderV2Props) {
   const { theme, resolvedTheme, setTheme } = useTheme()
   const [items, setItems] = useState<InboxItem[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [modKey, setModKey] = useState("Ctrl")
 
   const isDark = theme === "dark" || resolvedTheme === "dark"
+
+  useEffect(() => {
+    if (/Mac|iPhone|iPod|iPad/.test(navigator.platform)) {
+      setModKey("⌘")
+    }
+  }, [])
 
   async function loadInbox() {
     const res = await apiGet<{ items: InboxItem[]; unreadCount: number }>("/api/tenant/notifications/inbox")
@@ -85,8 +93,22 @@ export default function HeaderV2({
   return (
     <header className="bg-card/95 backdrop-blur sticky top-0 z-50 w-full">
       <div className="flex h-18 items-center justify-between border-b gap-4 px-4 sm:px-8">
-        <div className="flex items-center gap-4">
-          <SidebarTrigger className="cursor-pointer"/>
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <SidebarTrigger className="cursor-pointer shrink-0"/>
+          {onSearchClick && (
+            <button
+              type="button"
+              onClick={onSearchClick}
+              aria-label="Search pages"
+              className="flex h-9 w-full max-w-md min-w-0 items-center gap-2 rounded-md border border-border bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+            >
+              <Search className="size-4 shrink-0" />
+              <span className="flex-1 truncate text-left">Search pages...</span>
+              <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:inline-flex">
+                {modKey}K
+              </kbd>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-3">

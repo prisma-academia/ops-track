@@ -51,7 +51,7 @@ export function InviteTenantUserForm({
   allPermissions: readonly string[];
   moduleContext?: "STATION" | "FLEET";
   organizationId?: string | null;
-  successRedirect?: (userId: string) => string;
+  successRedirect?: string;
 }) {
   const router = useRouter();
   const { register, handleSubmit, formState: { errors, isSubmitting }, control, setValue } = useForm<Values>({
@@ -118,7 +118,7 @@ export function InviteTenantUserForm({
       return;
     }
     if (res.data?.user.id) {
-      router.push(successRedirect ? successRedirect(res.data.user.id) : `/admin/users/${res.data.user.id}`);
+      router.push(successRedirect ? `${successRedirect}/${res.data.user.id}` : `/admin/users/${res.data.user.id}`);
     }
   });
 

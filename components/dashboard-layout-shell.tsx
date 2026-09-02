@@ -16,7 +16,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useEffect, useState } from "react";
 import type { NavItem } from "@/components/sections/main-nav";
 import { NavSearchCommand } from "@/components/sections/nav-search-command";
-import { PrintCompanyProvider } from "@/components/print/print-company-context";
+import { PrintCompanyProvider, type PrintCompanyInfo } from "@/components/print/print-company-context";
 import { apiPost } from "@/lib/client/api";
 
 interface DashboardLayoutShellProps {
@@ -41,6 +41,7 @@ interface DashboardLayoutShellProps {
     phone?: string | null;
     address?: string | null;
   };
+  printCompany?: PrintCompanyInfo;
   activeStationId?: string;
   enabledModules?: string[];
   internalOrganizations?: { id: string; name: string; slug: string | null; logoUrl: string | null }[];
@@ -61,6 +62,7 @@ export function DashboardLayoutShell({
   enabledModules,
   internalOrganizations,
   tenant,
+  printCompany,
 }: DashboardLayoutShellProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [logOutModal, setLogOutModal] = useState(false);
@@ -117,14 +119,16 @@ export function DashboardLayoutShell({
 
           <main className="flex-1 p-4 md:p-8 bg-white dark:bg-black h-full">
             <PrintCompanyProvider
-              value={{
-                name: tenant?.name ?? title,
-                slug: tenant?.slug ?? null,
-                logoUrl: tenant?.logoUrl ?? logoUrl ?? null,
-                email: tenant?.email ?? null,
-                phone: tenant?.phone ?? null,
-                address: tenant?.address ?? null,
-              }}
+              value={
+                printCompany ?? {
+                  name: tenant?.name ?? title,
+                  slug: tenant?.slug ?? null,
+                  logoUrl: tenant?.logoUrl ?? logoUrl ?? null,
+                  email: tenant?.email ?? null,
+                  phone: tenant?.phone ?? null,
+                  address: tenant?.address ?? null,
+                }
+              }
             >
               {children}
             </PrintCompanyProvider>

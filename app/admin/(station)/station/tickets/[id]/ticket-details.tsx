@@ -1,16 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { format } from "date-fns";
 import { toast } from "sonner";
-import { ArrowLeft, AlertTriangle, Calendar, ClipboardList, Gauge, MapPin, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  ArrowLeft,
+  BadgeCheck,
+  Banknote,
+  Check,
+  ChevronsUpDown,
+  Cpu,
+  Link2,
+  Monitor,
+  Printer,
+  Smartphone,
+  TrendingUp,
+  XCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { NumberInput } from "@/components/ui/number-input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -18,80 +33,61 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { FileViewerModal } from "@/components/file-viewer-modal";
+import { TicketStatusBadge, TicketTypeBadge } from "@/components/tickets/ticket-badges";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
 import { apiPost } from "@/lib/client/api";
 
 type BankAccount = { id: string; bankName: string; accountName: string; accountNumber: string };
+type ModalKind = "approve" | "reject" | "payout" | "increase" | "spend" | null;
 
-function VarianceMeter({ expected, actual }: { expected: number; actual: number }) {
-  const max = Math.max(expected, actual, 1);
-  const expectedPct = Math.min(100, (expected / max) * 100);
-  const actualPct = Math.min(100, (actual / max) * 100);
-  const variance = actual - expected;
-  const isShortage = variance < 0;
-  const isNeutral = variance === 0;
+type HistoryEvent = {
+  id: string;
+  at: Date;
+  order: number;
+  title: string;
+  detail?: string;
+  actor?: string;
+};
 
-  return (
-    <div className="space-y-3">
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Expected Volume</span>
-          <span className="font-mono font-semibold">{expected.toLocaleString()} L</span>
-        </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-slate-400" style={{ width: `${expectedPct}%` }} />
-        </div>
-      </div>
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Actual Volume</span>
-          <span className="font-mono font-semibold">{actual.toLocaleString()} L</span>
-        </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={cn("h-full rounded-full", isShortage ? "bg-rose-500" : "bg-emerald-500")}
-            style={{ width: `${actualPct}%` }}
-          />
-        </div>
-      </div>
-      <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
-        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          {isNeutral ? null : isShortage ? (
-            <TrendingDown className="size-3.5 text-rose-600" />
-          ) : (
-            <TrendingUp className="size-3.5 text-emerald-600" />
-          )}
-          {isNeutral ? "No Variance" : isShortage ? "Shortage" : "Surplus"}
-        </span>
-        <span
-          className={cn(
-            "font-mono text-sm font-bold",
-            isNeutral ? "text-muted-foreground" : isShortage ? "text-rose-600" : "text-emerald-600",
-          )}
-        >
-          {isNeutral ? "0 L" : `${isShortage ? "-" : "+"}${Math.abs(variance).toLocaleString()} L`}
-        </span>
-      </div>
-    </div>
-  );
+const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
+  FUEL_FOR_GEN: "Generator fuel",
+  MAINTENANCE: "Maintenance",
+  UTILITIES: "Utilities",
+  STATIONERY: "Stationery",
+  OTHER: "Other",
+};
+
+function personName(
+  person?: { firstName?: string | null; lastName?: string | null; email?: string | null } | null,
+) {
+  if (!person) return "—";
+  const name = [person.firstName, person.lastName].filter(Boolean).join(" ").trim();
+  return name || person.email || "—";
 }
 
-function statusBadge(status: string) {
-  const tone =
-    status === "CLOSED" || status === "RESOLVED"
-      ? "text-emerald-600 bg-emerald-50"
-      : status === "REJECTED"
-        ? "text-rose-600 bg-rose-50"
-        : status === "APPROVED"
-          ? "text-indigo-600 bg-indigo-50"
-          : status === "PENDING_APPROVAL" || status === "OPEN"
-            ? "text-amber-600 bg-amber-50"
-            : "text-slate-600 bg-slate-50";
-  return (
-    <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded", tone)}>
-      {status.replaceAll("_", " ")}
-    </span>
-  );
+function money(value: unknown) {
+  if (value == null || value === "") return "—";
+  const amount = Number(value);
+  if (Number.isNaN(amount)) return "—";
+  return `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function isSpendTicket(ticket: { category: string; spendIntent?: string | null }) {
@@ -101,6 +97,110 @@ function isSpendTicket(ticket: { category: string; spendIntent?: string | null }
     ticket.spendIntent === "REQUEST" ||
     ticket.spendIntent === "ALREADY_PAID"
   );
+}
+
+function OriginIcon({ origin }: { origin: string }) {
+  const Icon = origin === "SYSTEM" ? Cpu : origin === "MOBILE" ? Smartphone : Monitor;
+  const label = origin === "SYSTEM" ? "System" : origin === "MOBILE" ? "Mobile" : "Admin";
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon className="size-3.5" />
+      {label}
+    </span>
+  );
+}
+
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[7.5rem_1fr] items-center gap-x-6 gap-y-1 py-2.5 text-sm sm:grid-cols-[9rem_1fr]">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+function SectionCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Card size="sm">
+      <CardHeader className="border-b">
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-4">{children}</CardContent>
+    </Card>
+  );
+}
+
+function buildHistory(ticket: any): HistoryEvent[] {
+  const events: HistoryEvent[] = [
+    {
+      id: "opened",
+      at: new Date(ticket.createdAt),
+      order: 0,
+      title: "Opened",
+      actor: personName(ticket.raisedBy),
+      detail: ticket.originStory || undefined,
+    },
+  ];
+
+  for (const rev of Array.isArray(ticket.spendRevisions) ? ticket.spendRevisions : []) {
+    events.push({
+      id: `rev-${rev.id}`,
+      at: new Date(rev.createdAt),
+      order: 1,
+      title: "Amount increase requested",
+      actor: personName(rev.actor),
+      detail: [
+        money(rev.newRequested),
+        rev.newApproved != null ? `approved ${money(rev.newApproved)}` : "awaiting approval",
+        rev.reason,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    });
+  }
+
+  for (const child of Array.isArray(ticket.children) ? ticket.children : []) {
+    events.push({
+      id: `child-${child.id}`,
+      at: new Date(child.createdAt),
+      order: 2,
+      title: "Spend request attached",
+      detail: `${child.title} · ${money(child.requestedAmount)}`,
+    });
+  }
+
+  const decidedStatuses = ["REJECTED", "CLOSED", "RESOLVED", "APPROVED"];
+  if (decidedStatuses.includes(ticket.status) && (ticket.approvedBy || ticket.remark)) {
+    const decided =
+      ticket.status === "REJECTED"
+        ? "Declined"
+        : ticket.status === "CLOSED"
+          ? "Closed"
+          : ticket.status === "RESOLVED"
+            ? "Resolved"
+            : "Approved";
+    events.push({
+      id: "decision",
+      at: new Date(ticket.updatedAt || ticket.createdAt),
+      order: 3,
+      title: decided,
+      actor: personName(ticket.approvedBy),
+      detail: ticket.remark || undefined,
+    });
+  }
+
+  if (ticket.expense) {
+    events.push({
+      id: `payout-${ticket.expense.id || "expense"}`,
+      at: new Date(ticket.expense.createdAt || ticket.updatedAt || ticket.createdAt),
+      order: 4,
+      title: "Payout recorded",
+      actor: personName(ticket.expense.recordedBy),
+      detail: `${money(ticket.expense.amount)} · ${String(ticket.expense.paymentMethod || "").replaceAll("_", " ")}`,
+    });
+  }
+
+  return events.sort((a, b) => a.at.getTime() - b.at.getTime() || a.order - b.order);
 }
 
 export function TicketDetails({
@@ -113,6 +213,7 @@ export function TicketDetails({
   bankAccounts: BankAccount[];
 }) {
   const router = useRouter();
+  const [modal, setModal] = useState<ModalKind>(null);
   const [remark, setRemark] = useState("");
   const [approvedAmount, setApprovedAmount] = useState(
     ticket.approvedAmount != null
@@ -124,14 +225,25 @@ export function TicketDetails({
   const [payoutAmount, setPayoutAmount] = useState(
     ticket.approvedAmount != null ? String(ticket.approvedAmount) : "",
   );
-  const [paymentMethod, setPaymentMethod] = useState(ticket.expense?.paymentMethod || "CASH");
+  const [paymentMethod, setPaymentMethod] = useState(
+    ticket.expense?.paymentMethod && ticket.expense.paymentMethod !== "CASH"
+      ? ticket.expense.paymentMethod
+      : "BANK_TRANSFER",
+  );
   const [bankAccountId, setBankAccountId] = useState(ticket.expense?.bankAccountId || "");
+  const [bankOpen, setBankOpen] = useState(false);
+  const [payoutErrors, setPayoutErrors] = useState<{
+    amount?: string;
+    paymentMethod?: string;
+    bankAccountId?: string;
+  }>({});
   const [increaseAmount, setIncreaseAmount] = useState("");
   const [increaseReason, setIncreaseReason] = useState("");
   const [spendAmount, setSpendAmount] = useState("");
   const [spendCategory, setSpendCategory] = useState("MAINTENANCE");
   const [spendDescription, setSpendDescription] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
 
   const spend = isSpendTicket(ticket);
   const closed = ticket.status === "CLOSED" || ticket.status === "REJECTED";
@@ -141,12 +253,21 @@ export function TicketDetails({
     spend &&
     (ticket.status === "APPROVED" || (ticket.status === "RESOLVED" && !ticket.expenseId));
   const canAttachSpend =
-    canResolve &&
-    !spend &&
-    ticket.status !== "CLOSED" &&
-    ticket.status !== "REJECTED";
+    canResolve && !spend && ticket.status !== "CLOSED" && ticket.status !== "REJECTED";
   const canIncrease =
     canResolve && spend && (ticket.status === "APPROVED" || ticket.status === "PENDING_APPROVAL");
+  const hasActions = canApprove || canPayout || canIncrease || canAttachSpend;
+
+  const evidence: string[] = Array.isArray(ticket.evidenceUrls) ? ticket.evidenceUrls : [];
+  const children: any[] = Array.isArray(ticket.children) ? ticket.children : [];
+  const history = useMemo(() => buildHistory(ticket), [ticket]);
+
+  function closeModal() {
+    if (processing) return;
+    setModal(null);
+    setBankOpen(false);
+    setPayoutErrors({});
+  }
 
   async function refresh(ticketId?: string) {
     router.push(`/admin/station/tickets/${ticketId || ticket.id}`);
@@ -155,7 +276,7 @@ export function TicketDetails({
 
   async function resolve(action: "APPROVE" | "REJECT" | "RESOLVE") {
     if (!remark.trim()) {
-      toast.error("Please provide a remark/reason.");
+      toast.error("Please add a short note.");
       return;
     }
     setProcessing(true);
@@ -169,27 +290,52 @@ export function TicketDetails({
       toast.error(res.error.message || "Failed to update ticket.");
       return;
     }
-    toast.success(`Ticket ${action.toLowerCase()}d successfully.`);
+    toast.success(action === "REJECT" ? "Ticket declined." : spend ? "Ticket approved." : "Ticket resolved.");
+    setModal(null);
+    setRemark("");
     refresh();
   }
 
   async function payout() {
-    if (paymentMethod !== "CASH" && !bankAccountId) {
-      toast.error("Select the outflow bank account.");
+    const nextErrors: { amount?: string; paymentMethod?: string; bankAccountId?: string } = {};
+    const amount = payoutAmount ? Number(payoutAmount) : 0;
+    const cap =
+      ticket.approvedAmount != null
+        ? Number(ticket.approvedAmount)
+        : ticket.requestedAmount != null
+          ? Number(ticket.requestedAmount)
+          : null;
+
+    if (!payoutAmount || Number.isNaN(amount) || amount <= 0) {
+      nextErrors.amount = "Enter a payout amount greater than zero.";
+    } else if (cap != null && amount > cap) {
+      nextErrors.amount = `Cannot exceed the approved amount of ${money(cap)}.`;
+    }
+    if (!paymentMethod) {
+      nextErrors.paymentMethod = "Select a payment method.";
+    }
+    if (!bankAccountId) {
+      nextErrors.bankAccountId = "Select the outflow bank account.";
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setPayoutErrors(nextErrors);
       return;
     }
+
+    setPayoutErrors({});
     setProcessing(true);
     const res = await apiPost<{ ticket: unknown }>(`/api/tenant/tickets/${ticket.id}/payout`, {
       paymentMethod,
-      bankAccountId: paymentMethod === "CASH" ? null : bankAccountId,
-      amount: payoutAmount ? Number(payoutAmount) : undefined,
+      bankAccountId,
+      amount,
     });
     setProcessing(false);
     if (res.error) {
       toast.error(res.error.message || "Failed to record payout.");
       return;
     }
-    toast.success("Payout recorded successfully.");
+    toast.success("Payout recorded.");
+    setModal(null);
     refresh();
   }
 
@@ -208,9 +354,10 @@ export function TicketDetails({
       toast.error(res.error.message || "Failed to request increase.");
       return;
     }
-    toast.success("Amount increase requested.");
+    toast.success("Increase requested.");
     setIncreaseAmount("");
     setIncreaseReason("");
+    setModal(null);
     refresh();
   }
 
@@ -231,301 +378,548 @@ export function TicketDetails({
       toast.error(res.error.message || "Failed to attach spend.");
       return;
     }
-    toast.success("Expense request attached.");
+    toast.success("Spend request created.");
+    setSpendAmount("");
+    setSpendDescription("");
+    setModal(null);
     refresh(res.data?.ticket?.id);
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div className="flex items-center gap-3">
-        <Button variant="outline" size="icon" onClick={() => router.push("/admin/station/tickets")}>
-          <ArrowLeft className="size-4" />
+    <div className="space-y-6">
+
+      <div className="flex items-start gap-4">
+        <Button variant="outline" size="icon" asChild className="mt-0.5 h-9 w-9 shrink-0">
+          <Link href="/admin/station/tickets">
+            <ArrowLeft className="size-4" />
+          </Link>
         </Button>
-        <div>
-          <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-            <AlertTriangle className="size-5 text-amber-500" />
-            {ticket.title}
-          </h1>
-          <p className="text-xs text-muted-foreground">{ticket.originStory || ticket.description}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-3 text-sm">
-        <div className="flex items-start gap-2">
-          <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-          <div>
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Station</p>
-            <p className="font-medium">{ticket.station?.name || "Global"}</p>
-          </div>
-        </div>
-        <div className="flex items-start gap-2">
-          <Calendar className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-          <div>
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Raised</p>
-            <p className="font-medium">{formatHumanReadableDate(ticket.createdAt)}</p>
-          </div>
-        </div>
-        <div className="flex items-start gap-2">
-          <ClipboardList className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-          <div>
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Origin</p>
-            <p className="font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-muted rounded inline-block">
-              {ticket.origin === "SYSTEM" ? "System" : ticket.origin === "MOBILE" ? "Mobile" : "Admin"}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-start gap-2">
-          <Gauge className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-          <div>
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Status</p>
-            {statusBadge(ticket.status)}
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl font-semibold text-foreground">{ticket.title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {[ticket.station?.name, format(new Date(ticket.createdAt), "LLL dd, y")]
+              .filter(Boolean)
+              .join(" · ")}
+            <span className="mx-1.5">·</span>
+            <OriginIcon origin={ticket.origin} />
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <TicketTypeBadge category={ticket.category} />
+            <TicketStatusBadge status={ticket.status} />
           </div>
         </div>
       </div>
 
-      <p className="text-sm text-muted-foreground">{ticket.description}</p>
-
-      {ticket.parent && (
-        <Link href={`/admin/station/tickets/${ticket.parent.id}`} className="block rounded-lg border p-3 text-sm hover:bg-muted/30">
-          Linked to {ticket.parent.title} ({ticket.parent.category.replaceAll("_", " ")})
-        </Link>
-      )}
-
-      {ticket.pump && (
-        <p className="text-sm">Pump: <span className="font-medium">{ticket.pump.name}</span></p>
-      )}
-      {ticket.latitude != null && ticket.longitude != null && (
-        <p className="text-xs text-muted-foreground">
-          Location {Number(ticket.latitude).toFixed(5)}, {Number(ticket.longitude).toFixed(5)}
-        </p>
-      )}
-
-      {ticket.requestedAmount != null && (
-        <div className="rounded-lg border p-3 text-sm space-y-1">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Spend</p>
-          <p className="font-semibold">
-            Requested ₦{Number(ticket.requestedAmount).toLocaleString()} · {ticket.requestedCategory || "—"}
-          </p>
-          {ticket.approvedAmount != null && (
-            <p className="text-sm">Approved cap ₦{Number(ticket.approvedAmount).toLocaleString()}</p>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0 space-y-4">
+          {ticket.description && (
+            <SectionCard title="Description">
+              <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">{ticket.description}</p>
+            </SectionCard>
           )}
-          {ticket.paidAmount != null && (
-            <p className="text-sm text-emerald-700">Paid ₦{Number(ticket.paidAmount).toLocaleString()}</p>
+
+          <SectionCard title="Details">
+            <dl className="divide-y">
+              <Fact label="Station">{ticket.station?.name || "—"}</Fact>
+              <Fact label="Raised by">{personName(ticket.raisedBy)}</Fact>
+              {ticket.pump && <Fact label="Pump">{ticket.pump.name}</Fact>}
+              {ticket.nozzle && <Fact label="Nozzle">{ticket.nozzle.name}</Fact>}
+              {ticket.requestedAmount != null && (
+                <Fact label="Requested">{money(ticket.requestedAmount)}</Fact>
+              )}
+              {ticket.requestedCategory && (
+                <Fact label="Category">
+                  {EXPENSE_CATEGORY_LABELS[ticket.requestedCategory] || ticket.requestedCategory}
+                </Fact>
+              )}
+              {ticket.spendIntent && ticket.spendIntent !== "NONE" && (
+                <Fact label="Intent">
+                  {ticket.spendIntent === "ALREADY_PAID" ? "Already paid" : "Request"}
+                </Fact>
+              )}
+              {ticket.approvedAmount != null && <Fact label="Approved">{money(ticket.approvedAmount)}</Fact>}
+              {ticket.paidAmount != null && <Fact label="Paid">{money(ticket.paidAmount)}</Fact>}
+              {ticket.latitude != null && ticket.longitude != null && (
+                <Fact label="Location">
+                  {Number(ticket.latitude).toFixed(5)}, {Number(ticket.longitude).toFixed(5)}
+                </Fact>
+              )}
+            </dl>
+          </SectionCard>
+
+          {ticket.varianceLog && (
+            <SectionCard title="Volume">
+              <dl className="divide-y">
+                <Fact label="Expected">{Number(ticket.varianceLog.expectedVolume).toLocaleString()} L</Fact>
+                <Fact label="Actual">{Number(ticket.varianceLog.actualVolume).toLocaleString()} L</Fact>
+                <Fact label="Variance">
+                  {Number(ticket.varianceLog.actualVolume) - Number(ticket.varianceLog.expectedVolume) > 0
+                    ? "+"
+                    : ""}
+                  {(
+                    Number(ticket.varianceLog.actualVolume) - Number(ticket.varianceLog.expectedVolume)
+                  ).toLocaleString()}{" "}
+                  L
+                </Fact>
+              </dl>
+            </SectionCard>
           )}
-          <p className="text-xs text-muted-foreground">
-            {ticket.spendIntent === "ALREADY_PAID" ? "Already paid — confirm outflow" : "Request — pay out after approval"}
-          </p>
-        </div>
-      )}
 
-      {Array.isArray(ticket.spendRevisions) && ticket.spendRevisions.length > 0 && (
-        <div className="rounded-lg border p-3 space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Amount timeline</p>
-          {ticket.spendRevisions.map((rev: any) => (
-            <div key={rev.id} className="text-xs border-b last:border-0 pb-2 last:pb-0">
-              <p>
-                Requested ₦{Number(rev.newRequested).toLocaleString()}
-                {rev.newApproved != null ? ` → approved ₦${Number(rev.newApproved).toLocaleString()}` : " (awaiting approval)"}
-              </p>
-              <p className="text-muted-foreground">{rev.reason}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {ticket.varianceLog && (
-        <div className="rounded-lg border p-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Volume Variance</p>
-          <VarianceMeter
-            expected={Number(ticket.varianceLog.expectedVolume)}
-            actual={Number(ticket.varianceLog.actualVolume)}
-          />
-        </div>
-      )}
-
-      {ticket.expense && (
-        <div className="rounded-lg border p-3 space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Linked expense</p>
-          <p className="text-sm font-medium">
-            ₦{Number(ticket.expense.amount).toLocaleString()} · {ticket.expense.status} · {ticket.expense.paymentMethod}
-          </p>
-          <p className="text-xs text-muted-foreground">{ticket.expense.description}</p>
-          {ticket.expense.receiptUrl && (
-            <div className="relative h-32 w-full overflow-hidden rounded-md border">
-              <Image src={ticket.expense.receiptUrl} alt="Receipt" fill className="object-contain" />
-            </div>
+          {ticket.parent && (
+            <SectionCard title="Linked ticket">
+              <Link
+                href={`/admin/station/tickets/${ticket.parent.id}`}
+                className="text-sm underline-offset-4 hover:underline"
+              >
+                {ticket.parent.title}
+              </Link>
+            </SectionCard>
           )}
-        </div>
-      )}
 
-      {Array.isArray(ticket.children) && ticket.children.length > 0 && (
-        <div className="rounded-lg border p-3 space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Linked spend</p>
-          {ticket.children.map((child: any) => (
-            <Link
-              key={child.id}
-              href={`/admin/station/tickets/${child.id}`}
-              className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted/30"
-            >
-              <span>
-                {child.title} · ₦{Number(child.requestedAmount || 0).toLocaleString()}
-              </span>
-              {statusBadge(child.status)}
-            </Link>
-          ))}
-        </div>
-      )}
+          {children.length > 0 && (
+            <SectionCard title="Linked spend">
+              <ul className="divide-y">
+                {children.map((child) => (
+                  <li key={child.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <Link
+                      href={`/admin/station/tickets/${child.id}`}
+                      className="min-w-0 truncate underline-offset-4 hover:underline"
+                    >
+                      {child.title}
+                    </Link>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="text-muted-foreground">{money(child.requestedAmount)}</span>
+                      <TicketStatusBadge status={child.status} />
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          )}
 
-      {Array.isArray(ticket.evidenceUrls) && ticket.evidenceUrls.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto">
-          {ticket.evidenceUrls.map((url: string) => (
-            <div key={url} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md border">
-              <Image src={url} alt="Evidence" fill className="object-cover" />
-            </div>
-          ))}
-        </div>
-      )}
+          {ticket.expense && (
+            <SectionCard title="Expense">
+              <dl className="divide-y">
+                <Fact label="Amount">{money(ticket.expense.amount)}</Fact>
+                <Fact label="Status">{ticket.expense.status}</Fact>
+                <Fact label="Method">{ticket.expense.paymentMethod?.replaceAll("_", " ")}</Fact>
+                {ticket.expense.description && <Fact label="Note">{ticket.expense.description}</Fact>}
+              </dl>
+              {ticket.expense.receiptUrl && (
+                <button
+                  type="button"
+                  onClick={() => setViewerUrl(ticket.expense.receiptUrl)}
+                  className="relative mt-4 h-36 w-full overflow-hidden rounded-md border text-left"
+                >
+                  <Image src={ticket.expense.receiptUrl} alt="Receipt" fill className="object-contain bg-muted/30" />
+                </button>
+              )}
+            </SectionCard>
+          )}
 
-      {closed && (
-        <div className={cn("space-y-1 rounded-lg border p-3", ticket.status === "REJECTED" ? "bg-rose-50" : "bg-emerald-50")}>
-          <p className={cn("text-xs font-semibold", ticket.status === "REJECTED" ? "text-rose-700" : "text-emerald-700")}>
-            {ticket.status === "REJECTED" ? "Rejected" : "Closed"} by {ticket.approvedBy?.firstName || ticket.approvedBy?.email || "Admin"}
-          </p>
-          {ticket.remark && <p className="text-sm italic text-muted-foreground">&ldquo;{ticket.remark}&rdquo;</p>}
-        </div>
-      )}
+          {evidence.length > 0 && (
+            <SectionCard title="Evidence">
+              <div className="flex flex-wrap gap-2">
+                {evidence.map((url) => (
+                  <button
+                    key={url}
+                    type="button"
+                    onClick={() => setViewerUrl(url)}
+                    className="relative h-20 w-20 overflow-hidden rounded-md border"
+                  >
+                    <Image src={url} alt="Evidence" fill className="object-cover" />
+                  </button>
+                ))}
+              </div>
+            </SectionCard>
+          )}
 
-      {canApprove && (
-        <div className="space-y-3 rounded-lg border p-4">
-          {spend && (
+          <SectionCard title="History">
+            {history.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No activity yet.</p>
+            ) : (
+              <ol className="relative space-y-4 border-l pl-4">
+                {history.map((event) => (
+                  <li key={event.id} className="relative">
+                    <span className="absolute top-1.5 -left-[21px] size-2 rounded-full bg-foreground/40" />
+                    <p className="text-sm font-medium">{event.title}</p>
+                    {event.detail && <p className="mt-0.5 text-sm text-muted-foreground">{event.detail}</p>}
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {[event.actor, formatHumanReadableDate(event.at)].filter(Boolean).join(" · ")}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </SectionCard>
+        </div>
+
+        <aside className="lg:sticky lg:top-6">
+          <Card size="sm">
+            <CardHeader className="border-b">
+              <CardTitle>Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2 pt-4">
+              {hasActions ? (
+                <>
+                  {canApprove && (
+                    <>
+                      <Button className="w-full justify-start gap-2" onClick={() => setModal("approve")}>
+                        <BadgeCheck className="size-4" />
+                        {spend ? "Approve" : "Resolve"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start gap-2"
+                        onClick={() => setModal("reject")}
+                      >
+                        <XCircle className="size-4" />
+                        Decline
+                      </Button>
+                    </>
+                  )}
+                  {canPayout && (
+                    <Button
+                      variant={canApprove ? "outline" : "default"}
+                      className="w-full justify-start gap-2"
+                      onClick={() => setModal("payout")}
+                    >
+                      <Banknote className="size-4" />
+                      Record payout
+                    </Button>
+                  )}
+                  {canIncrease && (
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start gap-2"
+                      onClick={() => setModal("increase")}
+                    >
+                      <TrendingUp className="size-4" />
+                      Request increase
+                    </Button>
+                  )}
+                  {canAttachSpend && (
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start gap-2"
+                      onClick={() => setModal("spend")}
+                    >
+                      <Link2 className="size-4" />
+                      Attach spend
+                    </Button>
+                  )}
+                </>
+              ) : !canResolve && !closed ? (
+                <p className="text-sm text-muted-foreground">You can view this ticket but cannot approve or pay it.</p>
+              ) : closed ? (
+                <p className="text-sm text-muted-foreground">
+                  {ticket.status === "REJECTED" ? "This ticket was declined." : "This ticket is closed."}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">No actions available right now.</p>
+              )}
+
+              <Button variant="outline" className="w-full justify-start gap-2" asChild>
+                <Link href={`/admin/station/tickets/${ticket.id}/print`}>
+                  <Printer className="size-4" />
+                  Print
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </aside>
+      </div>
+
+      <Dialog open={modal === "approve"} onOpenChange={(open) => !open && closeModal()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{spend ? "Approve this request" : "Resolve this ticket"}</DialogTitle>
+            <DialogDescription>
+              {spend
+                ? "Set the amount they can spend, then add a note for the record."
+                : "Add a short note explaining how this was resolved."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {spend && (
+              <div className="space-y-1.5">
+                <Label>Approved amount</Label>
+                <NumberInput
+                  value={approvedAmount}
+                  onChange={(value) => setApprovedAmount(value === "" ? "" : String(value))}
+                  placeholder="Approved amount"
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">Approved amount</Label>
-              <NumberInput
-                value={approvedAmount}
-                onChange={(value) => setApprovedAmount(value === "" ? "" : String(value))}
-                placeholder="Approved cap"
+              <Label>Note</Label>
+              <Textarea
+                value={remark}
+                onChange={(e) => setRemark(e.target.value)}
+                placeholder="Required"
+                rows={3}
               />
             </div>
-          )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeModal} disabled={processing}>
+              Cancel
+            </Button>
+            <Button onClick={() => resolve(spend ? "APPROVE" : "RESOLVE")} disabled={processing}>
+              {processing ? "Saving..." : spend ? "Approve" : "Resolve"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={modal === "reject"} onOpenChange={(open) => !open && closeModal()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Decline this ticket</DialogTitle>
+            <DialogDescription>Let them know why it cannot go ahead.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Remark / Reason</Label>
+            <Label>Reason</Label>
             <Textarea
-              placeholder="Required for approve or reject"
               value={remark}
               onChange={(e) => setRemark(e.target.value)}
+              placeholder="Required"
               rows={3}
             />
           </div>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
+            <Button variant="outline" onClick={closeModal} disabled={processing}>
+              Cancel
+            </Button>
             <Button variant="destructive" onClick={() => resolve("REJECT")} disabled={processing}>
-              Reject
+              {processing ? "Saving..." : "Decline"}
             </Button>
-            <Button onClick={() => resolve(spend ? "APPROVE" : "RESOLVE")} disabled={processing}>
-              {spend ? "Approve cap" : "Resolve"}
-            </Button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {canPayout && (
-        <div className="space-y-3 rounded-lg border p-4">
-          <p className="text-sm font-semibold">Pay out</p>
-          <p className="text-xs text-muted-foreground">
-            Select the outflow. This posts the station expense and ledger payment.
-          </p>
-          <div className="space-y-1.5">
-            <Label>Amount</Label>
-            <NumberInput
-              value={payoutAmount}
-              onChange={(value) => setPayoutAmount(value === "" ? "" : String(value))}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Payment method</Label>
-            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="CASH">Cash</SelectItem>
-                <SelectItem value="POS">POS</SelectItem>
-                <SelectItem value="BANK_TRANSFER">Bank transfer</SelectItem>
-                <SelectItem value="CHEQUE">Cheque</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {paymentMethod !== "CASH" && (
+      <Dialog open={modal === "payout"} onOpenChange={(open) => !open && closeModal()}>
+        <DialogContent className="overflow-visible">
+          <DialogHeader>
+            <DialogTitle>Record payout</DialogTitle>
+            <DialogDescription>This posts the station expense and ledger payment.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>Outflow account</Label>
-              <Select value={bankAccountId} onValueChange={setBankAccountId}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select account" /></SelectTrigger>
+              <Label className={payoutErrors.amount ? "text-destructive" : undefined}>Amount</Label>
+              <NumberInput
+                value={payoutAmount}
+                onChange={(value) => {
+                  setPayoutAmount(value === "" ? "" : String(value));
+                  if (payoutErrors.amount) setPayoutErrors((prev) => ({ ...prev, amount: undefined }));
+                }}
+                aria-invalid={!!payoutErrors.amount}
+              />
+              {payoutErrors.amount && <p className="text-xs text-destructive">{payoutErrors.amount}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label className={payoutErrors.paymentMethod ? "text-destructive" : undefined}>Payment method</Label>
+              <Select
+                value={paymentMethod}
+                onValueChange={(value) => {
+                  setPaymentMethod(value);
+                  if (payoutErrors.paymentMethod) {
+                    setPayoutErrors((prev) => ({ ...prev, paymentMethod: undefined }));
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full" aria-invalid={!!payoutErrors.paymentMethod}>
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
                 <SelectContent>
-                  {bankAccounts.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.bankName} · {a.accountName} · {a.accountNumber}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="POS">POS</SelectItem>
+                  <SelectItem value="BANK_TRANSFER">Bank transfer</SelectItem>
+                  <SelectItem value="CHEQUE">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+              {payoutErrors.paymentMethod && (
+                <p className="text-xs text-destructive">{payoutErrors.paymentMethod}</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label className={payoutErrors.bankAccountId ? "text-destructive" : undefined}>Outflow account</Label>
+              <Popover open={bankOpen} onOpenChange={setBankOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={bankOpen}
+                    aria-invalid={!!payoutErrors.bankAccountId}
+                    className={cn(
+                      "h-9 w-full justify-between font-normal",
+                      !bankAccountId && "text-muted-foreground",
+                      payoutErrors.bankAccountId && "border-destructive aria-invalid:ring-destructive/20",
+                    )}
+                  >
+                    <span className="truncate">
+                      {bankAccountId
+                        ? (() => {
+                            const account = bankAccounts.find((a) => a.id === bankAccountId);
+                            return account
+                              ? `${account.bankName} · ${account.accountName} · ${account.accountNumber}`
+                              : "Select account";
+                          })()
+                        : "Search and select account"}
+                    </span>
+                    <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0" align="start" style={{ width: "var(--radix-popover-trigger-width)" }}>
+                  <Command>
+                    <CommandInput placeholder="Search bank, name, or number..." />
+                    <CommandList>
+                      <CommandEmpty>No bank accounts found.</CommandEmpty>
+                      <CommandGroup>
+                        {bankAccounts.map((account) => (
+                          <CommandItem
+                            key={account.id}
+                            value={`${account.bankName} ${account.accountName} ${account.accountNumber}`}
+                            onSelect={() => {
+                              setBankAccountId(account.id);
+                              setBankOpen(false);
+                              if (payoutErrors.bankAccountId) {
+                                setPayoutErrors((prev) => ({ ...prev, bankAccountId: undefined }));
+                              }
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "size-4 shrink-0",
+                                bankAccountId === account.id ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                            <div className="flex min-w-0 flex-col text-left">
+                              <span className="text-sm font-medium">{account.bankName}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {account.accountName} · {account.accountNumber}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {payoutErrors.bankAccountId && (
+                <p className="text-xs text-destructive">{payoutErrors.bankAccountId}</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeModal} disabled={processing}>
+              Cancel
+            </Button>
+            <Button onClick={payout} disabled={processing}>
+              {processing ? "Paying..." : "Record payout"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={modal === "increase"} onOpenChange={(open) => !open && closeModal()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request amount increase</DialogTitle>
+            <DialogDescription>
+              Current request is {money(ticket.requestedAmount)}
+              {ticket.approvedAmount != null ? ` (approved ${money(ticket.approvedAmount)})` : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>New amount</Label>
+              <NumberInput
+                value={increaseAmount}
+                onChange={(value) => setIncreaseAmount(value === "" ? "" : String(value))}
+                placeholder="New requested amount"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Reason</Label>
+              <Input
+                value={increaseReason}
+                onChange={(e) => setIncreaseReason(e.target.value)}
+                placeholder="Price change, extra parts…"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeModal} disabled={processing}>
+              Cancel
+            </Button>
+            <Button onClick={requestIncrease} disabled={processing}>
+              {processing ? "Submitting..." : "Submit request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={modal === "spend"} onOpenChange={(open) => !open && closeModal()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Attach spend request</DialogTitle>
+            <DialogDescription>
+              Keeps this issue open and creates a linked spend ticket for approval.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Amount</Label>
+              <NumberInput
+                value={spendAmount}
+                onChange={(value) => setSpendAmount(value === "" ? "" : String(value))}
+                placeholder="Requested amount"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Category</Label>
+              <Select value={spendCategory} onValueChange={setSpendCategory}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="FUEL_FOR_GEN">Generator fuel</SelectItem>
+                  <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
+                  <SelectItem value="UTILITIES">Utilities</SelectItem>
+                  <SelectItem value="STATIONERY">Stationery</SelectItem>
+                  <SelectItem value="OTHER">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          )}
-          <Button onClick={payout} disabled={processing}>
-            {processing ? "Paying..." : "Record outflow"}
-          </Button>
-        </div>
-      )}
+            <div className="space-y-1.5">
+              <Label>What it is for</Label>
+              <Textarea
+                value={spendDescription}
+                onChange={(e) => setSpendDescription(e.target.value)}
+                placeholder="Describe the spend"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeModal} disabled={processing}>
+              Cancel
+            </Button>
+            <Button onClick={attachSpend} disabled={processing}>
+              {processing ? "Creating..." : "Create spend ticket"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {canIncrease && (
-        <div className="space-y-3 rounded-lg border p-4">
-          <p className="text-sm font-semibold">Request amount increase</p>
-          <NumberInput
-            value={increaseAmount}
-            onChange={(value) => setIncreaseAmount(value === "" ? "" : String(value))}
-            placeholder="New requested amount"
-          />
-          <Input
-            value={increaseReason}
-            onChange={(e) => setIncreaseReason(e.target.value)}
-            placeholder="Reason (price change, extra parts…)"
-          />
-          <Button variant="outline" onClick={requestIncrease} disabled={processing}>
-            Submit increase
-          </Button>
-        </div>
-      )}
-
-      {canAttachSpend && (
-        <div className="space-y-3 rounded-lg border p-4">
-          <p className="text-sm font-semibold">Attach spend request</p>
-          <p className="text-xs text-muted-foreground">Keeps this issue ticket and opens a child spend ticket.</p>
-          <NumberInput
-            value={spendAmount}
-            onChange={(value) => setSpendAmount(value === "" ? "" : String(value))}
-            placeholder="Requested amount"
-          />
-          <Select value={spendCategory} onValueChange={setSpendCategory}>
-            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="FUEL_FOR_GEN">Generator fuel</SelectItem>
-              <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
-              <SelectItem value="UTILITIES">Utilities</SelectItem>
-              <SelectItem value="STATIONERY">Stationery</SelectItem>
-              <SelectItem value="OTHER">Other</SelectItem>
-            </SelectContent>
-          </Select>
-          <Textarea
-            value={spendDescription}
-            onChange={(e) => setSpendDescription(e.target.value)}
-            placeholder="What the money is for"
-            rows={3}
-          />
-          <Button variant="outline" onClick={attachSpend} disabled={processing}>
-            Create spend ticket
-          </Button>
-        </div>
-      )}
-
-      {!canResolve && !closed && (
-        <p className="text-sm text-muted-foreground">You can view this ticket but do not have permission to approve or pay it.</p>
-      )}
+      <FileViewerModal
+        isOpen={!!viewerUrl}
+        onClose={() => setViewerUrl(null)}
+        fileUrl={viewerUrl}
+        fileName="Evidence"
+      />
     </div>
   );
 }

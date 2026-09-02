@@ -8,6 +8,11 @@ import { DashboardLayoutShell } from "@/components/dashboard-layout-shell";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 import { UnauthorizedToast } from "@/components/unauthorized-toast";
+import {
+  ORGANIZATION_BRAND_SELECT,
+  printCompanyFromOrganization,
+  type OrganizationBrand,
+} from "@/lib/print/org-branding";
 
 interface NavItemConfig {
   href?: string;
@@ -91,7 +96,7 @@ export default async function StationDashboardLayout({ children }: { children: R
           id: true,
           name: true,
           code: true,
-          organization: { select: { name: true, slug: true, logoKey: true, type: true } }
+          organization: { select: { ...ORGANIZATION_BRAND_SELECT, type: true } }
         },
         orderBy: { name: "asc" },
       },
@@ -112,7 +117,7 @@ export default async function StationDashboardLayout({ children }: { children: R
         id: true, 
         name: true, 
         code: true, 
-        organization: { select: { name: true, slug: true, logoKey: true, type: true } }
+        organization: { select: { ...ORGANIZATION_BRAND_SELECT, type: true } }
       },
       orderBy: { name: "asc" },
     });
@@ -123,7 +128,7 @@ export default async function StationDashboardLayout({ children }: { children: R
   
   const allInternalOrgs = await prisma.organization.findMany({
     where: { tenantId: actor.tenantId, type: "INTERNAL" },
-    select: { id: true, name: true, slug: true, logoKey: true }
+    select: { id: true, ...ORGANIZATION_BRAND_SELECT }
   });
 
   let isAllowed = activeStationId === "all" || allowedStations.some((s) => s.id === activeStationId);
@@ -138,11 +143,11 @@ export default async function StationDashboardLayout({ children }: { children: R
     activeStationId = hasAssignedStations ? (allowedStations[0]?.id || "all") : "all";
   }
 
-  let orgInfo = null;
+  let orgInfo: OrganizationBrand | null = null;
   if (activeStationId !== "all") {
     const activeStation = await prisma.station.findUnique({
       where: { id: activeStationId },
-      select: { organization: { select: { name: true, slug: true, logoKey: true } } }
+      select: { organization: { select: ORGANIZATION_BRAND_SELECT } }
     });
     if (activeStation?.organization) {
       orgInfo = activeStation.organization;
@@ -156,26 +161,20 @@ export default async function StationDashboardLayout({ children }: { children: R
   if (!orgInfo && actor.organizationId) {
     orgInfo = await prisma.organization.findUnique({
       where: { id: actor.organizationId },
-      select: { name: true, slug: true, logoKey: true }
+      select: ORGANIZATION_BRAND_SELECT
     });
   }
 
   if (!orgInfo) {
     const internalOrg = await prisma.organization.findFirst({
       where: { tenantId: actor.tenantId, type: "INTERNAL" },
-      select: { name: true, slug: true, logoKey: true }
+      select: ORGANIZATION_BRAND_SELECT
     });
     if (internalOrg) {
       orgInfo = internalOrg;
     } else {
       const firstOrg = allowedStations.find((s) => s.organization?.name)?.organization;
-      if (firstOrg && firstOrg.name) {
-        orgInfo = {
-          name: firstOrg.name,
-          slug: firstOrg.slug || null,
-          logoKey: firstOrg.logoKey || null,
-        };
-      }
+      if (firstOrg) orgInfo = firstOrg;
     }
   }
 
@@ -306,6 +305,7 @@ export default async function StationDashboardLayout({ children }: { children: R
             .filter(Boolean)
             .join(", ") || null,
       }}
+      printCompany={orgInfo ? printCompanyFromOrganization(orgInfo) : undefined}
     >
       <UnauthorizedToast />
       {children}

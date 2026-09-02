@@ -35,7 +35,7 @@ export default async function NewStationUserPage() {
         allPermissions={ALL_STATION_PERMISSION_KEYS}
         moduleContext="STATION"
         organizationId={orgId}
-        successRedirect={(id) => `/admin/station/users/${id}`}
+        successRedirect="/admin/station/users"
       />
     </div>
   );

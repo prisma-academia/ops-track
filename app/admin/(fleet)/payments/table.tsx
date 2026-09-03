@@ -6,12 +6,14 @@ import { CreditCard, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { useRouter, useSearchParams } from "next/navigation";
+import { formatTransactionCategoryLabel } from "@/lib/finance/transaction-labels";
 
 export type PaymentRow = {
   id: string;
   reference: string;
   type: string; // INFLOW | OUTFLOW
   category: string;
+  counterpartyName: string | null;
   amount: number;
   paymentMethod: string;
   bankAccount: string | null;
@@ -20,10 +22,10 @@ export type PaymentRow = {
 
 const columns: ColumnDef<PaymentRow>[] = [
   { 
-    accessorKey: "reference", 
-    header: "Transaction Ref",
+    accessorKey: "counterpartyName", 
+    header: "Station / Client",
     cell: ({ row }) => {
-      const ref = row.original.reference;
+      const name = row.original.counterpartyName || "—";
       const isOutflow = row.original.type === "OUTFLOW";
       return (
         <div className="flex items-center gap-3 py-1">
@@ -31,7 +33,7 @@ const columns: ColumnDef<PaymentRow>[] = [
             {isOutflow ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownLeft className="w-5 h-5" />}
           </div>
           <div className="flex flex-col">
-            <span className="font-semibold text-foreground">{ref}</span>
+            <span className="font-semibold text-foreground">{name}</span>
             <span className="text-xs text-muted-foreground">
               {row.original.paymentMethod || "Bank Transfer"}
               {row.original.bankAccount ? ` • ${row.original.bankAccount}` : ""}
@@ -42,12 +44,20 @@ const columns: ColumnDef<PaymentRow>[] = [
     }
   },
   { 
+    accessorKey: "reference", 
+    header: "Reference",
+    cell: ({ row }) => (
+      <span className="font-mono text-xs font-semibold text-foreground">
+        {row.original.reference}
+      </span>
+    ),
+  },
+  { 
     accessorKey: "category", 
     header: "Category",
-    cell: ({ row }) => {
-      const cat = row.original.category.replace(/_/g, " ");
-      return <span className="capitalize">{cat.toLowerCase()}</span>;
-    }
+    cell: ({ row }) => (
+      <span>{formatTransactionCategoryLabel(row.original.category)}</span>
+    )
   },
   { 
     accessorKey: "amount", 
@@ -124,8 +134,8 @@ export function PaymentsTable({
       columns={columns}
       data={data}
       rowHref={(s) => `/admin/payments/${s.id}`}
-      filterColumnId="reference"
-      searchPlaceholder="Search by reference…"
+      filterColumnId="counterpartyName"
+      searchPlaceholder="Search station or client…"
       filterNode={filterNode}
       headerAction={headerAction}
       {...(serverPagination ? {

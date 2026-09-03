@@ -12,7 +12,7 @@ const CreateSaleSchema = z.object({
   recipientType: z.enum(["CUSTOMER", "STATION"]),
   customerId: z.string().optional(),
   stationId: z.string().optional(),
-  transportCostBorneBy: z.enum(["CLIENT", "COMPANY"]).optional(),
+  transportCostBorneBy: z.enum(["CLIENT", "COMPANY"]),
   transportId: z.string().min(1, "Transport is required"),
   litersDespatched: z.number().positive(),
   litersReceived: z.number().min(0).optional().nullable(),
@@ -100,12 +100,6 @@ export async function POST(request: Request) {
     const litersReceivedForCalc = body.litersReceived !== undefined && body.litersReceived !== null ? body.litersReceived : body.litersDespatched;
     const totalExpectedAmount = litersReceivedForCalc * body.amountPerLiter;
     
-    // Default transport cost rule if not provided (Company for own station, Client for external)
-    let transportCostBorneBy = body.transportCostBorneBy;
-    if (!transportCostBorneBy) {
-      transportCostBorneBy = body.stationId ? "COMPANY" : "CLIENT";
-    }
-
     const Delivery = await prisma.$transaction(async (tx) => {
       let organizationId: string | null = null;
       if (body.stationId) {
@@ -123,7 +117,7 @@ export async function POST(request: Request) {
           customerId: body.customerId ?? null,
           stationId: body.stationId ?? null,
           transportId: body.transportId ?? null,
-          transportCostBorneBy: transportCostBorneBy,
+          transportCostBorneBy: body.transportCostBorneBy,
           transportRate: body.transportCostPerLiter ?? 0,
           transportCost: (body.transportCostPerLiter ?? 0) * body.litersDespatched,
           litersDespatched: body.litersDespatched,

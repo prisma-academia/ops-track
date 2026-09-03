@@ -17,6 +17,10 @@ import { Button } from "@/components/ui/button";
 import { LogPaymentModal } from "@/components/fleet/payments/log-payment-modal";
 import { cn, formatShortCurrency } from "@/lib/utils";
 import { fleetLedgerWhere, STATION_LEDGER_CATEGORIES } from "@/lib/finance/fleet-ledger";
+import {
+  formatTransactionCategoryLabel,
+  resolveTransactionCounterpartyName,
+} from "@/lib/finance/transaction-labels";
 
 export default async function PaymentsPage({
   searchParams,
@@ -70,7 +74,7 @@ export default async function PaymentsPage({
   });
   const categoryOptions = categories.map(c => ({
     value: c.category,
-    label: c.category.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+    label: formatTransactionCategoryLabel(c.category),
   }));
 
   // Get fleet bank accounts for combobox
@@ -89,7 +93,18 @@ export default async function PaymentsPage({
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({
       where,
-      include: { bankAccount: true },
+      include: {
+        bankAccount: true,
+        customer: { select: { name: true } },
+        station: { select: { name: true, code: true } },
+        transporter: { select: { name: true } },
+        delivery: {
+          select: {
+            customer: { select: { name: true } },
+            station: { select: { name: true, code: true } },
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
       skip,
       take,
@@ -101,6 +116,7 @@ export default async function PaymentsPage({
     reference: t.reference || t.id.substring(0, 8).toUpperCase(),
     type: t.type,
     category: t.category,
+    counterpartyName: resolveTransactionCounterpartyName(t),
     amount: Number(t.amount),
     paymentMethod: t.paymentMethod || "Bank Transfer",
     bankAccount: t.bankAccount ? `${t.bankAccount.bankName} - ${t.bankAccount.accountNumber}` : null,

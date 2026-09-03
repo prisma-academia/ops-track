@@ -110,7 +110,11 @@ export function CreateOrderForm() {
   // Auto-generate Reference
   useEffect(() => {
     if (watchProductType) {
-      const today = new Date().toISOString().split("T")[0].replace(/-/g, "");
+      const now = new Date();
+      const yy = String(now.getFullYear()).slice(-2);
+      const mm = String(now.getMonth() + 1).padStart(2, "0");
+      const dd = String(now.getDate()).padStart(2, "0");
+      const today = `${yy}${mm}${dd}`;
       const randomNum = Math.floor(Math.random() * 900) + 100;
       setValue("reference", `ORD-${today}-${watchProductType}-${randomNum}`, { shouldValidate: true });
     }

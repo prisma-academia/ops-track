@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save, ChevronsUpDown, Check, Store, UserCircle, Droplet } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Save, ChevronsUpDown, Store, UserCircle, Droplet, Truck, Package2 } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
@@ -22,7 +23,9 @@ const BaseSchema = z.object({
   recipientType: z.enum(["CUSTOMER", "STATION"]),
   customerId: z.string().optional(),
   stationId: z.string().optional(),
-  transportCostBorneBy: z.enum(["CLIENT", "COMPANY"]),
+  transportCostBorneBy: z.enum(["CLIENT", "COMPANY"], {
+    required_error: "Please select who bears the transport cost",
+  }),
   transportId: z.string().min(1, "Please select a transport"),
   litersDespatched: z.coerce.number().positive("Liters despatched must be > 0"),
   litersReceived: z.union([z.coerce.number().positive(), z.literal(""), z.undefined()]).transform(v => (v === "" || v === undefined ? null : Number(v))).optional().nullable(),
@@ -32,34 +35,198 @@ const BaseSchema = z.object({
 
 type Values = z.infer<typeof BaseSchema>;
 
+type CreateSaleFormProps = {
+  customers: { id: string; name: string }[];
+  stations: { id: string; name: string; code: string }[];
+  transports: {
+    id: string;
+    destination: string;
+    litersCarried: any;
+    ratePerLiter: any;
+    status: string;
+    order?: {
+      reference: string | null;
+      productType: string;
+      litersOrdered: any;
+      supplier: string | null;
+      sourceDepot: string | null;
+      status: string;
+    } | null;
+    deliveries?: { litersDespatched: any }[];
+    truck: { name: string; plateNumber: string | null; capacityLiters: any };
+    transporter: { name: string };
+  }[];
+  preselectedTransportId?: string;
+};
+
+type TransportOption = CreateSaleFormProps["transports"][number];
+
+function getTransportVolumes(transport: TransportOption) {
+  const carried = Number(transport.litersCarried || 0);
+  const distributed = (transport.deliveries || []).reduce(
+    (acc, sale) => acc + Number(sale.litersDespatched || 0),
+    0
+  );
+  const available = Math.max(0, carried - distributed);
+  return { carried, distributed, available };
+}
+
+function TripSummaryRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border/40 last:border-0">
+      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium text-foreground text-right">{value}</span>
+    </div>
+  );
+}
+
+function TripSummaryCard({
+  transport,
+  dispatchVolume,
+}: {
+  transport: TransportOption | undefined;
+  dispatchVolume: number;
+}) {
+  if (!transport) {
+    return (
+      <Card className="border-dashed border-2 border-border/60 bg-muted/10 sticky top-6">
+        <CardContent className="flex flex-col items-center justify-center min-h-[320px] px-6 text-center">
+          <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted/50">
+            <Truck className="size-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium text-foreground">No trip selected</p>
+          <p className="mt-1 text-xs text-muted-foreground max-w-[220px]">
+            Choose an order or transport trip to review available volume and trip details.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const { carried, distributed, available } = getTransportVolumes(transport);
+  const dispatching = Math.max(0, dispatchVolume || 0);
+  const remainingAfter = Math.max(0, available - dispatching);
+  const utilization = carried > 0 ? Math.min(100, Math.round((distributed / carried) * 100)) : 0;
+  const afterDispatchUtilization =
+    carried > 0 ? Math.min(100, Math.round(((distributed + dispatching) / carried) * 100)) : 0;
+  const truckLabel = transport.truck.plateNumber || transport.truck.name;
+
+  return (
+    <Card className="border-border/60 bg-card/80 backdrop-blur-xs sticky top-6 shadow-sm">
+      <CardHeader className="pb-3 border-b border-border/40">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+              Trip Summary
+            </CardTitle>
+          </div>
+          {transport.order?.productType ? (
+            <Badge variant="outline" className="font-mono text-[10px] uppercase shrink-0">
+              {transport.order.productType}
+            </Badge>
+          ) : null}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+          <div className="flex items-center gap-2 mb-3">
+            <Package2 className="size-4 text-muted-foreground" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Order</span>
+          </div>
+          <TripSummaryRow
+            label="Reference"
+            value={
+              <span className="font-mono text-xs">
+                {transport.order?.reference || "Unlinked"}
+              </span>
+            }
+          />
+          {transport.order?.sourceDepot ? (
+            <TripSummaryRow label="Depot" value={transport.order.sourceDepot} />
+          ) : null}
+        </div>
+
+        <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+          <div className="flex items-center gap-2 mb-3">
+            <Truck className="size-4 text-muted-foreground" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transport</span>
+          </div>
+          <TripSummaryRow label="Destination" value={transport.destination} />
+          <TripSummaryRow label="Transporter" value={transport.transporter.name} />
+          <TripSummaryRow label="Truck" value={truckLabel} />
+          <TripSummaryRow
+            label="Status"
+            value={
+              <Badge variant="secondary" className="text-[10px] uppercase">
+                {transport.status.replace(/_/g, " ")}
+              </Badge>
+            }
+          />
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+            <span>Volume on trip</span>
+            <span>{utilization}% allocated</span>
+          </div>
+          <div className="h-2.5 w-full overflow-hidden rounded-full border border-border/50 bg-muted/40">
+            <div
+              className="h-full rounded-full bg-primary/70 transition-all duration-300"
+              style={{ width: `${utilization}%` }}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-2">
+            <div className="flex items-center justify-between rounded-md border border-border/50 bg-background/80 px-3 py-2.5">
+              <span className="text-xs text-muted-foreground">Carried</span>
+              <span className="font-mono text-sm font-semibold">{carried.toLocaleString()} L</span>
+            </div>
+            <div className="flex items-center justify-between rounded-md border border-amber-200/70 bg-amber-50/50 px-3 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/20">
+              <span className="text-xs text-muted-foreground">Already distributed</span>
+              <span className="font-mono text-sm font-semibold text-amber-700 dark:text-amber-400">
+                {distributed.toLocaleString()} L
+              </span>
+            </div>
+            <div className="flex items-center justify-between rounded-md border border-emerald-200/70 bg-emerald-50/50 px-3 py-2.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+              <span className="text-xs text-muted-foreground">Available now</span>
+              <span className="font-mono text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                {available.toLocaleString()} L
+              </span>
+            </div>
+          </div>
+
+          {dispatching > 0 ? (
+            <div className="rounded-md border border-dashed border-primary/30 bg-primary/5 px-3 py-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">This dispatch</span>
+                <span className="font-mono font-semibold text-primary">{dispatching.toLocaleString()} L</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Remaining after</span>
+                <span className={`font-mono font-semibold ${remainingAfter === 0 ? "text-emerald-600" : "text-foreground"}`}>
+                  {remainingAfter.toLocaleString()} L
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted/50">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-300"
+                  style={{ width: `${afterDispatchUtilization}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function CreateSaleForm({
   customers,
   stations,
   transports,
   preselectedTransportId,
-}: {
-  customers: { id: string; name: string }[];
-  stations: { id: string; name: string; code: string }[];
-  transports: { 
-    id: string; 
-    destination: string; 
-    litersCarried: any;
-    ratePerLiter: any;
-    status: string;
-    order?: { 
-      reference: string | null; 
-      productType: string; 
-      litersOrdered: any; 
-      supplier: string | null; 
-      sourceDepot: string | null; 
-      status: string;
-    } | null;
-    deliveries?: { litersDespatched: any }[];
-    truck: { name: string; plateNumber: string | null; capacityLiters: any }; 
-    transporter: { name: string };
-  }[];
-  preselectedTransportId?: string;
-}) {
+}: CreateSaleFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   
@@ -98,7 +265,6 @@ export function CreateSaleForm({
       recipientType: "STATION",
       customerId: "",
       stationId: "",
-      transportCostBorneBy: "CLIENT",
       transportId: preselectedTransportId || "",
       litersDespatched: 0,
       litersReceived: undefined,
@@ -116,6 +282,7 @@ export function CreateSaleForm({
   
   const selectedTransportId = watch("transportId");
   const selectedTransport = transports.find((t) => t.id === selectedTransportId);
+  const litersDespatched = watch("litersDespatched");
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
@@ -185,13 +352,8 @@ export function CreateSaleForm({
                   name="recipientType"
                   render={({ field }) => (
                     <RadioGroup 
-                      onValueChange={(val) => {
-                        field.onChange(val);
-                        // Auto-set transport cost logic
-                        if (val === "STATION") setValue("transportCostBorneBy", "COMPANY");
-                        if (val === "CUSTOMER") setValue("transportCostBorneBy", "CLIENT");
-                      }} 
-                      defaultValue={field.value} 
+                      onValueChange={field.onChange} 
+                      value={field.value} 
                       className="grid grid-cols-1 md:grid-cols-2 gap-4"
                     >
                       <Label 
@@ -551,82 +713,10 @@ export function CreateSaleForm({
                 )}
               </Button>
             </div>
-          </div>
+        </div>
 
         <div className="space-y-6">
-          {selectedTransport ? (
-            <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs h-full">
-              <CardHeader className="border-b border-border/50">
-                <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center justify-between">
-                  <span>Selected Order & Transport Details</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5 text-xs">
-                {selectedTransport.order ? (
-                  <div className="space-y-2">
-                    <h4 className="font-medium text-foreground">Order Information</h4>
-                    <div className="grid grid-cols-2 gap-2 text-muted-foreground">
-                      <span>Reference:</span>
-                      <span className="font-medium text-foreground">{selectedTransport.order.reference || "N/A"}</span>
-                      <span>Product:</span>
-                      <span className="font-medium text-foreground">{selectedTransport.order.productType}</span>
-                      <span>Ordered Qty:</span>
-                      <span className="font-medium text-foreground">{Number(selectedTransport.order.litersOrdered || 0).toLocaleString()} L</span>
-                      <span>Supplier:</span>
-                      <span className="font-medium text-foreground truncate" title={selectedTransport.order.supplier || "N/A"}>{selectedTransport.order.supplier || "N/A"}</span>
-                      <span>Depot:</span>
-                      <span className="font-medium text-foreground truncate" title={selectedTransport.order.sourceDepot || "N/A"}>{selectedTransport.order.sourceDepot || "N/A"}</span>
-                      <span>Status:</span>
-                      <span className="font-medium text-foreground">{selectedTransport.order.status}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground italic">No associated order found.</p>
-                )}
-                
-                <div className="h-px bg-border/50" />
-
-                <div className="space-y-2">
-                  <h4 className="font-medium text-foreground">Transport Information</h4>
-                  <div className="grid grid-cols-2 gap-2 text-muted-foreground">
-                    <span>Transporter:</span>
-                    <span className="font-medium text-foreground truncate" title={selectedTransport.transporter.name}>{selectedTransport.transporter.name}</span>
-                    <span>Truck Plate No.:</span>
-                    <span className="font-medium text-foreground"> {selectedTransport.truck.plateNumber ? `(${selectedTransport.truck.plateNumber})` : ""}</span>
-                    <span>Destination:</span>
-                    <span className="font-medium text-foreground">{selectedTransport.destination}</span>
-                    <span>Status:</span>
-                    <span className="font-medium text-foreground">{selectedTransport.status}</span>
-                  </div>
-                </div>
-
-                <div className="h-px bg-border/50" />
-
-                <div className="space-y-2">
-                  <h4 className="font-medium text-foreground">Capacity & Volume</h4>
-                  <div className="grid grid-cols-2 gap-2 text-muted-foreground">
-                    <span>Truck Capacity:</span>
-                    <span className="font-medium text-foreground">{Number(selectedTransport.truck.capacityLiters || 0).toLocaleString()} L</span>
-                    <span>Liters Carried:</span>
-                    <span className="font-medium text-foreground">{Number(selectedTransport.litersCarried || 0).toLocaleString()} L</span>
-                    <span>Total Distributed:</span>
-                    <span className="font-medium text-foreground">
-                      {(selectedTransport.deliveries || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0).toLocaleString()} L
-                    </span>
-                    <span>Available Vol:</span>
-                    <span className="font-medium text-emerald-600 dark:text-emerald-500">
-                      {Math.max(0, Number(selectedTransport.litersCarried || 0) - (selectedTransport.deliveries || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0)).toLocaleString()} L
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-dashed border-2 border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/20 flex flex-col items-center justify-center h-full min-h-[300px] text-muted-foreground text-sm p-6 text-center">
-              <ChevronsUpDown className="h-8 w-8 text-stone-300 dark:text-stone-700 mb-3" />
-              <p>Select an Order / Transport Trip to view detailed information</p>
-            </Card>
-          )}
+          <TripSummaryCard transport={selectedTransport} dispatchVolume={Number(litersDespatched || 0)} />
         </div>
       </div>
     </form>

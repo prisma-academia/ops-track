@@ -1,19 +1,19 @@
 export type ActivityStatus = "SUCCESS" | "FAILED";
 
-const FAILED_ACTION_PATTERNS = [
-  /\.reject$/i,
-  /\.fail$/i,
-  /\.failed$/i,
-  /\.suspend$/i,
-  /\.denied$/i,
-  /\.error$/i,
-  /failed/i,
-  /unauthorized/i,
+const FAILED_ACTION_KEYWORDS = [
+  "reject",
+  "fail",
+  "suspend",
+  "denied",
+  "error",
+  "unauthorized",
 ];
 
 /** Classify an audit action as success or failed for display/filtering. */
 export function getActivityStatus(action: string): ActivityStatus {
-  if (FAILED_ACTION_PATTERNS.some((pattern) => pattern.test(action))) {
+  if (!action) return "SUCCESS";
+  const lower = action.toLowerCase();
+  if (FAILED_ACTION_KEYWORDS.some((keyword) => lower.includes(keyword))) {
     return "FAILED";
   }
   return "SUCCESS";

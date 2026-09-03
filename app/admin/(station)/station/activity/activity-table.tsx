@@ -7,9 +7,9 @@ import { format } from "date-fns";
 import {
   Activity,
   AlertCircle,
-  Building,
   Building2,
   Calendar as CalendarIcon,
+  CalendarClock,
   Check,
   CheckCircle2,
   ChevronsUpDown,
@@ -35,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { printElement, getExportFileBaseName } from "@/components/tables/table-export";
+import { usePrintCompany } from "@/components/print/print-company-context";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -93,19 +94,6 @@ export type ActivityRow = {
   actorDisplay?: string | null;
   targetDisplay?: string | null;
   status?: ActivityStatus;
-};
-
-export type TenantOption = {
-  id: string;
-  name: string;
-  slug: string;
-};
-
-export type UserOption = {
-  id: string;
-  name: string;
-  email: string;
-  role?: string;
 };
 
 type ActivityStats = {
@@ -178,27 +166,35 @@ function ActivityInsightCards({ stats }: { stats: ActivityStats }) {
   );
 }
 
-export function ActivityTable({
+export function StationActivityTable({
   initialData,
   initialMeta,
-  availableTenants = [],
   availableUsers = [],
-  moduleContext,
+  availableStations = [],
+  activeStationId,
+  initialFilters,
 }: {
   initialData: ActivityRow[];
-  initialMeta: Record<string, unknown> | null;
-  availableTenants?: TenantOption[];
-  availableUsers?: UserOption[];
-  moduleContext?: "STATION" | "FLEET";
+  initialMeta: Record<string, unknown>;
+  availableUsers?: { id: string; name: string }[];
+  availableStations?: { id: string; name: string; code: string }[];
+  activeStationId?: string | null;
+  initialFilters?: {
+    action?: string;
+    date?: string;
+    userId?: string;
+    stationId?: string;
+    status?: ActivityStatus | "";
+  };
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const urlAction = searchParams.get("action") ?? "";
-  const urlDateStr = searchParams.get("date") ?? "";
-  const urlUserId = searchParams.get("userId") ?? "";
-  const urlTenantId = searchParams.get("tenantId") ?? "";
-  const urlStatus = (searchParams.get("status") as ActivityStatus | "") ?? "";
+  const urlAction = searchParams.get("action") ?? initialFilters?.action ?? "";
+  const urlDateStr = searchParams.get("date") ?? initialFilters?.date ?? "";
+  const urlUserId = searchParams.get("userId") ?? initialFilters?.userId ?? "";
+  const urlStationId = searchParams.get("stationId") ?? initialFilters?.stationId ?? activeStationId ?? "";
+  const urlStatus = ((searchParams.get("status") as ActivityStatus | "") || initialFilters?.status) ?? "";
 
   const [date, setDate] = React.useState<Date | undefined>(() => {
     if (!urlDateStr) return undefined;
@@ -206,17 +202,17 @@ export function ActivityTable({
     return isNaN(parsed.getTime()) ? undefined : parsed;
   });
   const [userId, setUserId] = React.useState(urlUserId);
-  const [tenantId, setTenantId] = React.useState(urlTenantId);
+  const [stationId, setStationId] = React.useState(urlStationId);
   const [action, setAction] = React.useState(urlAction);
   const [status, setStatus] = React.useState<ActivityStatus | "">(urlStatus);
   const [openUser, setOpenUser] = React.useState(false);
-  const [openTenant, setOpenTenant] = React.useState(false);
+  const [openStation, setOpenStation] = React.useState(false);
   const [openDate, setOpenDate] = React.useState(false);
   const [selectedActivity, setSelectedActivity] = React.useState<ActivityRow | null>(null);
 
   const [debouncedAction, setDebouncedAction] = React.useState(action);
 
-  // Debounce action search input
+  // Debounce text filter input
   React.useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedAction(action);
@@ -241,31 +237,34 @@ export function ActivityTable({
     if (userId) params.set("userId", userId);
     else params.delete("userId");
 
-    if (tenantId) params.set("tenantId", tenantId);
-    else params.delete("tenantId");
+    if (stationId) params.set("stationId", stationId);
+    else params.delete("stationId");
 
     if (status) params.set("status", status);
     else params.delete("status");
 
     params.set("page", "1");
     router.replace(`?${params.toString()}`, { scroll: false });
-  }, [debouncedAction, date, userId, tenantId, status]);
+  }, [debouncedAction, date, userId, stationId, status]);
 
   const additionalParams = React.useMemo(
     () => ({
       ...(debouncedAction.trim() ? { action: debouncedAction.trim() } : {}),
       ...(date ? { date: format(date, "yyyy-MM-dd") } : {}),
       ...(userId ? { userId } : {}),
-      ...(tenantId ? { tenantId } : {}),
+      ...(stationId ? { stationId } : {}),
       ...(status ? { status } : {}),
-      ...(moduleContext ? { module: moduleContext } : {}),
     }),
-    [debouncedAction, date, userId, tenantId, status, moduleContext]
+    [debouncedAction, date, userId, stationId, status]
   );
+
+  const baseUrl = stationId
+    ? `/api/tenant/stations/${stationId}/activity-logs`
+    : `/api/tenant/stations/activity-logs`;
 
   const { data, meta, isLoading, setPage, setPageSize, refresh } =
     usePaginatedQuery<ActivityRow>({
-      baseUrl: "/api/platform/activity-logs",
+      baseUrl,
       initialData,
       initialMeta,
       additionalParams,
@@ -286,17 +285,13 @@ export function ActivityTable({
   };
 
   const selectedUser = availableUsers.find((u) => u.id === userId);
-  const selectedTenant =
-    tenantId === "PLATFORM"
-      ? { id: "PLATFORM", name: "Platform System", slug: "system" }
-      : availableTenants.find((t) => t.id === tenantId);
-
-  const isFiltered = Boolean(date || userId || tenantId || action || status);
+  const selectedStation = availableStations.find((s) => s.id === stationId);
+  const isFiltered = Boolean(date || userId || (stationId && stationId !== activeStationId) || action || status);
 
   const handleReset = () => {
     setDate(undefined);
     setUserId("");
-    setTenantId("");
+    setStationId(activeStationId || "");
     setAction("");
     setStatus("");
     setDebouncedAction("");
@@ -304,12 +299,17 @@ export function ActivityTable({
     params.delete("action");
     params.delete("date");
     params.delete("userId");
-    params.delete("tenantId");
+    if (activeStationId) {
+      params.set("stationId", activeStationId);
+    } else {
+      params.delete("stationId");
+    }
     params.delete("status");
     params.set("page", "1");
     router.replace(`?${params.toString()}`, { scroll: false });
   };
 
+  const company = usePrintCompany();
   const tableContainerRef = React.useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
@@ -320,9 +320,9 @@ export function ActivityTable({
     if (tableEl) {
       printElement(
         tableEl as HTMLElement,
-        "Platform Activity Log",
-        undefined,
-        getExportFileBaseName("platform-activity")
+        "Station Activity Log",
+        company,
+        getExportFileBaseName("station-activity", company?.slug)
       );
     } else {
       window.print();
@@ -330,11 +330,10 @@ export function ActivityTable({
   };
 
   const handleExportCsv = () => {
-    const headers = ["Time", "Status", "Tenant", "Actor", "Action", "Target", "IP Address"];
+    const headers = ["Time", "Status", "Actor", "Action", "Target", "IP Address"];
     const csvRows = rows.map((r) => [
       format(new Date(r.createdAt), "yyyy-MM-dd HH:mm:ss"),
       r.status ?? getActivityStatus(r.action),
-      r.tenantDisplay ?? (r.tenantId === null ? "Platform System" : r.tenantId ?? "—"),
       r.actorDisplay || `${r.actorType}:${r.actorId || "—"}`,
       r.action,
       r.targetDisplay || (r.targetType ? `${r.targetType}:${r.targetId || "—"}` : "—"),
@@ -347,7 +346,7 @@ export function ActivityTable({
       .join("\r\n");
 
     const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
-    const filename = `${getExportFileBaseName("platform-activity")}.csv`;
+    const filename = `${getExportFileBaseName("station-activity", company?.slug)}.csv`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -359,11 +358,10 @@ export function ActivityTable({
   };
 
   const handleExportExcel = () => {
-    const headers = ["Time", "Status", "Tenant", "Actor", "Action", "Target", "IP Address"];
+    const headers = ["Time", "Status", "Actor", "Action", "Target", "IP Address"];
     const excelRows = rows.map((r) => [
       format(new Date(r.createdAt), "yyyy-MM-dd HH:mm:ss"),
       r.status ?? getActivityStatus(r.action),
-      r.tenantDisplay ?? (r.tenantId === null ? "Platform System" : r.tenantId ?? "—"),
       r.actorDisplay || `${r.actorType}:${r.actorId || "—"}`,
       r.action,
       r.targetDisplay || (r.targetType ? `${r.targetType}:${r.targetId || "—"}` : "—"),
@@ -390,7 +388,7 @@ export function ActivityTable({
 </html>`;
 
     const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
-    const filename = `${getExportFileBaseName("platform-activity")}.xls`;
+    const filename = `${getExportFileBaseName("station-activity", company?.slug)}.xls`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -448,31 +446,9 @@ export function ActivityTable({
             </span>
           );
         },
-      },
-      {
-        id: "tenant",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Tenant" />,
-        meta: { label: "Tenant" },
-        accessorFn: (r) => r.tenantDisplay ?? (r.tenantId === null ? "Platform System" : r.tenantId ?? "—"),
-        cell: ({ row }) => {
-          const isPlatform = row.original.tenantId === null;
-          const display = row.original.tenantDisplay;
-          if (isPlatform) {
-            return (
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-indigo-500/10 px-2 py-0.5 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                <ShieldCheck className="size-3 shrink-0 text-indigo-500" />
-                Platform System
-              </span>
-            );
-          }
-          return (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Building2 className="size-3.5 text-muted-foreground/70 shrink-0" />
-              <span className="truncate text-xs font-medium text-foreground">
-                {display || row.original.tenantId || "—"}
-              </span>
-            </div>
-          );
+        filterFn: (row, id, value) => {
+          if (!Array.isArray(value)) return true;
+          return value.includes(row.getValue(id));
         },
       },
       {
@@ -555,8 +531,22 @@ export function ActivityTable({
     []
   );
 
+  const filterFields = React.useMemo<DataTableFilterField<ActivityRow>[]>(
+    () => [
+      {
+        id: "status",
+        label: "Status",
+        options: [
+          { label: "Success", value: "SUCCESS" },
+          { label: "Failed", value: "FAILED" },
+        ],
+      },
+    ],
+    []
+  );
+
   return (
-    <div className="flex flex-col gap-5" ref={tableContainerRef}>
+    <div className="flex flex-col gap-5">
       {/* KPI Stats Cards */}
       <ActivityInsightCards stats={stats} />
 
@@ -564,256 +554,164 @@ export function ActivityTable({
       <div className="flex flex-col gap-3 rounded-xl border border-border/40 bg-card p-4 shadow-xs">
         {/* Top Controls Row */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* Action Search Input */}
+          {/* Action Search Input with Search Icon */}
           <div className="relative w-full sm:w-72 md:w-80 shrink-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/70" />
             <Input
-              placeholder="Search action keyword..."
+              placeholder="Search by action or keyword…"
               value={action}
               onChange={(e) => setAction(e.target.value)}
-              className="h-9 pl-9 pr-8 text-xs bg-background/50"
+              className="h-9 pl-9 pr-8 text-sm"
             />
-            {action && (
+            {action ? (
               <button
                 type="button"
                 onClick={() => setAction("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                title="Clear search"
               >
                 <X className="size-3.5" />
               </button>
-            )}
+            ) : null}
           </div>
 
-          {/* Right Action Buttons */}
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            {isFiltered && (
+          {/* Quick Action Tools: Reset, Refresh, Export */}
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            {isFiltered ? (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                 onClick={handleReset}
               >
-                <RotateCcw className="mr-1.5 size-3.5" />
-                Reset
+                <RotateCcw className="size-3.5" />
+                Reset filters
               </Button>
-            )}
+            ) : null}
 
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-8 w-8 shrink-0 bg-background/50"
+                  className="h-9 w-9 shrink-0 cursor-pointer"
                   onClick={() => refresh()}
-                  disabled={isLoading}
                 >
-                  <RefreshCw className={cn("size-3.5", isLoading && "animate-spin")} />
+                  <RefreshCw className={cn("size-4", isLoading && "animate-spin")} />
+                  <span className="sr-only">Refresh</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Refresh logs</TooltipContent>
             </Tooltip>
 
-            {/* Export Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 gap-1.5 text-xs bg-background/50 font-normal"
+                  className="h-9 gap-1.5 cursor-pointer font-normal"
+                  title="Export activity log"
                 >
-                  <Download className="size-3.5" />
+                  <Download className="size-4 text-muted-foreground" />
                   <span>Export</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
-                <DropdownMenuItem onClick={handleExportCsv} className="text-xs cursor-pointer">
+              <DropdownMenuContent align="end" className="min-w-40">
+                <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
+                  <Printer className="mr-2 size-3.5 text-muted-foreground" />
+                  Print
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportCsv} className="cursor-pointer">
                   <FileText className="mr-2 size-3.5 text-muted-foreground" />
                   Export as CSV
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportExcel} className="text-xs cursor-pointer">
+                <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer">
                   <FileSpreadsheet className="mr-2 size-3.5 text-muted-foreground" />
                   Export as Excel
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handlePrint} className="text-xs cursor-pointer">
-                  <Printer className="mr-2 size-3.5 text-muted-foreground" />
-                  Print view
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
 
-        {/* Filter Bar Row */}
-        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border/30">
-          {/* Tenant Selector Combobox */}
-          <Popover open={openTenant} onOpenChange={setOpenTenant}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={openTenant}
-                className={cn(
-                  "h-8 justify-between font-normal text-xs bg-background/50 min-w-[170px] max-w-[220px]",
-                  !tenantId && "text-muted-foreground"
-                )}
-              >
-                <Building2 className="mr-1.5 size-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate">
-                  {selectedTenant ? selectedTenant.name : "All Tenants & Platform"}
-                </span>
-                <ChevronsUpDown className="ml-1.5 size-3 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64 p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Search tenant..." className="text-xs" />
-                <CommandList>
-                  <CommandEmpty>No tenant found.</CommandEmpty>
-                  <CommandGroup>
-                    <CommandItem
-                      value="all"
-                      onSelect={() => {
-                        setTenantId("");
-                        setOpenTenant(false);
-                      }}
-                      className="text-xs"
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 size-3.5",
-                          !tenantId ? "opacity-100" : "opacity-0"
-                        )}
-                      />
-                      <span className="font-medium">All Tenants & Platform</span>
-                    </CommandItem>
-                    <CommandItem
-                      value="platform system only"
-                      onSelect={() => {
-                        setTenantId(tenantId === "PLATFORM" ? "" : "PLATFORM");
-                        setOpenTenant(false);
-                      }}
-                      className="text-xs"
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 size-3.5",
-                          tenantId === "PLATFORM" ? "opacity-100" : "opacity-0"
-                        )}
-                      />
-                      <ShieldCheck className="mr-1.5 size-3.5 text-indigo-500 shrink-0" />
-                      <span className="font-medium text-indigo-600 dark:text-indigo-400">
-                        Platform System Only
-                      </span>
-                    </CommandItem>
-                    {availableTenants.map((t) => (
+        {/* Secondary Filter Chips Row */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-3">
+          {/* Station Selector */}
+          {availableStations.length > 1 ? (
+            <Popover open={openStation} onOpenChange={setOpenStation}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="h-9 w-full sm:w-[210px] justify-between font-normal text-xs shrink-0 cursor-pointer"
+                >
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+                    <span className="truncate">
+                      {selectedStation ? `${selectedStation.name} (${selectedStation.code})` : "All Allowed Stations"}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="ml-1 size-3.5 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[240px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search station…" />
+                  <CommandList>
+                    <CommandEmpty>No station found.</CommandEmpty>
+                    <CommandGroup>
                       <CommandItem
-                        key={t.id}
-                        value={`${t.name} ${t.slug}`}
+                        value="all"
                         onSelect={() => {
-                          setTenantId(tenantId === t.id ? "" : t.id);
-                          setOpenTenant(false);
+                          setStationId("");
+                          setOpenStation(false);
                         }}
-                        className="text-xs"
                       >
                         <Check
                           className={cn(
-                            "mr-2 size-3.5",
-                            tenantId === t.id ? "opacity-100" : "opacity-0"
+                            "mr-2 size-4",
+                            !stationId ? "opacity-100" : "opacity-0"
                           )}
                         />
-                        <div className="flex flex-col truncate">
-                          <span className="truncate">{t.name}</span>
-                          <span className="text-[10px] text-muted-foreground font-mono">{t.slug}</span>
-                        </div>
+                        All Allowed Stations
                       </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+                      {availableStations.map((station) => (
+                        <CommandItem
+                          key={station.id}
+                          value={`${station.name} ${station.code}`}
+                          onSelect={() => {
+                            setStationId(stationId === station.id ? "" : station.id);
+                            setOpenStation(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 size-4",
+                              stationId === station.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {station.name} ({station.code})
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          ) : null}
 
-          {/* User Combobox */}
-          <Popover open={openUser} onOpenChange={setOpenUser}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={openUser}
-                className={cn(
-                  "h-8 justify-between font-normal text-xs bg-background/50 min-w-[150px] max-w-[200px]",
-                  !userId && "text-muted-foreground"
-                )}
-              >
-                <User className="mr-1.5 size-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate">
-                  {selectedUser ? selectedUser.name : "Filter by user..."}
-                </span>
-                <ChevronsUpDown className="ml-1.5 size-3 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64 p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Search user..." className="text-xs" />
-                <CommandList>
-                  <CommandEmpty>No user found.</CommandEmpty>
-                  <CommandGroup>
-                    <CommandItem
-                      value="all-users"
-                      onSelect={() => {
-                        setUserId("");
-                        setOpenUser(false);
-                      }}
-                      className="text-xs"
-                    >
-                      <Check
-                        className={cn("mr-2 size-3.5", !userId ? "opacity-100" : "opacity-0")}
-                      />
-                      <span>All Users</span>
-                    </CommandItem>
-                    {availableUsers.map((u) => (
-                      <CommandItem
-                        key={u.id}
-                        value={`${u.name} ${u.email} ${u.role || ""}`}
-                        onSelect={() => {
-                          setUserId(userId === u.id ? "" : u.id);
-                          setOpenUser(false);
-                        }}
-                        className="text-xs"
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 size-3.5",
-                            userId === u.id ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        <div className="flex flex-col truncate">
-                          <span className="truncate font-medium">{u.name}</span>
-                          <span className="text-[10px] text-muted-foreground truncate">
-                            {u.role ? `${u.role} · ` : ""}
-                            {u.email}
-                          </span>
-                        </div>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-
-          {/* Date Picker */}
+          {/* Date Selector */}
           <Popover open={openDate} onOpenChange={setOpenDate}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 className={cn(
-                  "h-8 justify-start text-left font-normal text-xs bg-background/50 min-w-[140px]",
+                  "h-9 w-full sm:w-[170px] justify-start text-left font-normal text-xs shrink-0 cursor-pointer",
                   !date && "text-muted-foreground"
                 )}
               >
-                <CalendarIcon className="mr-1.5 size-3.5 text-muted-foreground" />
-                {date ? format(date, "MMM dd, yyyy") : <span>Filter by date...</span>}
+                <CalendarIcon className="mr-1.5 size-3.5 shrink-0" />
+                <span className="truncate">{date ? format(date, "MMM dd, yyyy") : "Filter by date"}</span>
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -825,204 +723,246 @@ export function ActivityTable({
                   setOpenDate(false);
                 }}
               />
-              {date && (
-                <div className="p-2 border-t border-border">
+              {date ? (
+                <div className="border-t border-border p-2">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="w-full h-7 text-xs text-muted-foreground hover:text-foreground"
+                    className="h-8 w-full text-xs"
                     onClick={() => {
                       setDate(undefined);
                       setOpenDate(false);
                     }}
                   >
-                    Clear Date Filter
+                    Clear date
                   </Button>
                 </div>
-              )}
+              ) : null}
             </PopoverContent>
           </Popover>
 
-          {/* Status Filter Toggle Pills */}
-          <div className="flex items-center rounded-lg border border-border/50 bg-muted/40 p-0.5">
-            {(
-              [
-                { label: "All", value: "" },
-                { label: "Success", value: "SUCCESS" },
-                { label: "Failed", value: "FAILED" },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setStatus(status === opt.value ? "" : opt.value)}
-                className={cn(
-                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                  status === opt.value
-                    ? "bg-background text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
+          {/* User Selector */}
+          {availableUsers.length > 0 ? (
+            <Popover open={openUser} onOpenChange={setOpenUser}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="h-9 w-full sm:w-[180px] justify-between font-normal text-xs shrink-0 cursor-pointer"
+                >
+                  <div className="flex items-center gap-1.5 truncate">
+                    <User className="size-3.5 text-muted-foreground shrink-0" />
+                    <span className="truncate">
+                      {selectedUser ? selectedUser.name : "Filter by user"}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="ml-1 size-3.5 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[240px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search user…" />
+                  <CommandList>
+                    <CommandEmpty>No user found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="all"
+                        onSelect={() => {
+                          setUserId("");
+                          setOpenUser(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 size-4",
+                            !userId ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        All Users
+                      </CommandItem>
+                      {availableUsers.map((user) => (
+                        <CommandItem
+                          key={user.id}
+                          value={user.name}
+                          onSelect={() => {
+                            setUserId(userId === user.id ? "" : user.id);
+                            setOpenUser(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 size-4",
+                              userId === user.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {user.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          ) : null}
+
+          {/* Status Filter Toggle Group */}
+          <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/40 p-0.5">
+            <button
+              type="button"
+              onClick={() => setStatus("")}
+              className={cn(
+                "rounded-md px-3 py-1 text-xs font-medium transition-all cursor-pointer",
+                status === ""
+                  ? "bg-background text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatus("SUCCESS")}
+              className={cn(
+                "flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium transition-all cursor-pointer",
+                status === "SUCCESS"
+                  ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <span className="size-1.5 rounded-full bg-emerald-500" />
+              Success
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatus("FAILED")}
+              className={cn(
+                "flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium transition-all cursor-pointer",
+                status === "FAILED"
+                  ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 font-semibold shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <span className="size-1.5 rounded-full bg-rose-500" />
+              Failed
+            </button>
           </div>
         </div>
 
         {/* Data Table */}
-        <DataTable
-          columns={columns}
-          data={rows}
-          isLoading={isLoading}
-          serverPagination={{
-            ...meta,
-            onPageChange: setPage,
-            onPageSizeChange: setPageSize,
-          }}
-        />
+        <div ref={tableContainerRef} className="mt-1">
+          <DataTable
+            columns={columns}
+            data={rows}
+            tableId="station-activity"
+            filterFields={filterFields}
+            hideToolbar
+            isLoading={isLoading}
+            emptyMessage="No activity logs found."
+            onRefresh={refresh}
+            serverPagination={{
+              page: meta.page,
+              pageSize: meta.pageSize,
+              totalCount: meta.totalCount,
+              totalPages: meta.totalPages,
+              hasNextPage: meta.hasNextPage,
+              hasPreviousPage: meta.hasPreviousPage,
+              onPageChange: setPage,
+              onPageSizeChange: setPageSize,
+            }}
+          />
+        </div>
       </div>
 
-      {/* Activity Details Modal */}
-      <Dialog
-        open={!!selectedActivity}
-        onOpenChange={(open) => !open && setSelectedActivity(null)}
-      >
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-          {selectedActivity && (
+      {/* Activity Details Dialog */}
+      <Dialog open={!!selectedActivity} onOpenChange={(open) => !open && setSelectedActivity(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          {selectedActivity ? (
             <>
               <DialogHeader className="gap-1 border-b border-border/40 pb-4">
                 <div className="flex items-center justify-between gap-3">
-                  <DialogTitle className="text-lg font-bold text-foreground">
+                  <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                    <ShieldCheck className="size-5 text-primary" />
                     Activity Details
                   </DialogTitle>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium tracking-tight",
-                        (selectedActivity.status ?? getActivityStatus(selectedActivity.action)) === "SUCCESS"
-                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                          : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
-                      )}
-                    >
-                      {(selectedActivity.status ?? getActivityStatus(selectedActivity.action)) === "SUCCESS" ? (
-                        <CheckCircle2 className="size-3 text-emerald-500 shrink-0" />
-                      ) : (
-                        <XCircle className="size-3 text-rose-500 shrink-0" />
-                      )}
-                      {(selectedActivity.status ?? getActivityStatus(selectedActivity.action)) === "SUCCESS"
-                        ? "Success"
-                        : "Failed"}
-                    </span>
-                    <Badge variant="outline" className="font-mono text-xs bg-muted/40">
-                      {selectedActivity.action}
-                    </Badge>
-                  </div>
+                  <Badge
+                    variant={selectedActivity.status === "FAILED" ? "destructive" : "default"}
+                    className="gap-1.5 font-normal"
+                  >
+                    {selectedActivity.status === "FAILED" ? (
+                      <XCircle className="size-3.5" />
+                    ) : (
+                      <CheckCircle2 className="size-3.5" />
+                    )}
+                    {selectedActivity.status ?? getActivityStatus(selectedActivity.action)}
+                  </Badge>
                 </div>
-                <DialogDescription className="text-xs">
-                  Logged on {format(new Date(selectedActivity.createdAt), "PPP 'at' pp")}
+                <DialogDescription className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock className="size-3.5" />
+                  {format(new Date(selectedActivity.createdAt), "PPP 'at' pp")}
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-6 pt-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="space-y-5 pt-2">
+                <div className="grid grid-cols-1 gap-4 text-xs sm:grid-cols-2 rounded-lg border border-border/40 bg-muted/20 p-3.5">
                   <div className="space-y-1">
-                    <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">
-                      Actor / User
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Actor
                     </span>
-                    <p className="font-semibold text-foreground">
-                      {selectedActivity.actorDisplay || selectedActivity.actorType || "—"}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      Type: {selectedActivity.actorType} · ID: {selectedActivity.actorId || "—"}
-                    </p>
+                    <p className="font-medium text-foreground">{selectedActivity.actorDisplay || "—"}</p>
+                    <p className="text-[11px] text-muted-foreground capitalize">{selectedActivity.actorType.replace(/_/g, " ")}</p>
                   </div>
-
                   <div className="space-y-1">
-                    <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">
-                      Tenant
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Target
                     </span>
-                    <p className="font-semibold text-foreground">
-                      {selectedActivity.tenantDisplay ??
-                        (selectedActivity.tenantId === null ? "Platform System" : selectedActivity.tenantId ?? "—")}
-                    </p>
-                    {selectedActivity.tenantId && (
-                      <p className="text-[10px] text-muted-foreground font-mono">
-                        Tenant ID: {selectedActivity.tenantId}
-                      </p>
-                    )}
+                    <p className="font-medium text-foreground">{selectedActivity.targetDisplay || "—"}</p>
+                    {selectedActivity.targetType ? (
+                      <p className="text-[11px] text-muted-foreground capitalize">{selectedActivity.targetType}</p>
+                    ) : null}
                   </div>
-
                   <div className="space-y-1">
-                    <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">
-                      Target Entity
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Action
                     </span>
-                    <p className="font-semibold text-foreground">
-                      {selectedActivity.targetDisplay || selectedActivity.targetType || "—"}
-                    </p>
-                    {selectedActivity.targetId && (
-                      <p className="text-[10px] text-muted-foreground font-mono">
-                        {selectedActivity.targetType}: {selectedActivity.targetId}
-                      </p>
-                    )}
+                    <p className="font-mono text-foreground">{selectedActivity.action}</p>
                   </div>
-
                   <div className="space-y-1">
-                    <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       IP Address
                     </span>
                     <p className="font-mono text-foreground">{selectedActivity.ip || "—"}</p>
                   </div>
-
-                  {selectedActivity.userAgent && (
-                    <div className="sm:col-span-2 space-y-1">
-                      <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">
-                        User Agent
-                      </span>
-                      <p className="font-mono text-[11px] text-muted-foreground break-all bg-muted/30 p-2.5 rounded-md border border-border/40">
-                        {selectedActivity.userAgent}
-                      </p>
-                    </div>
-                  )}
                 </div>
 
-                {Boolean(selectedActivity.afterJson || selectedActivity.beforeJson) && (
-                  <div className="space-y-4 pt-3 border-t border-border/40">
-                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                      Payload & Audit Data
-                    </h4>
-
-                    {Boolean(selectedActivity.afterJson) && (
-                      <div className="space-y-1">
-                        <span className="text-[11px] font-medium text-muted-foreground">
-                          New State / Payload:
-                        </span>
-                        <pre className="p-3 bg-muted/40 rounded-lg text-xs font-mono overflow-x-auto border border-border/40 max-h-60">
+                {selectedActivity.afterJson != null || selectedActivity.beforeJson != null ? (
+                  <div className="space-y-3 border-t border-border/40 pt-3">
+                    {selectedActivity.afterJson ? (
+                      <div className="space-y-1.5">
+                        <span className="text-xs font-semibold text-foreground">Payload Data</span>
+                        <pre className="max-h-60 overflow-x-auto rounded-lg border border-border/50 bg-muted/50 p-3 font-mono text-xs text-foreground">
                           {JSON.stringify(selectedActivity.afterJson, null, 2)}
                         </pre>
                       </div>
-                    )}
-
-                    {Boolean(selectedActivity.beforeJson) && (
-                      <div className="space-y-1">
-                        <span className="text-[11px] font-medium text-muted-foreground">
-                          Previous State:
-                        </span>
-                        <pre className="p-3 bg-muted/40 rounded-lg text-xs font-mono overflow-x-auto border border-border/40 max-h-60">
+                    ) : null}
+                    {selectedActivity.beforeJson ? (
+                      <div className="space-y-1.5">
+                        <span className="text-xs font-semibold text-foreground">Previous State</span>
+                        <pre className="max-h-60 overflow-x-auto rounded-lg border border-border/50 bg-muted/50 p-3 font-mono text-xs text-foreground">
                           {JSON.stringify(selectedActivity.beforeJson, null, 2)}
                         </pre>
                       </div>
-                    )}
+                    ) : null}
                   </div>
-                )}
+                ) : null}
               </div>
 
-              <DialogFooter className="pt-4 border-t border-border/40">
+              <DialogFooter className="border-t border-border/40 pt-4">
                 <Button variant="outline" size="sm" onClick={() => setSelectedActivity(null)}>
                   Close
                 </Button>
               </DialogFooter>
             </>
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>

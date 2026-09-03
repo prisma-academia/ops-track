@@ -15,6 +15,7 @@ const PRINT_TITLES: Record<string, string> = {
   "fleet-ledger-deliveries": "Deliveries Ledger",
   "fleet-activity": "Activity Log",
   "fleet-bank-account-transactions": "Bank Account Transactions",
+  "station-activity": "Activity Log",
   "station-delivery-pnl": "Delivery Profit & Loss",
   "station-delivery-pnl-v2": "Delivery Profit & Loss",
 };
@@ -32,6 +33,7 @@ const DOCUMENT_TYPE_CODES: Record<string, string> = {
   "fleet-station-performance": "STPR",
   "fleet-activity": "ACTL",
   "fleet-bank-account-transactions": "BACL",
+  "station-activity": "ACTL",
   "station-sales-reports": "SLR",
   "station-stock-report": "STKR",
   "station-delivery-pnl": "DLR",
@@ -173,14 +175,84 @@ export function exportTableToExcel<TData>(table: Table<TData>, filename = "table
 
 /**
  * Strips interactive chrome (sort buttons, dropdown triggers, sort/hide
- * icons) from a cloned table's header cells, leaving just the plain column
- * label — printed output shouldn't show clickable UI.
+ * icons, action/view details columns) from a cloned table — printed output
+ * shouldn't show clickable UI or view/action buttons.
  */
 function stripHeaderControls(table: HTMLElement) {
-  table.querySelectorAll("thead th").forEach((th) => {
-    const label = th.textContent?.trim() ?? "";
-    th.replaceChildren(document.createTextNode(label));
-  });
+  // Strip classes that interfere with print width or layout
+  table.classList.remove("min-w-max", "border-separate", "border-spacing-0");
+  table.removeAttribute("style");
+  table.style.width = "100%";
+  table.style.borderCollapse = "collapse";
+
+  // 1. In header cells, extract clean titles and identify the actions column
+  const headerRow = table.querySelector("thead tr");
+  const actionColumnIndices = new Set<number>();
+
+  if (headerRow) {
+    const ths = Array.from(headerRow.querySelectorAll("th"));
+    ths.forEach((th, index) => {
+      // Find title text:
+      // Note: DataTableColumnHeader wraps title in a button with a span, e.g.
+      // <Button><span class="flex-1 truncate text-left">{title}</span><ChevronsUpDownIcon/></Button>
+      const titleEl =
+        th.querySelector("button span") ||
+        th.querySelector("span") ||
+        th.querySelector("button") ||
+        th;
+      const label = (titleEl?.textContent || th.textContent || "").trim();
+      const colId = th.getAttribute("data-column-id") || "";
+
+      const isActionCol =
+        colId === "actions" ||
+        colId === "select" ||
+        th.classList.contains("no-print") ||
+        (label === "" && index === ths.length - 1);
+
+      if (isActionCol) {
+        actionColumnIndices.add(index);
+      } else {
+        // Replace with pure text node with clear label
+        th.replaceChildren(document.createTextNode(label));
+        th.style.textAlign = "left";
+        th.style.fontWeight = "600";
+      }
+    });
+  }
+
+  // 2. Remove action/view columns from all rows
+  if (actionColumnIndices.size > 0) {
+    table.querySelectorAll("tr").forEach((row) => {
+      const cells = Array.from(row.children);
+      const sorted = Array.from(actionColumnIndices).sort((a, b) => b - a);
+      for (const idx of sorted) {
+        if (cells[idx]) {
+          cells[idx].remove();
+        }
+      }
+    });
+  } else {
+    // Fallback: check if the last column in tbody has action buttons
+    const bodyRows = table.querySelectorAll("tbody tr");
+    let lastColHasButtonsOnly = bodyRows.length > 0;
+    bodyRows.forEach((r) => {
+      const lastCell = r.lastElementChild;
+      if (!lastCell || (!lastCell.querySelector("button") && lastCell.textContent?.trim() !== "")) {
+        lastColHasButtonsOnly = false;
+      }
+    });
+    if (lastColHasButtonsOnly) {
+      table.querySelectorAll("tr").forEach((r) => {
+        if (r.lastElementChild) r.lastElementChild.remove();
+      });
+    }
+  }
+
+  // 3. Remove non-printable elements in tbody while keeping text/badges intact
+  table.querySelectorAll("tbody .no-print, tbody button").forEach((el) => el.remove());
+
+  // 4. Remove all icons/SVGs so they don't break print layout or alignment
+  table.querySelectorAll("svg").forEach((el) => el.remove());
 }
 
 /**
@@ -260,62 +332,93 @@ export function printElement(
 <title>${escapeHtml(fileBaseName || title)}</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; padding: 24px; color: #111827; }
-  h1 { font-size: 16px; margin: 0 0 16px; }
+  @page {
+    size: landscape;
+    margin: 8mm 10mm;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    color: #111827;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   .print-header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 24px;
-    border-bottom: 2px solid #f3f4f6;
-    padding-bottom: 16px;
-    margin-bottom: 20px;
+    gap: 16px;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
   }
-  .print-logo { width: 144px; flex-shrink: 0; }
-  .print-logo img { max-height: 64px; max-width: 100%; object-fit: contain; }
-  .print-company-fallback { font-size: 18px; font-weight: 700; margin: 0; }
+  .print-logo { width: 120px; flex-shrink: 0; }
+  .print-logo img { max-height: 44px; max-width: 100%; object-fit: contain; }
+  .print-company-fallback { font-size: 16px; font-weight: 700; margin: 0; }
   .print-contact { text-align: right; }
-  .print-contact h1 { font-size: 18px; margin: 0; color: #111827; }
-  .print-contact p { font-size: 12px; color: #6b7280; margin: 4px 0 0; }
-  .print-doc { margin-bottom: 20px; }
-  .print-doc h2 { font-size: 20px; margin: 0; text-transform: uppercase; letter-spacing: 0.04em; }
-  .print-doc p { font-size: 13px; color: #6b7280; margin: 6px 0 0; }
+  .print-contact h1 { font-size: 15px; margin: 0; color: #111827; }
+  .print-contact p { font-size: 11px; color: #6b7280; margin: 2px 0 0; }
+  .print-doc { margin-bottom: 8px; }
+  .print-doc h2 { font-size: 14px; margin: 0; text-transform: uppercase; letter-spacing: 0.04em; }
+  .print-doc p { font-size: 11px; color: #6b7280; margin: 2px 0 0; }
   .print-details {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px 16px;
-    margin: 0 0 20px;
-    padding: 12px 14px;
+    gap: 6px 12px;
+    margin: 0 0 10px;
+    padding: 8px 10px;
     border: 1px solid #e5e7eb;
     background: #f9fafb;
   }
   .print-details .item label {
     display: block;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: #6b7280;
   }
   .print-details .item p {
-    margin: 3px 0 0;
-    font-size: 13px;
+    margin: 2px 0 0;
+    font-size: 12px;
     font-weight: 600;
     color: #111827;
   }
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 10.5px !important;
+    line-height: 1.25 !important;
+    margin: 0 !important;
+  }
+  th, td {
+    border: 1px solid #d4d4d8 !important;
+    padding: 4px 6px !important;
+    text-align: left !important;
+    vertical-align: middle !important;
+  }
+  th {
+    background: #f4f4f5 !important;
+    font-weight: 600 !important;
+    color: #18181b !important;
+    font-size: 10.5px !important;
+  }
+  thead { display: table-header-group !important; }
+  tr { break-inside: avoid !important; page-break-inside: avoid !important; }
   .print-footer {
-    margin-top: 24px;
-    padding-top: 12px;
+    margin-top: 8px;
+    padding-top: 4px;
     border-top: 1px dashed #e5e7eb;
     text-align: center;
-    font-size: 11px;
+    font-size: 10px;
     color: #9ca3af;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
-  .print-footer p { margin: 0 0 4px; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { border: 1px solid #d4d4d8; padding: 6px 10px; text-align: left; }
-  thead { background: #f4f4f5; }
-  @page { size: landscape; margin: 12mm; }
+  .print-footer p { margin: 0 0 1px; }
+  .no-print, button { display: none !important; }
 </style>
 </head>
 <body>

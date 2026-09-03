@@ -11,6 +11,7 @@ const NAV = [
   { href: "/tenants", title: "Tenants", icon: "Building2", permission: PERMISSIONS.PLATFORM_TENANTS_READ.key },
   { href: "/users", title: "Users", icon: "CircleUserRound", permission: PERMISSIONS.PLATFORM_USERS_READ.key },
   { href: "/role-templates", title: "Roles", icon: "Shield", permission: PERMISSIONS.PLATFORM_ROLES_READ.key },
+  { href: "/activity", title: "Audit Logs", icon: "Activity", permission: PERMISSIONS.PLATFORM_ACTIVITY_READ.key },
   { href: "/settings", title: "Settings", icon: "Settings", permission: null },
 ];
 

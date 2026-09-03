@@ -31,7 +31,14 @@ function navModuleLabel(pathname: string | null): "Fleet" | "Station" | "Platfor
   if (!pathname) return "Pages";
   if (isStationAdminPath(pathname)) return "Station";
   if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/auth")) return "Fleet";
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/tenants") || pathname.startsWith("/users")) {
+  if (
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/tenants") ||
+    pathname.startsWith("/users") ||
+    pathname.startsWith("/role-templates") ||
+    pathname.startsWith("/activity") ||
+    pathname.startsWith("/settings")
+  ) {
     return "Platform";
   }
   return "Pages";

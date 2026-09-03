@@ -10,10 +10,12 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
-import { Menu, Phone, X } from 'lucide-react'
+import { Menu, Moon, Phone, Sun, X } from 'lucide-react'
 import { Separator } from '@/components/ui/separator';
 import { motion, useInView } from "motion/react";
+import { useTheme } from "next-themes";
 import { CompanyLogo } from "@/components/brand/company-logo";
+import { COMPANY_EMAIL, COMPANY_PHONE, COMPANY_PHONE_TEL } from "@/lib/branding";
 
 type navData = {
   name: string;
@@ -57,6 +59,12 @@ const Navbar: React.FC<NavbarProps> = ({ navData }) => {
   const [navbarOpen, setNavbarOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
   const isInView = useInView(headerRef, { once: true, amount: 0.1 });
+  const { theme, resolvedTheme, setTheme } = useTheme();
+  const isDark = theme === "dark" || resolvedTheme === "dark";
+
+  const themeToggleClass = sticky
+    ? "text-foreground hover:bg-muted border-border bg-background"
+    : "text-white hover:bg-white/10 border-white/50 bg-white/10";
 
   const handleScroll = useCallback(() => {
     setSticky(window.scrollY >= 50);
@@ -96,16 +104,28 @@ const Navbar: React.FC<NavbarProps> = ({ navData }) => {
             <div className='flex items-center gap-2 sm:gap-6'>
               <div className={`hidden md:block`}>
                 <a
-                  href='tel:+1212456789'
+                  href={`tel:${COMPANY_PHONE_TEL}`}
                   className={`text-sm text-inherit flex items-center gap-2 ${sticky
                     ? 'text-foreground hover:text-primary border-white/50 dark:border-white/50'
                     : 'text-white hover:text-white/80 border-white/50 dark:border-white/50'
                     }`}>
                   <Phone size={20} />
-                  +1-212-456-789
+                  {COMPANY_PHONE}
                 </a>
               </div>
               <Separator orientation="vertical" className={`h-5 my-auto sm:block hidden ${sticky ? "bg-white/50 dark:bg-white/50" : "bg-white/50 dark:bg-white/50"}`} />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setTheme(isDark ? "light" : "dark")}
+                className={`relative size-10 rounded-full border ${themeToggleClass}`}
+                aria-label="Toggle dark mode"
+              >
+                <Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                <Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                <span className="sr-only">Toggle theme</span>
+              </Button>
               <div>
                 <Button
                   size={"lg"}
@@ -156,13 +176,22 @@ const Navbar: React.FC<NavbarProps> = ({ navData }) => {
                 <p className="text-lg font-normal text-muted-foreground">
                   Contact
                 </p>
-                <a href="#" className="text-base font-medium hover:text-primary">
-                  hello@homely.com
+                <a href={`mailto:${COMPANY_EMAIL}`} className="text-base font-medium hover:text-primary">
+                  {COMPANY_EMAIL}
                 </a>
-                <a href="#" className="text-base font-medium hover:text-primary">
-                  +1-212-456-7890
+                <a href={`tel:${COMPANY_PHONE_TEL}`} className="text-base font-medium hover:text-primary">
+                  {COMPANY_PHONE}
                 </a>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setTheme(isDark ? "light" : "dark")}
+                className="flex w-fit items-center gap-2 text-base font-medium text-foreground hover:text-primary"
+              >
+                {isDark ? <Sun size={18} /> : <Moon size={18} />}
+                {isDark ? "Light mode" : "Dark mode"}
+              </button>
 
               {/* Socials */}
               <div className="flex flex-col gap-1">

@@ -3,8 +3,9 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { COMPANY_NAME } from "@/lib/branding";
+import { COMPANY_EMAIL, COMPANY_NAME, COMPANY_PHONE, COMPANY_PHONE_TEL } from "@/lib/branding";
 import { PoweredBy } from "@/components/brand/powered-by";
+import { StoreButtons } from "@/components/landing-page/store-buttons";
 
 export default function Footer() {
   const footerLinks = [
@@ -63,9 +64,12 @@ export default function Footer() {
               <h2 className="sm:text-5xl text-3xl font-medium mb-6 text-foreground">
                 Ready to run fleet and station operations in one place?
               </h2>
-              <Button asChild className="py-3.5 px-6 rounded-full bg-teal-400 hover:bg-teal-400/80 h-auto">
-                <a href="/auth/register">Get started</a>
-              </Button>
+              <div className="flex flex-col items-start gap-4">
+                <Button asChild className="py-3.5 px-6 rounded-full bg-teal-400 hover:bg-teal-400/80 h-auto">
+                  <a href="/auth/register">Get started</a>
+                </Button>
+                <StoreButtons href="/auth/login" />
+              </div>
             </div>
             <div className="md:col-span-1" />
             <div className="col-span-12 md:col-span-2 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-100 ease-in-out fill-mode-both">
@@ -98,9 +102,19 @@ export default function Footer() {
           <div className="flex flex-col gap-12">
             <Separator />
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300 ease-in-out fill-mode-both">
-              <p className="text-sm text-muted-foreground">
-                ©{new Date().getFullYear()} {COMPANY_NAME}. All rights reserved.
-              </p>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-muted-foreground">
+                  ©{new Date().getFullYear()} {COMPANY_NAME}. All rights reserved.
+                </p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                  <a href={`tel:${COMPANY_PHONE_TEL}`} className="hover:text-primary">
+                    {COMPANY_PHONE}
+                  </a>
+                  <a href={`mailto:${COMPANY_EMAIL}`} className="hover:text-primary">
+                    {COMPANY_EMAIL}
+                  </a>
+                </div>
+              </div>
               <PoweredBy className="items-start sm:items-end text-muted-foreground" labelClassName="text-xs font-medium mb-1" />
             </div>
           </div>

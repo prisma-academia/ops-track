@@ -45,7 +45,7 @@ const Feature = ({ featureData }: { featureData: Features }) => {
                 </p>
               </div>
               <Button asChild className="rounded-full px-5 py-2.5 shadow-xs h-auto cursor-pointer">
-                <a href="/auth/register">Get started</a>
+                <a href="/">Book a demo</a>
               </Button>
             </motion.div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-6">

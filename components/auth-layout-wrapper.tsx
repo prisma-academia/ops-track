@@ -27,14 +27,14 @@ function CurrencySelector() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/80 transition-colors hover:bg-white/10 cursor-pointer"
+        className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted cursor-pointer"
       >
         <span className="font-medium">{selected.symbol}</span>
         <span>{selected.code}</span>
         <ChevronDown className="h-3.5 w-3.5 opacity-60" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-36 overflow-hidden rounded-lg border border-white/10 bg-neutral-900 shadow-xl">
+        <div className="absolute right-0 top-full z-50 mt-1 w-36 overflow-hidden rounded-lg border border-border bg-popover shadow-xl">
           {CURRENCIES.map((c) => (
             <button
               key={c.code}
@@ -43,10 +43,10 @@ function CurrencySelector() {
                 setSelected(c);
                 setOpen(false);
               }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-white/10 cursor-pointer ${
+              className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted cursor-pointer ${
                 selected.code === c.code
-                  ? "bg-white/5 text-white"
-                  : "text-white/70"
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground"
               }`}
             >
               <span className="font-medium">{c.symbol}</span>
@@ -80,7 +80,7 @@ export function AuthHeader() {
           <button
             type="button"
             onClick={() => setTheme(isDark ? "light" : "dark")}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/80 transition-colors hover:bg-white/10 cursor-pointer"
+            className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-foreground transition-colors hover:bg-muted cursor-pointer"
           >
             <Sun className="h-4.5 w-4.5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
             <Moon className="absolute h-4.5 w-4.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -107,22 +107,28 @@ export function LeftInfoSection({ logoUrl, tenantName }: { logoUrl?: string | nu
           ) : (
             <CompanyLogo href={null} variant="icon" imgClassName="size-20 mb-4" />
           )}
-          {tenantName && (
-            <h1 className="text-2xl font-bold text-white tracking-tight mt-2">{tenantName}</h1>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight mt-2">
+            {COMPANY_NAME}
+          </h1>
+          {tenantName && tenantName !== COMPANY_NAME && (
+            <p className="text-sm text-muted-foreground">{tenantName}</p>
           )}
+          <p className="mt-2 max-w-xs text-center text-sm text-muted-foreground leading-relaxed">
+            Fleet, station, transport, and tank operations in one place.
+          </p>
         </a>
 
         {/* Stars */}
         <div className="flex items-center gap-1.5">
           {[...Array(5)].map((_, i) => (
-            <Star key={i} className="h-5 w-5 fill-white text-white" />
+            <Star key={i} className="h-5 w-5 fill-primary text-primary" />
           ))}
         </div>
         
       </div>
 
       {/* Bottom Logos */}
-      <div className="pb-8 mt-12 w-full flex flex-col items-center justify-center text-white">
+      <div className="pb-8 mt-12 w-full flex flex-col items-center justify-center text-muted-foreground">
         <PoweredBy />
       </div>
     </div>
@@ -143,12 +149,12 @@ export function AuthLayoutWrapper({
   cardContainerClassName?: string;
 }) {
   return (
-    <section className="bg-foreground dark:bg-background relative min-h-screen flex flex-col">
-      
+    <section className="bg-background relative min-h-screen flex flex-col">
+      <AuthHeader />
       {/* Background decorations */}
       <div className="pointer-events-none absolute inset-0 right-0 overflow-hidden md:block hidden">
-        <div className="absolute left-1/1 top-0 h-650 w-650 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/10" />
-        <div className="absolute left-1/1 top-0 h-175 w-175 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground dark:bg-background" />
+        <div className="absolute left-1/1 top-0 h-650 w-650 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground/5 dark:bg-white/10" />
+        <div className="absolute left-1/1 top-0 h-175 w-175 -translate-x-1/2 -translate-y-1/2 rounded-full bg-background" />
       </div>
 
       {/* Main content */}
@@ -162,15 +168,19 @@ export function AuthLayoutWrapper({
           {/* Right — Form Card */}
           <div className={cn("flex items-center justify-center lg:justify-end", cardContainerClassName)}>
             <div className="flex w-full flex-col items-center lg:contents">
-              <div className="lg:hidden mb-8">
+              <div className="lg:hidden mb-8 flex flex-col items-center text-center">
                 {logoUrl ? (
                   <img src={logoUrl} alt={tenantName || COMPANY_NAME} className="h-12 w-auto object-contain" />
                 ) : (
-                  <CompanyLogo variant="banner" imgClassName="h-9 w-auto max-h-9" />
+                  <CompanyLogo href={null} variant="icon" imgClassName="size-14" />
                 )}
+                <h1 className="mt-3 text-xl font-bold text-foreground tracking-tight">{COMPANY_NAME}</h1>
+                <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+                  Fleet, station, transport, and tank operations in one place.
+                </p>
               </div>
               {children}
-              <div className="lg:hidden mt-10 text-white">
+              <div className="lg:hidden mt-10 text-muted-foreground">
                 <PoweredBy />
               </div>
             </div>

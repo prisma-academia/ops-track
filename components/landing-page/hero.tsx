@@ -56,7 +56,7 @@ const HeroSection: React.FC<{ stats: LandingStats }> = ({ stats }) => {
             </h1>
             <div className="flex flex-wrap items-center gap-3">
               <Button asChild className="px-6 py-3.5 bg-white border-0 text-black duration-300 hover:bg-white/80 font-medium rounded-full hover:cursor-pointer h-auto">
-                <a href="/auth/login">Platform sign in</a>
+                <a href="/auth/login">Book a demo</a>
               </Button>
               <Button asChild variant="outline" className="px-6 py-3.5 rounded-full h-auto border-white/60 bg-transparent text-white hover:bg-white/10 hover:text-white">
                 <a href="/auth/login">Go to workspace</a>

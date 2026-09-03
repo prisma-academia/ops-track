@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Jost, Geist_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -10,8 +10,8 @@ import { resolveHostMetadata } from "@/lib/tenant/page-metadata";
 import "./globals.css";
 
 // Body copy + headings
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const jost = Jost({
+  variable: "--font-jost",
   subsets: ["latin"],
 });
 // Monospace (data/IDs/coords)
@@ -36,7 +36,7 @@ export default async function RootLayout({
       lang={locale}
       className={cn(
         "h-full antialiased font-sans",
-        geistSans.variable,
+        jost.variable,
         geistMono.variable
       )}
       suppressHydrationWarning

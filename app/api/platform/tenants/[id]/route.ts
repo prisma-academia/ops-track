@@ -6,10 +6,15 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import type { AppModule } from "@/lib/generated/prisma/client";
 
 const Body = z.discriminatedUnion("action", [
   z.object({ action: z.enum(["suspend", "archive", "restore"]) }),
-  z.object({ action: z.literal("toggle_module"), module: z.string(), enabled: z.boolean() })
+  z.object({
+    action: z.literal("toggle_module"),
+    module: z.enum(["STATION", "FLEET"]),
+    enabled: z.boolean(),
+  }),
 ]);
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -24,27 +29,43 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     const tenant = await prisma.tenant.findUnique({ where: { id } });
     if (!tenant) throw new DomainError(404, "not_found", "Tenant not found.");
 
-    let next: any = {};
-    if (action === "suspend") next = { status: "SUSPENDED", archivedAt: null };
-    else if (action === "archive") next = { status: "ARCHIVED", archivedAt: new Date() };
-    else if (action === "restore") next = { status: "ACTIVE", archivedAt: null };
-    else if (action === "toggle_module") {
+    let updated = tenant;
+
+    if (action === "toggle_module") {
+      const module = payload.module as AppModule;
       const activeModules = new Set(tenant.activeModules);
-      if (payload.enabled) {
-        activeModules.add(payload.module);
-      } else {
-        activeModules.delete(payload.module);
+      if (payload.enabled) activeModules.add(module);
+      else activeModules.delete(module);
+
+      updated = await prisma.$transaction(async (tx) => {
+        const next = await tx.tenant.update({
+          where: { id },
+          data: { activeModules: Array.from(activeModules) },
+        });
+        await tx.tenantModule.upsert({
+          where: { tenantId_module: { tenantId: id, module } },
+          create: {
+            tenantId: id,
+            module,
+            status: payload.enabled ? "ACTIVE" : "SUSPENDED",
+          },
+          update: { status: payload.enabled ? "ACTIVE" : "SUSPENDED" },
+        });
+        return next;
+      });
+    } else {
+      const next =
+        action === "suspend"
+          ? { status: "SUSPENDED" as const, archivedAt: null }
+          : action === "archive"
+            ? { status: "ARCHIVED" as const, archivedAt: new Date() }
+            : { status: "ACTIVE" as const, archivedAt: null };
+      updated = await prisma.tenant.update({ where: { id }, data: next });
+      if (action === "suspend" || action === "archive") {
+        await revokeAllSessionsForTenant(id);
       }
-      next = { activeModules: Array.from(activeModules) };
     }
 
-    const updated = await prisma.tenant.update({
-      where: { id },
-      data: next,
-    });
-    if (action === "suspend" || action === "archive") {
-      await revokeAllSessionsForTenant(id);
-    }
     await audit({
       actorType: "PLATFORM_USER",
       actorId: actor.userId,

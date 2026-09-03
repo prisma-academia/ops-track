@@ -1,4 +1,5 @@
 import { DEFAULT_PRIMARY_COLOR, parseTenantSettings } from "@/lib/tenant/settings";
+import { COMPANY_LOGO, COMPANY_NAME } from "@/lib/branding";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 
 export type EmailBrand = {
@@ -7,8 +8,11 @@ export type EmailBrand = {
   primaryColor: string;
 };
 
+export const PLATFORM_FAVICON_URL = COMPANY_LOGO.favicon;
+export const PLATFORM_ICON_URL = COMPANY_LOGO.icon;
+
 export const PLATFORM_EMAIL_BRAND: EmailBrand = {
-  companyName: "OpsTrack",
+  companyName: COMPANY_NAME,
   logoUrl: null,
   primaryColor: DEFAULT_PRIMARY_COLOR,
 };

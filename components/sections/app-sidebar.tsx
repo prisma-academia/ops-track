@@ -105,7 +105,7 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                       </div>
                     )}
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-medium">{title}</span>
+                      <span className="truncate font-bold">{title}</span>
                       <span className="truncate text-xs text-muted-foreground">{moduleName}</span>
                     </div>
                     <ChevronsUpDown className="ml-auto size-4" />
@@ -180,7 +180,7 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                   className="bg-muted/40 hover:bg-muted/60 dark:bg-muted/20 dark:hover:bg-muted/30 border border-border/50 transition-colors"
                 >
                   {logoUrl && (
-                    <div className="flex aspect-square size-8 items-center justify-center overflow-hidden">
+                    <div className="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-md">
                       <img
                         src={logoUrl}
                         alt={`${title} Logo`}

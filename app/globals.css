@@ -11,9 +11,9 @@
   - Warning: amber (delayed/idle)
   - Destructive: red (breakdown/critical)
   - Radius kept small (6px) — precise, not soft/consumer
-  - Fonts: Geist (display + body), Geist Mono (data/IDs/coords)
+  - Fonts: Jost (display + body), Geist Mono (data/IDs/coords)
     Loaded via next/font/google in app/layout.tsx (self-hosted, no external
-    requests), which exposes --font-geist-sans / --font-geist-mono. The
+    requests), which exposes --font-jost / --font-geist-mono. The
     --font-* variables below just alias those for Tailwind's font-sans/
     font-heading/font-mono utilities.
 */
@@ -74,8 +74,8 @@
   --tracking-normal: -0.01em;
   --spacing: 0.25rem;
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-heading: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-jost), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-jost), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
 }
 

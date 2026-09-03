@@ -3,6 +3,7 @@ import { resolveHost } from "@/lib/auth/context";
 import { COOKIE_NAMES } from "@/lib/auth/session";
 
 const PUBLIC_PLATFORM = [
+  "/",
   "/auth/login",
   "/auth/change-password",
   "/auth/register",
@@ -33,7 +34,9 @@ export function proxy(request: NextRequest) {
   const path = url.pathname;
 
   if (path.startsWith("/api/")) return NextResponse.next();
-  if (path.startsWith("/_next/") || path === "/favicon.ico") return NextResponse.next();
+  if (path.startsWith("/_next/") || path === "/favicon.ico" || path.startsWith("/assets/")) {
+    return NextResponse.next();
+  }
   // Maintenance screen must serve on any host without auth/rewrite so the
   // lifecycle redirect (PRD §13) does not loop back to a login redirect.
   if (path === "/maintenance") return NextResponse.next();
@@ -56,9 +59,7 @@ function handlePlatform(request: NextRequest) {
   const hasSession = !!request.cookies.get(COOKIE_NAMES.platform)?.value;
 
   if (path === "/") {
-    const u = url.clone();
-    u.pathname = hasSession ? "/dashboard" : "/auth/login";
-    return NextResponse.redirect(u);
+    return NextResponse.next();
   }
   if (inList(path, PUBLIC_PLATFORM)) {
     return NextResponse.next();

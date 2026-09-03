@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { useTheme } from "next-themes";
-import { Moon, Sun, Zap, Star, ChevronDown } from "lucide-react";
+import { Moon, Sun, Star, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { COMPANY_NAME } from "@/lib/branding";
+import { CompanyLogo } from "@/components/brand/company-logo";
+import { PoweredBy } from "@/components/brand/powered-by";
 
 /* ------------------------------------------------------------------ */
 /*  Currency selector                                                  */
@@ -68,12 +71,7 @@ export function AuthHeader() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8">
         {/* Left — Logo */}
         <a href="/" className="flex items-center gap-2.5 group">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 backdrop-blur-sm border border-white/10 transition-all group-hover:bg-white/15">
-            <Zap className="h-5 w-5 text-white" />
-          </div>
-          <span className="text-lg font-semibold text-white tracking-tight hidden sm:inline">
-            OpsTrack
-          </span>
+          <CompanyLogo href={null} variant="banner" imgClassName="h-9 w-auto max-h-9" />
         </a>
 
         {/* Right — Controls */}
@@ -105,11 +103,9 @@ export function LeftInfoSection({ logoUrl, tenantName }: { logoUrl?: string | nu
         {/* Logo */}
         <a href="/" className="flex flex-col items-center justify-center group mb-5">
           {logoUrl ? (
-            <img src={logoUrl} alt={tenantName || "Logo"} className="h-20 w-auto object-contain mb-4" />
+            <img src={logoUrl} alt={tenantName || COMPANY_NAME} className="h-20 w-auto object-contain mb-4" />
           ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-white/10 backdrop-blur-sm border border-white/10 transition-all group-hover:bg-white/15">
-              <Zap className="h-7 w-7 text-white" />
-            </div>
+            <CompanyLogo href={null} variant="icon" imgClassName="size-20 mb-4" />
           )}
           {tenantName && (
             <h1 className="text-2xl font-bold text-white tracking-tight mt-2">{tenantName}</h1>
@@ -123,37 +119,11 @@ export function LeftInfoSection({ logoUrl, tenantName }: { logoUrl?: string | nu
           ))}
         </div>
         
-        {/* Quote */}
-        {/* <h2 className="text-xl font-bold tracking-tight text-white lg:text-2xl text-center leading-[1.35] max-w-lg">
-          &ldquo;The best login pages disappear.<br />This one already feels fast.&rdquo;
-        </h2> */}
-        
-        {/* Author */}
-        {/* <div className="flex items-center gap-3 mt-6">
-          <img 
-            src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=100&auto=format&fit=crop" 
-            alt="Sean Bold" 
-            className="h-10 w-10 rounded-full object-cover border border-white/10" 
-          />
-          <div className="text-left">
-            <p className="text-base font-semibold text-white leading-tight">Sean Bold</p>
-            <p className="text-sm text-white/50 mt-0.5 font-medium">Co-founder &bull; ReUI</p>
-          </div>
-        </div> */}
       </div>
 
       {/* Bottom Logos */}
-      <div className="pb-8 mt-12 w-full flex flex-col items-center justify-center">
-        <p className="text-[15px] font-semibold text-white mb-2 text-center">Powered By</p>
-        <div className="flex justify-center items-center gap-6 text-white flex-wrap">
-          {/* OpsTrack */}
-          <div className="flex items-center gap-1.5">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="h-[22px] w-[22px]">
-              <path d="M22.28 11.23a7.27 7.27 0 0 0-1.04-4.83 7.37 7.37 0 0 0-5.87-3.5 7.25 7.25 0 0 0-4.04-1.2 7.25 7.25 0 0 0-4.04 1.2 7.37 7.37 0 0 0-5.87 3.5 7.27 7.27 0 0 0-1.04 4.83 7.27 7.27 0 0 0 1.04 4.83 7.37 7.37 0 0 0 5.87 3.5 7.25 7.25 0 0 0 4.04 1.2 7.25 7.25 0 0 0 4.04-1.2 7.37 7.37 0 0 0 5.87-3.5 7.27 7.27 0 0 0 1.04-4.83zm-10.28 9.3c-2.3 0-4.32-1.3-5.38-3.18h7.97c2.46 0 4.45-2 4.45-4.46V8.14l1.24.71c.72.42 1.17 1.2 1.17 2.03 0 2.92-2.36 5.28-5.28 5.28h-4.17v4.37zm-7.6-5.46c-1.15-2-1.15-4.36 0-6.36l1.24.72v7.97c0 2.46 2 4.45 4.46 4.45h3.76v1.44c-.72.42-1.57.54-2.42.34-2.58-.62-4.52-2.9-4.87-5.56H3.6c.15-.36.5-.72.8-1zm14.16-5.63v7.97l-1.24.71V10.8a4.46 4.46 0 0 0-4.46-4.45H6.96V4.9c.72-.42 1.57-.54 2.42-.34 2.58.62 4.52 2.9 4.87 5.56h4.15v-1.44c-.16.36-.5.73-.8 1h1.24v-.25z"/>
-            </svg>
-            <span className="font-medium text-sm tracking-tight">OpsTrack</span>
-          </div>
-        </div>
+      <div className="pb-8 mt-12 w-full flex flex-col items-center justify-center text-white">
+        <PoweredBy />
       </div>
     </div>
   );
@@ -191,7 +161,19 @@ export function AuthLayoutWrapper({
 
           {/* Right — Form Card */}
           <div className={cn("flex items-center justify-center lg:justify-end", cardContainerClassName)}>
-            {children}
+            <div className="flex w-full flex-col items-center lg:contents">
+              <div className="lg:hidden mb-8">
+                {logoUrl ? (
+                  <img src={logoUrl} alt={tenantName || COMPANY_NAME} className="h-12 w-auto object-contain" />
+                ) : (
+                  <CompanyLogo variant="banner" imgClassName="h-9 w-auto max-h-9" />
+                )}
+              </div>
+              {children}
+              <div className="lg:hidden mt-10 text-white">
+                <PoweredBy />
+              </div>
+            </div>
           </div>
         </div>
       </div>

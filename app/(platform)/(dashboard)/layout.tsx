@@ -4,13 +4,13 @@ import { requirePlatformPage } from "@/lib/auth/page-guards";
 import { DashboardLayoutShell } from "@/components/dashboard-layout-shell";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
 import { UnauthorizedToast } from "@/components/unauthorized-toast";
+import { COMPANY_NAME, COMPANY_LOGO } from "@/lib/branding";
 
 const NAV = [
   { href: "/dashboard", title: "Overview", icon: "PieChart", permission: null },
   { href: "/tenants", title: "Tenants", icon: "Building2", permission: PERMISSIONS.PLATFORM_TENANTS_READ.key },
   { href: "/users", title: "Users", icon: "CircleUserRound", permission: PERMISSIONS.PLATFORM_USERS_READ.key },
   { href: "/role-templates", title: "Roles", icon: "Shield", permission: PERMISSIONS.PLATFORM_ROLES_READ.key },
-  { href: "/activity", title: "Activity", icon: "ClipboardList", permission: PERMISSIONS.PLATFORM_ACTIVITY_READ.key },
   { href: "/settings", title: "Settings", icon: "Settings", permission: null },
 ];
 
@@ -28,7 +28,8 @@ export default async function PlatformDashboardLayout({ children }: { children: 
 
   return (
     <DashboardLayoutShell
-      title="Platform"
+      title={COMPANY_NAME}
+      logoUrl={COMPANY_LOGO.icon}
       navItems={filteredNav}
       user={{ name: label, email: user.email }}
       roleLabel="Super Admin"

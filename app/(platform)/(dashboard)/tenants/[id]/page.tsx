@@ -5,9 +5,13 @@ import { requirePlatformPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { parseTenantSettings } from "@/lib/tenant/settings";
 import { resolveLogoUrl } from "@/lib/email/branding";
+import { resolveActivityLogRows } from "@/lib/activity/resolver";
+import { buildOffsetPageMeta } from "@/lib/api/pagination";
+import { failedActivityWhere } from "@/lib/activity/status";
 import { PageHeader } from "@/components/shell";
 import { Card, CardAction, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { TenantActions, TenantModuleToggle } from "./actions";
+import { TenantActivityTab } from "./activity-tab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -89,6 +93,33 @@ export default async function TenantDrilldownPage({
       lastLoginAt: true,
     },
   });
+
+  const ACTIVITY_PAGE_SIZE = 20;
+  const [activityCount, rawActivityRows] = await Promise.all([
+    prisma.activityLog.count({ where: { tenantId: id } }),
+    prisma.activityLog.findMany({
+      where: { tenantId: id },
+      orderBy: { createdAt: "desc" },
+      take: ACTIVITY_PAGE_SIZE,
+      include: { tenant: { select: { name: true } } },
+    }),
+  ]);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const [failedCount, todayCount] = await Promise.all([
+    prisma.activityLog.count({ where: { tenantId: id, ...failedActivityWhere() } }),
+    prisma.activityLog.count({ where: { tenantId: id, createdAt: { gte: startOfToday } } }),
+  ]);
+  const initialActivityRows = await resolveActivityLogRows(rawActivityRows);
+  const initialActivityMeta = {
+    ...buildOffsetPageMeta(activityCount, 1, ACTIVITY_PAGE_SIZE),
+    stats: {
+      total: activityCount,
+      success: activityCount - failedCount,
+      failed: failedCount,
+      today: todayCount,
+    },
+  };
 
   const owner = users.find((u) => u.isOwner) ?? null;
   const logoUrl = resolveLogoUrl(parseTenantSettings(tenant.settingsJson).logoKey);
@@ -180,6 +211,7 @@ export default async function TenantDrilldownPage({
         <TabsList>
           <TabsTrigger value="modules">Modules</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="activity">Activity Log</TabsTrigger>
         </TabsList>
 
         <TabsContent value="modules" className="mt-4">
@@ -271,6 +303,14 @@ export default async function TenantDrilldownPage({
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="activity" className="mt-4">
+          <TenantActivityTab
+            tenantId={tenant.id}
+            initialData={initialActivityRows as any}
+            initialMeta={initialActivityMeta as any}
+          />
         </TabsContent>
       </Tabs>
     </div>

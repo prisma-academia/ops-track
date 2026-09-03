@@ -8,21 +8,21 @@ export const LANDING_PEOPLE = {
   aliyu: {
     fullName: "Aliyu Ibrahim",
     image: "/assets/images/people/aliyu.png",
-    role: "Product Manager / Founder",
+    role: "---",
   },
   umar: {
     fullName: "Umar Adam",
     image: "/assets/images/people/abdullahi.png",
-    role: "DevOps / Infrastructure Specialist",
+    role: "---",
   },
   muhammad: {
     fullName: "Muhammad Maigoro",
     image: "/assets/images/people/maigoro.png",
-    role: "Full-Stack Developer / Tech Lead",
+    role: "---",
   },
   abdullah: {
     fullName: "Abdullah Muneer",
     image: "/assets/images/people/abdallah.jpeg",
-    role: "Full-Stack Developer",
+    role: "---",
   },
 } as const satisfies Record<string, LandingPerson>;

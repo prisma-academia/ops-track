@@ -24,7 +24,7 @@ const BaseSchema = z.object({
   customerId: z.string().optional(),
   stationId: z.string().optional(),
   transportCostBorneBy: z.enum(["CLIENT", "COMPANY"], {
-    required_error: "Please select who bears the transport cost",
+    error: "Please select who bears the transport cost",
   }),
   transportId: z.string().min(1, "Please select a transport"),
   litersDespatched: z.coerce.number().positive("Liters despatched must be > 0"),

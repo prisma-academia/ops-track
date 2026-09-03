@@ -60,39 +60,6 @@ function CurrencySelector() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Header                                                             */
-/* ------------------------------------------------------------------ */
-export function AuthHeader() {
-  const { theme, resolvedTheme, setTheme } = useTheme();
-  const isDark = theme === "dark" || resolvedTheme === "dark";
-
-  return (
-    <header className="absolute inset-x-0 top-0 z-50">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8">
-        {/* Left — Logo */}
-        <a href="/" className="flex items-center gap-2.5 group">
-          <CompanyLogo href={null} variant="banner" imgClassName="h-9 w-auto max-h-9" />
-        </a>
-
-        {/* Right — Controls */}
-        <div className="flex items-center gap-3">
-          <CurrencySelector />
-          <button
-            type="button"
-            onClick={() => setTheme(isDark ? "light" : "dark")}
-            className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-foreground transition-colors hover:bg-muted cursor-pointer"
-          >
-            <Sun className="h-4.5 w-4.5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-4.5 w-4.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-            <span className="sr-only">Toggle theme</span>
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  Feature highlights (left side)                                     */
 /* ------------------------------------------------------------------ */
 export function LeftInfoSection({ logoUrl, tenantName }: { logoUrl?: string | null, tenantName?: string }) {
@@ -150,7 +117,6 @@ export function AuthLayoutWrapper({
 }) {
   return (
     <section className="bg-background relative min-h-screen flex flex-col">
-      <AuthHeader />
       {/* Background decorations */}
       <div className="pointer-events-none absolute inset-0 right-0 overflow-hidden md:block hidden">
         <div className="absolute left-1/1 top-0 h-650 w-650 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground/5 dark:bg-white/10" />

@@ -23,7 +23,7 @@ const Hero02Page = ({
   return (
     <>
       <Navbar navData={navData} />
-      <main className="-mt-20">
+      <main className="-mt-20 overflow-x-clip">
         <HeroSection stats={stats} />
         <Feature01 />
         <Testimonial01 partnerLogos={partnerLogos} />

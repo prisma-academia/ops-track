@@ -17,7 +17,7 @@ function BrandSlider({ brandList }: { brandList: BrandList[] }) {
   if (!brandList.length) return null;
 
   return (
-    <section ref={sectionRef}>
+    <section ref={sectionRef} className="overflow-x-clip">
       <div className="py-6 md:py-10">
         <div className="max-w-7xl mx-auto sm:px-16 px-4">
           <motion.div

@@ -15,7 +15,7 @@ const quotePerson = LANDING_PEOPLE.aliyu;
 
 const Feature = ({ featureData }: { featureData: Features }) => {
   return (
-    <section>
+    <section className="overflow-x-clip">
       <div className="lg:py-20 sm:py-16 py-8 ">
         <div className="mx-auto max-w-7xl px-4 sm:px-8">
           <div className="flex flex-col gap-8 md:gap-12">

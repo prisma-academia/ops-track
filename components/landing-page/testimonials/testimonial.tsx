@@ -35,7 +35,7 @@ export default function Testimonial01({
     const isInView = useInView(sectionRef, { once: true, amount: 0.1 });
 
     return (
-        <section ref={sectionRef}>
+        <section ref={sectionRef} className="overflow-x-clip">
             <div className="max-w-7xl mx-auto sm:px-16 px-4 pt-12">
                 <div className="">
                     <motion.div

@@ -46,7 +46,7 @@ const HeroSection: React.FC<{ stats: LandingStats }> = ({ stats }) => {
   ];
 
   return (
-    <section ref={sectionRef}>
+    <section ref={sectionRef} className="overflow-x-clip">
       <div className="bg-[url(https://images.shadcnspace.com/assets/backgrounds/real-estate-bg.webp)] bg-contain bg-center bg-repeat overflow-hidden relative flex flex-col xl:h-screen justify-center z-10 xl:gap-0 gap-12">
         <div className="max-w-7xl mx-auto sm:px-16 px-4 w-full xl:pt-0 pt-32">
           <div className="relative text-white text-start z-30">
@@ -72,7 +72,7 @@ const HeroSection: React.FC<{ stats: LandingStats }> = ({ stats }) => {
                 alt="OpsTrack fuel tanker"
                 width={800}
                 height={500}
-                className="w-[90%] h-auto object-contain"
+                className="w-[90%] max-w-full h-auto object-contain"
               />
             </div>
             <div className="bg-background rounded-t-2xl xl:rounded-none xl:rounded-tl-2xl sm:py-10 py-6 sm:ps-12 ps-4 sm:pe-12 pe-4 xl:pe-60 z-1 relative">

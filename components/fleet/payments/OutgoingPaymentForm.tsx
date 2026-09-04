@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,7 @@ import {
   UploadIcon,
   XIcon,
   Loader2,
-  CreditCard,
+  ArrowLeft,
   Wallet,
   Truck as TruckIcon,
   Route,
@@ -36,7 +37,7 @@ import {
   getFeeLegBreakdown,
   getRemainingForLeg,
 } from "@/lib/fleet/transport-fees";
-import { PaymentConfirmDialog, PaymentResultDialog, type PaymentSummaryRow } from "@/components/fleet/payments/payment-dialogs";
+import { PaymentConfirmDialog, type PaymentSummaryRow } from "@/components/fleet/payments/payment-dialogs";
 
 type ExpenseCategory = "PERSONAL_EXPENSE" | "FLEET_EXPENSE" | "TRANSPORT_FEE";
 
@@ -87,6 +88,23 @@ const CATEGORY_OPTIONS: Array<{
   },
 ];
 
+function getDeliveryVolumeAndFee(d: any) {
+  const name = d?.station?.name || d?.customer?.name || "Secondary stop";
+  const liters = Number(d?.litersReceived ?? d?.litersDespatched ?? 0);
+  const amount =
+    Number(d?.transportCost || 0) > 0
+      ? Number(d.transportCost)
+      : liters * Number(d?.transportRate || 0);
+  return { name, liters, amount };
+}
+
+function formatVolumeAndFee(liters: number, amount: number) {
+  const parts: string[] = [];
+  if (liters > 0) parts.push(`${liters.toLocaleString()} L`);
+  if (amount > 0) parts.push(`₦${amount.toLocaleString()}`);
+  return parts.join(" • ");
+}
+
 export default function OutgoingPaymentForm({ metadata, loading }: { metadata: any, loading: boolean }) {
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
@@ -94,7 +112,6 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
   const [category, setCategory] = useState<ExpenseCategory | "">("");
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [result, setResult] = useState<{ status: "success" | "error"; title: string; description?: string } | null>(null);
   const [transportOpen, setTransportOpen] = useState(false);
   const [transporterOpen, setTransporterOpen] = useState(false);
   const [truckOpen, setTruckOpen] = useState(false);
@@ -276,24 +293,18 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
 
       if (!res.error) {
         setConfirmOpen(false);
-        setResult({
-          status: "success",
-          title: "Payment recorded",
-          description: `The outgoing payment of ₦${Number(formData.amount).toLocaleString()} has been logged successfully.`,
+        toast.success("Payment recorded", {
+          description: `₦${Number(formData.amount).toLocaleString()} has been logged successfully.`,
         });
-        setFormData({ ...formData, amount: "", description: "", reference: "", receiptUrl: "", bankAccountId: "" });
-      } else {
-        setConfirmOpen(false);
-        setResult({
-          status: "error",
-          title: "Payment failed",
-          description: res.error?.message || "Failed to record payment. Please try again.",
-        });
+        router.push("/admin/payments");
+        return;
       }
+      setConfirmOpen(false);
+      toast.error(res.error?.message || "Failed to record payment. Please try again.");
     } catch (e) {
       console.error(e);
       setConfirmOpen(false);
-      setResult({ status: "error", title: "Payment failed", description: "Something went wrong while recording this payment." });
+      toast.error("Something went wrong while recording this payment.");
     } finally {
       setSubmitting(false);
     }
@@ -302,10 +313,6 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
   if (loading) return <div className="p-8 text-center text-muted-foreground"><SpinnerEllipsis /></div>;
 
   const selectedDeliveries = selectedTransport?.deliveries || [];
-  const showDeliveryPicker =
-    category === "TRANSPORT_FEE" &&
-    feeLeg === "PRIMARY_TO_SUBSEQUENT" &&
-    selectedDeliveries.length > 1;
 
   const selectedBank = formData.bankAccountId
     ? metadata?.bankAccounts?.find((a: any) => a.id === formData.bankAccountId)
@@ -339,13 +346,19 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
     <>
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2">
-        <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
-          <CardHeader className="pb-4 border-b border-border/30">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-red-600" />
-              Log Outgoing Payment
-            </CardTitle>
-            <CardDescription>Record transport fee payouts and operational expenses.</CardDescription>
+        <Card>
+          <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b">
+            <div className="flex items-center gap-4">
+              <Button variant="outline" size="icon" asChild className="h-10 w-10 shrink-0">
+                <Link href="/admin/payments">
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
+              <div>
+                <CardTitle className="text-xl">Log Outgoing Payment</CardTitle>
+                <CardDescription>Record transport fee payouts and operational expenses.</CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in duration-500">
@@ -471,7 +484,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
         )}
 
         {category === "TRANSPORT_FEE" && (
-          <div className="space-y-2 flex flex-col justify-end">
+          <div className="space-y-2 flex flex-col justify-end md:col-span-2">
             <Label>Transport Fee Leg *</Label>
             <Popover open={feeLegOpen} onOpenChange={setFeeLegOpen}>
               <PopoverTrigger asChild className="w-full">
@@ -484,9 +497,20 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                 >
                   <span className="truncate pr-4">
                     {feeLeg
-                      ? availableFeeLegs.find(
-                          (l) => (l.deliveryId ? `${l.feeLeg}:${l.deliveryId}` : l.feeLeg) === feeLegSelectionKey
-                        )?.label || "Select fee leg..."
+                      ? (() => {
+                          const selected = availableFeeLegs.find(
+                            (l) => (l.deliveryId ? `${l.feeLeg}:${l.deliveryId}` : l.feeLeg) === feeLegSelectionKey
+                          );
+                          if (!selected) return "Select fee leg...";
+                          if (selected.feeLeg === "FULL_TRIP") return "Full Trip";
+                          const delivery = selected.deliveryId
+                            ? selectedTransport?.deliveries?.find((d: any) => d.id === selected.deliveryId)
+                            : null;
+                          if (!delivery) return selected.label;
+                          const { liters, amount } = getDeliveryVolumeAndFee(delivery);
+                          const extra = formatVolumeAndFee(liters, amount);
+                          return extra ? `${selected.label} • ${extra}` : selected.label;
+                        })()
                       : formData.transportId
                         ? "Select fee leg..."
                         : "Select transport first"}
@@ -506,10 +530,16 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                     <CommandGroup>
                       {availableFeeLegs.map((leg) => {
                         const key = leg.deliveryId ? `${leg.feeLeg}:${leg.deliveryId}` : leg.feeLeg;
+                        const delivery = leg.deliveryId
+                          ? selectedTransport?.deliveries?.find((d: any) => d.id === leg.deliveryId)
+                          : null;
+                        const stats = delivery ? getDeliveryVolumeAndFee(delivery) : null;
+                        const volumeFee = stats ? formatVolumeAndFee(stats.liters, stats.amount) : "";
+                        const isFullTrip = leg.feeLeg === "FULL_TRIP";
                         return (
                           <CommandItem
                             key={key}
-                            value={`${leg.label} ${key}`}
+                            value={`${leg.label} ${key} ${isFullTrip ? "full trip" : ""} ${volumeFee}`}
                             onSelect={() => {
                               setFeeLeg(leg.feeLeg);
                               setDeliveryId(leg.deliveryId || "");
@@ -518,9 +548,15 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                           >
                             <Check className={cn("mr-2 h-4 w-4 shrink-0", feeLegSelectionKey === key ? "opacity-100" : "opacity-0")} />
                             <div className="flex flex-col text-left">
-                              <span className="font-semibold text-sm">{leg.label}</span>
+                              <span className="font-semibold text-sm">
+                                {isFullTrip ? "Full Trip" : leg.label}
+                              </span>
                               <span className="text-xs text-muted-foreground mt-0.5">
-                                ₦{leg.remaining.toLocaleString()} remaining
+                                {isFullTrip
+                                  ? `Pays origin, depot, and all destinations together • ₦${leg.remaining.toLocaleString()} remaining`
+                                  : volumeFee
+                                    ? `${volumeFee} • ₦${leg.remaining.toLocaleString()} remaining`
+                                    : `₦${leg.remaining.toLocaleString()} remaining`}
                               </span>
                             </div>
                           </CommandItem>
@@ -531,24 +567,6 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                 </Command>
               </PopoverContent>
             </Popover>
-          </div>
-        )}
-
-        {showDeliveryPicker && (
-          <div className="space-y-2 flex flex-col justify-end">
-            <Label>Secondary Destination *</Label>
-            <Select value={deliveryId} onValueChange={setDeliveryId} required>
-              <SelectTrigger className="w-full h-auto py-2">
-                <SelectValue placeholder="Select delivery stop" />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {selectedDeliveries.map((d: any) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.station?.name || d.customer?.name || "Secondary stop"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         )}
 
@@ -735,7 +753,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
         </div>
 
         {formData.paymentMethod !== "CASH" && (
-          <div className="space-y-2 flex flex-col justify-end">
+          <div className="space-y-2">
             <Label>Paying Bank Account *</Label>
             <Popover open={bankOpen} onOpenChange={setBankOpen}>
               <PopoverTrigger asChild className="w-full">
@@ -743,16 +761,18 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                   variant="outline"
                   role="combobox"
                   aria-expanded={bankOpen}
-                  className="w-full justify-between font-normal"
+                  className="h-9 w-full justify-between font-normal"
                 >
-                  {formData.bankAccountId
-                    ? (() => {
-                        const account = metadata?.bankAccounts?.find((a: any) => a.id === formData.bankAccountId);
-                        return account 
-                          ? `${account.accountName ? account.accountName + " - " : ""} ${account.bankName}`
-                          : "Select Bank Account...";
-                      })()
-                    : "Select Bank Account..."}
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {formData.bankAccountId
+                      ? (() => {
+                          const account = metadata?.bankAccounts?.find((a: any) => a.id === formData.bankAccountId);
+                          return account
+                            ? `${account.accountName ? account.accountName + " - " : ""}${account.bankName}`
+                            : "Select Bank Account...";
+                        })()
+                      : "Select Bank Account..."}
+                  </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -1003,33 +1023,6 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
   rows={confirmRows}
   confirmLabel="Confirm & Log Expense"
 />
-
-{result && (
-  <PaymentResultDialog
-    open={!!result}
-    onOpenChange={(open) => !open && setResult(null)}
-    status={result.status}
-    title={result.title}
-    description={result.description}
-    primaryLabel={result.status === "success" ? "Go to Payments" : "Try Again"}
-    onPrimaryAction={() => {
-      if (result.status === "success") {
-        router.push("/admin/payments");
-      } else {
-        setResult(null);
-      }
-    }}
-    secondaryLabel={result.status === "success" ? "Log Another" : undefined}
-    onSecondaryAction={
-      result.status === "success"
-        ? () => {
-            setResult(null);
-            setCategory("");
-          }
-        : undefined
-    }
-  />
-)}
 </>
 );
 }

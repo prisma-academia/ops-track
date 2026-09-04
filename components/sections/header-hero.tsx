@@ -7,10 +7,8 @@ import { cn } from '@/lib/utils'
 import { useTheme } from "next-themes"
 
 const menuItems = [
-    { name: 'Features', href: '#link' },
-    { name: 'Bussiness', href: '#link' },
-    { name: 'Pricing', href: '#link' },
     { name: 'About', href: '#link' },
+    { name: 'Pricing', href: '#link' },
     { name: 'Contact', href: '#contact' },
 ]
 
@@ -64,8 +62,8 @@ export const HeroHeader = ({ slug = "App", logoUrl }: { slug?: string, logoUrl?:
                                     <li key={index}>
                                         <Link
                                             href={item.href}
-                                            className="text-muted-foreground hover:text-accent-foreground block duration-150">
-                                            <span>{item.name}</span>
+                                            className="text-white hover:text-accent-foreground block duration-150">
+                                            <span className="text-white">{item.name}</span>
                                         </Link>
                                     </li>
                                 ))}

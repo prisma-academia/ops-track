@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,15 +19,14 @@ import {
   UploadIcon,
   XIcon,
   Loader2,
-  Check,
+  ArrowLeft,
   ChevronsUpDown,
-  CreditCard,
 } from "lucide-react";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { apiPost } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { PaymentConfirmDialog, PaymentResultDialog, type PaymentSummaryRow } from "@/components/fleet/payments/payment-dialogs";
+import { PaymentConfirmDialog, type PaymentSummaryRow } from "@/components/fleet/payments/payment-dialogs";
 
 function SummaryRow({ label, value, emphasis }: { label: string; value: string; emphasis?: boolean }) {
   return (
@@ -37,18 +37,42 @@ function SummaryRow({ label, value, emphasis }: { label: string; value: string; 
   );
 }
 
+function getSaleTransportFee(s: any) {
+  if (!s) return 0;
+  return s.transportCostBorneBy === "CLIENT" ? Number(s.transportCost || 0) : 0;
+}
+
+function getSaleTotalExpected(s: any) {
+  if (!s) return 0;
+  return Number(s.totalExpectedAmount || 0) + getSaleTransportFee(s);
+}
+
+function getSaleOutstanding(s: any) {
+  if (!s) return 0;
+  return getSaleTotalExpected(s) - Number(s.paymentReceived || 0);
+}
+
+function inferPaymentType(sale: any | null, amount: string) {
+  if (!sale) return "ADVANCE_DEPOSIT";
+  const outstanding = getSaleOutstanding(sale);
+  const alreadyPaid = Number(sale.paymentReceived || 0);
+  const amt = Number(amount);
+  if (amt > 0 && amt < outstanding) return "PART_PAYMENT";
+  if (alreadyPaid > 0) return "DEBT_CLEARANCE";
+  return "FULL_SETTLEMENT";
+}
+
 export default function IncomingPaymentForm({ metadata, loading }: { metadata: any, loading: boolean }) {
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
   const [saleOpen, setSaleOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [result, setResult] = useState<{ status: "success" | "error"; title: string; description?: string } | null>(null);
   
   const [formData, setFormData] = useState({
     clientId: "",
     saleId: "none",
     amount: "",
-    paymentType: "FULL_SETTLEMENT",
+    paymentType: "ADVANCE_DEPOSIT",
     paymentMethod: "BANK_TRANSFER",
     reference: "",
     receiptUrl: "",
@@ -119,6 +143,14 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
   const previewUrl = formData.receiptUrl || (files[0]?.preview || null);
   const displayFileName = files[0]?.file.name || "Payment Receipt";
 
+  const selectedSaleDetails = formData.saleId && formData.saleId !== "none"
+    ? metadata?.sales?.find((s: any) => s.id === formData.saleId)
+    : null;
+
+  useEffect(() => {
+    const nextType = inferPaymentType(selectedSaleDetails ?? null, formData.amount);
+    setFormData((prev) => (prev.paymentType === nextType ? prev : { ...prev, paymentType: nextType }));
+  }, [formData.saleId, formData.amount, selectedSaleDetails]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,49 +187,24 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
       const res = await apiPost<any>(`/api/tenant/fleet/payments/inflow`, payload);
       if (!res.error) {
         setConfirmOpen(false);
-        setResult({
-          status: "success",
-          title: "Payment recorded",
-          description: `The incoming payment of ₦${Number(formData.amount).toLocaleString()} has been logged successfully.`,
+        toast.success("Payment recorded", {
+          description: `₦${Number(formData.amount).toLocaleString()} has been logged successfully.`,
         });
-        setFormData({ ...formData, amount: "", reference: "", receiptUrl: "", saleId: "none", bankAccountId: "" });
-      } else {
-        setConfirmOpen(false);
-        setResult({
-          status: "error",
-          title: "Payment failed",
-          description: res.error?.message || "Failed to record payment. Please try again.",
-        });
+        router.push("/admin/payments");
+        return;
       }
+      setConfirmOpen(false);
+      toast.error(res.error?.message || "Failed to record payment. Please try again.");
     } catch (e: any) {
       console.error(e);
       setConfirmOpen(false);
-      setResult({ status: "error", title: "Payment failed", description: e?.message || "Something went wrong while recording this payment." });
+      toast.error(e?.message || "Something went wrong while recording this payment.");
     } finally {
       setSubmitting(false);
     }
   };
 
   if (loading) return <div className="p-8 text-center text-muted-foreground"><SpinnerEllipsis /></div>;
-
-  const selectedSaleDetails = formData.saleId && formData.saleId !== "none" 
-    ? metadata?.sales?.find((s: any) => s.id === formData.saleId)
-    : null;
-
-  const getSaleTransportFee = (s: any) => {
-    if (!s) return 0;
-    return s.transportCostBorneBy === "CLIENT" ? Number(s.transportCost || 0) : 0;
-  };
-
-  const getSaleTotalExpected = (s: any) => {
-    if (!s) return 0;
-    return Number(s.totalExpectedAmount || 0) + getSaleTransportFee(s);
-  };
-
-  const getSaleOutstanding = (s: any) => {
-    if (!s) return 0;
-    return getSaleTotalExpected(s) - Number(s.paymentReceived || 0);
-  };
 
   const selectedCustomer = metadata?.customers?.find((c: any) => c.id === formData.clientId);
   const selectedStation = metadata?.stations?.find((s: any) => s.id === formData.clientId);
@@ -221,16 +228,22 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
     <>
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2">
-        <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
-          <CardHeader className="pb-4 border-b border-border/30">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-green-600" />
-              Log Incoming Payment
-            </CardTitle>
-            <CardDescription>Record payments received from customers for fuel sales.</CardDescription>
+        <Card>
+          <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b">
+            <div className="flex items-center gap-4">
+              <Button variant="outline" size="icon" asChild className="h-10 w-10 shrink-0">
+                <Link href="/admin/payments">
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
+              <div>
+                <CardTitle className="text-xl">Log Incoming Payment</CardTitle>
+                <CardDescription>Record a payment received from a customer or station.</CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in duration-500">
+            <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-500">
               {/* SECTION: General Details */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b">
@@ -358,7 +371,11 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
                           key={s.id}
                           value={searchValue}
                           onSelect={() => {
-                            setFormData({ ...formData, saleId: s.id });
+                            setFormData({
+                              ...formData,
+                              saleId: s.id,
+                              amount: outstanding > 0 ? String(outstanding) : formData.amount,
+                            });
                             setSaleOpen(false);
                           }}
                           data-checked={formData.saleId === s.id}
@@ -425,6 +442,15 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
               <SelectItem value="DEBT_CLEARANCE">Debt Clearance</SelectItem>
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">
+            {formData.saleId === "none"
+              ? "No sale selected — recorded as an advance deposit."
+              : formData.paymentType === "PART_PAYMENT"
+                ? "Amount is less than the outstanding balance."
+                : formData.paymentType === "DEBT_CLEARANCE"
+                  ? "Clears remaining balance on a previously part-paid sale."
+                  : "Covers the full outstanding balance on this sale."}
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -448,7 +474,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
         </div>
 
         {formData.paymentMethod !== "CASH" && formData.paymentMethod !== "DEPOSIT" && (
-          <div className="space-y-2 flex flex-col justify-end">
+          <div className="space-y-2">
             <Label>Receiving Bank Account *</Label>
             <Popover open={bankOpen} onOpenChange={setBankOpen}>
               <PopoverTrigger asChild className="w-full">
@@ -456,16 +482,18 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
                   variant="outline"
                   role="combobox"
                   aria-expanded={bankOpen}
-                  className="w-full justify-between font-normal"
+                  className="h-9 w-full justify-between font-normal"
                 >
-                  {formData.bankAccountId
-                    ? (() => {
-                        const account = metadata?.bankAccounts?.find((a: any) => a.id === formData.bankAccountId);
-                        return account 
-                          ? `${account.accountName ? account.accountName + " - " : ""} ${account.bankName}`
-                          : "Select Bank Account...";
-                      })()
-                    : "Select Bank Account..."}
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {formData.bankAccountId
+                      ? (() => {
+                          const account = metadata?.bankAccounts?.find((a: any) => a.id === formData.bankAccountId);
+                          return account
+                            ? `${account.accountName ? account.accountName + " - " : ""}${account.bankName}`
+                            : "Select Bank Account...";
+                        })()
+                      : "Select Bank Account..."}
+                  </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -682,33 +710,6 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
   rows={confirmRows}
   confirmLabel="Confirm & Log Payment"
 />
-
-{result && (
-  <PaymentResultDialog
-    open={!!result}
-    onOpenChange={(open) => !open && setResult(null)}
-    status={result.status}
-    title={result.title}
-    description={result.description}
-    primaryLabel={result.status === "success" ? "Go to Payments" : "Try Again"}
-    onPrimaryAction={() => {
-      if (result.status === "success") {
-        router.push("/admin/payments");
-      } else {
-        setResult(null);
-      }
-    }}
-    secondaryLabel={result.status === "success" ? "Log Another" : undefined}
-    onSecondaryAction={
-      result.status === "success"
-        ? () => {
-            setResult(null);
-            setFormData((prev) => ({ ...prev, clientId: "" }));
-          }
-        : undefined
-    }
-  />
-)}
 </>
 );
 }

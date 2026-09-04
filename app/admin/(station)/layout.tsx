@@ -52,6 +52,7 @@ const NAV: NavItemConfig[] = [
     children: [
       { href: "/admin/station/dippings", key: "dippings", title: "Dippings", module: "operations" as ModuleKey, icon: "IconActivity", permission: PERMISSIONS.TENANT_DIPPINGS_READ.key },
       { href: "/admin/station/stock-movements", key: "stockMovements", title: "Stock Movements", module: "operations" as ModuleKey, icon: "IconTable", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
+      { href: "/admin/station/activity", key: "activity", title: "Activity", module: "operations" as ModuleKey, icon: "IconActivity", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
     ],
   },
   { href: "/admin/station/bank-accounts", key: "bankAccounts", title: "Bank Accounts", module: "operations" as ModuleKey, icon: "IconBuildingBank", permission: PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key },

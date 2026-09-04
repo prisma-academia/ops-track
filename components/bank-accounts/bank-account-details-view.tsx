@@ -30,6 +30,7 @@ type TransactionRow = {
   date: string;
   category: string;
   description: string;
+  payerName?: string | null;
   reference?: string | null;
   sourceModule: string;
   status: string;
@@ -97,6 +98,27 @@ const columns: ColumnDef<TransactionRow>[] = [
     filterFn: (row, id, value) => {
       if (!Array.isArray(value)) return true;
       return value.includes(row.getValue(id));
+    },
+  },
+  {
+    accessorKey: "payerName",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Payer" />,
+    meta: { label: "Payer" },
+    cell: ({ row }) => {
+      const payer = row.original.payerName;
+      const isCredit = row.original.type === "CREDIT";
+      return (
+        <div className="flex flex-col">
+          <span className="text-sm font-medium text-foreground">
+            {payer || "—"}
+          </span>
+          {payer ? (
+            <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wider">
+              {isCredit ? "Payer" : "Payee"}
+            </span>
+          ) : null}
+        </div>
+      );
     },
   },
   {
@@ -270,9 +292,9 @@ export function BankAccountDetailsView({
       <DataTable
         columns={columns}
         data={transactions}
-        tableId="fleet-bank-account-transactions"
+        tableId="bank-account-transactions"
         filterFields={filterFields}
-        searchPlaceholder="Search description, reference, category..."
+        searchPlaceholder="Search payer, description, reference, category..."
         emptyMessage="No transactions recorded for this account."
         pageSize={25}
       />

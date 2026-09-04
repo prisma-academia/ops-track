@@ -3,10 +3,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { apiGet } from "@/lib/client/api";
 import type { PaginatedEnvelope } from "@/lib/api/pagination-types";
 
-interface UsePaginatedQueryOptions {
+interface UsePaginatedQueryOptions<T = any> {
   baseUrl: string;
   initialPage?: number;
   initialPageSize?: number;
+  initialData?: T[];
+  initialMeta?: any;
   additionalParams?: Record<string, string>;
   syncWithUrl?: boolean;
   enabled?: boolean;
@@ -16,10 +18,12 @@ export function usePaginatedQuery<T>({
   baseUrl,
   initialPage = 1,
   initialPageSize = 25,
+  initialData,
+  initialMeta,
   additionalParams = {},
   syncWithUrl = true,
   enabled = true,
-}: UsePaginatedQueryOptions) {
+}: UsePaginatedQueryOptions<T>) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -30,23 +34,25 @@ export function usePaginatedQuery<T>({
   const [page, setPageState] = useState(urlPage > 0 ? urlPage : initialPage);
   const [pageSize, setPageSizeState] = useState(urlPageSize > 0 ? urlPageSize : initialPageSize);
 
-  const [data, setData] = useState<T[]>([]);
-  const [meta, setMeta] = useState({
-    page,
-    pageSize,
-    totalCount: 0,
-    totalPages: 1,
-    hasNextPage: false,
-    hasPreviousPage: false,
-  });
+  const [data, setData] = useState<T[]>(initialData || []);
+  const [meta, setMeta] = useState(
+    initialMeta || {
+      page,
+      pageSize,
+      totalCount: initialData ? initialData.length : 0,
+      totalPages: 1,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    }
+  );
 
-  const [isLoading, setIsLoading] = useState(enabled);
+  const [isLoading, setIsLoading] = useState(!initialData && enabled);
   const [error, setError] = useState<string | null>(null);
   
+  const hasFetchedRef = useRef(false);
+  const isFirstMountRef = useRef(true);
+
   // Keep track of mounted state to avoid setting state after unmount.
-  // A ref is used instead of state because: (1) it avoids the cascading-render
-  // warning from calling setState synchronously in an effect, and (2) it gives
-  // a live mutable value that async callbacks can read without stale closures.
   const isMountedRef = useRef(false);
   useEffect(() => {
     isMountedRef.current = true;
@@ -67,7 +73,8 @@ export function usePaginatedQuery<T>({
       url.searchParams.set("page", currentPage.toString());
       url.searchParams.set("take", currentTake.toString());
 
-      Object.entries(additionalParams).forEach(([key, value]) => {
+      const paramsObj = JSON.parse(serializedParams) as Record<string, string>;
+      Object.entries(paramsObj).forEach(([key, value]) => {
         if (value) url.searchParams.set(key, value);
       });
 
@@ -75,14 +82,14 @@ export function usePaginatedQuery<T>({
 
       if (!isMountedRef.current) return;
 
+      hasFetchedRef.current = true;
       if (res.error) {
         setError(res.error.message);
       } else if (res.data) {
-        // At runtime, res is { data: T[], error: null, meta: PageMeta }
         setData(res.data as unknown as T[]);
         const resMeta = (res as any).meta;
         if (resMeta) {
-          setMeta((prev) => ({ ...prev, ...resMeta }));
+          setMeta((prev: any) => ({ ...prev, ...resMeta }));
         }
       }
     } catch (err: any) {
@@ -93,9 +100,14 @@ export function usePaginatedQuery<T>({
   }, [baseUrl, serializedParams]);
 
   useEffect(() => {
-    if (enabled) {
-      fetchPage(page, pageSize);
+    if (!enabled) return;
+    // Skip duplicate initial fetch if initialData was provided and params haven't changed
+    if (isFirstMountRef.current && initialData && initialData.length > 0) {
+      isFirstMountRef.current = false;
+      return;
     }
+    isFirstMountRef.current = false;
+    fetchPage(page, pageSize);
   }, [fetchPage, page, pageSize, enabled]);
 
   const setPage = (newPage: number) => {
@@ -109,7 +121,6 @@ export function usePaginatedQuery<T>({
 
   const setPageSize = (newTake: number) => {
     setPageSizeState(newTake);
-    // Reset to page 1 when changing page size
     setPageState(1);
     
     if (syncWithUrl) {
@@ -121,10 +132,12 @@ export function usePaginatedQuery<T>({
   };
 
   // Helper to pre-fill initial data when passed from server component
-  const setInitialData = (initialData: T[], initialMeta: any) => {
-    if (data.length === 0 && !isLoading) {
-      setData(initialData);
-      setMeta(initialMeta);
+  const setInitialData = (newInitialData: T[], newInitialMeta: any) => {
+    if (!hasFetchedRef.current) {
+      setData(newInitialData);
+      if (newInitialMeta) {
+        setMeta(newInitialMeta);
+      }
     }
   };
 

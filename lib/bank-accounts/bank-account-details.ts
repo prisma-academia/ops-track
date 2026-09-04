@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/client";
+import { resolveTransactionCounterpartyName } from "@/lib/finance/transaction-labels";
 
 export type BankTransactionItem = {
   id: string;
@@ -7,6 +8,7 @@ export type BankTransactionItem = {
   date: string;
   category: string;
   description: string;
+  payerName?: string | null;
   reference?: string | null;
   sourceModule: "FLEET_TRANSACTION" | "STATION_SALE" | "STATION_EXPENSE";
   status: string;
@@ -46,6 +48,17 @@ export async function getBankAccountDetailsData({
   if (account.scope === "FLEET") {
     const fleetTxs = await prisma.transaction.findMany({
       where: { tenantId, bankAccountId },
+      include: {
+        customer: { select: { name: true } },
+        station: { select: { name: true, code: true } },
+        transporter: { select: { name: true } },
+        delivery: {
+          select: {
+            customer: { select: { name: true } },
+            station: { select: { name: true, code: true } },
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
 
@@ -56,6 +69,7 @@ export async function getBankAccountDetailsData({
       date: tx.createdAt.toISOString(),
       category: tx.category,
       description: tx.description || tx.paymentPurpose || "Fleet Transaction",
+      payerName: resolveTransactionCounterpartyName(tx),
       reference: tx.reference,
       sourceModule: "FLEET_TRANSACTION",
       status: "COMPLETED",
@@ -70,7 +84,16 @@ export async function getBankAccountDetailsData({
         status: "APPROVED",
       },
       include: {
-        salesLog: { select: { productType: true, logDate: true } },
+        salesLog: {
+          select: {
+            productType: true,
+            logDate: true,
+            station: { select: { name: true, code: true } },
+            recordedBy: {
+              select: { firstName: true, lastName: true, email: true },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -81,36 +104,100 @@ export async function getBankAccountDetailsData({
         bankAccountId,
         status: "APPROVED",
       },
+      include: {
+        station: { select: { name: true, code: true } },
+        recordedBy: {
+          select: { firstName: true, lastName: true, email: true },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
 
-    const salesTxItems: BankTransactionItem[] = salesPayments.map((p) => ({
-      id: p.id,
-      type: "CREDIT",
-      amount: Number(p.amount),
-      date: p.salesLog.logDate
-        ? new Date(p.salesLog.logDate).toISOString()
-        : p.createdAt.toISOString(),
-      category: "STATION_SALE",
-      description: `Approved ${p.method} sale (${p.salesLog.productType})`,
-      reference: p.id.slice(0, 8),
-      sourceModule: "STATION_SALE",
-      status: p.status,
+    const otherTxs = await prisma.transaction.findMany({
+      where: {
+        tenantId,
+        bankAccountId,
+        salesLogId: null,
+        expenseId: null,
+      },
+      include: {
+        customer: { select: { name: true } },
+        station: { select: { name: true, code: true } },
+        transporter: { select: { name: true } },
+        delivery: {
+          select: {
+            customer: { select: { name: true } },
+            station: { select: { name: true, code: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const salesTxItems: BankTransactionItem[] = salesPayments.map((p) => {
+      const station = p.salesLog.station;
+      const stationName = station
+        ? (station.code ? `${station.name} (${station.code})` : station.name)
+        : null;
+      const recordedBy = p.salesLog.recordedBy;
+      const recordedByName = recordedBy
+        ? `${recordedBy.firstName || ""} ${recordedBy.lastName || ""}`.trim() || recordedBy.email
+        : null;
+
+      return {
+        id: p.id,
+        type: "CREDIT",
+        amount: Number(p.amount),
+        date: p.salesLog.logDate
+          ? new Date(p.salesLog.logDate).toISOString()
+          : p.createdAt.toISOString(),
+        category: "STATION_SALE",
+        description: `Approved ${p.method} sale (${p.salesLog.productType})`,
+        payerName: stationName || recordedByName || null,
+        reference: p.id.slice(0, 8),
+        sourceModule: "STATION_SALE",
+        status: p.status,
+      };
+    });
+
+    const expenseTxItems: BankTransactionItem[] = expenses.map((e) => {
+      const station = e.station;
+      const stationName = station
+        ? (station.code ? `${station.name} (${station.code})` : station.name)
+        : null;
+      const recordedBy = e.recordedBy;
+      const recordedByName = recordedBy
+        ? `${recordedBy.firstName || ""} ${recordedBy.lastName || ""}`.trim() || recordedBy.email
+        : null;
+
+      return {
+        id: e.id,
+        type: "DEBIT",
+        amount: Number(e.amount),
+        date: e.createdAt.toISOString(),
+        category: e.category,
+        description: e.description || "Station Expense",
+        payerName: stationName || recordedByName || null,
+        reference: e.id.slice(0, 8),
+        sourceModule: "STATION_EXPENSE",
+        status: e.status,
+      };
+    });
+
+    const otherTxItems: BankTransactionItem[] = otherTxs.map((tx) => ({
+      id: tx.id,
+      type: tx.type === "INFLOW" ? "CREDIT" : "DEBIT",
+      amount: Number(tx.amount),
+      date: tx.createdAt.toISOString(),
+      category: tx.category,
+      description: tx.description || tx.paymentPurpose || "Station Transaction",
+      payerName: resolveTransactionCounterpartyName(tx),
+      reference: tx.reference,
+      sourceModule: "FLEET_TRANSACTION",
+      status: "COMPLETED",
     }));
 
-    const expenseTxItems: BankTransactionItem[] = expenses.map((e) => ({
-      id: e.id,
-      type: "DEBIT",
-      amount: Number(e.amount),
-      date: e.createdAt.toISOString(),
-      category: e.category,
-      description: e.description || "Station Expense",
-      reference: e.id.slice(0, 8),
-      sourceModule: "STATION_EXPENSE",
-      status: e.status,
-    }));
-
-    rawTransactions = [...salesTxItems, ...expenseTxItems].sort(
+    rawTransactions = [...salesTxItems, ...expenseTxItems, ...otherTxItems].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   }

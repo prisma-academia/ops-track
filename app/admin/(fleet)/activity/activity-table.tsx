@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import {
@@ -9,9 +10,22 @@ import {
   CheckCircle2,
   ChevronsUpDown,
   Clock,
+  Download,
   Eye,
+  FileSpreadsheet,
+  FileText,
+  Printer,
   XCircle,
 } from "lucide-react";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { printElement, getExportFileBaseName } from "@/components/tables/table-export";
+import { usePrintCompany } from "@/components/print/print-company-context";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -151,62 +165,93 @@ export function FleetActivityTable({
   initialData,
   initialMeta,
   availableUsers = [],
+  initialFilters,
 }: {
   initialData: ActivityRow[];
   initialMeta: Record<string, unknown>;
   availableUsers?: { id: string; name: string }[];
+  initialFilters?: {
+    action?: string;
+    date?: string;
+    userId?: string;
+    status?: ActivityStatus | "";
+  };
 }) {
-  const [date, setDate] = React.useState<Date | undefined>();
-  const [userId, setUserId] = React.useState("");
-  const [action, setAction] = React.useState("");
-  const [status, setStatus] = React.useState<ActivityStatus | "">("");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const urlAction = searchParams.get("action") ?? initialFilters?.action ?? "";
+  const urlDateStr = searchParams.get("date") ?? initialFilters?.date ?? "";
+  const urlUserId = searchParams.get("userId") ?? initialFilters?.userId ?? "";
+  const urlStatus = ((searchParams.get("status") as ActivityStatus | "") || initialFilters?.status) ?? "";
+
+  const [date, setDate] = React.useState<Date | undefined>(() => {
+    if (!urlDateStr) return undefined;
+    const parsed = new Date(urlDateStr);
+    return isNaN(parsed.getTime()) ? undefined : parsed;
+  });
+  const [userId, setUserId] = React.useState(urlUserId);
+  const [action, setAction] = React.useState(urlAction);
+  const [status, setStatus] = React.useState<ActivityStatus | "">(urlStatus);
   const [openUser, setOpenUser] = React.useState(false);
   const [openDate, setOpenDate] = React.useState(false);
   const [selectedActivity, setSelectedActivity] = React.useState<ActivityRow | null>(null);
 
-  const [debouncedDate, setDebouncedDate] = React.useState<Date | undefined>(date);
-  const [debouncedUserId, setDebouncedUserId] = React.useState(userId);
   const [debouncedAction, setDebouncedAction] = React.useState(action);
-  const [debouncedStatus, setDebouncedStatus] = React.useState<ActivityStatus | "">(status);
 
-  const { data, meta, isLoading, setPage, setPageSize, setInitialData, refresh } =
-    usePaginatedQuery<ActivityRow>({
-      baseUrl: "/api/tenant/activity-logs",
-      additionalParams: {
-        ...(debouncedDate ? { date: format(debouncedDate, "yyyy-MM-dd") } : {}),
-        ...(debouncedUserId ? { userId: debouncedUserId } : {}),
-        ...(debouncedAction ? { action: debouncedAction } : {}),
-        ...(debouncedStatus ? { status: debouncedStatus } : {}),
-        module: "FLEET",
-      },
-    });
-
+  // Debounce text filter input
   React.useEffect(() => {
     const handler = setTimeout(() => {
-      const changed =
-        debouncedDate !== date ||
-        debouncedUserId !== userId ||
-        debouncedAction !== action ||
-        debouncedStatus !== status;
-
-      if (changed) {
-        setPage(1);
-        setDebouncedDate(date);
-        setDebouncedUserId(userId);
-        setDebouncedAction(action);
-        setDebouncedStatus(status);
-      }
-    }, 400);
+      setDebouncedAction(action);
+    }, 350);
     return () => clearTimeout(handler);
-  }, [date, userId, action, status, debouncedDate, debouncedUserId, debouncedAction, debouncedStatus, setPage]);
+  }, [action]);
 
+  // Synchronize filter state into URL parameters
+  const isFirstRenderRef = React.useRef(true);
   React.useEffect(() => {
-    setInitialData(initialData, initialMeta);
-  }, [initialData, initialMeta, setInitialData]);
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    if (debouncedAction.trim()) params.set("action", debouncedAction.trim());
+    else params.delete("action");
 
-  const rows = data.length > 0 || debouncedDate || debouncedUserId || debouncedAction || debouncedStatus
-    ? data
-    : initialData;
+    if (date) params.set("date", format(date, "yyyy-MM-dd"));
+    else params.delete("date");
+
+    if (userId) params.set("userId", userId);
+    else params.delete("userId");
+
+    if (status) params.set("status", status);
+    else params.delete("status");
+
+    params.set("page", "1");
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }, [debouncedAction, date, userId, status]);
+
+  const additionalParams = React.useMemo(
+    () => ({
+      ...(debouncedAction.trim() ? { action: debouncedAction.trim() } : {}),
+      ...(date ? { date: format(date, "yyyy-MM-dd") } : {}),
+      ...(userId ? { userId } : {}),
+      ...(status ? { status } : {}),
+      module: "FLEET",
+    }),
+    [debouncedAction, date, userId, status]
+  );
+
+  const { data, meta, isLoading, setPage, setPageSize, refresh } =
+    usePaginatedQuery<ActivityRow>({
+      baseUrl: "/api/tenant/activity-logs",
+      initialData,
+      initialMeta,
+      additionalParams,
+      syncWithUrl: true,
+    });
+
+  const rows = data;
 
   const stats: ActivityStats = (meta as { stats?: ActivityStats }).stats ?? {
     total: (meta.totalCount as number) ?? initialData.length,
@@ -221,6 +266,111 @@ export function FleetActivityTable({
 
   const selectedUser = availableUsers.find((u) => u.id === userId);
   const isFiltered = Boolean(date || userId || action || status);
+
+  const handleReset = () => {
+    setDate(undefined);
+    setUserId("");
+    setAction("");
+    setStatus("");
+    setDebouncedAction("");
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("action");
+    params.delete("date");
+    params.delete("userId");
+    params.delete("status");
+    params.set("page", "1");
+    router.replace(`?${params.toString()}`, { scroll: false });
+  };
+
+  const company = usePrintCompany();
+  const tableContainerRef = React.useRef<HTMLDivElement>(null);
+
+  const handlePrint = () => {
+    const tableEl =
+      tableContainerRef.current?.querySelector("table") ||
+      document.querySelector('[data-slot="table-container"] table') ||
+      document.querySelector("table");
+    if (tableEl) {
+      printElement(
+        tableEl as HTMLElement,
+        "Fleet Activity Log",
+        company,
+        getExportFileBaseName("fleet-activity", company?.slug)
+      );
+    } else {
+      window.print();
+    }
+  };
+
+  const handleExportCsv = () => {
+    const headers = ["Time", "Status", "Actor", "Action", "Target", "IP Address"];
+    const csvRows = rows.map((r) => [
+      format(new Date(r.createdAt), "yyyy-MM-dd HH:mm:ss"),
+      r.status ?? getActivityStatus(r.action),
+      r.actorDisplay || `${r.actorType}:${r.actorId || "—"}`,
+      r.action,
+      r.targetDisplay || (r.targetType ? `${r.targetType}:${r.targetId || "—"}` : "—"),
+      r.ip || "—",
+    ]);
+
+    const escape = (val: string) => `"${(val || "").replace(/"/g, '""')}"`;
+    const csvContent = [headers, ...csvRows]
+      .map((line) => line.map(escape).join(","))
+      .join("\r\n");
+
+    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const filename = `${getExportFileBaseName("fleet-activity", company?.slug)}.csv`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportExcel = () => {
+    const headers = ["Time", "Status", "Actor", "Action", "Target", "IP Address"];
+    const excelRows = rows.map((r) => [
+      format(new Date(r.createdAt), "yyyy-MM-dd HH:mm:ss"),
+      r.status ?? getActivityStatus(r.action),
+      r.actorDisplay || `${r.actorType}:${r.actorId || "—"}`,
+      r.action,
+      r.targetDisplay || (r.targetType ? `${r.targetType}:${r.targetId || "—"}` : "—"),
+      r.ip || "—",
+    ]);
+
+    const escapeHtml = (val: string) =>
+      (val || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /></head>
+<body>
+<table border="1">
+<thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>
+<tbody>${excelRows
+      .map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`)
+      .join("")}</tbody>
+</table>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const filename = `${getExportFileBaseName("fleet-activity", company?.slug)}.xls`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const columns = React.useMemo<ColumnDef<ActivityRow>[]>(
     () => [
@@ -295,11 +445,12 @@ export function FleetActivityTable({
         id: "actions",
         header: "",
         enableHiding: false,
+        meta: { exportable: false },
         cell: ({ row }) => (
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground no-print"
             onClick={(e) => {
               e.stopPropagation();
               setSelectedActivity(row.original);
@@ -447,39 +598,77 @@ export function FleetActivityTable({
                 variant="ghost"
                 size="sm"
                 className="h-9"
-                onClick={() => {
-                  setDate(undefined);
-                  setUserId("");
-                  setAction("");
-                  setStatus("");
-                }}
+                onClick={handleReset}
               >
                 Reset
               </Button>
             ) : null}
+
+            <div className="hidden h-5 w-px bg-border/60 sm:block" />
+
+            {/* <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 cursor-pointer"
+              onClick={handlePrint}
+              title="Print activity log"
+            >
+              <Printer className="size-4" />
+              Print
+            </Button> */}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1.5 cursor-pointer"
+                  title="Export activity log"
+                >
+                  <Download className="size-4" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-40">
+                <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
+                  <Printer className="mr-2 size-3.5 text-muted-foreground" />
+                  Print
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportCsv} className="cursor-pointer">
+                  <FileText className="mr-2 size-3.5 text-muted-foreground" />
+                  Export as CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer">
+                  <FileSpreadsheet className="mr-2 size-3.5 text-muted-foreground" />
+                  Export as Excel
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
-        <DataTable
-          columns={columns}
-          data={rows}
-          tableId="fleet-activity"
-          filterFields={filterFields}
-          hideToolbar
-          isLoading={isLoading}
-          emptyMessage="No activity logs found."
-          onRefresh={refresh}
-          serverPagination={{
-            page: meta.page,
-            pageSize: meta.pageSize,
-            totalCount: meta.totalCount,
-            totalPages: meta.totalPages,
-            hasNextPage: meta.hasNextPage,
-            hasPreviousPage: meta.hasPreviousPage,
-            onPageChange: setPage,
-            onPageSizeChange: setPageSize,
-          }}
-        />
+        <div ref={tableContainerRef}>
+          <DataTable
+            columns={columns}
+            data={rows}
+            tableId="fleet-activity"
+            filterFields={filterFields}
+            hideToolbar
+            isLoading={isLoading}
+            emptyMessage="No activity logs found."
+            onRefresh={refresh}
+            serverPagination={{
+              page: meta.page,
+              pageSize: meta.pageSize,
+              totalCount: meta.totalCount,
+              totalPages: meta.totalPages,
+              hasNextPage: meta.hasNextPage,
+              hasPreviousPage: meta.hasPreviousPage,
+              onPageChange: setPage,
+              onPageSizeChange: setPageSize,
+            }}
+          />
+        </div>
       </div>
 
       <Dialog open={!!selectedActivity} onOpenChange={(open) => !open && setSelectedActivity(null)}>

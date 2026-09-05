@@ -24,25 +24,25 @@ const HeroSection: React.FC<{ stats: LandingStats }> = ({ stats }) => {
   const productFeatures = [
     {
       image: "/assets/icons/oil-industry.png",
-      label: `${formatCount(stats.trucks)} Oil Industries`,
+      label: ` Oil Industries`,
       className: "border-e border-b",
     },
     {
       image: "/assets/icons/fuel-truck.png",
-      label: `${formatCount(stats.stations)} Transporters`,
+      label: ` Transporters`,
       className: "border-b",
     },
     {
-      image: "/assets/icons/fuel-station.png",
-      label: `${formatCount(stats.transports)} Filling Stations`,
-      className: "border-e",
-    },
-    {
-      image: "/assets/icons/fuel-tank.png",
-      value: formatCount(stats.tanks),
-      label: "Tanks",
+      image: "/assets/icons/route.png",
+      label: "Routes",
       className: "",
     },
+    {
+      image: "/assets/icons/fuel-station.png",
+      label: `Filling Stations`,
+      className: "border-e",
+    },
+    
   ];
 
   return (
@@ -59,7 +59,7 @@ const HeroSection: React.FC<{ stats: LandingStats }> = ({ stats }) => {
                 <a href="/auth/login">Book a demo</a>
               </Button>
               <Button asChild variant="outline" className="px-6 py-3.5 rounded-full h-auto border-white/60 bg-transparent text-white hover:bg-white/10 hover:text-white">
-                <a href="/auth/login">Go to workspace</a>
+                <a href="/auth/register">Get Started</a>
               </Button>
             </div>
           </div>
@@ -72,7 +72,7 @@ const HeroSection: React.FC<{ stats: LandingStats }> = ({ stats }) => {
                 alt="OpsTrack fuel tanker"
                 width={800}
                 height={500}
-                className="w-[90%] max-w-full h-auto object-contain"
+                className="w-[80%] max-w-full h-auto object-contain"
               />
             </div>
             <div className="bg-background rounded-t-2xl xl:rounded-none xl:rounded-tl-2xl sm:py-10 py-6 sm:ps-12 ps-4 sm:pe-12 pe-4 xl:pe-60 z-1 relative">
@@ -106,7 +106,7 @@ const HeroSection: React.FC<{ stats: LandingStats }> = ({ stats }) => {
                         alt=""
                         width={30}
                         height={30}
-                        className="size-10 object-contain"
+                        className="size-10 object-contain dark:invert"
                       />
                       {/* {item.value ? (
                         <p className="sm:text-xl text-lg font-semibold text-foreground">

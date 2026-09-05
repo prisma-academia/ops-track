@@ -57,7 +57,7 @@ const Feature = ({ featureData }: { featureData: Features }) => {
                   duration: 0.8,
                   ease: [0.21, 0.47, 0.32, 0.98],
                 }}
-                className="p-6 sm:p-16 rounded-2xl bg-[url('/assets/icons/truck-hero.png')] object-cover bg-center h-full w-full bg-cover bg-no-repeat"
+                className="p-6 sm:p-16 rounded-2xl bg-[url('/assets/images/oil-industry-nigeria.jpg')] object-cover bg-center h-full w-full bg-cover bg-no-repeat"
               >
                 <Card className="flex items-start gap-12 has-data-[slot=card-footer]:pb-6 sm:has-data-[slot=card-footer]:pb-10 pt-6 sm:py-10 border-none shadow-none ring-0 rounded-lg">
                   <CardContent className="flex flex-col gap-6 px-6 sm:px-8">

@@ -11,9 +11,9 @@ export const LANDING_PEOPLE = {
     role: "---",
   },
   umar: {
-    fullName: "Umar Adam",
+    fullName: "Shamsudeen Sunusi",
     image: "/assets/images/people/abdullahi.png",
-    role: "---",
+    role: "CEO Sahaf Petroleum",
   },
   muhammad: {
     fullName: "Muhammad Maigoro",

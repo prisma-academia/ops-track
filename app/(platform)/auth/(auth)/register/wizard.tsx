@@ -445,7 +445,7 @@ function AccountForm({
 
         {/* Navigation */}
         <div className="flex items-center justify-between pt-4 mt-2 border-t">
-          <Link href="/auth/login">
+          <Link href="/">
             <Button
               type="button"
               variant="outline"

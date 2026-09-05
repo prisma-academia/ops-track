@@ -9,8 +9,9 @@ export const COMPANY_EMAIL = "opstrack@prismforge.ng";
 export const COMPANY_LOGO = {
   /** Circular mark — compact spots, sidebars, fallbacks */
   icon: "/assets/images/opstrack-icon.png",
-  /** Wordmark lockup for dark backgrounds */
+  /** Wordmark lockup for dark backgrounds (white, transparent) */
   banner: "/assets/images/ops-track-banner-icon.png",
+  /** Wordmark lockup with a filled background — use on light surfaces */
   bannerImage: "/assets/images/ops-track-banner-image.png",
   favicon: "/assets/images/favicon.png",
 } as const;

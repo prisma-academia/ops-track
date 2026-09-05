@@ -97,7 +97,12 @@ const Navbar: React.FC<NavbarProps> = ({ navData }) => {
           <div className='flex justify-between items-center gap-2 w-full'>
             <div>
               <a href="/" className="flex items-center gap-2 shrink-0">
-                <CompanyLogo href={null} variant="banner" imgClassName="h-10 w-auto max-h-10" />
+                <CompanyLogo
+                  href={null}
+                  variant="banner"
+                  onLightSurface={sticky}
+                  imgClassName="h-10 w-auto max-h-10"
+                />
               </a>
             </div>
 

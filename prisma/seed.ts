@@ -62,36 +62,55 @@ async function main() {
   );
   console.log("✅ Platform Super Admin role template configured.");
 
-  console.log(`Seeding Platform Admin (${adminEmail})...`);
-  const passwordHash = await argon2.hash(adminPassword, {
-    type: argon2.argon2id,
-    memoryCost: 2 ** 16,
-    timeCost: 3,
-    parallelism: 1,
-  });
-
-  const adminData = {
-    email: adminEmail,
-    passwordHash,
-    firstName: "Platform",
-    lastName: "Super Admin",
-    mustChangePassword: false,
-    isSuperAdmin: true,
-    status: "ACTIVE" as const,
-    permissions: ALL_PLATFORM_PERMISSION_KEYS,
-  };
-
-  await prisma.platformUser.upsert({
+  console.log(`Checking Platform Admin (${adminEmail})...`);
+  const existingAdmin = await prisma.platformUser.findUnique({
     where: { email: adminEmail },
-    update: {
-      passwordHash,
-      isSuperAdmin: true,
-      status: "ACTIVE",
-      permissions: ALL_PLATFORM_PERMISSION_KEYS,
-      mustChangePassword: false,
-    },
-    create: adminData,
   });
+
+  const shouldResetPassword = process.env.RESET_ADMIN_PASSWORD === "true" || !existingAdmin;
+
+  let passwordHash = existingAdmin?.passwordHash;
+  if (shouldResetPassword) {
+    passwordHash = await argon2.hash(adminPassword, {
+      type: argon2.argon2id,
+      memoryCost: 2 ** 16,
+      timeCost: 3,
+      parallelism: 1,
+    });
+  }
+
+  if (existingAdmin) {
+    await prisma.platformUser.update({
+      where: { email: adminEmail },
+      data: {
+        ...(shouldResetPassword ? { passwordHash } : {}),
+        isSuperAdmin: true,
+        status: "ACTIVE",
+        permissions: ALL_PLATFORM_PERMISSION_KEYS,
+        mustChangePassword: false,
+      },
+    });
+
+    if (shouldResetPassword) {
+      console.log(`🔑 Platform Admin password updated for: ${adminEmail}`);
+    } else {
+      console.log(`ℹ️  Existing password preserved for: ${adminEmail} (set RESET_ADMIN_PASSWORD=true to override).`);
+    }
+  } else {
+    await prisma.platformUser.create({
+      data: {
+        email: adminEmail,
+        passwordHash: passwordHash!,
+        firstName: "Platform",
+        lastName: "Super Admin",
+        mustChangePassword: false,
+        isSuperAdmin: true,
+        status: "ACTIVE",
+        permissions: ALL_PLATFORM_PERMISSION_KEYS,
+      },
+    });
+    console.log(`✅ Platform Admin created: ${adminEmail}`);
+  }
 
   console.log(`✅ Platform Admin successfully seeded: ${adminEmail}`);
   console.log("✨ Platform seed completed.");

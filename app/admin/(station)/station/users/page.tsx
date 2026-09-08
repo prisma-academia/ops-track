@@ -18,6 +18,8 @@ export default async function StationUsersPage() {
           OR: [
             { organizationId: orgId },
             { stations: { some: { organizationId: orgId } } },
+            { isOwner: true },
+            { ownedOrganizations: { some: { id: orgId } } },
           ],
         }
       : {}),

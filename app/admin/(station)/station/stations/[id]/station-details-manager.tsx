@@ -29,6 +29,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -63,8 +64,34 @@ const AddTankSchema = z.object({
   name: z.string().min(1, "Please enter a tank name").max(50),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   capacity: z.coerce.number().positive("Capacity must be positive"),
+  currentLiters: optionalReading.optional(),
   waterLevel: optionalReading.optional(),
   temperature: optionalReading.optional(),
+}).refine((data) => {
+  if (data.currentLiters != null && data.currentLiters > data.capacity) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Initial stock cannot exceed tank capacity",
+  path: ["currentLiters"],
+});
+
+const EditTankSchema = z.object({
+  name: z.string().min(1, "Please enter a tank name").max(50),
+  productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
+  capacity: z.coerce.number().positive("Capacity must be positive"),
+  currentLiters: optionalReading.optional(),
+  waterLevel: optionalReading.optional(),
+  temperature: optionalReading.optional(),
+}).refine((data) => {
+  if (data.currentLiters != null && data.currentLiters > data.capacity) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Stock cannot exceed tank capacity",
+  path: ["currentLiters"],
 });
 
 const AddPumpSchema = z.object({
@@ -84,8 +111,6 @@ const EditStationSchema = z.object({
   longitude: z.number().nullable().optional(),
   altitude: z.number().nullable().optional(),
 });
-
-
 
 const PRODUCT_ICONS: Record<string, React.ReactNode> = {
   PMS: <Flame size={14} className="text-rose-500" />,
@@ -148,6 +173,13 @@ export function StationDetailsManager({
 
   const tankForm = useForm({
     resolver: zodResolver(AddTankSchema),
+    defaultValues: { name: "", productType: "PMS" as any, capacity: 0, waterLevel: null, temperature: null },
+  });
+
+  const [editingTank, setEditingTank] = useState<any | null>(null);
+
+  const editTankForm = useForm({
+    resolver: zodResolver(EditTankSchema),
     defaultValues: { name: "", productType: "PMS" as any, capacity: 0, waterLevel: null, temperature: null },
   });
 
@@ -234,7 +266,9 @@ export function StationDetailsManager({
     setApiError(null);
     setNozzleCount(1);
     setIsAssigningManager(false);
-    tankForm.reset({ name: "", productType: "PMS" as any, capacity: 0, waterLevel: null, temperature: null });
+    setEditingTank(null);
+    tankForm.reset({ name: "", productType: "PMS" as any, capacity: 0, currentLiters: 0, waterLevel: null, temperature: null });
+    editTankForm.reset({ name: "", productType: "PMS" as any, capacity: 0, currentLiters: 0, waterLevel: null, temperature: null });
     pumpForm.reset({ name: "", tankId: "", nozzles: [{ name: "Nozzle A" }] });
     router.refresh();
   };
@@ -283,7 +317,33 @@ export function StationDetailsManager({
     setActiveDialog("edit-station");
   };
 
-  const [configTab, setConfigTab] = useState<string>("addTank");
+  const handleEditTank = editTankForm.handleSubmit(async (values) => {
+    if (!editingTank) return;
+    setApiError(null);
+    const res = await apiPatch(`/api/tenant/stations/${station.id}/tanks/${editingTank.id}`, values);
+    if (res.error) {
+      setApiError(res.error.message);
+    } else {
+      closeDialog();
+    }
+  });
+
+  const openEditTankDialog = (tank: any, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setEditingTank(tank);
+    editTankForm.reset({
+      name: tank.name || "",
+      productType: tank.productType || "PMS",
+      capacity: Number(tank.capacity) || 0,
+      currentLiters: tank.currentLiters == null ? 0 : Number(tank.currentLiters),
+      waterLevel: tank.waterLevel == null ? null : Number(tank.waterLevel),
+      temperature: tank.temperature == null ? null : Number(tank.temperature),
+    });
+    setActiveDialog("edit-tank");
+  };
 
   const openAddTankDialog = () => {
     const nextTankIndex = (station.tanks?.length || 0) + 1;
@@ -291,26 +351,21 @@ export function StationDetailsManager({
       name: `TANK ${nextTankIndex}`,
       productType: "PMS",
       capacity: 0,
+      currentLiters: 0,
       waterLevel: null,
       temperature: null,
     });
-    setConfigTab("addTank");
-    setActiveDialog("config");
+    setActiveDialog("add-tank");
   };
 
   const openAddPumpDialog = () => {
     const nextPumpIndex = (station.pumps?.length || 0) + 1;
     pumpForm.reset({
       name: `PUMP ${nextPumpIndex}`,
-      tankId: "",
+      tankId: station.tanks?.[0]?.id || "",
       nozzles: [{ name: "Nozzle A" }]
     });
-    setConfigTab("addPump");
-    setActiveDialog("config");
-  };
-
-  const openConfigDialog = () => {
-    openAddTankDialog();
+    setActiveDialog("add-pump");
   };
 
   useEffect(() => {
@@ -378,9 +433,13 @@ export function StationDetailsManager({
               <Pencil className="h-4 w-4" />
               Edit Station
             </Button>
-            <Button onClick={openConfigDialog} className="gap-2">
-              <Settings className="h-4 w-4" />
-              Config
+            <Button variant="outline" onClick={openAddTankDialog} className="gap-2">
+              <Droplet className="h-4 w-4 text-primary" />
+              Add Tank
+            </Button>
+            <Button variant="outline" onClick={openAddPumpDialog} className="gap-2">
+              <Fuel className="h-4 w-4 text-primary" />
+              Add Pump
             </Button>
           </CardAction>
         </CardHeader>
@@ -708,8 +767,8 @@ export function StationDetailsManager({
 
               return (
                 <div key={tank.id} className="flex flex-col gap-2">
-                  <Link href={`/admin/station/stations/${station.id}/tanks/${tank.id}`} className="group">
-                    <div className="relative">
+                  <div className="relative group">
+                    <Link href={`/admin/station/stations/${station.id}/tanks/${tank.id}`}>
                       <AssetTank
                         variant="compact"
                         currentLitres={currentLitres}
@@ -723,14 +782,26 @@ export function StationDetailsManager({
                         lastClosingAt={lastClosing ? formatHumanReadableDate(lastClosing.recordedAt) : null}
                         className="group-hover:border-primary/40 group-hover:shadow-md transition-all duration-200 pt-8"
                       />
-                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-1">
-                        <Badge variant="outline" className="font-mono text-[9px] bg-background/80 backdrop-blur-sm">
-                          {tank.productType}
-                        </Badge>
+                    </Link>
+                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-1 pointer-events-none">
+                      <Badge variant="outline" className="font-mono text-[9px] bg-background/80 backdrop-blur-sm pointer-events-auto">
+                        {tank.productType}
+                      </Badge>
+                      <div className="flex items-center gap-1.5 pointer-events-auto">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="size-6 text-muted-foreground hover:text-foreground hover:bg-background/80 rounded-md"
+                          onClick={(e) => openEditTankDialog(tank, e)}
+                          title="Edit Tank Information"
+                        >
+                          <Pencil size={12} />
+                        </Button>
                         <StatusBadge status={tank.status || "ACTIVE"} />
                       </div>
                     </div>
-                  </Link>
+                  </div>
                   {(tankPumps.length > 0 || nozzleCount > 0) && (
                     <p className="text-[10px] text-center text-muted-foreground">
                       {`${tankPumps.length} pump${tankPumps.length !== 1 ? "s" : ""} · ${nozzleCount} nozzle${nozzleCount !== 1 ? "s" : ""}`}
@@ -991,133 +1062,266 @@ export function StationDetailsManager({
         </Dialog>
       )}
 
-      {/* Config Dialog */}
-      {activeDialog === "config" && (
+      {/* Add Tank Dialog */}
+      {activeDialog === "add-tank" && (
         <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Station Configuration & Assets</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <Droplet className="size-5 text-primary" />
+                Add Storage Tank
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Configure a new fuel storage tank for this station.
+              </DialogDescription>
             </DialogHeader>
-            
-            <Tabs value={configTab} onValueChange={setConfigTab} className="w-full mt-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="addTank">Add Storage Tank</TabsTrigger>
-                <TabsTrigger value="addPump">Add Dispenser / Pump</TabsTrigger>
-              </TabsList>
+            <form onSubmit={handleAddTank} className="space-y-4 pt-2">
+              <FormField label="Tank Name" htmlFor="t_name" error={tankForm.formState.errors.name?.message}>
+                <TextInput id="t_name" placeholder="e.g. PMS Tank 1" {...tankForm.register("name")} />
+              </FormField>
               
-              <TabsContent value="addTank" className="pt-4">
-                <form onSubmit={handleAddTank} className="space-y-4">
-                  <FormField label="Tank Name" htmlFor="t_name" error={tankForm.formState.errors.name?.message}>
-                    <TextInput id="t_name" placeholder="e.g. PMS Tank 1" {...tankForm.register("name")} />
-                  </FormField>
-                  
-                  <FormField label="Product Type" htmlFor="t_prod" error={tankForm.formState.errors.productType?.message}>
-                    <select id="t_prod" className="rounded border border-input bg-background text-foreground px-3 py-2 text-sm w-full" {...tankForm.register("productType")}>
-                      <option value="PMS">PMS (Petrol)</option>
-                      <option value="AGO">AGO (Diesel)</option>
-                      <option value="DPK">DPK (Kerosene)</option>
-                      <option value="LPG">LPG (Gas)</option>
-                    </select>
-                  </FormField>
+              <FormField label="Product Type" htmlFor="t_prod" error={tankForm.formState.errors.productType?.message}>
+                <select id="t_prod" className="rounded border border-input bg-background text-foreground px-3 py-2 text-sm w-full" {...tankForm.register("productType")}>
+                  <option value="PMS">PMS (Petrol)</option>
+                  <option value="AGO">AGO (Diesel)</option>
+                  <option value="DPK">DPK (Kerosene)</option>
+                  <option value="LPG">LPG (Gas)</option>
+                </select>
+              </FormField>
 
-                  <FormField label="Liters Capacity" htmlFor="t_cap" error={tankForm.formState.errors.capacity?.message}>
-                    <Controller
-                      name="capacity"
-                      control={tankForm.control}
-                      render={({ field }) => (
-                        <FormattedNumberInput
-                          id="t_cap"
-                          placeholder="e.g. 45000"
-                          value={field.value as string | number}
-                          onChange={(e: any) => field.onChange(Number(e.target.value))}
-                          prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
-                        />
-                      )}
-                    />
-                  </FormField>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField label="Water level (L, optional)" htmlFor="t_water" error={tankForm.formState.errors.waterLevel?.message}>
-                      <Controller
-                        name="waterLevel"
-                        control={tankForm.control}
-                        render={({ field }) => (
-                          <FormattedNumberInput
-                            id="t_water"
-                            placeholder="e.g. 12"
-                            value={(field.value ?? "") as string | number}
-                            onChange={(e: any) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                          />
-                        )}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Liters Capacity" htmlFor="t_cap" error={tankForm.formState.errors.capacity?.message}>
+                  <Controller
+                    name="capacity"
+                    control={tankForm.control}
+                    render={({ field }) => (
+                      <FormattedNumberInput
+                        id="t_cap"
+                        placeholder="e.g. 45000"
+                        value={field.value as string | number}
+                        onChange={(e: any) => field.onChange(Number(e.target.value))}
+                        prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
                       />
-                    </FormField>
-                    <FormField label="Temperature (°C, optional)" htmlFor="t_temp" error={tankForm.formState.errors.temperature?.message}>
-                      <Controller
-                        name="temperature"
-                        control={tankForm.control}
-                        render={({ field }) => (
-                          <FormattedNumberInput
-                            id="t_temp"
-                            placeholder="e.g. 28"
-                            value={(field.value ?? "") as string | number}
-                            onChange={(e: any) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                          />
-                        )}
+                    )}
+                  />
+                </FormField>
+
+                <FormField label="Initial Stock (L, optional)" htmlFor="t_init" error={tankForm.formState.errors.currentLiters?.message}>
+                  <Controller
+                    name="currentLiters"
+                    control={tankForm.control}
+                    render={({ field }) => (
+                      <FormattedNumberInput
+                        id="t_init"
+                        placeholder="e.g. 15000"
+                        value={(field.value ?? "") as string | number}
+                        onChange={(e: any) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                        prefixIcon={<Flame className="w-4 h-4 text-emerald-500" />}
                       />
-                    </FormField>
-                  </div>
+                    )}
+                  />
+                </FormField>
+              </div>
 
-                  {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Water level (L, optional)" htmlFor="t_water" error={tankForm.formState.errors.waterLevel?.message}>
+                  <Controller
+                    name="waterLevel"
+                    control={tankForm.control}
+                    render={({ field }) => (
+                      <FormattedNumberInput
+                        id="t_water"
+                        placeholder="e.g. 12"
+                        value={(field.value ?? "") as string | number}
+                        onChange={(e: any) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                      />
+                    )}
+                  />
+                </FormField>
+                <FormField label="Temperature (°C, optional)" htmlFor="t_temp" error={tankForm.formState.errors.temperature?.message}>
+                  <Controller
+                    name="temperature"
+                    control={tankForm.control}
+                    render={({ field }) => (
+                      <FormattedNumberInput
+                        id="t_temp"
+                        placeholder="e.g. 28"
+                        value={(field.value ?? "") as string | number}
+                        onChange={(e: any) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                      />
+                    )}
+                  />
+                </FormField>
+              </div>
 
-                  <div className="flex justify-end pt-4 border-t mt-4">
-                    <Button type="button" variant="outline" className="mr-2" onClick={closeDialog} disabled={tankForm.formState.isSubmitting}>Cancel</Button>
-                    <Button type="submit" disabled={tankForm.formState.isSubmitting} className="gap-2">
-                      {tankForm.formState.isSubmitting ? <><SpinnerEllipsis /><span>Creating...</span></> : "Create Tank"}
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
+              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="outline" onClick={closeDialog} disabled={tankForm.formState.isSubmitting}>Cancel</Button>
+                <Button type="submit" disabled={tankForm.formState.isSubmitting} className="gap-2">
+                  {tankForm.formState.isSubmitting ? <><SpinnerEllipsis /><span>Creating...</span></> : "Create Tank"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Add Pump Dialog */}
+      {activeDialog === "add-pump" && (
+        <Dialog open={true} onOpenChange={closeDialog}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Fuel className="size-5 text-primary" />
+                Add Dispenser / Pump
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Add a fuel dispenser pump and assign which tank it draws from.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddPump} className="space-y-4 pt-2">
+              <FormField label="Pump Name" htmlFor="p_name" error={pumpForm.formState.errors.name?.message}>
+                <TextInput id="p_name" placeholder="e.g. Pump 1" {...pumpForm.register("name")} />
+              </FormField>
+
+              <FormField label="Draws From Tank" htmlFor="p_tank" error={pumpForm.formState.errors.tankId?.message}>
+                <select id="p_tank" className="rounded border border-input bg-background text-foreground px-3 py-2 text-sm w-full" {...pumpForm.register("tankId")}>
+                  <option value="">Select tank...</option>
+                  {station.tanks.map((t: any) => (
+                    <option key={t.id} value={t.id}>{t.name} ({t.productType})</option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField label="Number of Nozzles" htmlFor="p_nozzle_count" error={pumpForm.formState.errors.nozzles?.message}>
+                <select
+                  id="p_nozzle_count"
+                  className="rounded border border-input bg-background text-foreground px-3 py-2 text-sm w-full font-medium"
+                  value={nozzleCount}
+                  onChange={(e) => handleNozzleCountChange(Number(e.target.value))}
+                >
+                  <option value={1}>1 Nozzle</option>
+                  <option value={2}>2 Nozzles</option>
+                  <option value={3}>3 Nozzles</option>
+                  <option value={4}>4 Nozzles</option>
+                </select>
+              </FormField>
+
+              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="outline" onClick={closeDialog} disabled={pumpForm.formState.isSubmitting}>Cancel</Button>
+                <Button type="submit" disabled={pumpForm.formState.isSubmitting} className="gap-2">
+                  {pumpForm.formState.isSubmitting ? <><SpinnerEllipsis /><span>Creating...</span></> : "Create Pump"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Edit Tank Dialog */}
+      {activeDialog === "edit-tank" && editingTank && (
+        <Dialog open={true} onOpenChange={closeDialog}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="size-5 text-primary" />
+                Edit Tank Information
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Update parameters and details for {editingTank.name}.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleEditTank} className="space-y-4 pt-2">
+              <FormField label="Tank Name" htmlFor="et_name" error={editTankForm.formState.errors.name?.message}>
+                <TextInput id="et_name" placeholder="e.g. PMS Tank 1" {...editTankForm.register("name")} />
+              </FormField>
               
-              <TabsContent value="addPump" className="pt-4">
-                <form onSubmit={handleAddPump} className="space-y-4">
-                  <FormField label="Pump Name" htmlFor="p_name" error={pumpForm.formState.errors.name?.message}>
-                    <TextInput id="p_name" placeholder="e.g. Pump 1" {...pumpForm.register("name")} />
-                  </FormField>
+              <FormField label="Product Type" htmlFor="et_prod" error={editTankForm.formState.errors.productType?.message}>
+                <select id="et_prod" className="rounded border border-input bg-background text-foreground px-3 py-2 text-sm w-full" {...editTankForm.register("productType")}>
+                  <option value="PMS">PMS (Petrol)</option>
+                  <option value="AGO">AGO (Diesel)</option>
+                  <option value="DPK">DPK (Kerosene)</option>
+                  <option value="LPG">LPG (Gas)</option>
+                </select>
+              </FormField>
 
-                  <FormField label="Draws From Tank" htmlFor="p_tank" error={pumpForm.formState.errors.tankId?.message}>
-                    <select id="p_tank" className="rounded border border-input bg-background text-foreground px-3 py-2 text-sm w-full" {...pumpForm.register("tankId")}>
-                      <option value="">Select tank...</option>
-                      {station.tanks.map((t: any) => (
-                        <option key={t.id} value={t.id}>{t.name} ({t.productType})</option>
-                      ))}
-                    </select>
-                  </FormField>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Liters Capacity" htmlFor="et_cap" error={editTankForm.formState.errors.capacity?.message}>
+                  <Controller
+                    name="capacity"
+                    control={editTankForm.control}
+                    render={({ field }) => (
+                      <FormattedNumberInput
+                        id="et_cap"
+                        placeholder="e.g. 45000"
+                        value={field.value as string | number}
+                        onChange={(e: any) => field.onChange(Number(e.target.value))}
+                        prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
+                      />
+                    )}
+                  />
+                </FormField>
 
-                  <FormField label="Number of Nozzles" htmlFor="p_nozzle_count" error={pumpForm.formState.errors.nozzles?.message}>
-                    <select
-                      id="p_nozzle_count"
-                      className="rounded border border-input bg-background text-foreground px-3 py-2 text-sm w-full font-medium"
-                      value={nozzleCount}
-                      onChange={(e) => handleNozzleCountChange(Number(e.target.value))}
-                    >
-                      <option value={1}>1 Nozzle</option>
-                      <option value={2}>2 Nozzles</option>
-                      <option value={3}>3 Nozzles</option>
-                      <option value={4}>4 Nozzles</option>
-                    </select>
-                  </FormField>
+                <FormField label="Current Stock (Liters)" htmlFor="et_liters" error={editTankForm.formState.errors.currentLiters?.message}>
+                  <Controller
+                    name="currentLiters"
+                    control={editTankForm.control}
+                    render={({ field }) => (
+                      <FormattedNumberInput
+                        id="et_liters"
+                        placeholder="e.g. 15000"
+                        value={(field.value ?? "") as string | number}
+                        onChange={(e: any) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                        prefixIcon={<Flame className="w-4 h-4 text-emerald-500" />}
+                      />
+                    )}
+                  />
+                </FormField>
+              </div>
 
-                  {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Water level (L, optional)" htmlFor="et_water" error={editTankForm.formState.errors.waterLevel?.message}>
+                  <Controller
+                    name="waterLevel"
+                    control={editTankForm.control}
+                    render={({ field }) => (
+                      <FormattedNumberInput
+                        id="et_water"
+                        placeholder="e.g. 12"
+                        value={(field.value ?? "") as string | number}
+                        onChange={(e: any) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                      />
+                    )}
+                  />
+                </FormField>
+                <FormField label="Temperature (°C, optional)" htmlFor="et_temp" error={editTankForm.formState.errors.temperature?.message}>
+                  <Controller
+                    name="temperature"
+                    control={editTankForm.control}
+                    render={({ field }) => (
+                      <FormattedNumberInput
+                        id="et_temp"
+                        placeholder="e.g. 28"
+                        value={(field.value ?? "") as string | number}
+                        onChange={(e: any) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                      />
+                    )}
+                  />
+                </FormField>
+              </div>
 
-                  <div className="flex justify-end pt-4 border-t mt-4">
-                    <Button type="button" variant="outline" className="mr-2" onClick={closeDialog} disabled={pumpForm.formState.isSubmitting}>Cancel</Button>
-                    <Button type="submit" disabled={pumpForm.formState.isSubmitting} className="gap-2">
-                      {pumpForm.formState.isSubmitting ? <><SpinnerEllipsis /><span>Creating...</span></> : "Create Pump"}
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
-            </Tabs>
+              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="outline" onClick={closeDialog} disabled={editTankForm.formState.isSubmitting}>Cancel</Button>
+                <Button type="submit" disabled={editTankForm.formState.isSubmitting} className="gap-2">
+                  {editTankForm.formState.isSubmitting ? <><SpinnerEllipsis /><span>Saving...</span></> : "Save Changes"}
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       )}

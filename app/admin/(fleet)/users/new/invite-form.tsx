@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { PERMISSIONS, isFleetPermissionKey } from "@/lib/auth/permissions";
 import { Save, ChevronsUpDown, Check, ChevronDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -94,10 +94,8 @@ export function InviteTenantUserForm({
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     const perms = values.permissions ?? [];
-    const hasFleetPerm = perms.some((p) => p.startsWith("tenant.fleet"));
-    const hasStationOrMobilePerm = perms.some(
-      (p) => (p.startsWith("tenant.") && !p.startsWith("tenant.fleet")) || p.startsWith("mobile.tenant.")
-    );
+    const hasFleetPerm = perms.some((p) => isFleetPermissionKey(p));
+    const hasStationOrMobilePerm = perms.some((p) => !isFleetPermissionKey(p));
     const activeModules = Array.from(
       new Set([
         ...(hasFleetPerm ? ["FLEET"] : []),

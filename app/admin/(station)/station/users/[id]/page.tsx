@@ -18,14 +18,19 @@ export default async function StationUserDetailPage({
   const orgId = actor.organizationId ?? (await resolveActiveOrgId(actor));
   const user = await prisma.tenantUser.findUnique({
     where: { id },
-    include: { stations: { select: { organizationId: true } } },
+    include: {
+      stations: { select: { organizationId: true } },
+      ownedOrganizations: { select: { id: true } },
+    },
   });
   if (!user || user.tenantId !== actor.tenantId) notFound();
   if (!user.activeModules.includes("STATION")) notFound();
   const inOrg =
     !orgId ||
+    user.isOwner ||
     user.organizationId === orgId ||
-    user.stations.some((s) => s.organizationId === orgId);
+    user.stations.some((s) => s.organizationId === orgId) ||
+    user.ownedOrganizations.some((o) => o.id === orgId);
   if (!inOrg) notFound();
 
   const roles = await prisma.roleTemplate.findMany({

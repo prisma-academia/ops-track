@@ -7,8 +7,10 @@ export async function GET() {
   const startTime = Date.now();
 
   try {
-    // Ping database with lightweight query
-    await prisma.$queryRaw`SELECT 1`;
+    // Ping database via unscoped model query (avoids tenant-guard $queryRaw block)
+    await prisma.permission.findFirst({
+      select: { key: true },
+    });
     const latencyMs = Date.now() - startTime;
 
     return NextResponse.json(

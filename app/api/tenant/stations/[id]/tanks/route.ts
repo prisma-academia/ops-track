@@ -6,6 +6,8 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 
+import { Prisma } from "@/lib/generated/prisma/client";
+
 const optionalReading = z.preprocess((value) => {
   if (value === "" || value === undefined || value === null) return null;
   return Number(value);
@@ -20,6 +22,8 @@ const CreateTankSchema = z.object({
   name: z.string().min(1).max(50),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   capacity: z.coerce.number().positive(),
+  currentLiters: z.coerce.number().nonnegative().optional().default(0),
+  openingLiters: z.coerce.number().nonnegative().optional(),
   waterLevel: optionalWaterLevel.optional(),
   temperature: optionalReading.optional(),
 });
@@ -66,6 +70,10 @@ export async function POST(
     const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_WRITE.key, "STATION");
 
     const body = CreateTankSchema.parse(await request.json());
+    const initialLiters = body.openingLiters ?? body.currentLiters ?? 0;
+    if (initialLiters > body.capacity) {
+      throw new DomainError(400, "invalid_capacity", "Initial stock cannot exceed tank capacity.");
+    }
     const meta = requestMeta(request);
 
     const station = await prisma.station.findUnique({ where: { id: stationId } });
@@ -73,16 +81,38 @@ export async function POST(
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
-    const tank = await prisma.tank.create({
-      data: {
-        tenantId: actor.tenantId,
-        stationId,
-        name: body.name,
-        productType: body.productType,
-        capacity: body.capacity,
-        waterLevel: body.waterLevel ?? null,
-        temperature: body.temperature ?? null,
-      },
+    const tank = await prisma.$transaction(async (tx) => {
+      const createdTank = await tx.tank.create({
+        data: {
+          tenantId: actor.tenantId,
+          stationId,
+          name: body.name,
+          productType: body.productType,
+          capacity: body.capacity,
+          currentLiters: initialLiters,
+          waterLevel: body.waterLevel ?? null,
+          temperature: body.temperature ?? null,
+        },
+      });
+
+      if (initialLiters > 0) {
+        await tx.stockMovement.create({
+          data: {
+            tenantId: actor.tenantId,
+            stationId,
+            tankId: createdTank.id,
+            movementType: "OPENING_BALANCE",
+            productType: body.productType,
+            quantity: new Prisma.Decimal(initialLiters),
+            balanceAfter: new Prisma.Decimal(initialLiters),
+            referenceType: "TankCreation",
+            notes: "Initial fuel volume upon tank onboarding",
+            recordedById: actor.userId,
+          },
+        });
+      }
+
+      return createdTank;
     });
 
     await audit({
@@ -92,7 +122,12 @@ export async function POST(
       tenantId: actor.tenantId,
       targetType: "Tank",
       targetId: tank.id,
-      after: { name: tank.name, productType: tank.productType, capacity: tank.capacity } as object,
+      after: {
+        name: tank.name,
+        productType: tank.productType,
+        capacity: tank.capacity,
+        currentLiters: tank.currentLiters,
+      } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });

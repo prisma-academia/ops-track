@@ -13,6 +13,9 @@ export type StationRow = {
   id: string;
   code: string;
   name: string;
+  state?: string | null;
+  lga?: string | null;
+  ward?: string | null;
   todaySales: { PMS: number; AGO: number; LPG: number };
   lastClosingStock: { PMS: number; AGO: number; LPG: number };
   lastSalesAmount: number;
@@ -26,7 +29,8 @@ const columns: ColumnDef<StationRow>[] = [
     header: "Station",
     cell: ({ row }) => {
       const name = row.original.name;
-      const code = row.original.code;
+      const locationParts = [row.original.state, row.original.ward, row.original.lga].filter(Boolean);
+      const locationText = locationParts.length > 0 ? locationParts.join(" - ") : "—";
       return (
         <div className="flex items-center gap-3 py-1">
           <div className="size-10 flex items-center justify-center shrink-0 text-primary">
@@ -39,7 +43,7 @@ const columns: ColumnDef<StationRow>[] = [
           </div>
           <div className="flex flex-col">
             <span className="font-semibold text-foreground">{name}</span>
-            <span className="text-xs text-muted-foreground font-mono">{code}</span>
+            <span className="text-xs text-muted-foreground">{locationText}</span>
           </div>
         </div>
       );

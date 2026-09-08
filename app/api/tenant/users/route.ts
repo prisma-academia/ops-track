@@ -93,6 +93,8 @@ export async function GET(request: Request) {
         whereClause.OR = [
           { organizationId: targetOrgId },
           { stations: { some: { organizationId: targetOrgId } } },
+          { isOwner: true },
+          { ownedOrganizations: { some: { id: targetOrgId } } },
         ];
       }
     }

@@ -27,6 +27,18 @@ interface NavItemConfig {
 // `module: null` = always shown (Overview, Settings).
 const NAV: NavItemConfig[] = [
   { href: "/admin/station", key: "overview", title: "Overview", module: null, icon: "IconLayoutDashboard", permission: null },
+  // {
+  //   key: "analytics",
+  //   title: "Analytics",
+  //   module: null,
+  //   icon: "IconFileText",
+  //   permission: null,
+  //   children: [
+  //     { href: "/admin/station/commercial", key: "commercial", title: "Commercial", module: null, icon: "IconReportAnalytics", permission: null },
+  //     { href: "/admin/station/inventory", key: "inventory", title: "Inventory", module: null, icon: "IconTruck", permission: null },
+  //     { href: "/admin/station/operations", key: "operations", title: "Operations", module: null, icon: "IconTruck", permission: null },
+  //   ],
+  // },
   { href: "/admin/station/stations", key: "stations", title: "Stations", module: "stations" as ModuleKey, icon: "IconGasStation", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/station/waybills", key: "waybills", title: "Waybills", module: "operations" as ModuleKey, icon: "IconTruck", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   { href: "/admin/station/expenses", key: "expenses", title: "Expenses", module: "operations" as ModuleKey, icon: "IconReceiptDollar", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },

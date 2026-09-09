@@ -319,6 +319,7 @@ export default async function StationDashboardLayout({ children }: { children: R
             .join(", ") || null,
       }}
       printCompany={orgInfo ? printCompanyFromOrganization(orgInfo) : undefined}
+      profileHref="/admin/station/profile"
     >
       <UnauthorizedToast />
       {children}

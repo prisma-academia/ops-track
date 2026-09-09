@@ -16,6 +16,8 @@ import {
   User
 } from "lucide-react";
 import type { ReactElement } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 type Props = {
   trigger: ReactElement;
@@ -27,6 +29,7 @@ type Props = {
     image?: string | null;
   };
   onLogout?: () => void;
+  profileHref?: string;
 };
 
 type MenuItem = {
@@ -47,7 +50,12 @@ const LOGOUT_ITEM: MenuItem = {
 
 const itemClass = "px-4 py-2.5 text-sm cursor-pointer gap-3";
 
-const ProfileDropdown = ({ trigger, defaultOpen, align = "end", user, onLogout }: Props) => {
+const ProfileDropdown = ({ trigger, defaultOpen, align = "end", user, onLogout, profileHref }: Props) => {
+  const pathname = usePathname();
+  const isStation = pathname === "/admin/station" || pathname?.startsWith("/admin/station/");
+  const defaultProfileHref = isStation ? "/admin/station/profile" : "/admin/profile";
+  const targetProfileHref = profileHref || defaultProfileHref;
+
   return (
     <DropdownMenu defaultOpen={defaultOpen}>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
@@ -55,31 +63,40 @@ const ProfileDropdown = ({ trigger, defaultOpen, align = "end", user, onLogout }
       <DropdownMenuContent className="w-80" align={align}>
         <DropdownMenuGroup>
           {/* User Info */}
-          <DropdownMenuLabel className="flex items-center gap-4 px-4 py-2.5 font-normal">
-            <div className="relative">
-              <Avatar className="size-10">
-                <AvatarFallback>{user?.name?.charAt(0)}</AvatarFallback>
-              </Avatar>
-              <span className="ring-card absolute right-0 bottom-0 size-2 rounded-full bg-green-600 ring-2" />
-            </div>
+          <DropdownMenuLabel className="p-0 font-normal">
+            <Link
+              href={targetProfileHref}
+              className="flex items-center gap-4 px-4 py-3 hover:bg-muted/50 rounded-xs transition-colors cursor-pointer"
+            >
+              <div className="relative shrink-0">
+                <Avatar className="size-10">
+                  <AvatarFallback className="bg-slate-700 text-white font-bold">
+                    {user?.name?.charAt(0) || "U"}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="ring-card absolute right-0 bottom-0 size-2 rounded-full bg-green-600 ring-2" />
+              </div>
 
-            <div className="flex flex-col">
-              <span className="text-foreground text-sm font-bold">
-                {user?.name || "User"}
-              </span>
-              <span className="text-muted-foreground text-xs">
-                {user?.email || "user@example.com"}
-              </span>
-            </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-foreground text-sm font-bold truncate">
+                  {user?.name || "User"}
+                </span>
+                <span className="text-muted-foreground text-xs truncate">
+                  {user?.email || "user@example.com"}
+                </span>
+              </div>
+            </Link>
           </DropdownMenuLabel>
 
           <DropdownMenuSeparator />
 
           {/* Main Links */}
           {PROFILE_ITEMS.map(({ label, icon: Icon }) => (
-            <DropdownMenuItem key={label} className={itemClass}>
-              <Icon size={20} className="text-foreground" />
-              <span className="capitalize">{label}</span>
+            <DropdownMenuItem key={label} className={itemClass} asChild>
+              <Link href={targetProfileHref} className="flex items-center gap-3 w-full">
+                <Icon size={20} className="text-foreground" />
+                <span className="capitalize">{label}</span>
+              </Link>
             </DropdownMenuItem>
           ))}
 
@@ -101,3 +118,4 @@ const ProfileDropdown = ({ trigger, defaultOpen, align = "end", user, onLogout }
 };
 
 export default ProfileDropdown;
+

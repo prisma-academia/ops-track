@@ -50,10 +50,18 @@ export function formatNumberInput(value: string | number): string {
   const numStr = value.toString().replace(/[^0-9.]/g, "");
   const parts = numStr.split(".");
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  if (parts.length > 2) {
+    return `${parts[0]}.${parts.slice(1).join("")}`;
+  }
   return parts.join(".");
 }
 
 export function parseFormattedNumber(value: string): string {
   if (!value) return "";
-  return value.replace(/,/g, "");
+  const cleaned = value.replace(/,/g, "").replace(/[^0-9.]/g, "");
+  const parts = cleaned.split(".");
+  if (parts.length > 2) {
+    return `${parts[0]}.${parts.slice(1).join("")}`;
+  }
+  return cleaned;
 }

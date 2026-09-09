@@ -173,14 +173,14 @@ export function StationDetailsManager({
 
   const tankForm = useForm({
     resolver: zodResolver(AddTankSchema),
-    defaultValues: { name: "", productType: "PMS" as any, capacity: 0, waterLevel: null, temperature: null },
+    defaultValues: { name: "", productType: "PMS" as any, capacity: "" as any, currentLiters: "" as any, waterLevel: null, temperature: null },
   });
 
   const [editingTank, setEditingTank] = useState<any | null>(null);
 
   const editTankForm = useForm({
     resolver: zodResolver(EditTankSchema),
-    defaultValues: { name: "", productType: "PMS" as any, capacity: 0, waterLevel: null, temperature: null },
+    defaultValues: { name: "", productType: "PMS" as any, capacity: "" as any, currentLiters: "" as any, waterLevel: null, temperature: null },
   });
 
   const pumpForm = useForm({
@@ -267,8 +267,8 @@ export function StationDetailsManager({
     setNozzleCount(1);
     setIsAssigningManager(false);
     setEditingTank(null);
-    tankForm.reset({ name: "", productType: "PMS" as any, capacity: 0, currentLiters: 0, waterLevel: null, temperature: null });
-    editTankForm.reset({ name: "", productType: "PMS" as any, capacity: 0, currentLiters: 0, waterLevel: null, temperature: null });
+    tankForm.reset({ name: "", productType: "PMS" as any, capacity: "" as any, currentLiters: "" as any, waterLevel: null, temperature: null });
+    editTankForm.reset({ name: "", productType: "PMS" as any, capacity: "" as any, currentLiters: "" as any, waterLevel: null, temperature: null });
     pumpForm.reset({ name: "", tankId: "", nozzles: [{ name: "Nozzle A" }] });
     router.refresh();
   };
@@ -278,9 +278,8 @@ export function StationDetailsManager({
     setApiError(null);
     setIsAssigningManager(true);
     const res = await apiPatch(`/api/tenant/stations/${station.id}`, {
-      staffUserIds: selectedManagerId ? [selectedManagerId] : [],
+      managerId: selectedManagerId || null,
     });
-    setIsAssigningManager(false);
     if (res.error) {
       setApiError(res.error.message);
     } else {
@@ -337,10 +336,10 @@ export function StationDetailsManager({
     editTankForm.reset({
       name: tank.name || "",
       productType: tank.productType || "PMS",
-      capacity: Number(tank.capacity) || 0,
-      currentLiters: tank.currentLiters == null ? 0 : Number(tank.currentLiters),
-      waterLevel: tank.waterLevel == null ? null : Number(tank.waterLevel),
-      temperature: tank.temperature == null ? null : Number(tank.temperature),
+      capacity: tank.capacity != null ? String(tank.capacity) : ("" as any),
+      currentLiters: tank.currentLiters != null ? String(tank.currentLiters) : ("" as any),
+      waterLevel: tank.waterLevel != null ? String(tank.waterLevel) : null,
+      temperature: tank.temperature != null ? String(tank.temperature) : null,
     });
     setActiveDialog("edit-tank");
   };
@@ -350,8 +349,8 @@ export function StationDetailsManager({
     tankForm.reset({
       name: `TANK ${nextTankIndex}`,
       productType: "PMS",
-      capacity: 0,
-      currentLiters: 0,
+      capacity: "" as any,
+      currentLiters: "" as any,
       waterLevel: null,
       temperature: null,
     });
@@ -1099,7 +1098,7 @@ export function StationDetailsManager({
                         id="t_cap"
                         placeholder="e.g. 45000"
                         value={field.value as string | number}
-                        onChange={(e: any) => field.onChange(Number(e.target.value))}
+                        onChange={(e: any) => field.onChange(e.target.value)}
                         prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
                       />
                     )}
@@ -1115,7 +1114,7 @@ export function StationDetailsManager({
                         id="t_init"
                         placeholder="e.g. 15000"
                         value={(field.value ?? "") as string | number}
-                        onChange={(e: any) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                        onChange={(e: any) => field.onChange(e.target.value)}
                         prefixIcon={<Flame className="w-4 h-4 text-emerald-500" />}
                       />
                     )}
@@ -1133,7 +1132,7 @@ export function StationDetailsManager({
                         id="t_water"
                         placeholder="e.g. 12"
                         value={(field.value ?? "") as string | number}
-                        onChange={(e: any) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        onChange={(e: any) => field.onChange(e.target.value)}
                       />
                     )}
                   />
@@ -1147,7 +1146,7 @@ export function StationDetailsManager({
                         id="t_temp"
                         placeholder="e.g. 28"
                         value={(field.value ?? "") as string | number}
-                        onChange={(e: any) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        onChange={(e: any) => field.onChange(e.target.value)}
                       />
                     )}
                   />
@@ -1258,7 +1257,7 @@ export function StationDetailsManager({
                         id="et_cap"
                         placeholder="e.g. 45000"
                         value={field.value as string | number}
-                        onChange={(e: any) => field.onChange(Number(e.target.value))}
+                        onChange={(e: any) => field.onChange(e.target.value)}
                         prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
                       />
                     )}
@@ -1274,7 +1273,7 @@ export function StationDetailsManager({
                         id="et_liters"
                         placeholder="e.g. 15000"
                         value={(field.value ?? "") as string | number}
-                        onChange={(e: any) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                        onChange={(e: any) => field.onChange(e.target.value)}
                         prefixIcon={<Flame className="w-4 h-4 text-emerald-500" />}
                       />
                     )}
@@ -1292,7 +1291,7 @@ export function StationDetailsManager({
                         id="et_water"
                         placeholder="e.g. 12"
                         value={(field.value ?? "") as string | number}
-                        onChange={(e: any) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        onChange={(e: any) => field.onChange(e.target.value)}
                       />
                     )}
                   />
@@ -1306,7 +1305,7 @@ export function StationDetailsManager({
                         id="et_temp"
                         placeholder="e.g. 28"
                         value={(field.value ?? "") as string | number}
-                        onChange={(e: any) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        onChange={(e: any) => field.onChange(e.target.value)}
                       />
                     )}
                   />

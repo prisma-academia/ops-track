@@ -382,6 +382,7 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
             .filter(Boolean)
             .join(", ") || null,
       }}
+      profileHref="/admin/profile"
     >
       <UnauthorizedToast />
       {children}

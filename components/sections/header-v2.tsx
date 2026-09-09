@@ -50,6 +50,7 @@ interface HeaderV2Props {
   onLogout?: () => void;
   stations?: { id: string; name: string; code: string }[];
   activeStationId?: string;
+  profileHref?: string;
 }
 
 export default function HeaderV2({
@@ -57,7 +58,8 @@ export default function HeaderV2({
   onLogout,
   onSearchClick,
   stations = [],
-  activeStationId = "all"
+  activeStationId = "all",
+  profileHref
 }: HeaderV2Props) {
   const { theme, resolvedTheme, setTheme } = useTheme()
   const [items, setItems] = useState<InboxItem[]>([])
@@ -198,6 +200,7 @@ export default function HeaderV2({
           <ProfileDropdown
             user={user}
             onLogout={onLogout}
+            profileHref={profileHref}
             trigger={
               <div
                 id="profile-dropdown-trigger"

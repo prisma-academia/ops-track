@@ -45,6 +45,7 @@ interface DashboardLayoutShellProps {
   activeStationId?: string;
   enabledModules?: string[];
   internalOrganizations?: { id: string; name: string; slug: string | null; logoUrl: string | null }[];
+  profileHref?: string;
 }
 
 export function DashboardLayoutShell({
@@ -63,6 +64,7 @@ export function DashboardLayoutShell({
   internalOrganizations,
   tenant,
   printCompany,
+  profileHref,
 }: DashboardLayoutShellProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [logOutModal, setLogOutModal] = useState(false);
@@ -115,6 +117,7 @@ export function DashboardLayoutShell({
             onLogout={() => setLogOutModal(true)}
             stations={stations}
             activeStationId={activeStationId}
+            profileHref={profileHref}
           />
 
           <main className="flex-1 p-4 md:p-8 bg-white dark:bg-black h-full">

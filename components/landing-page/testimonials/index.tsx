@@ -11,9 +11,9 @@ const defaultTestimonials: Testimonial[] = [
     },
     {
         quote: "Waybills, dipping, and station receipts stay aligned from depot to pump. The team tracks trips and stock in the same system instead of radio and spreadsheets.",
-        author: LANDING_PEOPLE.umar.fullName,
-        role: LANDING_PEOPLE.umar.role,
-        image: LANDING_PEOPLE.umar.image,
+        author: LANDING_PEOPLE.shamsudeen.fullName,
+        role: LANDING_PEOPLE.shamsudeen.role,
+        image: LANDING_PEOPLE.shamsudeen.image,
     },
     {
         quote: "Operators get trucks, tanks, tickets, and payments in a workspace that matches how fleet and station work actually runs.",
@@ -23,9 +23,9 @@ const defaultTestimonials: Testimonial[] = [
     },
     {
         quote: "Station managers and fleet officers can follow stock, transport, and tickets in one place—without switching tools or losing the record.",
-        author: LANDING_PEOPLE.abdullah.fullName,
-        role: LANDING_PEOPLE.abdullah.role,
-        image: LANDING_PEOPLE.abdullah.image,
+        author: LANDING_PEOPLE.abdallah.fullName,
+        role: LANDING_PEOPLE.abdallah.role,
+        image: LANDING_PEOPLE.abdallah.image,
     },
 ];
 

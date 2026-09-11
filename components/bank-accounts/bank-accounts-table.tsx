@@ -41,7 +41,7 @@ export function BankAccountsTable({
   detailBase,
 }: {
   initialData: BankAccountRow[];
-  initialMeta: any;
+  initialMeta?: unknown;
   tenantSlug: string;
   scopeFilter?: "STATION" | "FLEET";
   createScope?: "STATION" | "FLEET";
@@ -78,8 +78,8 @@ export function BankAccountsTable({
       toast.success("Bank account deleted");
       refresh();
       router.refresh();
-    } catch (e: any) {
-      toast.error(e.message || "Failed to delete account");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete account");
     } finally {
       setIsDeleting(false);
       setDeletingId(null);

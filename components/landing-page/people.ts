@@ -11,8 +11,13 @@ export const LANDING_PEOPLE = {
     role: "---",
   },
   umar: {
+    fullName: "Umar Adam",
+    image: "",
+    role: "---",
+  },
+  shamsudeen: {
     fullName: "Shamsudeen Sunusi",
-    image: "/assets/images/people/abdullahi.png",
+    image: "",
     role: "CEO Sahaf Petroleum",
   },
   muhammad: {
@@ -20,8 +25,8 @@ export const LANDING_PEOPLE = {
     image: "/assets/images/people/maigoro.png",
     role: "---",
   },
-  abdullah: {
-    fullName: "Abdullah Muneer",
+  abdallah: {
+    fullName: "Abdallah Muneer",
     image: "/assets/images/people/abdallah.jpeg",
     role: "---",
   },

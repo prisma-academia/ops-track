@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { OrganizationForm } from "./form";
@@ -18,12 +20,21 @@ export default async function NewOrganizationPage() {
   });
 
   return (
-    <div className="">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">Add Organization</h1>
-        <p className="text-muted-foreground mt-2">
-          Register a new organization or client company under your fleet management.
-        </p>
+    <div>
+      <div className="mb-8 flex items-center gap-3">
+        <Link
+          href="/admin/organizations"
+          className="flex h-9 w-9 items-center justify-center rounded-md border border-stone-200 dark:border-stone-800 bg-transparent hover:bg-stone-100 dark:hover:bg-stone-800 shrink-0 transition-colors"
+          aria-label="Back to organizations"
+        >
+          <ArrowLeft className="size-4" />
+        </Link>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Add Organization</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Register a new organization or client company under your fleet management.
+          </p>
+        </div>
       </div>
       <OrganizationForm users={users} />
     </div>

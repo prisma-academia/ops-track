@@ -16,8 +16,8 @@ const Hero02Page = ({
 }) => {
   const navData: NavLinkItem[] = [
     { name: "Home", href: "/", isActive: true },
-    { name: "Platform sign in", href: "/auth/login", isActive: false },
-    { name: "Go to workspace", href: "/auth/login", isActive: false },
+    // { name: "Platform sign in", href: "/auth/login", isActive: false },
+    // { name: "Go to workspace", href: "/auth/login", isActive: false },
     { name: "Register", href: "/auth/register", isActive: false },
   ];
   return (

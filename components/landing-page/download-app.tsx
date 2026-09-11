@@ -13,7 +13,7 @@ export function DownloadAppSection() {
             <p className="mb-8 max-w-lg text-sm text-muted-foreground">
               Track trucks, stations, transport, and tanks from your phone. Available on the App Store and Google Play.
             </p>
-            <StoreButtons href="/auth/login" />
+            <StoreButtons href="#" />
           </div>
           <div className="flex justify-center lg:justify-end">
             <img

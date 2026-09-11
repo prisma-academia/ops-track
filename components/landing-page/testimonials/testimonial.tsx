@@ -90,14 +90,28 @@ export default function Testimonial01({
                                                 </div>
                                             </div>
                                             <div className="md:col-span-4 col-span-12">
-                                                <div className="rounded-xl overflow-hidden bg-muted">
-                                                    <img
-                                                        src={testimonial.image}
-                                                        alt={testimonial.author}
-                                                        width={500}
-                                                        height={500}
-                                                        className="w-full h-full object-cover"
-                                                    />
+                                                <div className="rounded-xl overflow-hidden bg-muted aspect-square flex items-center justify-center">
+                                                    {testimonial.image ? (
+                                                        <img
+                                                            src={testimonial.image}
+                                                            alt={testimonial.author}
+                                                            width={500}
+                                                            height={500}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    ) : (
+                                                        <div className="flex flex-col items-center justify-center p-8 text-center select-none w-full h-full">
+                                                            <span className="text-5xl sm:text-6xl font-semibold text-muted-foreground/40 tracking-wider">
+                                                                {testimonial.author
+                                                                    .split(" ")
+                                                                    .filter(Boolean)
+                                                                    .slice(0, 2)
+                                                                    .map((part) => part[0])
+                                                                    .join("")
+                                                                    .toUpperCase()}
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

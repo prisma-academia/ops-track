@@ -382,7 +382,7 @@ export function OrganizationForm({ users }: { users: { id: string; firstName: st
               </div>
               
               <div className="flex justify-end gap-4 border-t pt-6">
-                <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
+                <Button type="button" variant="outline" onClick={() => router.push("/admin/organizations")} disabled={isSubmitting}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isSubmitting || uploadingLogo}>

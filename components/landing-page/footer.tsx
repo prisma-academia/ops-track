@@ -68,7 +68,7 @@ export default function Footer() {
                 <Button asChild className="py-3.5 px-6 rounded-full bg-teal-400 hover:bg-teal-400/80 h-auto">
                   <a href="/auth/register">Get started</a>
                 </Button>
-                <StoreButtons href="/auth/login" />
+                <StoreButtons href="#" />
               </div>
             </div>
             <div className="md:col-span-1" />

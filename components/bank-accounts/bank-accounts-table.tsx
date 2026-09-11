@@ -41,7 +41,7 @@ export function BankAccountsTable({
   detailBase,
 }: {
   initialData: BankAccountRow[];
-  initialMeta: any;
+  initialMeta?: unknown;
   tenantSlug: string;
   scopeFilter?: "STATION" | "FLEET";
   createScope?: "STATION" | "FLEET";
@@ -59,8 +59,10 @@ export function BankAccountsTable({
     ? `/api/tenant/bank-accounts?scope=${scopeFilter}` 
     : `/api/tenant/bank-accounts`;
 
-  const { data, meta, isLoading, setPage, setPageSize, setInitialData } = usePaginatedQuery<BankAccountRow>({
+  const { data, meta, isLoading, setPage, setPageSize, setInitialData, refresh } = usePaginatedQuery<BankAccountRow>({
     baseUrl,
+    initialData,
+    initialMeta,
   });
 
   useEffect(() => {
@@ -74,9 +76,10 @@ export function BankAccountsTable({
       const res = await apiDelete(`/api/tenant/bank-accounts/${deletingId}`);
       if (res.error) throw new Error(res.error.message);
       toast.success("Bank account deleted");
+      refresh();
       router.refresh();
-    } catch (e: any) {
-      toast.error(e.message || "Failed to delete account");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete account");
     } finally {
       setIsDeleting(false);
       setDeletingId(null);
@@ -162,7 +165,7 @@ export function BankAccountsTable({
     <>
       <DataTable
         columns={columns}
-        data={(data ?? []).length > 0 ? data : initialData}
+        data={data ?? []}
         isLoading={isLoading}
         serverPagination={{
           ...meta,
@@ -191,7 +194,10 @@ export function BankAccountsTable({
         tenantSlug={tenantSlug}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSuccess={() => router.refresh()}
+        onSuccess={() => {
+          refresh();
+          router.refresh();
+        }}
         initialData={editingAccount}
         fixedScope={createScope ?? scopeFilter}
       />
@@ -202,7 +208,10 @@ export function BankAccountsTable({
           accountLabel={`${assigningAccount.bankName} · ${assigningAccount.accountNumber}`}
           isOpen={!!assigningAccount}
           onClose={() => setAssigningAccount(null)}
-          onSuccess={() => router.refresh()}
+          onSuccess={() => {
+            refresh();
+            router.refresh();
+          }}
           initiallyAssignedIds={(assigningAccount.stationAssignments ?? []).map((a) => a.stationId)}
         />
       )}

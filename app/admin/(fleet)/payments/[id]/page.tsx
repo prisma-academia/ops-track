@@ -3,11 +3,9 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft } from "lucide-react";
-import Link from "next/link";
 import QRCode from "qrcode";
 import { InvoiceReceipt } from "./invoice-receipt";
+import { PaymentActions } from "./payment-actions";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 import { isStationLedgerTransaction } from "@/lib/finance/fleet-ledger";
 
@@ -254,19 +252,26 @@ export default async function PaymentDetailsPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4 print:hidden">
-        <Button variant="outline" size="icon" asChild>
-          <Link href="/admin/payments">
-            <ChevronLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Payment Details</h1>
-          <p className="text-muted-foreground mt-1">Ref: {transaction.reference || transaction.id.substring(0, 8).toUpperCase()}</p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight print:hidden">Payment Details</h1>
+        <p className="text-muted-foreground mt-1 print:hidden">Ref: {transaction.reference || transaction.id.substring(0, 8).toUpperCase()}</p>
       </div>
 
-      <InvoiceReceipt transaction={safeTransactionForClient} />
+      <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4 items-start">
+        {/* Actions Card */}
+        <div className="md:sticky md:top-6">
+          <PaymentActions
+            transactionId={transaction.id}
+            description={transaction.description}
+            receiptUrl={transaction.receiptUrl}
+            amount={Number(transaction.amount)}
+            reference={ref}
+          />
+        </div>
+
+        {/* Receipt */}
+        <InvoiceReceipt transaction={safeTransactionForClient} />
+      </div>
     </div>
   );
 }

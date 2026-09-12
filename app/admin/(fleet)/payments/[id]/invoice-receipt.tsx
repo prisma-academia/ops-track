@@ -1,6 +1,6 @@
 "use client";
 
-import { Printer, Download, ImageIcon } from "lucide-react";
+import { Download, ImageIcon } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
@@ -57,10 +57,6 @@ function DetailRow({
 }
 
 export function InvoiceReceipt({ transaction }: InvoiceReceiptProps) {
-  const handlePrint = () => {
-    window.print();
-  };
-
   const isOutflow = transaction.type === "OUTFLOW";
   const ref = transaction.reference || transaction.id.substring(0, 8).toUpperCase();
   const categoryFormatted = formatLabel(transaction.category);
@@ -202,17 +198,11 @@ export function InvoiceReceipt({ transaction }: InvoiceReceiptProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-2 print:hidden">
-        <Button variant="outline" size="sm" onClick={handlePrint}>
-          <Printer className="w-4 h-4 mr-2" />
-          Print Receipt
-        </Button>
-      </div>
 
       {/* Invoice */}
       <div
         id="invoice-receipt"
-        className="bg-white text-gray-900 border border-border w-full max-w-3xl mx-auto rounded-lg print:border-0 print:rounded-none print:shadow-none"
+        className="bg-white text-gray-900 border border-border w-full rounded-lg print:border-0 print:rounded-none print:shadow-none"
       >
         <div className="p-6 sm:p-10">
           {/* Header */}
@@ -333,7 +323,7 @@ export function InvoiceReceipt({ transaction }: InvoiceReceiptProps) {
 
       {/* Attachment / Proof of Payment */}
       {transaction.receiptUrl && (
-        <div className="max-w-3xl mx-auto print:hidden">
+        <div className="w-full print:hidden">
           <div className="rounded-lg border border-border bg-card p-5">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-semibold flex items-center gap-2">

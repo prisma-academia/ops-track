@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
-import { handleError, DomainError } from "@/lib/api/errors";
+import { handleError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 
@@ -20,33 +20,80 @@ const CreateCustomerSchema = z.object({
   outstandingBalance: z.coerce.number().default(0),
 });
 
+function formatCustomerRow<
+  T extends {
+    deliveries?: Array<{
+      totalExpectedAmount: { toNumber(): number } | null;
+      paymentReceived: { toNumber(): number } | null;
+    }>;
+    outstandingBalance: { toNumber(): number };
+    depositBalance: { toNumber(): number };
+  }
+>(customer: T) {
+  const deliveryBalance = (customer.deliveries || []).reduce((sum, d) => {
+    const expected = d.totalExpectedAmount ? d.totalExpectedAmount.toNumber() : 0;
+    const paid = d.paymentReceived ? d.paymentReceived.toNumber() : 0;
+    return sum + Math.max(0, expected - paid);
+  }, 0);
+
+  const outstandingBalance =
+    customer.deliveries && customer.deliveries.length > 0
+      ? deliveryBalance
+      : customer.outstandingBalance.toNumber();
+
+  const { deliveries: _omitted, ...rest } = customer;
+  void _omitted;
+
+  return {
+    ...rest,
+    outstandingBalance,
+    depositBalance: customer.depositBalance.toNumber(),
+  };
+}
+
 export async function GET(request: Request) {
   try {
     const actor = await requireTenantActor(PERMISSIONS.TENANT_FLEET_CUSTOMERS_READ.key);
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
 
+    const deliveryInclude = {
+      deliveries: {
+        select: {
+          totalExpectedAmount: true,
+          paymentReceived: true,
+        },
+      },
+    };
+
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
-      const [totalCount, rows] = await Promise.all([
+      const [totalCount, customers] = await Promise.all([
         prisma.customer.count({ where: { tenantId: actor.tenantId } }),
         prisma.customer.findMany({
           where: { tenantId: actor.tenantId },
           orderBy: { createdAt: "desc" },
           take,
           skip,
+          include: deliveryInclude,
         }),
       ]);
+
+      const rows = customers.map(formatCustomerRow);
+
       return ok(rows, buildOffsetPageMeta(totalCount, page, take));
     } else {
       const { cursor, take } = parsePagination(url.searchParams);
   
-      const rows = await prisma.customer.findMany({
+      const customers = await prisma.customer.findMany({
         where: { tenantId: actor.tenantId },
         orderBy: { createdAt: "desc" },
         take,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        include: deliveryInclude,
       });
+
+      const rows = customers.map(formatCustomerRow);
   
       return ok(rows, buildPageMeta(rows, take));
     }

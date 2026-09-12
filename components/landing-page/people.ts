@@ -5,29 +5,19 @@ export type LandingPerson = {
 };
 
 export const LANDING_PEOPLE = {
-  aliyu: {
-    fullName: "Aliyu Ibrahim",
-    image: "/assets/images/people/aliyu.png",
-    role: "---",
-  },
-  umar: {
-    fullName: "Umar Adam",
-    image: "",
-    role: "---",
-  },
   shamsudeen: {
     fullName: "Shamsudeen Sunusi",
     image: "",
     role: "CEO Sahaf Petroleum",
   },
   muhammad: {
-    fullName: "Muhammad Maigoro",
-    image: "/assets/images/people/maigoro.png",
-    role: "---",
+    fullName: "MUHAMMAD MUSA",
+    image: "",
+    role: "MANAGER A.S.A OIL NIG LTD",
   },
-  abdallah: {
-    fullName: "Abdallah Muneer",
-    image: "/assets/images/people/abdallah.jpeg",
+  aliyu: {
+    fullName: "ALIYU IBRAHIM",
+    image: "",
     role: "---",
   },
 } as const satisfies Record<string, LandingPerson>;

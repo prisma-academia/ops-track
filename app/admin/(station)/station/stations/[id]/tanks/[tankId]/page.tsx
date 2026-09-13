@@ -1,6 +1,6 @@
-import { notFound } from "next/navigation";
+import { PERMISSIONS, requireTenantActor } from "@/lib/auth/guards";
 import { prisma } from "@/lib/db/client";
-import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
+import { notFound } from "next/navigation";
 import { TankDetailsClient } from "./tank-details-client";
 
 export default async function TankDetailsPage(props: {
@@ -21,9 +21,11 @@ export default async function TankDetailsPage(props: {
     notFound();
   }
 
+  const serializedTank = JSON.parse(JSON.stringify(tank));
+
   return (
     <div className="p-6">
-      <TankDetailsClient stationId={params.id} tankId={params.tankId} tank={tank} />
+      <TankDetailsClient stationId={params.id} tankId={params.tankId} tank={serializedTank} />
     </div>
   );
 }

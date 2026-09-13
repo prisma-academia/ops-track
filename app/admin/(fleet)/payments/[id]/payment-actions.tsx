@@ -38,6 +38,7 @@ export function PaymentActions({
           {/* Back button — full width, primary color */}
           <Button
             className="w-full"
+            size={"icon-lg"}
             onClick={() => router.push("/admin/payments")}
           >
             <ChevronLeft className="mr-2 h-4 w-4" />
@@ -49,9 +50,10 @@ export function PaymentActions({
             variant="outline"
             className="w-full"
             onClick={() => setEditOpen(true)}
+            size={"icon-lg"}
           >
             <Pencil className="mr-2 h-4 w-4" />
-            Edit
+            Edit Payment
           </Button>
 
           {/* Print button */}
@@ -59,9 +61,10 @@ export function PaymentActions({
             variant="outline"
             className="w-full"
             onClick={handlePrint}
+            size={"icon-lg"}
           >
             <Printer className="mr-2 h-4 w-4" />
-            Print
+            Print Receipt
           </Button>
 
           {/* Delete button — full width, destructive */}

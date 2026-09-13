@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { formatShortCurrency } from "@/lib/utils";
+import { formatShortCurrency, formatHumanReadableDate } from "@/lib/utils";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const BaseSchema = z.object({
   recipientType: z.enum(["CUSTOMER", "STATION"]),
@@ -37,13 +38,14 @@ type Values = z.infer<typeof BaseSchema>;
 
 type CreateSaleFormProps = {
   customers: { id: string; name: string }[];
-  stations: { id: string; name: string; code: string }[];
+  stations: { id: string; name: string; code: string; state?: string | null; lga?: string | null; organization?: { name: string } | null }[];
   transports: {
     id: string;
     destination: string;
     litersCarried: any;
     ratePerLiter: any;
     status: string;
+    createdAt?: string | Date;
     order?: {
       reference: string | null;
       productType: string;
@@ -233,7 +235,8 @@ export function CreateSaleForm({
   const [openCustomerSelect, setOpenCustomerSelect] = useState(false);
   const [openStationSelect, setOpenStationSelect] = useState(false);
   const [openTransportSelect, setOpenTransportSelect] = useState(false);
-  const [showReceivedInput, setShowReceivedInput] = useState(false);
+  const [rateMode, setRateMode] = useState<"PER_LITER" | "FLAT">("PER_LITER");
+  const [flatTransportFee, setFlatTransportFee] = useState<number>(0);
 
   const FormSchema = BaseSchema.superRefine((data, ctx) => {
     if (data.recipientType === "CUSTOMER" && !data.customerId) {
@@ -265,15 +268,17 @@ export function CreateSaleForm({
       recipientType: "STATION",
       customerId: "",
       stationId: "",
+      transportCostBorneBy: "COMPANY",
       transportId: preselectedTransportId || "",
       litersDespatched: 0,
-      litersReceived: undefined,
+      litersReceived: null,
       amountPerLiter: 0,
       transportCostPerLiter: 0,
     },
   });
 
   const recipientType = watch("recipientType");
+  const transportCostBorneBy = watch("transportCostBorneBy");
   const selectedCustomerId = watch("customerId");
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
   
@@ -284,13 +289,25 @@ export function CreateSaleForm({
   const selectedTransport = transports.find((t) => t.id === selectedTransportId);
   const litersDespatched = watch("litersDespatched");
 
+  // Keep per-litre transport cost synchronized when in flat fee mode
+  useEffect(() => {
+    if (rateMode === "FLAT") {
+      const perLiter = litersDespatched > 0 && flatTransportFee > 0 ? flatTransportFee / litersDespatched : 0;
+      setValue("transportCostPerLiter", perLiter, { shouldValidate: true });
+    }
+  }, [litersDespatched, rateMode, flatTransportFee, setValue]);
+
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
+
+    const calculatedRatePerLiter = rateMode === "FLAT"
+      ? (values.litersDespatched > 0 && flatTransportFee > 0 ? flatTransportFee / values.litersDespatched : 0)
+      : (values.transportCostPerLiter || 0);
     
     const payload = {
       ...values,
-      // null means truly blank (no received volume yet) — do not send 0
-      litersReceived: (values.litersReceived == null || Number.isNaN(values.litersReceived as any)) ? null : values.litersReceived,
+      litersReceived: null,
+      transportCostPerLiter: calculatedRatePerLiter,
       // Clear out the unused relation
       customerId: values.recipientType === "CUSTOMER" ? values.customerId : undefined,
       stationId: values.recipientType === "STATION" ? values.stationId : undefined,
@@ -388,144 +405,103 @@ export function CreateSaleForm({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                {recipientType === "CUSTOMER" ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="customerId" className={formState.errors.customerId ? "text-destructive" : ""}>Client*</Label>
-                    <Popover open={openCustomerSelect} onOpenChange={setOpenCustomerSelect}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          id="customerId"
-                          className={`w-full justify-between font-normal ${formState.errors.customerId ? "border-destructive" : ""}`}
-                        >
-                          <span className="truncate">
-                            {selectedCustomer ? selectedCustomer.name : "Select client..."}
-                          </span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Search client..." />
-                          <CommandList className="max-h-[200px] overflow-y-auto">
-                            <CommandEmpty>No client found.</CommandEmpty>
-                            <CommandGroup>
-                              {customers.map((c) => (
-                                <CommandItem
-                                  key={c.id}
-                                  value={`${c.name} ${c.id}`.toLowerCase()}
-                                  onSelect={() => {
-                                    setValue("customerId", c.id, { shouldValidate: true });
-                                    setOpenCustomerSelect(false);
-                                  }}
-                                  data-checked={selectedCustomerId === c.id}
-                                >
-                                  <div className="flex flex-col text-left">
-                                    <span className="font-semibold text-sm">{c.name}</span>
-                                    <span className="text-xs text-muted-foreground mt-0.5">External Client</span>
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    {formState.errors.customerId && <p className="text-xs text-destructive">{formState.errors.customerId.message}</p>}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label htmlFor="stationId" className={formState.errors.stationId ? "text-destructive" : ""}>Station*</Label>
-                    <Popover open={openStationSelect} onOpenChange={setOpenStationSelect}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          id="stationId"
-                          className={`w-full justify-between font-normal ${formState.errors.stationId ? "border-destructive" : ""}`}
-                        >
-                          <span className="truncate">
-                            {selectedStation ? `${selectedStation.name} (${selectedStation.code})` : "Select station..."}
-                          </span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Search station..." />
-                          <CommandList className="max-h-[200px] overflow-y-auto">
-                            <CommandEmpty>No station found.</CommandEmpty>
-                            <CommandGroup>
-                              {stations.map((s) => (
-                                <CommandItem
-                                  key={s.id}
-                                  value={`${s.name} ${s.code} ${s.id}`.toLowerCase()}
-                                  onSelect={() => {
-                                    setValue("stationId", s.id, { shouldValidate: true });
-                                    setOpenStationSelect(false);
-                                  }}
-                                  data-checked={selectedStationId === s.id}
-                                >
-                                  <div className="flex flex-col text-left">
-                                    <span className="font-semibold text-sm">{s.name}</span>
-                                    <span className="text-xs text-muted-foreground mt-0.5">Code: {s.code}</span>
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    {formState.errors.stationId && <p className="text-xs text-destructive">{formState.errors.stationId.message}</p>}
-                  </div>
-                )}
-
+              {recipientType === "CUSTOMER" ? (
                 <div className="space-y-2">
-                  <Label htmlFor="transportId" className={formState.errors.transportId ? "text-destructive" : ""}>Order / Trip*</Label>
-                  <Popover open={openTransportSelect} onOpenChange={setOpenTransportSelect}>
+                  <Label htmlFor="customerId" className={formState.errors.customerId ? "text-destructive" : ""}>Client*</Label>
+                  <Popover open={openCustomerSelect} onOpenChange={setOpenCustomerSelect}>
                     <PopoverTrigger asChild>
                       <Button
                         type="button"
                         variant="outline"
-                        id="transportId"
-                        className={`w-full justify-between font-normal ${formState.errors.transportId ? "border-destructive" : ""}`}
+                        id="customerId"
+                        className={`w-full justify-between font-normal ${formState.errors.customerId ? "border-destructive" : ""}`}
                       >
                         <span className="truncate">
-                          {selectedTransport ? `${selectedTransport.order?.reference || 'No Ref'}` : "Select transport..."}
+                          {selectedCustomer ? selectedCustomer.name : "Select client..."}
                         </span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                       <Command>
-                        <CommandInput placeholder="Search transport..." />
+                        <CommandInput placeholder="Search client..." />
                         <CommandList className="max-h-[200px] overflow-y-auto">
-                          <CommandEmpty>No transport found.</CommandEmpty>
+                          <CommandEmpty>No client found.</CommandEmpty>
                           <CommandGroup>
-                            {transports.map((t) => {
-                              const carried = Number(t.litersCarried || 0);
-                              const distributed = (t.deliveries || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0);
-                              const available = Math.max(0, carried - distributed);
+                            {customers.map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={`${c.name} ${c.id}`.toLowerCase()}
+                                onSelect={() => {
+                                  setValue("customerId", c.id, { shouldValidate: true });
+                                  setOpenCustomerSelect(false);
+                                }}
+                                data-checked={selectedCustomerId === c.id}
+                              >
+                                <div className="flex flex-col text-left">
+                                  <span className="font-semibold text-sm">{c.name}</span>
+                                  <span className="text-xs text-muted-foreground mt-0.5">External Client</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {formState.errors.customerId && <p className="text-xs text-destructive">{formState.errors.customerId.message}</p>}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="stationId" className={formState.errors.stationId ? "text-destructive" : ""}>Station*</Label>
+                  <Popover open={openStationSelect} onOpenChange={setOpenStationSelect}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        id="stationId"
+                        className={`w-full justify-between font-normal ${formState.errors.stationId ? "border-destructive" : ""}`}
+                      >
+                        <span className="truncate">
+                          {selectedStation ? (
+                            selectedStation.organization?.name
+                              ? `${selectedStation.name} • ${selectedStation.organization.name}${selectedStation.state ? ` (${[selectedStation.lga, selectedStation.state].filter(Boolean).join(", ")})` : ""}`
+                              : `${selectedStation.name}${[selectedStation.lga, selectedStation.state].filter(Boolean).length ? ` (${[selectedStation.lga, selectedStation.state].filter(Boolean).join(", ")})` : ""}`
+                          ) : "Select station..."}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search station, state, or LGA..." />
+                        <CommandList className="max-h-[200px] overflow-y-auto">
+                          <CommandEmpty>No station found.</CommandEmpty>
+                          <CommandGroup>
+                            {stations.map((s) => {
+                              const locationInfo = [s.lga, s.state].filter(Boolean).join(", ");
                               return (
                                 <CommandItem
-                                  key={t.id}
-                                  value={`${t.order?.reference || ''} ${t.destination} ${t.truck.plateNumber || ''} ${t.truck.name} ${t.id}`.toLowerCase()}
+                                  key={s.id}
+                                  value={`${s.name} ${s.organization?.name || ''} ${s.state || ''} ${s.lga || ''} ${s.code} ${s.id}`.toLowerCase()}
                                   onSelect={() => {
-                                    setValue("transportId", t.id, { shouldValidate: true });
-                                    setOpenTransportSelect(false);
+                                    setValue("stationId", s.id, { shouldValidate: true });
+                                    setOpenStationSelect(false);
                                   }}
-                                  data-checked={selectedTransportId === t.id}
+                                  data-checked={selectedStationId === s.id}
+                                  className="py-2"
                                 >
-                                  {/* <Check className={`mr-2 h-4 w-4 shrink-0 ${selectedTransportId === t.id ? "opacity-100" : "opacity-0"}`} /> */}
-                                  <div className="flex flex-col text-left">
-                                    <span className="font-semibold text-sm">
-                                      {t.order?.reference || 'No Ref'} • {t.destination}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground mt-0.5">
-                                      {t.truck.plateNumber || t.truck.name} • Available: {available.toLocaleString()} L
+                                  <div className="flex flex-col text-left gap-0.5 w-full">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-semibold text-sm truncate">{s.name}</span>
+                                      {locationInfo && (
+                                        <span className="text-[11px] text-muted-foreground/80 font-medium shrink-0">
+                                          {locationInfo}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">
+                                      {s.organization?.name || "No Organization"}
                                     </span>
                                   </div>
                                 </CommandItem>
@@ -536,8 +512,80 @@ export function CreateSaleForm({
                       </Command>
                     </PopoverContent>
                   </Popover>
-                  {formState.errors.transportId && <p className="text-xs text-destructive">{formState.errors.transportId.message}</p>}
+                  {formState.errors.stationId && <p className="text-xs text-destructive">{formState.errors.stationId.message}</p>}
                 </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="transportId" className={formState.errors.transportId ? "text-destructive" : ""}>Order / Trip*</Label>
+                <Popover open={openTransportSelect} onOpenChange={setOpenTransportSelect}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      id="transportId"
+                      className={`w-full justify-between font-normal ${formState.errors.transportId ? "border-destructive" : ""}`}
+                    >
+                      <span className="truncate">
+                        {selectedTransport ? (
+                          `${selectedTransport.order?.reference || 'No Ref'}${selectedTransport.order?.sourceDepot ? ` • ${selectedTransport.order.sourceDepot}` : ''} → ${selectedTransport.destination}${selectedTransport.createdAt ? ` (${formatHumanReadableDate(selectedTransport.createdAt)})` : ''}`
+                        ) : "Select transport..."}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search transport..." />
+                      <CommandList className="max-h-[200px] overflow-y-auto">
+                        <CommandEmpty>No transport found.</CommandEmpty>
+                        <CommandGroup>
+                          {transports.map((t) => {
+                            const carried = Number(t.litersCarried || 0);
+                            const distributed = (t.deliveries || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0);
+                            const available = Math.max(0, carried - distributed);
+                            return (
+                              <CommandItem
+                                key={t.id}
+                                value={`${t.order?.reference || ''} ${t.order?.sourceDepot || ''} ${t.destination} ${t.truck.plateNumber || ''} ${t.truck.name} ${t.transporter?.name || ''} ${t.id}`.toLowerCase()}
+                                onSelect={() => {
+                                  setValue("transportId", t.id, { shouldValidate: true });
+                                  setOpenTransportSelect(false);
+                                }}
+                                data-checked={selectedTransportId === t.id}
+                                className="py-2.5"
+                              >
+                                <div className="flex flex-col text-left gap-1 w-full">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-semibold text-sm truncate">
+                                      {t.order?.reference ? `${t.order.reference} • ` : ""}
+                                      {t.order?.sourceDepot ? `${t.order.sourceDepot} → ` : ""}
+                                      {t.destination}
+                                    </span>
+                                    <span className="text-[11px] font-mono font-medium text-emerald-600 dark:text-emerald-400 shrink-0">
+                                      {available.toLocaleString()} L avail.
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                    <span className="truncate">
+                                      {t.truck.plateNumber || t.truck.name} • {t.transporter.name}
+                                    </span>
+                                    {t.createdAt && (
+                                      <span className="text-[10px] text-muted-foreground/80 shrink-0 ml-2 font-mono">
+                                        {formatHumanReadableDate(t.createdAt)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {formState.errors.transportId && <p className="text-xs text-destructive">{formState.errors.transportId.message}</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -559,52 +607,6 @@ export function CreateSaleForm({
                   {formState.errors.litersDespatched && <p className="text-xs text-destructive">{formState.errors.litersDespatched.message}</p>}
                 </div>
 
-                {recipientType === "CUSTOMER" ? (
-                  <div className="space-y-2 flex flex-col justify-end">
-                    {!showReceivedInput ? (
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        className="w-full text-muted-foreground border-dashed h-10"
-                        onClick={() => setShowReceivedInput(true)}
-                      >
-                        Already Received?
-                      </Button>
-                    ) : (
-                      <>
-                        <Label htmlFor="litersReceived" className={formState.errors.litersReceived ? "text-destructive" : ""}>Volume Received (L) (Optional)</Label>
-                        <Controller
-                          control={control}
-                          name="litersReceived"
-                          render={({ field }) => (
-                            <FormattedNumberInput 
-                              id="litersReceived" 
-                              placeholder="e.g. 10000" 
-                              {...field}
-                              value={field.value ?? ""}
-                              className={formState.errors.litersReceived ? "border-destructive" : ""}
-                              prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
-                            />
-                          )}
-                        />
-                        <p className="text-[10px] text-muted-foreground mt-1 flex justify-between">
-                          <span>Leave blank if pending.</span>
-                          <button type="button" onClick={() => { setShowReceivedInput(false); setValue("litersReceived", undefined); }} className="text-destructive hover:underline cursor-pointer">Cancel</button>
-                        </p>
-                        {formState.errors.litersReceived && <p className="text-xs text-destructive">{formState.errors.litersReceived.message}</p>}
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-2 flex flex-col justify-end h-full">
-                     <div className="text-xs text-muted-foreground p-3 border border-dashed rounded-lg bg-muted/20 h-10 flex items-center justify-center">
-                        Volume received must be logged by the station via Waybill Delivery.
-                     </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 border-t border-border/50 pt-5 mt-2">
                 <div className="space-y-2">
                   <Label htmlFor="amountPerLiter" className={formState.errors.amountPerLiter ? "text-destructive" : ""}>Selling Price per Liter (₦)*</Label>
                   <Controller
@@ -622,27 +624,10 @@ export function CreateSaleForm({
                   />
                   {formState.errors.amountPerLiter && <p className="text-xs text-destructive">{formState.errors.amountPerLiter.message}</p>}
                 </div>
+              </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="transportCostPerLiter" className={formState.errors.transportCostPerLiter ? "text-destructive" : ""}>Transport Rate per Litre (₦)</Label>
-                  <Controller
-                    control={control}
-                    name="transportCostPerLiter"
-                    render={({ field }) => (
-                      <FormattedNumberInput 
-                        id="transportCostPerLiter" 
-                        placeholder="e.g. 50" 
-                        {...field}
-                        className={formState.errors.transportCostPerLiter ? "border-destructive" : ""}
-                        prefixText="₦"
-                        maxLength={4}
-                      />
-                    )}
-                  />
-                  {formState.errors.transportCostPerLiter && <p className="text-xs text-destructive">{formState.errors.transportCostPerLiter.message}</p>}
-                </div>
-
-                <div className="space-y-3 col-span-2 mt-2">
+              <div className="space-y-5 border-t border-border/50 pt-5 mt-2">
+                <div className="space-y-3">
                   <Label className={formState.errors.transportCostBorneBy ? "text-destructive" : ""}>Transport Cost Borne By*</Label>
                   <Controller
                     control={control}
@@ -654,30 +639,103 @@ export function CreateSaleForm({
                         className="grid grid-cols-1 md:grid-cols-2 gap-4"
                       >
                         <Label 
+                          htmlFor="tc-company" 
+                          className="flex cursor-pointer flex-row items-center justify-between rounded-lg border p-4 hover:bg-accent/50 [&:has([data-state=checked])]:border-primary [&:has([data-state=checked])]:bg-primary/5"
+                        >
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-sm">Company</span>
+                              <Badge variant="secondary" className="text-[10px] font-semibold tracking-wide uppercase px-1.5 py-0">
+                                Default
+                              </Badge>
+                            </div>
+                            <span className="text-xs text-muted-foreground font-normal">Absorbed by the company</span>
+                          </div>
+                          <RadioGroupItem value="COMPANY" id="tc-company" />
+                        </Label>
+
+                        <Label 
                           htmlFor="tc-client" 
                           className="flex cursor-pointer flex-row items-center justify-between rounded-lg border p-4 hover:bg-accent/50 [&:has([data-state=checked])]:border-primary [&:has([data-state=checked])]:bg-primary/5"
                         >
                           <div className="flex flex-col gap-1">
                             <span className="font-semibold text-sm">Client</span>
-                            <span className="text-xs text-muted-foreground font-normal">Charged to the customer</span>
+                            <span className="text-xs text-muted-foreground font-normal">Charged to the customer / self-transport</span>
                           </div>
                           <RadioGroupItem value="CLIENT" id="tc-client" />
-                        </Label>
-
-                        <Label 
-                          htmlFor="tc-company" 
-                          className="flex cursor-pointer flex-row items-center justify-between rounded-lg border p-4 hover:bg-accent/50 [&:has([data-state=checked])]:border-primary [&:has([data-state=checked])]:bg-primary/5"
-                        >
-                          <div className="flex flex-col gap-1">
-                            <span className="font-semibold text-sm">Company</span>
-                            <span className="text-xs text-muted-foreground font-normal">Absorbed by the company</span>
-                          </div>
-                          <RadioGroupItem value="COMPANY" id="tc-company" />
                         </Label>
                       </RadioGroup>
                     )}
                   />
                   {formState.errors.transportCostBorneBy && <p className="text-xs text-destructive">{formState.errors.transportCostBorneBy.message}</p>}
+                </div>
+
+                <div className="space-y-2 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="transportRate" className={formState.errors.transportCostPerLiter ? "text-destructive" : ""}>
+                      Transport Rate ({rateMode === "PER_LITER" ? "₦ / Litre" : "Flat Fee Total"})
+                    </Label>
+                    {rateMode === "FLAT" && litersDespatched > 0 && flatTransportFee > 0 && (
+                      <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-medium">
+                        ≈ ₦{(flatTransportFee / litersDespatched).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / L
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex rounded-md shadow-xs">
+                    <div className="relative flex-1">
+                      <FormattedNumberInput 
+                        id="transportRate" 
+                        placeholder={rateMode === "PER_LITER" ? "e.g. 50" : "e.g. 100,000"} 
+                        value={rateMode === "PER_LITER" ? (watch("transportCostPerLiter") || "") : (flatTransportFee || "")}
+                        onChange={(e: any) => {
+                          const val = Number(e.target.value || 0);
+                          if (rateMode === "PER_LITER") {
+                            setValue("transportCostPerLiter", val, { shouldValidate: true });
+                          } else {
+                            setFlatTransportFee(val);
+                            const perLiter = litersDespatched > 0 ? val / litersDespatched : 0;
+                            setValue("transportCostPerLiter", perLiter, { shouldValidate: true });
+                          }
+                        }}
+                        className={`rounded-r-none ${formState.errors.transportCostPerLiter ? "border-destructive" : ""}`}
+                        prefixText="₦"
+                      />
+                    </div>
+                    <Select
+                      value={rateMode}
+                      onValueChange={(val: "PER_LITER" | "FLAT") => {
+                        setRateMode(val);
+                        if (val === "FLAT") {
+                          const currentRate = watch("transportCostPerLiter") || 0;
+                          const initialFlat = currentRate * (litersDespatched || 1);
+                          setFlatTransportFee(initialFlat);
+                        } else {
+                          const perLiter = litersDespatched > 0 ? flatTransportFee / litersDespatched : flatTransportFee;
+                          setValue("transportCostPerLiter", Number(perLiter.toFixed(2)), { shouldValidate: true });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-[230px] rounded-l-none border-l-0 bg-muted/40 hover:bg-muted/70 text-xs font-medium shrink-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="end" position="popper">
+                        <SelectItem value="PER_LITER" className="text-xs">
+                          Per Litre
+                        </SelectItem>
+                        <SelectItem value="FLAT" className="text-xs">
+                          Flat Fee
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {rateMode === "FLAT" && (!litersDespatched || litersDespatched <= 0) && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      Enter volume despatched above to compute the rate per litre.
+                    </p>
+                  )}
+                  {formState.errors.transportCostPerLiter && <p className="text-xs text-destructive">{formState.errors.transportCostPerLiter.message}</p>}
                 </div>
               </div>
 

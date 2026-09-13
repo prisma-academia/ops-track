@@ -134,7 +134,7 @@ export function CreateTransportForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-6 animate-in fade-in duration-500">
-      <Card className="mb-6 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => router.push("/admin/transports")}>
@@ -144,7 +144,7 @@ export function CreateTransportForm({
               <CardTitle className="text-xl flex items-center gap-3">
                 New Transport
               </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Create a transport trip and optionally link it to a procurement order.</p>
+              <p className="text-sm text-muted-foreground">Create a transport trip and optionally link it to a procurement order.</p>
             </div>
           </div>
         </CardHeader>

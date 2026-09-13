@@ -19,7 +19,14 @@ export default async function NewSalePage(
   
   const stations = await prisma.station.findMany({
     where: { tenantId: actor.tenantId },
-    select: { id: true, name: true, code: true },
+    select: { 
+      id: true, 
+      name: true, 
+      code: true,
+      state: true,
+      lga: true,
+      organization: { select: { name: true } }
+    },
     orderBy: { name: "asc" },
   });
   
@@ -31,6 +38,7 @@ export default async function NewSalePage(
       litersCarried: true,
       ratePerLiter: true,
       status: true,
+      createdAt: true,
       order: { select: { reference: true, productType: true, litersOrdered: true, supplier: true, sourceDepot: true, status: true } },
       deliveries: { select: { litersDespatched: true } },
       truck: { select: { name: true, plateNumber: true, capacityLiters: true } },

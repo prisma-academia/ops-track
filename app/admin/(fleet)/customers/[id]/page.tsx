@@ -44,11 +44,25 @@ export default async function CustomerDetailPage({
             id: true,
             name: true,
             code: true,
+            location: true,
+            lga: true,
+            state: true,
+          },
+        },
+        organization: {
+          select: {
+            id: true,
+            name: true,
           },
         },
         transport: {
-          select: {
-            id: true,
+          include: {
+            transporter: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
             truck: {
               select: {
                 id: true,
@@ -63,6 +77,15 @@ export default async function CustomerDetailPage({
                 id: true,
                 firstName: true,
                 lastName: true,
+                phone: true,
+              },
+            },
+            order: {
+              select: {
+                id: true,
+                reference: true,
+                productType: true,
+                sourceDepot: true,
               },
             },
           },
@@ -82,6 +105,7 @@ export default async function CustomerDetailPage({
     const paid = d.paymentReceived.toNumber();
     const truck = d.transport?.truck;
     const driver = d.transport?.driver;
+    const productType = d.transport?.productType || d.transport?.order?.productType || "PMS";
 
     return {
       id: d.id,
@@ -92,6 +116,7 @@ export default async function CustomerDetailPage({
       driverName: driver ? `${driver.firstName} ${driver.lastName}` : null,
       stationName: d.station?.name || "Direct Customer Delivery",
       stationCode: d.station?.code || "—",
+      productType,
       litersDespatched: d.litersDespatched.toNumber(),
       litersReceived: d.litersReceived ? d.litersReceived.toNumber() : null,
       totalExpectedAmount: expected,
@@ -296,7 +321,7 @@ export default async function CustomerDetailPage({
             Fuel deliveries recorded for {customer.name} ({deliveries.length})
           </p>
         </div>
-        <CustomerDeliveriesTable data={deliveryRows} />
+        <CustomerDeliveriesTable data={deliveryRows} customerId={customer.id} />
       </div>
     </div>
   );

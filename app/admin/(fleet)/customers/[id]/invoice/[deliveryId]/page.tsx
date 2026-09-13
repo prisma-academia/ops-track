@@ -7,22 +7,28 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import QRCode from "qrcode";
-import { DeliveryInvoiceView } from "../delivery-invoice-view";
+import { DeliveryInvoiceView } from "@/app/admin/(fleet)/deliveries/[id]/delivery-invoice-view";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 
-export default async function PrintDeliveryInvoicePage({
+export default async function CustomerDeliveryInvoicePage({
   params,
-  searchParams,
 }: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ from?: string; customerId?: string; orgId?: string }>;
+  params: Promise<{ id: string; deliveryId: string }>;
 }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_SALES_READ.key);
-  const { id } = await params;
-  const { from, customerId, orgId } = await searchParams;
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_CUSTOMERS_READ.key);
+  const { id: customerId, deliveryId } = await params;
 
+  // Verify the customer exists and belongs to this tenant
+  const customer = await prisma.customer.findFirst({
+    where: { id: customerId, tenantId: actor.tenantId },
+    select: { id: true, name: true },
+  });
+
+  if (!customer) notFound();
+
+  // Fetch the delivery ensuring it belongs to this customer and tenant
   const delivery = await prisma.delivery.findFirst({
-    where: { id, tenantId: actor.tenantId },
+    where: { id: deliveryId, customerId, tenantId: actor.tenantId },
     include: {
       tenant: true,
       customer: true,
@@ -35,6 +41,18 @@ export default async function PrintDeliveryInvoicePage({
           driver: true,
           order: true,
         },
+      },
+      transactions: {
+        select: {
+          id: true,
+          type: true,
+          category: true,
+          amount: true,
+          paymentMethod: true,
+          reference: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" as const },
       },
     },
   });
@@ -56,7 +74,7 @@ export default async function PrintDeliveryInvoicePage({
   const headersList = await headers();
   const host = headersList.get("host");
   const protocol = headersList.get("x-forwarded-proto") || (host?.startsWith("localhost") ? "http" : "https");
-  const verifyUrl = host ? `${protocol}://${host}/admin/deliveries/${delivery.id}/print` : null;
+  const verifyUrl = host ? `${protocol}://${host}/admin/customers/${customerId}/invoice/${delivery.id}` : null;
 
   const qrCodeDataUrl = verifyUrl
     ? await QRCode.toDataURL(verifyUrl, { margin: 1, width: 200, color: { dark: "#111827", light: "#ffffff" } })
@@ -73,6 +91,21 @@ export default async function PrintDeliveryInvoicePage({
     createdAt: delivery.createdAt,
     litersDespatched: Number(delivery.litersDespatched),
     litersReceived: delivery.litersReceived !== null ? Number(delivery.litersReceived) : null,
+    amountPerLiter: Number(delivery.amountPerLiter),
+    totalExpectedAmount: Number(delivery.totalExpectedAmount),
+    paymentReceived: Number(delivery.paymentReceived),
+    transportCost: Number(delivery.transportCost),
+    transportRate: delivery.transportRate ? Number(delivery.transportRate) : null,
+    transportCostBorneBy: delivery.transportCostBorneBy,
+    status: delivery.status,
+    transactions: delivery.transactions.map((t) => ({
+      type: t.type,
+      category: t.category,
+      amount: Number(t.amount),
+      paymentMethod: t.paymentMethod,
+      reference: t.reference,
+      createdAt: t.createdAt.toISOString(),
+    })),
     customer: delivery.customer
       ? {
           name: delivery.customer.name,
@@ -136,16 +169,7 @@ export default async function PrintDeliveryInvoicePage({
     qrCodeDataUrl,
   };
 
-  const targetCustomerId = customerId || delivery.customerId;
-  const targetOrgId = orgId || delivery.organizationId || delivery.station?.organizationId;
-  const backHref =
-    from === "customer" && targetCustomerId
-      ? `/admin/customers/${targetCustomerId}`
-      : from === "organization" && targetOrgId
-        ? `/admin/organizations/${targetOrgId}`
-        : from === "transport" && delivery.transport?.id
-          ? `/admin/transports/${delivery.transport.id}?tab=distribution`
-          : `/admin/deliveries/${delivery.id}`;
+  const backHref = `/admin/customers/${customerId}`;
 
   return (
     <div className="space-y-6">

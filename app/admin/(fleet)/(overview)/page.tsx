@@ -2,12 +2,12 @@ import { requireTenantPage } from "@/lib/auth/page-guards"
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { parseOverviewPeriod } from "@/lib/overview-period"
 
-import { getFleetOverviewData } from "./_data/fleet-overview"
+import { getFleetOverviewData } from "../_data/fleet-overview"
 
-import { Overview } from "./_components/overview"
+import { Overview } from "../_components/overview"
 import SalesOverviewChart from "@/components/charts/sales-overview"
 import EarningReportChart from "@/components/charts/earn-report"
-import { PerformersSection } from "./_components/performers-section"
+import { PerformersSection } from "../_components/performers-section"
 
 export default async function FleetOverviewPage({
   searchParams,

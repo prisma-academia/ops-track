@@ -13,9 +13,9 @@ import {
 import { DatePickerWithRange } from "@/components/date-range-picker"
 import { AssetTank } from "@/components/asset-tank"
 import { reconcileNegativeTanks } from "@/lib/inventory/tank-balance"
-import { DashboardClient, TopStats, MonthlyData, ProductVolumeTotals } from "./dashboard-client"
-import { DashboardContentSkeleton } from "./dashboard-content-skeleton"
-import { DashboardDatePicker } from "./dashboard-date-picker"
+import { DashboardClient, TopStats, MonthlyData, ProductVolumeTotals } from "../dashboard-client"
+import { DashboardContentSkeleton } from "../dashboard-content-skeleton"
+import { DashboardDatePicker } from "../dashboard-date-picker"
 
 function calcChange(curr: number, prev: number): number {
   if (prev === 0) return curr > 0 ? 1 : 0

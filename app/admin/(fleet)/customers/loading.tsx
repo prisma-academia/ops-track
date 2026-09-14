@@ -2,22 +2,21 @@ import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { TableSkeleton } from "@/components/table-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function TransportersLoading() {
+export default function CustomersLoading() {
   return (
     <div className="space-y-6">
       <DataTableToolbar
-        title="Transporters"
-        description="Manage third-party transport companies and haulage partners."
+        title="Customers"
+        description="B2B and corporate client accounts."
         action={<Skeleton className="h-9 w-28 rounded-md" />}
       />
       <TableSkeleton
         headers={[
-          "Transporter Name",
-          "Contact Person",
+          "Customer Name",
+          "Company",
           "Phone",
           "Email",
-          "Trucks",
-          "Active Trips",
+          "Active Orders",
           "Status",
         ]}
         rows={8}

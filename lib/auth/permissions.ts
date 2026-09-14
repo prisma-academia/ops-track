@@ -23,6 +23,7 @@ export const PERMISSIONS = {
   TENANT_STATIONS_WRITE: { key: "tenant.stations:write", module: "tenant.stations", description: "Manage stations, tanks & pricing" },
   TENANT_WAYBILLS_READ: { key: "tenant.waybills:read", module: "tenant.waybills", description: "View waybills" },
   TENANT_WAYBILLS_WRITE: { key: "tenant.waybills:write", module: "tenant.waybills", description: "Manage waybills" },
+  TENANT_WAYBILL_DIPPINGS_WRITE: { key: "tenant.waybill-dippings:write", module: "tenant.waybills", description: "Edit or delete waybill dippings" },
   TENANT_SHIFTS_READ: { key: "tenant.shifts:read", module: "tenant.shifts", description: "View shifts" },
   TENANT_SHIFTS_WRITE: { key: "tenant.shifts:write", module: "tenant.shifts", description: "Manage shifts" },
   TENANT_DIPPINGS_READ: { key: "tenant.dippings:read", module: "tenant.dippings", description: "View dippings" },

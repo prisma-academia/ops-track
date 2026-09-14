@@ -59,12 +59,21 @@ export async function apiPatch<T>(
   return (await res.json()) as ApiResponse<T>;
 }
 
-export async function apiDelete<T>(url: string): Promise<ApiResponse<T>> {
+export async function apiDelete<T>(
+  url: string,
+  body?: unknown,
+  init?: { headers?: Record<string, string> }
+): Promise<ApiResponse<T>> {
   const token = await ensureCsrf();
   const res = await fetch(url, {
     method: "DELETE",
     credentials: "include",
-    headers: { [CSRF_HEADER]: token },
+    headers: {
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      [CSRF_HEADER]: token,
+      ...init?.headers,
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   return (await res.json()) as ApiResponse<T>;
 }

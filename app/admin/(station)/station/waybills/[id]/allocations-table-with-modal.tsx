@@ -611,7 +611,7 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
   );
 }
 
-type Allocation = {
+export type Allocation = {
   id: string;
   stationId: string;
   productType: string;

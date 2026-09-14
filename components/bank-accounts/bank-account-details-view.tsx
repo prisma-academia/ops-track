@@ -1,8 +1,8 @@
 "use client";
 
-import * as React from "react";
-import { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
   ArrowLeft,
@@ -10,10 +10,24 @@ import {
   ArrowDownLeft,
   CheckCircle2,
   XCircle,
+  Trash2,
+  Building2,
 } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { apiDelete } from "@/lib/client/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   DataTable,
   DataTableColumnHeader,
@@ -22,6 +36,7 @@ import {
   type DataTableFilterField,
 } from "@/components/tables";
 import { BankAccountFormModal } from "./bank-account-form-modal";
+import { AssignStationsModal } from "./assign-stations-modal";
 
 type TransactionRow = {
   id: string;
@@ -44,6 +59,10 @@ type BankAccountDetails = {
     bankName: string;
     scope: "STATION" | "FLEET";
     isActive: boolean;
+    stationAssignments?: {
+      stationId: string;
+      station: { id: string; name: string; code: string };
+    }[];
     createdAt: string;
     updatedAt: string;
   };
@@ -192,10 +211,28 @@ export function BankAccountDetailsView({
   initialDetails: BankAccountDetails;
   backUrl: string;
 }) {
+  const router = useRouter();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const { account, summary, transactions } = initialDetails;
 
-  const insightStats = React.useMemo(
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await apiDelete(`/api/tenant/bank-accounts/${account.id}`);
+      if (res.error) throw new Error(res.error.message);
+      toast.success("Bank account deleted");
+      router.push(backUrl);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete account");
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+    }
+  };
+
+  const insightStats = useMemo(
     () =>
       buildPctStats([
         {
@@ -209,38 +246,30 @@ export function BankAccountDetailsView({
           key: "debited",
           label: "Total Debited",
           value: summary.totalDebited,
-          color: "#f43f5e",
+          color: "#ef4444",
           format: formatMoney,
         },
         {
-          key: "net",
+          key: "netBalance",
           label: "Net Balance",
           value: summary.netBalance,
-          color: "#4f46e5",
+          color: summary.netBalance >= 0 ? "#10b981" : "#ef4444",
           format: formatMoney,
-        },
-        {
-          key: "activity",
-          label: "Transactions",
-          value: summary.transactionCount,
-          color: "#64748b",
         },
       ]),
     [summary]
   );
 
-  const filterFields = React.useMemo((): DataTableFilterField<TransactionRow>[] => {
-    const types = Array.from(new Set(transactions.map((t) => t.type)));
-    const categories = Array.from(new Set(transactions.map((t) => t.category)));
-
+  const filterFields: DataTableFilterField<TransactionRow>[] = useMemo(() => {
+    const categories = Array.from(new Set(transactions.map((t) => t.category).filter(Boolean)));
     return [
       {
         id: "type",
         label: "Type",
-        options: types.map((type) => ({
-          label: type === "CREDIT" ? "Credit" : "Debit",
-          value: type,
-        })),
+        options: [
+          { label: "Credit", value: "CREDIT" },
+          { label: "Debit", value: "DEBIT" },
+        ],
       },
       {
         id: "category",
@@ -281,10 +310,42 @@ export function BankAccountDetailsView({
             <p className="text-sm text-muted-foreground">
               {account.accountName} • <span className="font-mono">{account.accountNumber}</span>
             </p>
+            {account.scope === "STATION" && (
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Building2 className="size-3.5 text-muted-foreground" />
+                <span>
+                  {account.stationAssignments && account.stationAssignments.length > 0
+                    ? `${account.stationAssignments.length} Assigned Station${account.stationAssignments.length === 1 ? "" : "s"} (${account.stationAssignments.map((a) => a.station?.name).filter(Boolean).join(", ")})`
+                    : "0 Stations Assigned"}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
-        <Button onClick={() => setIsEditModalOpen(true)}>Edit Details</Button>
+        <div className="flex items-center gap-2">
+          {account.scope === "STATION" && (
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => setIsAssignModalOpen(true)}
+            >
+              <Building2 className="size-4" />
+              Assign Stations
+            </Button>
+          )}
+          <Button onClick={() => setIsEditModalOpen(true)}>Edit Details</Button>
+          {transactions.length === 0 && (
+            <Button
+              variant="outline"
+              className="text-destructive hover:bg-destructive/10 border-destructive/20 gap-1.5"
+              onClick={() => setIsDeleteDialogOpen(true)}
+            >
+              <Trash2 className="size-4" />
+              Delete Account
+            </Button>
+          )}
+        </div>
       </div>
 
       <TableInsightCards stats={insightStats} breakdownTitle="Cashflow mix" />
@@ -315,7 +376,42 @@ export function BankAccountDetailsView({
           isActive: account.isActive,
         }}
         fixedScope={account.scope}
+        hasTransactions={transactions.length > 0}
       />
+
+      {account.scope === "STATION" && (
+        <AssignStationsModal
+          accountId={account.id}
+          accountLabel={`${account.bankName} · ${account.accountNumber}`}
+          isOpen={isAssignModalOpen}
+          onClose={() => setIsAssignModalOpen(false)}
+          onSuccess={() => {
+            window.location.reload();
+          }}
+          initiallyAssignedIds={(account.stationAssignments ?? []).map((a) => a.stationId)}
+        />
+      )}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Bank Account</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this bank account ({account.bankName} - {account.accountNumber})? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

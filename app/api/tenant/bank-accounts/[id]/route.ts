@@ -52,27 +52,59 @@ export async function PATCH(
       throw new AuthError(403, "Forbidden.");
     }
 
-    if (body.accountNumber || body.bankName) {
+    if (body.accountNumber && body.accountNumber.trim() !== existingAccount.accountNumber) {
+      // Check if account has any existing transactions
+      const [txCount, salesPaymentCount, salesLogCount, expenseCount] = await Promise.all([
+        prisma.transaction.count({ where: { bankAccountId: id } }),
+        prisma.salesPayment.count({ where: { bankAccountId: id } }),
+        prisma.salesLog.count({
+          where: {
+            OR: [
+              { posBankAccountId: id },
+              { transferBankAccountId: id },
+            ],
+          },
+        }),
+        prisma.expense.count({ where: { bankAccountId: id } }),
+      ]);
+
+      const totalActivity = txCount + salesPaymentCount + salesLogCount + expenseCount;
+      if (totalActivity > 0) {
+        throw new DomainError(
+          400,
+          "account_has_transactions",
+          "Cannot change the account number of a bank account that has existing transaction history."
+        );
+      }
+
+      const cleanAccountNumber = body.accountNumber.trim();
+
       const duplicate = await prisma.bankAccount.findFirst({
         where: {
           tenantId: actor.tenantId,
-          accountNumber: body.accountNumber ?? existingAccount.accountNumber,
-          bankName: body.bankName ?? existingAccount.bankName,
+          accountNumber: { equals: cleanAccountNumber, mode: "insensitive" },
+          scope: existingAccount.scope,
           id: { not: id },
         },
       });
 
       if (duplicate) {
-        throw new DomainError(409, "account_exists", "This account number already exists for this bank in your tenant.");
+        throw new DomainError(
+          409,
+          "account_exists",
+          `Account number ${cleanAccountNumber} already exists in ${existingAccount.scope.toLowerCase()} accounts (${duplicate.bankName} - ${duplicate.accountName}).`
+        );
       }
     }
 
     const bankAccount = await prisma.bankAccount.update({
       where: { id },
       data: {
-        ...(body.accountName && { accountName: body.accountName }),
-        ...(body.accountNumber && { accountNumber: body.accountNumber }),
-        ...(body.bankName && { bankName: body.bankName }),
+        ...(body.accountName && { accountName: body.accountName.trim() }),
+        ...(body.accountNumber && body.accountNumber.trim() !== existingAccount.accountNumber && {
+          accountNumber: body.accountNumber.trim(),
+        }),
+        ...(body.bankName && { bankName: body.bankName.trim() }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
       },
     });
@@ -119,8 +151,37 @@ export async function DELETE(
       throw new AuthError(403, "Forbidden.");
     }
 
-    await prisma.bankAccount.delete({
-      where: { id },
+    // Check if account has any financial transactions or activity
+    const [txCount, salesPaymentCount, salesLogCount, expenseCount] = await Promise.all([
+      prisma.transaction.count({ where: { bankAccountId: id } }),
+      prisma.salesPayment.count({ where: { bankAccountId: id } }),
+      prisma.salesLog.count({
+        where: {
+          OR: [
+            { posBankAccountId: id },
+            { transferBankAccountId: id },
+          ],
+        },
+      }),
+      prisma.expense.count({ where: { bankAccountId: id } }),
+    ]);
+
+    const totalActivity = txCount + salesPaymentCount + salesLogCount + expenseCount;
+    if (totalActivity > 0) {
+      throw new DomainError(
+        400,
+        "account_has_transactions",
+        "Cannot delete a bank account that has existing transactions or sales records. You can deactivate it instead."
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.stationBankAccount.deleteMany({
+        where: { bankAccountId: id },
+      });
+      await tx.bankAccount.delete({
+        where: { id },
+      });
     });
 
     await audit({

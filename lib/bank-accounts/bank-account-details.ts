@@ -36,6 +36,15 @@ export async function getBankAccountDetailsData({
 }) {
   const account = await prisma.bankAccount.findFirst({
     where: { id: bankAccountId, tenantId },
+    include: {
+      stationAssignments: {
+        where: { isActive: true },
+        select: {
+          stationId: true,
+          station: { select: { id: true, name: true, code: true } },
+        },
+      },
+    },
   });
 
   if (!account) {
@@ -251,6 +260,7 @@ export async function getBankAccountDetailsData({
       bankName: account.bankName,
       scope: account.scope,
       isActive: account.isActive,
+      stationAssignments: account.stationAssignments ?? [],
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),
     },

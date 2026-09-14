@@ -6,21 +6,9 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
 import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, Building2 } from "lucide-react";
 import { BankAccountFormModal } from "./bank-account-form-modal";
-import { AssignStationsModal } from "./assign-stations-modal";
-import { toast } from "sonner";
-import { apiDelete } from "@/lib/client/api";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 export type BankAccountRow = {
   id: string;
@@ -50,10 +38,6 @@ export function BankAccountsTable({
   const router = useRouter();
   const [editingAccount, setEditingAccount] = useState<BankAccountRow | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [assigningAccount, setAssigningAccount] = useState<BankAccountRow | null>(null);
-  
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const baseUrl = scopeFilter 
     ? `/api/tenant/bank-accounts?scope=${scopeFilter}` 
@@ -68,23 +52,6 @@ export function BankAccountsTable({
   useEffect(() => {
     setInitialData(initialData, initialMeta);
   }, [initialData, initialMeta, setInitialData]);
-
-  const handleDelete = async () => {
-    if (!deletingId) return;
-    setIsDeleting(true);
-    try {
-      const res = await apiDelete(`/api/tenant/bank-accounts/${deletingId}`);
-      if (res.error) throw new Error(res.error.message);
-      toast.success("Bank account deleted");
-      refresh();
-      router.refresh();
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to delete account");
-    } finally {
-      setIsDeleting(false);
-      setDeletingId(null);
-    }
-  };
 
   const columns: ColumnDef<BankAccountRow>[] = [
     {
@@ -125,38 +92,24 @@ export function BankAccountsTable({
     },
     ...(createScope === "STATION" || scopeFilter === "STATION"
       ? [{
-          id: "stations",
-          header: "Stations",
+          id: "assignedStations",
+          header: "Assigned Stations",
           cell: ({ row }: { row: { original: BankAccountRow } }) => {
-            const names = (row.original.stationAssignments ?? []).map((a) => a.station?.name).filter(Boolean);
+            const count = (row.original.stationAssignments ?? []).length;
+            if (count === 0) {
+              return (
+                <span className="text-xs text-muted-foreground italic">
+                  0 Stations
+                </span>
+              );
+            }
             return (
-              <span className="text-sm text-muted-foreground">
-                {names.length > 0 ? names.join(", ") : "Unassigned"}
-              </span>
+              <Badge variant="secondary" className="font-normal text-xs gap-1.5 py-0.5">
+                <Building2 className="size-3 text-muted-foreground" />
+                <span>{count} {count === 1 ? "Station" : "Stations"}</span>
+              </Badge>
             );
           },
-        } satisfies ColumnDef<BankAccountRow>]
-      : []),
-    ...(createScope === "STATION" || scopeFilter === "STATION"
-      ? [{
-          id: "assign",
-          header: "",
-          cell: ({ row }: { row: { original: BankAccountRow } }) => (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setAssigningAccount(row.original);
-              }}
-            >
-              <Building2 className="size-3.5" />
-              Assign
-            </Button>
-          ),
         } satisfies ColumnDef<BankAccountRow>]
       : []),
   ];
@@ -201,41 +154,6 @@ export function BankAccountsTable({
         initialData={editingAccount}
         fixedScope={createScope ?? scopeFilter}
       />
-
-      {assigningAccount && (
-        <AssignStationsModal
-          accountId={assigningAccount.id}
-          accountLabel={`${assigningAccount.bankName} · ${assigningAccount.accountNumber}`}
-          isOpen={!!assigningAccount}
-          onClose={() => setAssigningAccount(null)}
-          onSuccess={() => {
-            refresh();
-            router.refresh();
-          }}
-          initiallyAssignedIds={(assigningAccount.stationAssignments ?? []).map((a) => a.stationId)}
-        />
-      )}
-
-      <AlertDialog open={!!deletingId} onOpenChange={(open) => !open && setDeletingId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Bank Account</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this bank account? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDelete} 
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

@@ -127,25 +127,33 @@ export async function POST(request: Request) {
         ? await resolveStationBankAccountOrgId(actor, body.organizationId)
         : null;
 
+    const cleanAccountNumber = body.accountNumber.trim();
+    const cleanBankName = body.bankName.trim();
+    const cleanAccountName = body.accountName.trim();
+
     const existing = await prisma.bankAccount.findFirst({
       where: {
         tenantId: actor.tenantId,
-        accountNumber: body.accountNumber,
-        bankName: body.bankName,
+        accountNumber: { equals: cleanAccountNumber, mode: "insensitive" },
+        scope: body.scope,
       },
     });
 
     if (existing) {
-      throw new DomainError(409, "account_exists", "This account number already exists for this bank in your tenant.");
+      throw new DomainError(
+        409,
+        "account_exists",
+        `Account number ${cleanAccountNumber} already exists in ${body.scope.toLowerCase()} accounts (${existing.bankName} - ${existing.accountName}).`
+      );
     }
 
     const bankAccount = await prisma.bankAccount.create({
       data: {
         tenantId: actor.tenantId,
         scope: body.scope,
-        accountName: body.accountName,
-        accountNumber: body.accountNumber,
-        bankName: body.bankName,
+        accountName: cleanAccountName,
+        accountNumber: cleanAccountNumber,
+        bankName: cleanBankName,
         isActive: body.isActive,
         organizationId,
       },

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -25,21 +24,22 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 interface BankAccountFormModalProps {
-  tenantSlug: string;
+  tenantSlug?: string;
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  initialData?: any; // The bank account to edit
+  initialData?: (Partial<FormValues> & { id?: string }) | null;
   fixedScope?: "STATION" | "FLEET";
+  hasTransactions?: boolean;
 }
 
 export function BankAccountFormModal({
-  tenantSlug,
   isOpen,
   onClose,
   onSuccess,
   initialData,
   fixedScope,
+  hasTransactions = false,
 }: BankAccountFormModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -54,11 +54,26 @@ export function BankAccountFormModal({
     },
   });
 
+  useEffect(() => {
+    if (isOpen) {
+      reset({
+        scope: initialData?.scope || fixedScope || "STATION",
+        accountName: initialData?.accountName || "",
+        accountNumber: initialData?.accountNumber || "",
+        bankName: initialData?.bankName || "",
+        isActive: initialData?.isActive ?? true,
+      });
+    }
+  }, [isOpen, initialData, fixedScope, reset]);
+
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
     try {
       if (initialData) {
-        const res = await apiPatch(`/api/tenant/bank-accounts/${initialData.id}`, data);
+        const payload = hasTransactions
+          ? { ...data, accountNumber: initialData.accountNumber }
+          : data;
+        const res = await apiPatch(`/api/tenant/bank-accounts/${initialData.id}`, payload);
         if (res.error) throw new Error(res.error.message);
       } else {
         const res = await apiPost(`/api/tenant/bank-accounts`, data);
@@ -68,8 +83,8 @@ export function BankAccountFormModal({
       toast.success(initialData ? "Bank account updated" : "Bank account created");
       onSuccess();
       onClose();
-    } catch (e: any) {
-      toast.error(e.message || "An error occurred");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "An error occurred");
     } finally {
       setIsSubmitting(false);
     }
@@ -119,9 +134,27 @@ export function BankAccountFormModal({
           </div>
 
           <div className="space-y-2">
-            <Label>Account Number</Label>
-            <Input {...register("accountNumber")} placeholder="e.g. 1012345678" />
-            {errors.accountNumber && <p className="text-sm text-red-500">{errors.accountNumber.message}</p>}
+            <div className="flex items-center justify-between">
+              <Label>Account Number</Label>
+              {hasTransactions && (
+                <span className="text-[11px] text-amber-600 dark:text-amber-500 font-medium">
+                  Locked (has transactions)
+                </span>
+              )}
+            </div>
+            <Input
+              {...register("accountNumber")}
+              placeholder="e.g. 1012345678"
+              disabled={hasTransactions}
+              className={hasTransactions ? "bg-muted cursor-not-allowed opacity-80" : ""}
+            />
+            {hasTransactions ? (
+              <p className="text-[11px] text-muted-foreground">
+                Account number cannot be changed because this account has transaction records.
+              </p>
+            ) : errors.accountNumber ? (
+              <p className="text-sm text-red-500">{errors.accountNumber.message}</p>
+            ) : null}
           </div>
 
           <div className="flex items-center space-x-2 pt-2">

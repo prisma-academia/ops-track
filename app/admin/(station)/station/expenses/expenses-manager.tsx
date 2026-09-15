@@ -18,6 +18,7 @@ import { formatHumanReadableDate } from "@/lib/utils";
 import { CheckCircle2, Eye, User } from "lucide-react";
 import Image from "next/image";
 import { usePaginatedQuery } from "@/hooks/use-paginated-query";
+import { FilePreviewButton } from "@/components/file-viewer-modal";
 
 interface ExpenseUser {
   id: string;
@@ -368,16 +369,16 @@ export function ExpensesManager({
               {currentSelectedExpense.receiptUrl && (
                 <div className="space-y-1.5">
                   <span className="text-xs text-muted-foreground block font-medium">Receipt Document</span>
-                  <div className="border border-border/40 rounded-xl overflow-hidden p-3 bg-muted/10 flex items-center justify-between">
-                    <span className="text-xs truncate max-w-xs">{currentSelectedExpense.receiptUrl}</span>
-                    <a
-                      href={currentSelectedExpense.receiptUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline font-semibold"
-                    >
-                      View Receipt
-                    </a>
+                  <div className="border border-border/40 rounded-xl overflow-hidden p-3 bg-muted/10 flex items-center justify-between gap-3">
+                    <span className="text-xs truncate max-w-xs text-muted-foreground">{currentSelectedExpense.receiptUrl}</span>
+                    <FilePreviewButton
+                      fileUrl={currentSelectedExpense.receiptUrl}
+                      fileName={`Expense Receipt - ${currentSelectedExpense.category || "Expense"}`}
+                      label="Preview Receipt"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs font-medium shrink-0"
+                    />
                   </div>
                 </div>
               )}

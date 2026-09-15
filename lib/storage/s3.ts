@@ -25,11 +25,20 @@ const CONTENT_TYPE_EXT: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/webp": "webp",
+  "application/pdf": "pdf",
 };
 
 export type PresignKind = "logo" | "receipt";
 
 export function isAllowedImageType(contentType: string): boolean {
+  return (
+    contentType === "image/png" ||
+    contentType === "image/jpeg" ||
+    contentType === "image/webp"
+  );
+}
+
+export function isAllowedReceiptType(contentType: string): boolean {
   return contentType in CONTENT_TYPE_EXT;
 }
 

@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Image as ImageIcon,
+  FileText,
   Upload,
   Loader2,
   User,
@@ -536,22 +537,65 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
 
           return (
             <div className="flex items-center gap-2">
-              <span className="flex size-7 shrink-0 items-center justify-center rounded-md border bg-muted/60 text-muted-foreground">
-                {isPdf ? (
-                  <FileText className="size-3.5 text-rose-500" />
-                ) : (
-                  <ImageIcon className="size-3.5 text-primary" />
-                )}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1.5"
-                onClick={() => handleOpenReviewModal(row.original)}
-              >
-                <Eye className="size-3.5" />
-                Preview
-              </Button>
+              {row.original.receiptUrl ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  disabled={isUploading}
+                  onClick={() =>
+                    handleOpenReceipt(
+                      row.original.receiptUrl!,
+                      row.original.method === "POS" ? "POS Receipt" : "Transfer Receipt"
+                    )
+                  }
+                >
+                  {row.original.receiptUrl.toLowerCase().includes(".pdf") ? (
+                    <FileText className="mr-1.5 size-3.5 text-primary" />
+                  ) : (
+                    <ImageIcon className="mr-1.5 size-3.5" />
+                  )}
+                  View
+                </Button>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
+              <label className={cn("inline-flex", (isUploading || anyUploading) && "pointer-events-none")}>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf,.pdf"
+                  className="hidden"
+                  disabled={isUploading || anyUploading}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    await handleUploadReceipt(row.original.paymentId, row.original.sourceId, file);
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8"
+                  type="button"
+                  disabled={isUploading || anyUploading}
+                  asChild
+                >
+                  <span>
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-1.5 size-3.5" />
+                        Upload
+                      </>
+                    )}
+                  </span>
+                </Button>
+              </label>
             </div>
           );
         },

@@ -21,7 +21,11 @@ import {
   Loader2,
   ArrowLeft,
   ChevronsUpDown,
+  FileText,
+  ExternalLink,
+  Eye,
 } from "lucide-react";
+import { FilePreviewTrigger } from "@/components/file-viewer-modal";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { apiPost } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
@@ -79,7 +83,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
     bankAccountId: "",
   });
 
-  const maxSizeMB = 2;
+  const maxSizeMB = 5;
   const maxSize = maxSizeMB * 1024 * 1024;
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -90,7 +94,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
     { files, isDragging, errors: uploadErrors },
     { handleDragEnter, handleDragLeave, handleDragOver, handleDrop, openFileDialog, removeFile, getInputProps },
   ] = useFileUpload({
-    accept: "image/svg+xml,image/png,image/jpeg,image/jpg,image/webp",
+    accept: "image/png,image/jpeg,image/jpg,image/webp,application/pdf,.pdf",
     maxSize,
     onFilesAdded: async (addedFiles) => {
       const file = addedFiles[0]?.file;
@@ -98,7 +102,12 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
       setUploadError(null);
       setUploading(true);
       try {
-        const res = await apiPost<any>("/api/tenant/fleet/payments/upload", { contentType: file.type });
+        const fileType =
+          file.type ||
+          (file.name.toLowerCase().endsWith(".pdf")
+            ? "application/pdf"
+            : "image/png");
+        const res = await apiPost<any>("/api/tenant/fleet/payments/upload", { contentType: fileType });
         if (res.error || !res.data) {
           setUploadError(res.error?.message ?? "Upload could not be started.");
           return;
@@ -122,7 +131,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
         } else {
           const put = await fetch(res.data.url, {
             method: "PUT",
-            headers: { "Content-Type": file.type },
+            headers: { "Content-Type": fileType },
             body: file,
           });
           if (!put.ok) {
@@ -141,7 +150,15 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
   });
 
   const previewUrl = formData.receiptUrl || (files[0]?.preview || null);
-  const displayFileName = files[0]?.file.name || "Payment Receipt";
+  const displayFileName =
+    (files[0]?.file instanceof File ? files[0].file.name : null) ||
+    "Payment Receipt";
+  const isPdf = Boolean(
+    (files[0]?.file instanceof File &&
+      (files[0].file.type === "application/pdf" ||
+        files[0].file.name.toLowerCase().endsWith(".pdf"))) ||
+      (previewUrl && previewUrl.toLowerCase().includes(".pdf"))
+  );
 
   const selectedSaleDetails = formData.saleId && formData.saleId !== "none"
     ? metadata?.sales?.find((s: any) => s.id === formData.saleId)
@@ -569,28 +586,61 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
                    <p className="text-sm font-medium">Uploading receipt...</p>
                 </div>
               ) : previewUrl ? (
-                <div className="absolute inset-0 flex items-center justify-center p-4 bg-background">
-                  <img alt={displayFileName} className="mx-auto max-h-full rounded object-contain" src={previewUrl} />
-                </div>
+                <FilePreviewTrigger
+                  fileUrl={previewUrl}
+                  fileName={displayFileName}
+                  className="absolute inset-0 flex items-center justify-center p-4 bg-background cursor-pointer group"
+                >
+                  {isPdf ? (
+                    <div className="flex flex-col items-center justify-center text-center p-2">
+                      <div className="mb-2 flex size-14 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
+                        <FileText className="size-8" />
+                      </div>
+                      <p className="text-sm font-medium text-foreground max-w-[240px] truncate mb-1">
+                        {displayFileName}
+                      </p>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground font-medium mb-2">
+                        PDF Document
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-primary group-hover:underline">
+                        <Eye className="size-3" /> Preview Document
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="relative flex size-full items-center justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        alt={displayFileName}
+                        className="mx-auto max-h-full rounded object-contain transition-transform duration-200 group-hover:scale-102"
+                        src={previewUrl}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100 rounded-lg">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-background/90 px-3 py-1.5 text-xs font-semibold shadow-md backdrop-blur-sm">
+                          <Eye className="size-3.5" /> Preview Receipt
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </FilePreviewTrigger>
               ) : (
                 <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
                   <div aria-hidden="true" className="mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border bg-background">
-                    <ImageIcon className="size-4 opacity-60" />
+                    <UploadIcon className="size-4 opacity-60" />
                   </div>
                   <p className="mb-1.5 font-medium text-sm">Drop your receipt here</p>
-                  <p className="text-muted-foreground text-xs">SVG, PNG, JPG or WEBP (max. {maxSizeMB}MB)</p>
+                  <p className="text-muted-foreground text-xs">PDF, PNG, JPG or WEBP (max. {maxSizeMB}MB)</p>
                   <Button className="mt-4" onClick={openFileDialog} variant="outline" type="button">
-                    <UploadIcon aria-hidden="true" className="-ms-1 size-4 opacity-60" /> Select image
+                    <UploadIcon aria-hidden="true" className="-ms-1 size-4 opacity-60" /> Select file
                   </Button>
                 </div>
               )}
             </div>
 
             {previewUrl && !uploading && (
-              <div className="absolute top-4 right-4">
+              <div className="absolute top-4 right-4 z-50">
                 <button
-                  aria-label="Remove image"
-                  className="z-50 flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white outline-none transition-[color,box-shadow] hover:bg-black/80 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  aria-label="Remove receipt"
+                  className="flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white outline-none transition-[color,box-shadow] hover:bg-black/80 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                   onClick={() => {
                      removeFile(files[0]?.id);
                      setFormData((prev) => ({ ...prev, receiptUrl: "" }));

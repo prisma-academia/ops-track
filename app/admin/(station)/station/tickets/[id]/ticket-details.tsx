@@ -19,6 +19,7 @@ import {
   Smartphone,
   TrendingUp,
   XCircle,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -509,9 +510,17 @@ export function TicketDetails({
                 <button
                   type="button"
                   onClick={() => setViewerUrl(ticket.expense.receiptUrl)}
-                  className="relative mt-4 h-36 w-full overflow-hidden rounded-md border text-left"
+                  className="relative mt-4 h-36 w-full overflow-hidden rounded-md border text-left flex items-center justify-center bg-muted/20 hover:bg-muted/40 transition-colors"
                 >
-                  <Image src={ticket.expense.receiptUrl} alt="Receipt" fill className="object-contain bg-muted/30" />
+                  {ticket.expense.receiptUrl.toLowerCase().includes(".pdf") ? (
+                    <div className="flex flex-col items-center justify-center p-4 text-center">
+                      <FileText className="size-10 text-primary mb-2" />
+                      <span className="text-xs font-medium text-foreground">PDF Document</span>
+                      <span className="text-[11px] text-muted-foreground">Click to preview document</span>
+                    </div>
+                  ) : (
+                    <Image src={ticket.expense.receiptUrl} alt="Receipt" fill className="object-contain bg-muted/30" />
+                  )}
                 </button>
               )}
             </SectionCard>
@@ -520,16 +529,26 @@ export function TicketDetails({
           {evidence.length > 0 && (
             <SectionCard title="Evidence">
               <div className="flex flex-wrap gap-2">
-                {evidence.map((url) => (
-                  <button
-                    key={url}
-                    type="button"
-                    onClick={() => setViewerUrl(url)}
-                    className="relative h-20 w-20 overflow-hidden rounded-md border"
-                  >
-                    <Image src={url} alt="Evidence" fill className="object-cover" />
-                  </button>
-                ))}
+                {evidence.map((url) => {
+                  const isPdf = url.toLowerCase().includes(".pdf");
+                  return (
+                    <button
+                      key={url}
+                      type="button"
+                      onClick={() => setViewerUrl(url)}
+                      className="relative h-20 w-20 overflow-hidden rounded-md border flex items-center justify-center bg-muted/20 hover:bg-muted/40 transition-colors"
+                    >
+                      {isPdf ? (
+                        <div className="flex flex-col items-center justify-center p-1 text-center">
+                          <FileText className="size-6 text-primary mb-1" />
+                          <span className="text-[10px] font-medium leading-none">PDF</span>
+                        </div>
+                      ) : (
+                        <Image src={url} alt="Evidence" fill className="object-cover" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </SectionCard>
           )}

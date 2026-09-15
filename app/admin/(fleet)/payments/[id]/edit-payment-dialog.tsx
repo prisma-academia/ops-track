@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Upload, X } from "lucide-react";
+import { Loader2, Upload, X, FileText, ExternalLink, Eye } from "lucide-react";
+import { FilePreviewTrigger } from "@/components/file-viewer-modal";
 import { apiPatch, apiPost } from "@/lib/client/api";
 import {
   Dialog,
@@ -43,9 +44,17 @@ export function EditPaymentDialog({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error("Receipt must be a PNG, JPEG, or WebP image.");
+    const fileType =
+      file.type ||
+      (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "");
+    const allowedTypes = [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "application/pdf",
+    ];
+    if (!allowedTypes.includes(fileType)) {
+      toast.error("Receipt must be a PNG, JPEG, WebP image, or PDF document.");
       return;
     }
 
@@ -61,7 +70,7 @@ export function EditPaymentDialog({
         key?: string;
         publicUrl?: string;
       }>("/api/tenant/fleet/payments/upload", {
-        contentType: file.type,
+        contentType: fileType,
       });
 
       if (uploadRes.error) {
@@ -93,7 +102,7 @@ export function EditPaymentDialog({
         // Upload to S3
         await fetch(data.url!, {
           method: "PUT",
-          headers: { "Content-Type": file.type },
+          headers: { "Content-Type": fileType },
           body: file,
         });
         setReceiptUrl(data.publicUrl!);
@@ -165,16 +174,41 @@ export function EditPaymentDialog({
           <div className="space-y-2">
             <Label>Receipt / Proof of Payment</Label>
             {receiptPreview ? (
-              <div className="relative rounded-lg border border-border bg-muted/50 p-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={receiptPreview}
-                  alt="Receipt preview"
-                  className="max-h-40 w-full object-contain rounded-md"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = "none";
-                  }}
-                />
+              <div className="relative rounded-lg border border-border bg-muted/50 p-3">
+                <FilePreviewTrigger
+                  fileUrl={receiptPreview}
+                  fileName="Payment Receipt"
+                  className="w-full flex items-center justify-center cursor-pointer group"
+                >
+                  {receiptPreview.toLowerCase().includes(".pdf") ? (
+                    <div className="flex flex-col items-center justify-center py-4 text-center">
+                      <div className="mb-2 flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
+                        <FileText className="size-6" />
+                      </div>
+                      <span className="text-xs font-medium text-foreground mb-1">PDF Document</span>
+                      <span className="text-xs text-primary group-hover:underline inline-flex items-center gap-1">
+                        <Eye className="size-3" /> Preview Document
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="relative flex max-h-40 w-full items-center justify-center overflow-hidden rounded-md">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={receiptPreview}
+                        alt="Receipt preview"
+                        className="max-h-40 w-full object-contain rounded-md transition-transform duration-200 group-hover:scale-102"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100 rounded-md">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-background/90 px-3 py-1.5 text-xs font-semibold shadow-md backdrop-blur-sm">
+                          <Eye className="size-3.5" /> Preview
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </FilePreviewTrigger>
                 <Button
                   variant="destructive"
                   size="icon"
@@ -197,7 +231,7 @@ export function EditPaymentDialog({
                 </span>
                 <input
                   type="file"
-                  accept="image/png,image/jpeg,image/webp"
+                  accept="image/png,image/jpeg,image/webp,application/pdf,.pdf"
                   className="hidden"
                   onChange={handleFileUpload}
                   disabled={uploading}

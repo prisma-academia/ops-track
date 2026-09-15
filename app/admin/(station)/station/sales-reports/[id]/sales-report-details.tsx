@@ -15,6 +15,12 @@ import {
   CircleDollarSign,
   Wallet,
   Scale,
+  Eye,
+  Trash2,
+  Maximize2,
+  FileText,
+  X,
+  ExternalLink,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -33,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -286,6 +293,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
   const [isFileViewerOpen, setIsFileViewerOpen] = React.useState(false);
   const [detailsRow, setDetailsRow] = React.useState<PaymentLine | null>(null);
   const [uploadingPaymentId, setUploadingPaymentId] = React.useState<string | null>(null);
+  const [isDeletingReceipt, setIsDeletingReceipt] = React.useState(false);
 
   const flowParent = report.isDebtRepayment && report.parentSale ? report.parentSale : report;
   const flowChildren = React.useMemo(() => {
@@ -339,7 +347,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     setReviewLogId(line.sourceId);
     setReviewLine(line);
     setReviewStatus(line.status === "REJECTED" ? "REJECTED" : "APPROVED");
-    setReason("");
+    setReason(line.reason || "");
     setApiError(null);
     setReviewModalOpen(true);
   };
@@ -348,8 +356,8 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     e.preventDefault();
     if (!reviewTargetId) return;
 
-    if (reviewStatus === "REJECTED" && !reason.trim()) {
-      setApiError("Rejection reason is required.");
+    if (reason.trim().length < 5) {
+      setApiError("Remarks are required (minimum 5 characters).");
       return;
     }
 
@@ -361,7 +369,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
       `/api/tenant/stations/${report.stationId}/sales-logs/${logId}/payments/${reviewTargetId}`,
       {
         status: reviewStatus,
-        reason: reason.trim() || null,
+        reason: reason.trim(),
       }
     );
 
@@ -418,6 +426,10 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
       );
       if (res.error) throw new Error(res.error.message);
 
+      if (reviewLine && reviewLine.paymentId === paymentId) {
+        setReviewLine((prev) => (prev ? { ...prev, receiptUrl: publicUrl } : null));
+      }
+
       toast.success("Receipt uploaded successfully.");
       router.refresh();
     } catch (err) {
@@ -425,6 +437,29 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
       toast.error(msg);
     } finally {
       setUploadingPaymentId(null);
+    }
+  };
+
+  const handleDeleteReceipt = async (paymentId: string, salesLogId: string) => {
+    setIsDeletingReceipt(true);
+    try {
+      const res = await apiPatch(
+        `/api/tenant/stations/${report.stationId}/sales-logs/${salesLogId}/payments/${paymentId}`,
+        { receiptUrl: null }
+      );
+      if (res.error) throw new Error(res.error.message);
+
+      if (reviewLine && reviewLine.paymentId === paymentId) {
+        setReviewLine((prev) => (prev ? { ...prev, receiptUrl: null } : null));
+      }
+
+      toast.success("Receipt removed successfully.");
+      router.refresh();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to remove receipt.";
+      toast.error(msg);
+    } finally {
+      setIsDeletingReceipt(false);
     }
   };
 
@@ -492,66 +527,31 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
         header: ({ column }) => <DataTableColumnHeader column={column} title="Receipt" />,
         meta: { label: "Receipt" },
         cell: ({ row }) => {
-          const isUploading = uploadingPaymentId === row.original.paymentId;
-          const anyUploading = uploadingPaymentId !== null;
+          const hasReceipt = Boolean(row.original.receiptUrl);
+          const isPdf = row.original.receiptUrl?.toLowerCase().includes(".pdf");
+
+          if (!hasReceipt) {
+            return <span className="text-xs text-muted-foreground">—</span>;
+          }
 
           return (
             <div className="flex items-center gap-2">
-              {row.original.receiptUrl ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  disabled={isUploading}
-                  onClick={() =>
-                    handleOpenReceipt(
-                      row.original.receiptUrl!,
-                      row.original.method === "POS" ? "POS Receipt" : "Transfer Receipt"
-                    )
-                  }
-                >
-                  <ImageIcon className="mr-1.5 size-3.5" />
-                  View
-                </Button>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
-              <label className={cn("inline-flex", (isUploading || anyUploading) && "pointer-events-none")}>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
-                  className="hidden"
-                  disabled={isUploading || anyUploading}
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = "";
-                    if (!file) return;
-                    await handleUploadReceipt(row.original.paymentId, row.original.sourceId, file);
-                  }}
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8"
-                  type="button"
-                  disabled={isUploading || anyUploading}
-                  asChild
-                >
-                  <span>
-                    {isUploading ? (
-                      <>
-                        <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="mr-1.5 size-3.5" />
-                        Upload
-                      </>
-                    )}
-                  </span>
-                </Button>
-              </label>
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-md border bg-muted/60 text-muted-foreground">
+                {isPdf ? (
+                  <FileText className="size-3.5 text-rose-500" />
+                ) : (
+                  <ImageIcon className="size-3.5 text-primary" />
+                )}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={() => handleOpenReviewModal(row.original)}
+              >
+                <Eye className="size-3.5" />
+                Preview
+              </Button>
             </div>
           );
         },
@@ -578,7 +578,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
         ),
       },
     ],
-    [uploadingPaymentId]
+    []
   );
 
   const isDebt = metrics.outstanding > 0;
@@ -887,68 +887,292 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
       />
 
       <Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Review this payment</DialogTitle>
-            <DialogDescription>
-              {reviewLine
-                ? `This decision applies only to ${reviewLine.label} of ${fmtMoney(reviewLine.amount)} (${reviewLine.bankName} ${reviewLine.accountNumber}). Other POS or transfer lines on this sale are reviewed separately.`
-                : "Approve or reject this POS or transfer payment. Other payments on the sale are reviewed separately."}
-            </DialogDescription>
+        <DialogContent
+          showCloseButton={false}
+          className="max-h-[92vh] overflow-y-auto sm:max-w-4xl lg:max-w-5xl"
+        >
+          <DialogHeader className="gap-0">
+            <div className="flex items-center justify-between pb-2 border-b">
+              <DialogTitle className="text-base font-semibold">Payment Review & Receipt</DialogTitle>
+              <DialogClose asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-8 rounded-full border text-muted-foreground hover:text-foreground hover:bg-muted"
+                >
+                  <X className="size-4" />
+                  <span className="sr-only">Close</span>
+                </Button>
+              </DialogClose>
+            </div>
           </DialogHeader>
-          <form onSubmit={handleReviewReport} className="space-y-5 py-4">
-            <div className="space-y-2.5">
-              <Label className="text-sm font-semibold">Action</Label>
-              <Select value={reviewStatus} onValueChange={(val) => setReviewStatus(val as "APPROVED" | "REJECTED")}>
-                <SelectTrigger className="h-10 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="APPROVED">Approve this payment</SelectItem>
-                  <SelectItem value="REJECTED">Reject this payment</SelectItem>
-                </SelectContent>
-              </Select>
+
+          <div className="mt-3 grid grid-cols-1 gap-6 md:grid-cols-2">
+            {/* Left Column: Receipt Preview & Fixed Footer Actions */}
+            <div className="flex flex-col h-full rounded-xl border border-border/80 bg-muted/10 overflow-hidden">
+              {/* Header Bar */}
+              <div className="flex items-center justify-between px-3.5 py-2 border-b bg-muted/20">
+                <span className="text-xs font-semibold text-foreground">Receipt Document</span>
+                {reviewLine?.receiptUrl && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {reviewLine.receiptUrl.toLowerCase().includes(".pdf")
+                      ? "PDF Document"
+                      : "Image Receipt"}
+                  </span>
+                )}
+              </div>
+
+              {/* Preview Center Box */}
+              <div className="relative flex-1 flex flex-col items-center justify-center p-3 min-h-[280px] sm:min-h-[320px] bg-background/50 overflow-hidden">
+                {reviewLine?.receiptUrl ? (
+                  reviewLine.receiptUrl.toLowerCase().includes(".pdf") ? (
+                    <div className="flex flex-col items-center justify-center p-4 text-center">
+                      <div className="mb-2 flex size-12 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600">
+                        <FileText className="size-6" />
+                      </div>
+                      <p className="text-xs font-medium text-foreground">PDF Receipt Attached</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Click &quot;View in another tab&quot; below to open the PDF.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="relative flex size-full items-center justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={reviewLine.receiptUrl}
+                        alt="Receipt preview"
+                        className="max-h-[300px] w-full rounded-md object-contain"
+                      />
+                    </div>
+                  )
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-4 text-center">
+                    <div className="mb-2 flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                      <ImageIcon className="size-6" />
+                    </div>
+                    <p className="text-xs font-medium text-foreground">No Receipt Attached</p>
+                    <p className="mt-0.5 max-w-[220px] text-[11px] text-muted-foreground">
+                      No document has been uploaded for this payment yet.
+                    </p>
+                  </div>
+                )}
+
+                {/* Loading Overlay */}
+                {(uploadingPaymentId === reviewLine?.paymentId || isDeletingReceipt) && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-xs">
+                    <Loader2 className="size-6 animate-spin text-primary" />
+                    <span className="mt-1.5 text-xs font-medium text-muted-foreground">
+                      {isDeletingReceipt ? "Deleting receipt..." : "Uploading receipt..."}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Fixed Footer with Action Buttons below Preview */}
+              <div className="border-t bg-card/95 px-3 py-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 flex-1">
+                  {/* Upload / Reupload */}
+                  <label
+                    className={cn(
+                      "inline-flex",
+                      (uploadingPaymentId !== null || isDeletingReceipt) && "pointer-events-none opacity-50"
+                    )}
+                  >
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+                      className="hidden"
+                      disabled={uploadingPaymentId !== null || isDeletingReceipt}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!file || !reviewLine) return;
+                        await handleUploadReceipt(reviewLine.paymentId, reviewLine.sourceId, file);
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs"
+                      type="button"
+                      disabled={uploadingPaymentId !== null || isDeletingReceipt}
+                      asChild
+                    >
+                      <span>
+                        <Upload className="size-3.5" />
+                        {reviewLine?.receiptUrl ? "Reupload" : "Upload"}
+                      </span>
+                    </Button>
+                  </label>
+
+                  {/* View in another tab */}
+                  {reviewLine?.receiptUrl && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs"
+                      type="button"
+                      disabled={uploadingPaymentId !== null || isDeletingReceipt}
+                      onClick={() => {
+                        if (reviewLine?.receiptUrl) {
+                          window.open(reviewLine.receiptUrl, "_blank", "noopener,noreferrer");
+                        }
+                      }}
+                    >
+                      <ExternalLink className="size-3.5" />
+                      View in another tab
+                    </Button>
+                  )}
+                </div>
+
+                {/* Delete button */}
+                {reviewLine?.receiptUrl && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/50"
+                    type="button"
+                    disabled={uploadingPaymentId !== null || isDeletingReceipt}
+                    onClick={() => {
+                      if (reviewLine) {
+                        handleDeleteReceipt(reviewLine.paymentId, reviewLine.sourceId);
+                      }
+                    }}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Delete
+                  </Button>
+                )}
+              </div>
             </div>
 
-            <div className="space-y-2.5">
-              <Label
-                htmlFor="review-reason"
-                className={cn("text-sm font-semibold", reviewStatus === "REJECTED" && "text-rose-600")}
-              >
-                Remarks {reviewStatus === "REJECTED" && "*"}
-              </Label>
-              <Textarea
-                id="review-reason"
-                placeholder={
-                  reviewStatus === "REJECTED"
-                    ? "Specify why this payment is rejected..."
-                    : "Add any notes or remarks..."
-                }
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="min-h-[100px] resize-none"
-              />
-            </div>
+            {/* Right Column: Compact Payment Summary & Review Form */}
+            <div className="flex flex-col space-y-4">
+              {/* Compact Summary Card */}
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Payment Summary
+                  </span>
+                  <span className="text-base font-bold tracking-tight text-foreground">
+                    {reviewLine ? fmtMoney(reviewLine.amount) : "₦0.00"}
+                  </span>
+                </div>
 
-            {apiError && <p className="text-sm font-medium text-rose-600">{apiError}</p>}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-1 border-t text-[11px]">
+                  <div>
+                    <span className="text-muted-foreground">Method: </span>
+                    <span className="font-medium text-foreground">{reviewLine?.method ?? "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Source: </span>
+                    <span className="font-medium text-foreground">
+                      {reviewLine?.sourceType === "INITIAL_SALE" ? "Initial sale" : "Debt repayment"}
+                    </span>
+                  </div>
+                  <div className="truncate" title={reviewLine?.bankName}>
+                    <span className="text-muted-foreground">Bank: </span>
+                    <span className="font-medium text-foreground">{reviewLine?.bankName ?? "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Account: </span>
+                    <span className="font-mono text-foreground">{reviewLine?.accountNumber ?? "—"}</span>
+                  </div>
+                  {reviewLine?.accountName && reviewLine.accountName !== "—" && (
+                    <div className="col-span-2 truncate" title={reviewLine.accountName}>
+                      <span className="text-muted-foreground">Account Name: </span>
+                      <span className="font-medium text-foreground">{reviewLine.accountName}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-muted-foreground">Date: </span>
+                    <span className="font-medium text-foreground">
+                      {reviewLine ? format(new Date(reviewLine.logDate), "LLL dd, y") : "—"}
+                    </span>
+                  </div>
+                  <div className="truncate" title={userName(reviewLine?.recordedBy)}>
+                    <span className="text-muted-foreground">By: </span>
+                    <span className="font-medium text-foreground">{userName(reviewLine?.recordedBy)}</span>
+                  </div>
+                </div>
+              </div>
 
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className={cn("h-11 w-full gap-2", reviewStatus === "REJECTED" && "bg-rose-600 text-white hover:bg-rose-700")}
-            >
-              {isSubmitting ? (
-                <>
-                  <SpinnerEllipsis />
-                  <span>Saving...</span>
-                </>
-              ) : reviewStatus === "APPROVED" ? (
-                "Save & Approve"
+              {/* Review Form or Legacy Notice */}
+              {reviewLine && reviewLine.paymentId === reviewLine.sourceId ? (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
+                  This payment was recorded before individual payment reviews were enabled and cannot be reviewed separately.
+                </div>
               ) : (
-                "Save & Reject"
+                <form onSubmit={handleReviewReport} className="flex flex-col space-y-3 pt-0.5">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-semibold">Review Decision</Label>
+                    <Select
+                      value={reviewStatus}
+                      onValueChange={(val) => setReviewStatus(val as "APPROVED" | "REJECTED")}
+                    >
+                      <SelectTrigger className="h-9 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="APPROVED">Approve this payment</SelectItem>
+                        <SelectItem value="REJECTED">Reject this payment</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="review-reason" className="text-sm font-semibold">
+                        Remarks <span className="text-rose-600">*</span>
+                      </Label>
+                      <span
+                        className={cn(
+                          "text-[11px]",
+                          reason.trim().length < 5
+                            ? "text-muted-foreground"
+                            : "text-emerald-600 font-medium"
+                        )}
+                      >
+                        {reason.trim().length}/5 chars min
+                      </span>
+                    </div>
+                    <Textarea
+                      id="review-reason"
+                      placeholder="Enter remarks (minimum 5 characters)..."
+                      value={reason}
+                      onChange={(e) => {
+                        setReason(e.target.value);
+                        if (apiError) setApiError(null);
+                      }}
+                      className="min-h-[85px] resize-none text-sm"
+                    />
+                  </div>
+
+                  {apiError && <p className="text-xs font-medium text-rose-600">{apiError}</p>}
+
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting || uploadingPaymentId !== null || isDeletingReceipt}
+                    className={cn(
+                      "h-10 w-full gap-2 font-medium",
+                      reviewStatus === "REJECTED" && "bg-rose-600 text-white hover:bg-rose-700"
+                    )}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <SpinnerEllipsis />
+                        <span>Saving...</span>
+                      </>
+                    ) : reviewStatus === "APPROVED" ? (
+                      "Save & Approve"
+                    ) : (
+                      "Save & Reject"
+                    )}
+                  </Button>
+                </form>
               )}
-            </Button>
-          </form>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

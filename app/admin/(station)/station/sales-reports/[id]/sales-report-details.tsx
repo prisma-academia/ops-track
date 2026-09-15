@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Image as ImageIcon,
-  FileText,
   Upload,
   Loader2,
   User,
@@ -523,83 +522,83 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
           <Badge variant={statusVariant[row.original.status]}>{row.original.status}</Badge>
         ),
       },
-      {
-        id: "receipt",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Receipt" />,
-        meta: { label: "Receipt" },
-        cell: ({ row }) => {
-          const hasReceipt = Boolean(row.original.receiptUrl);
-          const isPdf = row.original.receiptUrl?.toLowerCase().includes(".pdf");
+      // {
+      //   id: "receipt",
+      //   header: ({ column }) => <DataTableColumnHeader column={column} title="Receipt" />,
+      //   meta: { label: "Receipt" },
+      //   cell: ({ row }) => {
+      //     const hasReceipt = Boolean(row.original.receiptUrl);
+      //     const isPdf = row.original.receiptUrl?.toLowerCase().includes(".pdf");
 
-          if (!hasReceipt) {
-            return <span className="text-xs text-muted-foreground">—</span>;
-          }
+      //     if (!hasReceipt) {
+      //       return <span className="text-xs text-muted-foreground">—</span>;
+      //     }
 
-          return (
-            <div className="flex items-center gap-2">
-              {row.original.receiptUrl ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  disabled={isUploading}
-                  onClick={() =>
-                    handleOpenReceipt(
-                      row.original.receiptUrl!,
-                      row.original.method === "POS" ? "POS Receipt" : "Transfer Receipt"
-                    )
-                  }
-                >
-                  {row.original.receiptUrl.toLowerCase().includes(".pdf") ? (
-                    <FileText className="mr-1.5 size-3.5 text-primary" />
-                  ) : (
-                    <ImageIcon className="mr-1.5 size-3.5" />
-                  )}
-                  View
-                </Button>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
-              <label className={cn("inline-flex", (isUploading || anyUploading) && "pointer-events-none")}>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf,.pdf"
-                  className="hidden"
-                  disabled={isUploading || anyUploading}
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = "";
-                    if (!file) return;
-                    await handleUploadReceipt(row.original.paymentId, row.original.sourceId, file);
-                  }}
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8"
-                  type="button"
-                  disabled={isUploading || anyUploading}
-                  asChild
-                >
-                  <span>
-                    {isUploading ? (
-                      <>
-                        <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="mr-1.5 size-3.5" />
-                        Upload
-                      </>
-                    )}
-                  </span>
-                </Button>
-              </label>
-            </div>
-          );
-        },
-      },
+      //     return (
+      //       <div className="flex items-center gap-2">
+      //         {row.original.receiptUrl ? (
+      //           <Button
+      //             variant="outline"
+      //             size="sm"
+      //             className="h-8"
+      //             disabled={isUploading}
+      //             onClick={() =>
+      //               handleOpenReceipt(
+      //                 row.original.receiptUrl!,
+      //                 row.original.method === "POS" ? "POS Receipt" : "Transfer Receipt"
+      //               )
+      //             }
+      //           >
+      //             {row.original.receiptUrl.toLowerCase().includes(".pdf") ? (
+      //               <FileText className="mr-1.5 size-3.5 text-primary" />
+      //             ) : (
+      //               <ImageIcon className="mr-1.5 size-3.5" />
+      //             )}
+      //             View
+      //           </Button>
+      //         ) : (
+      //           <span className="text-muted-foreground">—</span>
+      //         )}
+      //         <label className={cn("inline-flex", (isUploading || anyUploading) && "pointer-events-none")}>
+      //           <input
+      //             type="file"
+      //             accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf,.pdf"
+      //             className="hidden"
+      //             disabled={isUploading || anyUploading}
+      //             onChange={async (e) => {
+      //               const file = e.target.files?.[0];
+      //               e.target.value = "";
+      //               if (!file) return;
+      //               await handleUploadReceipt(row.original.paymentId, row.original.sourceId, file);
+      //             }}
+      //           />
+      //           <Button
+      //             variant="ghost"
+      //             size="sm"
+      //             className="h-8"
+      //             type="button"
+      //             disabled={isUploading || anyUploading}
+      //             asChild
+      //           >
+      //             <span>
+      //               {isUploading ? (
+      //                 <>
+      //                   <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+      //                   Uploading...
+      //                 </>
+      //               ) : (
+      //                 <>
+      //                   <Upload className="mr-1.5 size-3.5" />
+      //                   Upload
+      //                 </>
+      //               )}
+      //             </span>
+      //           </Button>
+      //         </label>
+      //       </div>
+      //     );
+      //   },
+      // },
       {
         id: "actions",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Action" />,

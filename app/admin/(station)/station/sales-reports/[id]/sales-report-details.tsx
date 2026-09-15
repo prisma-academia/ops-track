@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Image as ImageIcon,
+  FileText,
   Upload,
   Loader2,
   User,
@@ -510,7 +511,11 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                     )
                   }
                 >
-                  <ImageIcon className="mr-1.5 size-3.5" />
+                  {row.original.receiptUrl.toLowerCase().includes(".pdf") ? (
+                    <FileText className="mr-1.5 size-3.5 text-primary" />
+                  ) : (
+                    <ImageIcon className="mr-1.5 size-3.5" />
+                  )}
                   View
                 </Button>
               ) : (
@@ -519,7 +524,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
               <label className={cn("inline-flex", (isUploading || anyUploading) && "pointer-events-none")}>
                 <input
                   type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf,.pdf"
                   className="hidden"
                   disabled={isUploading || anyUploading}
                   onChange={async (e) => {

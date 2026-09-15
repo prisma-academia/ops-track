@@ -1,9 +1,10 @@
 "use client";
 
-import { Download, ImageIcon } from "lucide-react";
+import { Download, ImageIcon, FileText, Eye } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { FilePreviewTrigger, FilePreviewButton } from "@/components/file-viewer-modal";
 
 interface InvoiceReceiptProps {
   transaction: any;
@@ -327,35 +328,72 @@ export function InvoiceReceipt({ transaction }: InvoiceReceiptProps) {
           <div className="rounded-lg border border-border bg-card p-5">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-semibold flex items-center gap-2">
-                <ImageIcon className="size-4" />
+                {transaction.receiptUrl.toLowerCase().includes(".pdf") ? (
+                  <FileText className="size-4 text-primary" />
+                ) : (
+                  <ImageIcon className="size-4" />
+                )}
                 Proof of Payment
               </p>
-              <Button variant="ghost" size="sm" asChild>
-                <a href={transaction.receiptUrl} target="_blank" rel="noopener noreferrer">
-                  <Download className="h-4 w-4" />
-                </a>
-              </Button>
+              <div className="flex items-center gap-1.5">
+                <FilePreviewButton
+                  fileUrl={transaction.receiptUrl}
+                  fileName={`Payment-Receipt-${transaction.id.substring(0, 8).toUpperCase()}`}
+                  label="Preview"
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                />
+                <Button variant="ghost" size="icon" className="h-8 w-8" asChild title="Open in new tab">
+                  <a href={transaction.receiptUrl} target="_blank" rel="noopener noreferrer">
+                    <Download className="h-4 w-4" />
+                    <span className="sr-only">Download</span>
+                  </a>
+                </Button>
+              </div>
             </div>
-            <div className="rounded-lg overflow-hidden border border-border bg-muted/50 p-2 flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={transaction.receiptUrl}
-                alt="Transaction Receipt"
-                className="max-h-[320px] object-contain rounded-md"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
-            </div>
+            <FilePreviewTrigger
+              fileUrl={transaction.receiptUrl}
+              fileName={`Payment-Receipt-${transaction.id.substring(0, 8).toUpperCase()}`}
+              className="w-full block"
+            >
+              <div className="group relative rounded-lg overflow-hidden border border-border bg-muted/50 p-4 flex items-center justify-center cursor-pointer transition-all hover:bg-muted/70 hover:border-primary/40">
+                {transaction.receiptUrl.toLowerCase().includes(".pdf") ? (
+                  <div className="flex flex-col items-center justify-center p-6 text-center">
+                    <div className="mb-2 flex size-14 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
+                      <FileText className="size-8" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground mb-1">PDF Payment Document</p>
+                    <p className="text-xs text-muted-foreground">Click to preview document</p>
+                  </div>
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={transaction.receiptUrl}
+                    alt="Transaction Receipt"
+                    className="max-h-[320px] object-contain rounded-md transition-transform duration-200 group-hover:scale-102"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100 rounded-lg">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-background/90 px-3 py-1.5 text-xs font-semibold shadow-md backdrop-blur-sm">
+                    <Eye className="size-3.5" /> Preview Document
+                  </span>
+                </div>
+              </div>
+            </FilePreviewTrigger>
             <div className="text-center mt-2">
-              <a
-                href={transaction.receiptUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-medium text-primary hover:underline"
+              <FilePreviewTrigger
+                fileUrl={transaction.receiptUrl}
+                fileName={`Payment-Receipt-${transaction.id.substring(0, 8).toUpperCase()}`}
               >
-                View Full Document
-              </a>
+                <span className="text-sm font-medium text-primary hover:underline cursor-pointer inline-flex items-center gap-1">
+                  <Eye className="size-3.5" />
+                  {transaction.receiptUrl.toLowerCase().includes(".pdf") ? "Preview PDF Document" : "Preview Full Document"}
+                </span>
+              </FilePreviewTrigger>
             </div>
           </div>
         </div>

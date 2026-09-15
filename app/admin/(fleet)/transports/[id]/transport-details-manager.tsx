@@ -25,6 +25,7 @@ import { TransportFeeBreakdown, getTransactionFeeLegLabel } from "@/components/f
 import { PRODUCT_LOSS_TYPES, getLossTypeLabel, getProductLossType, isNotesRequiredForLossType } from "@/lib/fleet/loss-types";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { FilePreviewButton } from "@/components/file-viewer-modal";
 
 export function TransportDetailsManager({
   transport,
@@ -622,10 +623,17 @@ export function TransportDetailsManager({
                           </td>
                           <td className="text-right py-3 px-4">
                             {txn.receiptUrl ? (
-                              <a href={txn.receiptUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
-                                View
-                              </a>
-                            ) : "—"}
+                              <FilePreviewButton
+                                fileUrl={txn.receiptUrl}
+                                fileName={`Payment Receipt - ${txn.reference || txn.id.substring(0, 8).toUpperCase()}`}
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs font-medium text-primary hover:underline"
+                                label="View"
+                              />
+                            ) : (
+                              "—"
+                            )}
                           </td>
                           <td className="text-right py-3 px-4 text-foreground/90 font-medium font-mono text-destructive">
                             {Number(txn.amount).toLocaleString()}

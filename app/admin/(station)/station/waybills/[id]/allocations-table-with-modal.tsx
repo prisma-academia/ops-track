@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { apiPost, apiPatch, apiGet } from "@/lib/client/api";
+import { FilePreviewThumbnail } from "@/components/file-viewer-modal";
 
 type TankOption = {
   id: string;
@@ -874,9 +875,12 @@ export function AllocationsTableWithModal({
                             <div className="font-semibold text-muted-foreground uppercase text-[9px] tracking-wider">Verification Photos</div>
                             <div className="flex flex-wrap gap-2">
                               {a.arrivalPictures.map((pic, idx) => (
-                                <div key={idx} className="relative size-16 rounded-lg overflow-hidden border bg-muted shadow-sm shrink-0">
-                                  <img src={pic} alt="Arrival verification" className="w-full h-full object-cover" />
-                                </div>
+                                <FilePreviewThumbnail
+                                  key={idx}
+                                  fileUrl={pic}
+                                  fileName={`Arrival verification - ${a.station?.name || "Station"} (#${idx + 1})`}
+                                  className="size-16 rounded-lg shrink-0 shadow-sm"
+                                />
                               ))}
                             </div>
                           </div>

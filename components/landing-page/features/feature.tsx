@@ -1,10 +1,11 @@
 import { LANDING_PEOPLE } from "@/components/landing-page/people";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
+import Link from "next/link";
 
 type Features = {
   icon: LucideIcon;
@@ -45,7 +46,7 @@ const Feature = ({ featureData }: { featureData: Features }) => {
                 </p>
               </div>
               <Button asChild className="rounded-full px-5 py-2.5 shadow-xs h-auto cursor-pointer">
-                <a href="/">Book a demo</a>
+                <Link href="/">Book a demo</Link>
               </Button>
             </motion.div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-6">
@@ -62,12 +63,21 @@ const Feature = ({ featureData }: { featureData: Features }) => {
                 <Card className="flex items-start gap-12 has-data-[slot=card-footer]:pb-6 sm:has-data-[slot=card-footer]:pb-10 pt-6 sm:py-10 border-none shadow-none ring-0 rounded-lg">
                   <CardContent className="flex flex-col gap-6 px-6 sm:px-8">
                     <Avatar className="size-12">
-                      <AvatarFallback>
-                        <img
+                      {quotePerson.image ? (
+                        <AvatarImage
                           src={quotePerson.image}
                           alt={quotePerson.fullName}
                           className="rounded-full object-cover"
                         />
+                      ) : null}
+                      <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
+                        {quotePerson.fullName
+                          .split(" ")
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((part) => part[0])
+                          .join("")
+                          .toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <h3 className="text-xl sm:text-2xl font-medium">

@@ -2,6 +2,7 @@ import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import "dotenv/config";
+import { google } from "googleapis";
 
 async function run() {
   const dbUrl = process.env.DATABASE_URL;
@@ -55,6 +56,48 @@ async function run() {
     "-f", backupFile,
   ];
 
+
+async function uploadToGoogleDrive(filePath: string, fileName: string) {
+  const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+
+  if (!credentialsPath || !folderId) {
+    console.warn("⚠️  GOOGLE_APPLICATION_CREDENTIALS or GOOGLE_DRIVE_FOLDER_ID not set. Skipping Google Drive upload.");
+    return;
+  }
+
+  console.log(`\n☁️  Uploading ${fileName} to Google Drive...`);
+  
+  try {
+    const auth = new google.auth.GoogleAuth({
+      keyFile: credentialsPath,
+      scopes: ["https://www.googleapis.com/auth/drive.file"],
+    });
+
+    const drive = google.drive({ version: "v3", auth });
+
+    const fileMetadata = {
+      name: fileName,
+      parents: [folderId],
+    };
+    
+    const media = {
+      mimeType: "application/sql",
+      body: fs.createReadStream(filePath),
+    };
+
+    const file = await drive.files.create({
+      requestBody: fileMetadata,
+      media: media,
+      fields: "id",
+    });
+
+    console.log(`✅ Successfully uploaded to Google Drive (File ID: ${file.data.id})`);
+  } catch (error: any) {
+    console.error("❌ Failed to upload to Google Drive:", error.message);
+  }
+}
+
   try {
     const result = spawnSync("pg_dump", args, {
       env: envVars,
@@ -64,6 +107,7 @@ async function run() {
 
     if (result.status === 0) {
       console.log(`\n✅ Backup successfully saved to:\n   ${backupFile}\n`);
+      await uploadToGoogleDrive(backupFile, `backup_${dbName}_${timestamp}.sql`);
       return;
     }
   } catch {

@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { apiGet, apiPost } from "@/lib/client/api";
-import { Building2, Loader2 } from "lucide-react";
+import { Building2, Loader2, ChevronsUpDown } from "lucide-react";
 
 const CURRENCIES = ["NGN", "USD", "GBP", "EUR", "KES", "GHS"];
 const DURATIONS = [
@@ -31,6 +33,7 @@ export default function RecordPaymentPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [searching, setSearching] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("NGN");
@@ -112,31 +115,60 @@ export default function RecordPaymentPage() {
               </Button>
             </div>
           ) : (
-            <div className="relative">
-              <Input
-                placeholder="Search by company name or slug…"
-                value={tenantSearch}
-                onChange={(e) => search(e.target.value)}
-                className="pr-8"
-              />
-              {searching && <Loader2 className="absolute right-2.5 top-2.5 size-4 animate-spin text-muted-foreground" />}
-              {tenants.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full rounded-lg border border-border bg-card shadow-lg">
-                  {tenants.map((t) => (
-                    <button
-                      key={t.id}
-                      className="w-full flex items-start gap-3 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors first:rounded-t-lg last:rounded-b-lg"
-                      onClick={() => { setSelectedTenant(t); setTenants([]); setTenantSearch(""); }}
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{t.name}</p>
-                        <p className="text-xs text-muted-foreground font-mono">{t.slug}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={open}
+                  className="w-full justify-between font-normal"
+                >
+                  Select a company...
+                  <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput 
+                    placeholder="Search by company name or slug…" 
+                    value={tenantSearch} 
+                    onValueChange={search}
+                  />
+                  <CommandList>
+                    <CommandEmpty>
+                      {searching ? (
+                        <div className="flex justify-center py-6">
+                          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (
+                        "No company found."
+                      )}
+                    </CommandEmpty>
+                    {tenants.length > 0 && (
+                      <CommandGroup>
+                        {tenants.map((t) => (
+                          <CommandItem
+                            key={t.id}
+                            value={t.id}
+                            onSelect={() => {
+                              setSelectedTenant(t);
+                              setOpen(false);
+                              setTenants([]);
+                              setTenantSearch("");
+                            }}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-medium">{t.name}</span>
+                              <span className="text-xs text-muted-foreground font-mono">{t.slug}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           )}
         </CardContent>
       </Card>

@@ -41,7 +41,19 @@ export async function GET(request: Request) {
     await requirePlatformActor(PERMISSIONS.PLATFORM_TENANTS_READ.key);
     const url = new URL(request.url);
     const { cursor, take } = parsePagination(url.searchParams);
+    const search = url.searchParams.get("search");
+    
+    const where = search 
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" as const } },
+            { slug: { contains: search, mode: "insensitive" as const } }
+          ]
+        }
+      : {};
+
     const rows = await prisma.tenant.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       take,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),

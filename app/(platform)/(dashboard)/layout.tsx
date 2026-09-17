@@ -9,8 +9,8 @@ import { COMPANY_NAME, COMPANY_LOGO } from "@/lib/branding";
 const NAV = [
   { href: "/dashboard",     title: "Overview",      icon: "PieChart",      permission: null },
   { href: "/tenants",      title: "Tenants",       icon: "Building2",    permission: PERMISSIONS.PLATFORM_TENANTS_READ.key },
-  { href: "/demo-requests",title: "Demo Requests",  icon: "InboxIcon",    permission: PERMISSIONS.PLATFORM_TENANTS_READ.key },
-  { href: "/subscriptions/new", title: "Record Payment", icon: "BadgeDollarSign", permission: PERMISSIONS.PLATFORM_TENANTS_WRITE.key },
+  { href: "/demo-requests",title: "Demo Requests",  icon: "Inbox",        permission: PERMISSIONS.PLATFORM_TENANTS_READ.key },
+  { href: "/subscriptions",title: "Subscription",   icon: "BadgeDollarSign", permission: PERMISSIONS.PLATFORM_TENANTS_WRITE.key },
   { href: "/users",        title: "Users",         icon: "CircleUserRound",permission: PERMISSIONS.PLATFORM_USERS_READ.key },
   { href: "/role-templates",title: "Roles",        icon: "Shield",       permission: PERMISSIONS.PLATFORM_ROLES_READ.key },
   { href: "/activity",    title: "Audit Logs",    icon: "Activity",     permission: PERMISSIONS.PLATFORM_ACTIVITY_READ.key },

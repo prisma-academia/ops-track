@@ -48,6 +48,7 @@ import {
   Landmark,
   Ticket,
   Network,
+  Inbox,
 } from "lucide-react";
 import {
   IconLayoutDashboard,
@@ -129,6 +130,7 @@ export const iconMap: Record<string, React.ComponentType<{ size?: number; classN
   Landmark,
   Ticket,
   Network,
+  Inbox,
 
   // Tabler Outline icons
   IconLayoutDashboard,

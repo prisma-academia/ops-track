@@ -67,14 +67,6 @@ export async function POST(
     const tankId = shiftLog.nozzle.pump.tank.id;
     const tankCurrentLiters = Number(shiftLog.nozzle.pump.tank.currentLiters);
 
-    if (tankCurrentLiters - litersSold < 0) {
-      throw new DomainError(
-        400,
-        "insufficient_tank_volume",
-        `Cannot close shift: deducting ${litersSold.toLocaleString()} L would bring tank below 0 (current: ${tankCurrentLiters.toLocaleString()} L). Record a dipping first.`
-      );
-    }
-
     const updatedShiftLog = await prisma.$transaction(async (tx) => {
       const updated = await tx.shiftLog.update({
         where: { id: shiftId },
@@ -96,12 +88,6 @@ export async function POST(
             },
           },
         },
-      });
-
-      const nextLiters = Math.max(0, tankCurrentLiters - litersSold);
-      await tx.tank.update({
-        where: { id: tankId },
-        data: { currentLiters: nextLiters },
       });
 
       return updated;

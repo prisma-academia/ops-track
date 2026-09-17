@@ -43,22 +43,23 @@ export async function POST(
       throw new DomainError(400, "missing_price", "A new price per liter is required when reason is PRICE_CHANGE.");
     }
 
-    // Block dipping session closing if there are unapproved sales logs for this tank's product type
-    const pendingSales = await prisma.salesLog.findFirst({
-      where: {
-        stationId,
-        tenantId: actor.tenantId,
-        productType: session.tank.productType,
-        status: { notIn: ["APPROVED", "REJECTED"] },
-      },
-    });
+    // Block dipping session closing if there are unapproved sales logs in the current dipping session
+    if (session.closings.length > 0) {
+      const closingIds = session.closings.map(c => c.id);
+      const pendingSales = await prisma.salesLog.findFirst({
+        where: {
+          dippingClosingId: { in: closingIds },
+          status: { notIn: ["APPROVED", "REJECTED"] },
+        },
+      });
 
-    if (pendingSales) {
-      throw new DomainError(
-        400,
-        "pending_sales_exists",
-        "Cannot close session: There are unapproved sales for this product type. Please approve or reject pending sales first to ensure accurate stock reconciliation."
-      );
+      if (pendingSales) {
+        throw new DomainError(
+          400,
+          "pending_sales_exists",
+          "Cannot close session: There are unapproved sales in this dipping session. Please approve or reject them first."
+        );
+      }
     }
 
     // Determine applied price: last closing's newPricePerLiter, or session's pricePerLiter
@@ -79,12 +80,6 @@ export async function POST(
           newPricePerLiter: body.newPricePerLiter,
           appliedPrice,
         },
-      });
-
-      // Update tank liters
-      await tx.tank.update({
-        where: { id: session.tankId },
-        data: { currentLiters: body.closingLiters },
       });
 
       // Close the session if reason is END_OF_DAY

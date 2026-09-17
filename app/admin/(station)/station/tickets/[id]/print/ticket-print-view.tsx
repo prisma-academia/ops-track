@@ -69,7 +69,6 @@ export function TicketPrintView({
 }) {
   const ref = ticket.id.substring(0, 8).toUpperCase();
   const children: any[] = Array.isArray(ticket.children) ? ticket.children : [];
-  const revisions: any[] = Array.isArray(ticket.spendRevisions) ? ticket.spendRevisions : [];
 
   return (
     <div className="space-y-4">
@@ -133,34 +132,7 @@ export function TicketPrintView({
             {ticket.nozzle?.name && <DetailRow label="Nozzle" value={ticket.nozzle.name} compact />}
           </div>
 
-          {(ticket.requestedAmount != null || ticket.approvedAmount != null || ticket.paidAmount != null) && (
-            <div className="mb-4 rounded-lg border border-gray-200 p-4">
-              <h3 className="mb-1 border-b border-gray-100 pb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                Spend
-              </h3>
-              {ticket.requestedAmount != null && (
-                <DetailRow label="Requested" value={money(ticket.requestedAmount)} strong compact />
-              )}
-              {ticket.requestedCategory && (
-                <DetailRow
-                  label="Category"
-                  value={EXPENSE_CATEGORY_LABELS[ticket.requestedCategory] || ticket.requestedCategory}
-                  compact
-                />
-              )}
-              {ticket.spendIntent && ticket.spendIntent !== "NONE" && (
-                <DetailRow
-                  label="Intent"
-                  value={ticket.spendIntent === "ALREADY_PAID" ? "Already paid" : "Request"}
-                  compact
-                />
-              )}
-              {ticket.approvedAmount != null && (
-                <DetailRow label="Approved" value={money(ticket.approvedAmount)} compact />
-              )}
-              {ticket.paidAmount != null && <DetailRow label="Paid" value={money(ticket.paidAmount)} compact />}
-            </div>
-          )}
+
 
           {ticket.description && (
             <div className="mb-4 rounded-lg border border-gray-200 p-4">
@@ -215,21 +187,7 @@ export function TicketPrintView({
             </div>
           )}
 
-          {revisions.length > 0 && (
-            <div className="mb-4 rounded-lg border border-gray-200 p-4">
-              <h3 className="mb-1 border-b border-gray-100 pb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                Amount history
-              </h3>
-              {revisions.map((rev) => (
-                <DetailRow
-                  key={rev.id}
-                  label={formatHumanReadableDate(rev.createdAt)}
-                  value={`${money(rev.newRequested)}${rev.newApproved != null ? ` → ${money(rev.newApproved)}` : ""}`}
-                  compact
-                />
-              ))}
-            </div>
-          )}
+
 
           {ticket.remark && (
             <div className="mb-4 rounded-lg border border-gray-200 p-4">

@@ -134,6 +134,7 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
   const [tanks, setTanks] = useState<TankOption[]>([]);
   const [afterLiters, setAfterLiters] = useState("");
   const [beforeLiters, setBeforeLiters] = useState("");
+  const [observations, setObservations] = useState("");
   const [recordedDips, setRecordedDips] = useState<RecordedDip[]>([]);
   const [receivedSoFar, setReceivedSoFar] = useState(Number(allocation.litersReceived ?? 0));
   const savedThisSession = React.useRef(false);
@@ -163,6 +164,7 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
     setTankId("");
     setAfterLiters("");
     setBeforeLiters("");
+    setObservations("");
     setRecordedDips([]);
     setReceivedSoFar(Number(allocation.litersReceived ?? 0));
     setConfirmCompleteOpen(false);
@@ -195,6 +197,7 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
     setTankId("");
     setAfterLiters("");
     setBeforeLiters("");
+    setObservations("");
   };
 
   const validateCurrentDip = () => {
@@ -236,6 +239,7 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
           tankId,
           beforeLiters: currentBeforeLiters,
           afterLiters: Number(afterLiters),
+          observations: observations || null,
         }],
         completeWithShortage: false,
       });
@@ -500,6 +504,15 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAfterLiters(e.target.value)}
                         />
                       </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Observations / Notes (Optional)</Label>
+                      <textarea
+                        className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="Any observations about this dip?"
+                        value={observations}
+                        onChange={(e) => setObservations(e.target.value)}
+                      />
                     </div>
                     {afterExceedsCapacity && (
                       <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">

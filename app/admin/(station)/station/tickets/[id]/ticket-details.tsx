@@ -143,23 +143,6 @@ function buildHistory(ticket: any): HistoryEvent[] {
     },
   ];
 
-  for (const rev of Array.isArray(ticket.spendRevisions) ? ticket.spendRevisions : []) {
-    events.push({
-      id: `rev-${rev.id}`,
-      at: new Date(rev.createdAt),
-      order: 1,
-      title: "Amount increase requested",
-      actor: personName(rev.actor),
-      detail: [
-        money(rev.newRequested),
-        rev.newApproved != null ? `approved ${money(rev.newApproved)}` : "awaiting approval",
-        rev.reason,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-    });
-  }
-
   for (const child of Array.isArray(ticket.children) ? ticket.children : []) {
     events.push({
       id: `child-${child.id}`,
@@ -190,17 +173,6 @@ function buildHistory(ticket: any): HistoryEvent[] {
     });
   }
 
-  if (ticket.expense) {
-    events.push({
-      id: `payout-${ticket.expense.id || "expense"}`,
-      at: new Date(ticket.expense.createdAt || ticket.updatedAt || ticket.createdAt),
-      order: 4,
-      title: "Payout recorded",
-      actor: personName(ticket.expense.recordedBy),
-      detail: `${money(ticket.expense.amount)} · ${String(ticket.expense.paymentMethod || "").replaceAll("_", " ")}`,
-    });
-  }
-
   return events.sort((a, b) => a.at.getTime() - b.at.getTime() || a.order - b.order);
 }
 
@@ -223,15 +195,9 @@ export function TicketDetails({
         ? String(ticket.requestedAmount)
         : "",
   );
-  const [payoutAmount, setPayoutAmount] = useState(
-    ticket.approvedAmount != null ? String(ticket.approvedAmount) : "",
-  );
-  const [paymentMethod, setPaymentMethod] = useState(
-    ticket.expense?.paymentMethod && ticket.expense.paymentMethod !== "CASH"
-      ? ticket.expense.paymentMethod
-      : "BANK_TRANSFER",
-  );
-  const [bankAccountId, setBankAccountId] = useState(ticket.expense?.bankAccountId || "");
+  const [payoutAmount, setPayoutAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("BANK_TRANSFER");
+  const [bankAccountId, setBankAccountId] = useState("");
   const [bankOpen, setBankOpen] = useState(false);
   const [payoutErrors, setPayoutErrors] = useState<{
     amount?: string;
@@ -425,21 +391,7 @@ export function TicketDetails({
               <Fact label="Raised by">{personName(ticket.raisedBy)}</Fact>
               {ticket.pump && <Fact label="Pump">{ticket.pump.name}</Fact>}
               {ticket.nozzle && <Fact label="Nozzle">{ticket.nozzle.name}</Fact>}
-              {ticket.requestedAmount != null && (
-                <Fact label="Requested">{money(ticket.requestedAmount)}</Fact>
-              )}
-              {ticket.requestedCategory && (
-                <Fact label="Category">
-                  {EXPENSE_CATEGORY_LABELS[ticket.requestedCategory] || ticket.requestedCategory}
-                </Fact>
-              )}
-              {ticket.spendIntent && ticket.spendIntent !== "NONE" && (
-                <Fact label="Intent">
-                  {ticket.spendIntent === "ALREADY_PAID" ? "Already paid" : "Request"}
-                </Fact>
-              )}
-              {ticket.approvedAmount != null && <Fact label="Approved">{money(ticket.approvedAmount)}</Fact>}
-              {ticket.paidAmount != null && <Fact label="Paid">{money(ticket.paidAmount)}</Fact>}
+
               {ticket.latitude != null && ticket.longitude != null && (
                 <Fact label="Location">
                   {Number(ticket.latitude).toFixed(5)}, {Number(ticket.longitude).toFixed(5)}
@@ -495,34 +447,6 @@ export function TicketDetails({
                   </li>
                 ))}
               </ul>
-            </SectionCard>
-          )}
-
-          {ticket.expense && (
-            <SectionCard title="Expense">
-              <dl className="divide-y">
-                <Fact label="Amount">{money(ticket.expense.amount)}</Fact>
-                <Fact label="Status">{ticket.expense.status}</Fact>
-                <Fact label="Method">{ticket.expense.paymentMethod?.replaceAll("_", " ")}</Fact>
-                {ticket.expense.description && <Fact label="Note">{ticket.expense.description}</Fact>}
-              </dl>
-              {ticket.expense.receiptUrl && (
-                <button
-                  type="button"
-                  onClick={() => setViewerUrl(ticket.expense.receiptUrl)}
-                  className="relative mt-4 h-36 w-full overflow-hidden rounded-md border text-left flex items-center justify-center bg-muted/20 hover:bg-muted/40 transition-colors"
-                >
-                  {ticket.expense.receiptUrl.toLowerCase().includes(".pdf") ? (
-                    <div className="flex flex-col items-center justify-center p-4 text-center">
-                      <FileText className="size-10 text-primary mb-2" />
-                      <span className="text-xs font-medium text-foreground">PDF Document</span>
-                      <span className="text-[11px] text-muted-foreground">Click to preview document</span>
-                    </div>
-                  ) : (
-                    <Image src={ticket.expense.receiptUrl} alt="Receipt" fill className="object-contain bg-muted/30" />
-                  )}
-                </button>
-              )}
             </SectionCard>
           )}
 

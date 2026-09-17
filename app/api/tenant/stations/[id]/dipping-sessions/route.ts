@@ -61,22 +61,29 @@ export async function POST(
       throw new DomainError(400, "active_shifts_running", "Cannot record dipping: Active shifts must be closed first.");
     }
 
-    // Block dipping session if there are unapproved sales logs for this tank's product type
-    const pendingSales = await prisma.salesLog.findFirst({
-      where: {
-        stationId,
-        tenantId: actor.tenantId,
-        productType: tank.productType,
-        status: { notIn: ["APPROVED", "REJECTED"] },
-      },
+    // Block dipping session if there are unapproved sales logs from the previous dipping session
+    const lastSessionForBlock = await prisma.dippingSession.findFirst({
+      where: { tankId: body.tankId, tenantId: actor.tenantId },
+      orderBy: { openedAt: "desc" },
+      include: { closings: true },
     });
 
-    if (pendingSales) {
-      throw new DomainError(
-        400,
-        "pending_sales_exists",
-        "Cannot open session: There are unapproved sales for this product type. Please approve or reject pending sales first to ensure accurate stock reconciliation."
-      );
+    if (lastSessionForBlock && lastSessionForBlock.closings.length > 0) {
+      const closingIds = lastSessionForBlock.closings.map(c => c.id);
+      const pendingSales = await prisma.salesLog.findFirst({
+        where: {
+          dippingClosingId: { in: closingIds },
+          status: { notIn: ["APPROVED"] },
+        },
+      });
+
+      if (pendingSales) {
+        throw new DomainError(
+          400,
+          "pending_sales_exists",
+          "Cannot open a new dipping session: There are unapproved or rejected sales from the previous session. Please approve or resolve them first."
+        );
+      }
     }
 
     // Variance detection: fetch last session for this tank
@@ -166,12 +173,6 @@ export async function POST(
           pricePerLiter: body.pricePerLiter,
           status: "OPEN",
         },
-      });
-
-      // Update tank liters
-      await tx.tank.update({
-        where: { id: body.tankId },
-        data: { currentLiters: body.openingLiters },
       });
 
       if (shouldCheckVariance) {

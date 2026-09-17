@@ -60,18 +60,7 @@ export async function reconcileTankCurrentLiters(
     liters = liters.plus(dip.afterLiters.minus(dip.beforeLiters));
   }
 
-  const shiftSales = await tx.shiftLog.aggregate({
-    where: {
-      closedAt: { gt: since },
-      litersSold: { not: null },
-      nozzle: { pump: { tankId } },
-    },
-    _sum: { litersSold: true },
-  });
 
-  if (shiftSales._sum.litersSold) {
-    liters = liters.minus(shiftSales._sum.litersSold);
-  }
 
   const next = maxZero(liters);
 

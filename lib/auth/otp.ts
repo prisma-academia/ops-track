@@ -29,6 +29,9 @@ export async function issueOtp(input: {
   if (recent >= RATE_MAX) return { sent: false, reason: "rate_limited" };
 
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  console.log(`\n\n================================`);
+  console.log(`🔑 DEVELOPMENT OTP CODE: ${code}`);
+  console.log(`================================\n\n`);
   const codeHash = hashCode(code);
   await prisma.otpRequest.create({
     data: {

@@ -243,9 +243,9 @@ export function BankAccountFormModal({
                   <CommandList>
                     <CommandEmpty>No bank found.</CommandEmpty>
                     <CommandGroup className="max-h-64 overflow-y-auto">
-                      {banks.map((bank) => (
+                      {banks.map((bank, index) => (
                         <CommandItem
-                          key={bank.code}
+                          key={`${bank.code}-${bank.name}-${index}`}
                           value={bank.name}
                           onSelect={() => {
                             setValue("bankName", bank.name, { shouldValidate: true });

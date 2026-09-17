@@ -82,7 +82,12 @@ export async function GET(
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
-    const where = { stationId, tenantId: actor.tenantId };
+    const statusFilter = url.searchParams.get("status") || undefined;
+
+    const where: any = { stationId, tenantId: actor.tenantId };
+    if (statusFilter) {
+      where.status = statusFilter;
+    }
 
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);

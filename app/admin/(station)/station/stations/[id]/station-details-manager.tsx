@@ -374,8 +374,8 @@ export function StationDetailsManager({
       setOverviewLoading(true);
       const base = `/api/tenant/stations/${station.id}`;
       const [salesRes, expensesRes, waybillRes] = await Promise.all([
-        apiGet<any[]>(`${base}/sales-logs?page=1&take=5`),
-        apiGet<any[]>(`${base}/expenses?page=1&take=50`),
+        apiGet<any[]>(`${base}/sales-logs?page=1&take=5&status=APPROVED`),
+        apiGet<any[]>(`${base}/expenses?page=1&take=50&status=APPROVED`),
         apiGet<any[]>(`${base}/waybills?page=1&take=1`),
       ]);
 

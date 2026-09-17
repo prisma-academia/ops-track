@@ -11,6 +11,7 @@ const CreateWaybillDippingSchema = z.object({
     tankId: z.string().min(1),
     beforeLiters: z.coerce.number().nonnegative(),
     afterLiters: z.coerce.number().nonnegative().optional().nullable(),
+    observations: z.string().optional().nullable(),
   })).optional().default([]),
   completeWithShortage: z.boolean().optional().default(false),
 });
@@ -65,6 +66,34 @@ export async function POST(
           `Close the open dipping session on tank${openSessions.length > 1 ? "s" : ""} ${names} before recording a waybill drop.`
         );
       }
+
+      // Check for unapproved sales for all selected tanks
+      for (const tankId of uniqueTankIds) {
+        const lastSessionForBlock = await prisma.dippingSession.findFirst({
+          where: { tankId, tenantId: actor.tenantId },
+          orderBy: { openedAt: "desc" },
+          include: { closings: true },
+        });
+
+        if (lastSessionForBlock && lastSessionForBlock.closings.length > 0) {
+          const closingIds = lastSessionForBlock.closings.map(c => c.id);
+          const pendingSales = await prisma.salesLog.findFirst({
+            where: {
+              dippingClosingId: { in: closingIds },
+              status: { notIn: ["APPROVED"] },
+            },
+          });
+
+          if (pendingSales) {
+            const tank = tanks.find(t => t.id === tankId);
+            throw new DomainError(
+              400,
+              "pending_sales_exists",
+              `Cannot discharge into tank "${tank?.name}": There are unapproved or rejected sales from its previous dipping session. Please approve or resolve them first.`
+            );
+          }
+        }
+      }
     }
 
     // Validate capacity limits before entering transaction
@@ -97,6 +126,7 @@ export async function POST(
             tankId: dip.tankId,
             beforeLiters: dip.beforeLiters,
             afterLiters: dip.afterLiters ?? null,
+            observations: dip.observations || null,
             recordedById: actor.userId,
           },
         });

@@ -113,7 +113,6 @@ model Tenant {
   dailyStockReports          DailyStockReport[]
   tankDippings               TankDipping[]
   tickets                    Ticket[]
-  ticketSpendRevisions       TicketSpendRevision[]
   customers                  Customer[]
   waybills                   Waybill[]
   waybillAllocations         WaybillAllocation[]
@@ -200,7 +199,6 @@ model TenantUser {
   salesPaymentReviews     SalesPaymentReview[]
   raisedTickets           Ticket[]         @relation("TicketRaiser")
   approvedTickets         Ticket[]         @relation("TicketApprover")
-  ticketSpendRevisions    TicketSpendRevision[]
   recordedWaybills        Waybill[]
   attendantShifts         ShiftLog[]       @relation("AttendantShifts")
   reconciledShifts        ShiftLog[]       @relation("ReconciledShifts")
@@ -475,16 +473,8 @@ enum TicketCategory {
   INVENTORY_VARIANCE
   EQUIPMENT_FAULT
   CASH_DISCREPANCY
-  EXPENSE_REQUEST
-  EXPENSE_VERIFY
   INCIDENT_REPORT
   OTHER
-}
-
-enum SpendIntent {
-  NONE
-  REQUEST
-  ALREADY_PAID
 }
 
 enum StationRole {
@@ -767,11 +757,6 @@ model Ticket {
   description  String         @db.Text
   status       TicketStatus   @default(OPEN)
   remark       String?        @db.Text
-  requestedAmount   Decimal?          @db.Decimal(12, 2)
-  approvedAmount    Decimal?          @db.Decimal(12, 2)
-  paidAmount        Decimal?          @db.Decimal(12, 2)
-  requestedCategory ExpenseCategory?
-  spendIntent       SpendIntent       @default(NONE)
   evidenceUrls      String[]          @default([])
   latitude          Decimal?          @db.Decimal(9, 6)
   longitude         Decimal?          @db.Decimal(9, 6)
@@ -782,9 +767,6 @@ model Ticket {
   parentTicketId    String?
   parent            Ticket?           @relation("TicketChildren", fields: [parentTicketId], references: [id], onDelete: SetNull)
   children          Ticket[]          @relation("TicketChildren")
-  expenseId    String?        @unique
-  expense      Expense?       @relation(fields: [expenseId], references: [id], onDelete: SetNull)
-  spendRevisions TicketSpendRevision[]
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
@@ -798,24 +780,6 @@ model Ticket {
   @@map("tickets")
 }
 
-model TicketSpendRevision {
-  id                String   @id @default(uuid())
-  tenantId          String
-  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ticketId          String
-  ticket            Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  actorId           String
-  actor             TenantUser @relation(fields: [actorId], references: [id])
-  previousApproved  Decimal? @db.Decimal(12, 2)
-  newRequested      Decimal  @db.Decimal(12, 2)
-  newApproved       Decimal? @db.Decimal(12, 2)
-  reason            String   @db.Text
-  createdAt         DateTime @default(now())
-
-  @@index([tenantId])
-  @@index([ticketId])
-  @@map("ticket_spend_revisions")
-}
 
 enum VarianceType {
   TANK_DIPPING
@@ -1052,7 +1016,6 @@ model Expense {
 
   createdAt    DateTime      @default(now())
   transactions Transaction[]
-  ticket       Ticket?
 
   @@index([tenantId])
   @@index([stationId])

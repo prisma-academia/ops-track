@@ -68,11 +68,31 @@ export async function POST(
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
-    throw new DomainError(
-      400,
-      "use_tickets",
-      "Create a ticket first. Already-paid spend is submitted as a ticket; payouts are recorded by admin.",
-    );
+    const body = await request.json();
+    const { amount, category, description, paymentMethod } = body;
+
+    if (!amount || !category || !description || !paymentMethod) {
+      throw new DomainError(400, "invalid_input", "Missing required fields.");
+    }
+
+    const expense = await prisma.expense.create({
+      data: {
+        tenantId: actor.tenantId,
+        stationId,
+        context: "STATION",
+        amount: Number(amount),
+        category,
+        description,
+        paymentMethod,
+        status: "PENDING",
+        recordedById: actor.userId,
+      },
+      include: {
+        recordedBy: { select: { firstName: true, lastName: true } },
+      },
+    });
+
+    return ok(expense);
   } catch (e) {
     return handleError(e);
   }

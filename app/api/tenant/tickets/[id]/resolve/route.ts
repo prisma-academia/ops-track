@@ -21,7 +21,7 @@ export async function POST(
       actorUserId: actor.userId,
       action: body.action,
       remark: body.remark,
-      approvedAmount: body.approvedAmount,
+
     });
 
     return ok({ ticket });

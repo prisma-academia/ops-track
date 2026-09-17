@@ -56,9 +56,7 @@ export async function POST(
       category: body.category,
       title: body.title || CATEGORY_TITLES[body.category],
       description: body.description,
-      requestedAmount: body.requestedAmount,
-      requestedCategory: body.requestedCategory,
-      spendIntent: body.spendIntent,
+
       evidenceUrls: body.evidenceUrls,
       clientId: body.clientId,
       parentTicketId: body.parentTicketId,
@@ -66,7 +64,7 @@ export async function POST(
       longitude: body.longitude,
       pumpId: body.pumpId,
       nozzleId: body.nozzleId,
-      alreadyPaid: body.alreadyPaid,
+
     });
 
     await audit({

@@ -5,7 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { reviewExpense } from "@/lib/tickets/ticket-service";
+import { applyExpenseStatus } from "@/lib/finance/expense-approval";
 
 const UpdateExpenseSchema = z.object({
   status: z.enum(["PENDING", "APPROVED", "REJECTED"]),
@@ -37,12 +37,11 @@ export async function PATCH(
       throw new DomainError(404, "not_found", "Expense not found.");
     }
 
-    const result = await reviewExpense({
+    await applyExpenseStatus(prisma, {
       expenseId,
       tenantId: actor.tenantId,
       actorUserId: actor.userId,
       status: body.status,
-      remark: body.remark,
       bankAccountId: body.bankAccountId,
     });
 
@@ -62,7 +61,7 @@ export async function PATCH(
       userAgent: meta.userAgent,
     });
 
-    return ok({ expense: updatedExpense, ticket: result.ticket ?? null });
+    return ok({ expense: updatedExpense });
   } catch (e) {
     return handleError(e);
   }

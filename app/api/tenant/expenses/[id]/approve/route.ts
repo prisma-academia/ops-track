@@ -5,7 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { reviewExpense } from "@/lib/tickets/ticket-service";
+import { applyExpenseStatus } from "@/lib/finance/expense-approval";
 
 const ApproveExpenseSchema = z.object({
   status: z.enum(["APPROVED", "REJECTED", "PENDING"]),
@@ -28,12 +28,11 @@ export async function POST(
       throw new DomainError(404, "not_found", "Expense record not found.");
     }
 
-    const result = await reviewExpense({
+    await applyExpenseStatus(prisma, {
       expenseId: id,
       tenantId: actor.tenantId,
       actorUserId: actor.userId,
       status: body.status,
-      remark: body.remark,
     });
 
     const expense = await prisma.expense.findUnique({
@@ -62,7 +61,7 @@ export async function POST(
       userAgent: meta.userAgent,
     });
 
-    return ok({ expense, ticket: result.ticket ?? null });
+    return ok({ expense });
   } catch (e) {
     return handleError(e);
   }

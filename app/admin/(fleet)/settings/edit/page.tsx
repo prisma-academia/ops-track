@@ -44,7 +44,7 @@ export default async function TenantSettingsEditPage() {
   return (
     <div className="w-full pb-10">
       <div className="mb-6 flex items-center justify-between">
-        <PageHeader title="Edit Settings" />
+        <PageHeader title="Edit Settings" backHref="/admin/settings" />
         <Link
           href="/admin/settings"
           className={cn(

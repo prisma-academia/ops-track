@@ -15,7 +15,7 @@ export default async function NewTenantUserPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Invite User" />
+      <PageHeader title="Invite User" backHref="/admin/users" />
       <InviteTenantUserForm
         roles={roles}
         allPermissions={ALL_FLEET_PERMISSION_KEYS}

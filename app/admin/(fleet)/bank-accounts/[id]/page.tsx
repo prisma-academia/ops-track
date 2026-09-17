@@ -11,7 +11,7 @@ export default async function FleetBankAccountDetailPage({
 }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key, "FLEET");
   if (!hasPermission(actor, PERMISSIONS.TENANT_FLEET_BANK_ACCOUNTS_READ.key)) {
-    redirect("/admin/unauthorized");
+    redirect("/admin/profile?error=unauthorized");
   }
 
   const { id } = await params;
@@ -28,7 +28,7 @@ export default async function FleetBankAccountDetailPage({
 
   const canViewAccount = details.account.scope === "FLEET";
   if (!canViewAccount) {
-    redirect("/admin/unauthorized");
+    redirect("/admin/profile?error=unauthorized");
   }
 
   return (

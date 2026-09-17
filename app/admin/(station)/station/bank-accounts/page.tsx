@@ -10,7 +10,7 @@ import { orgStationBankAccountWhere } from "@/lib/bank-accounts/queries";
 export default async function StationBankAccountsPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key, "STATION");
   if (!hasPermission(actor, PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key)) {
-    redirect("/admin/station/unauthorized");
+    redirect("/admin/station/profile?error=unauthorized");
   }
 
   const take = 25;

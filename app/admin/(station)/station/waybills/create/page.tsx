@@ -11,7 +11,7 @@ export default async function CreateWaybillPage() {
     !actor.permissions.has(PERMISSIONS.TENANT_WAYBILLS_WRITE.key) && 
     !actor.permissions.has(PERMISSIONS.TENANT_FLEET_WRITE.key)
   ) {
-    redirect("/admin/station/unauthorized");
+    redirect("/admin/station/profile?error=unauthorized");
   }
 
   // Fetch stations for allocation dropdown

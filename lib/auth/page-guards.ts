@@ -4,11 +4,16 @@ import { getSession, readSessionToken } from "@/lib/auth/session";
 import { enterContext } from "@/lib/db/tenant-context";
 import {
   hasPermission,
+  isFleetPermissionKey,
   type PermissionKey,
   type PlatformActor,
   type TenantActor,
   type ClientActor,
 } from "@/lib/auth/permissions";
+
+export interface RequireTenantPageOptions {
+  allowUnauthorized?: boolean;
+}
 
 /**
  * Redirect-based page mirrors of the API guards in `lib/auth/guards.ts`.
@@ -46,7 +51,8 @@ export async function requirePlatformPage(
 
 export async function requireTenantPage(
   permission?: PermissionKey,
-  module?: "FLEET" | "STATION"
+  module?: "FLEET" | "STATION",
+  options?: RequireTenantPageOptions
 ): Promise<TenantActor> {
   const session = await getSession(await readSessionToken("TENANT"));
   if (!session || session.userType !== "TENANT" || !session.tenantId) {
@@ -76,17 +82,6 @@ export async function requireTenantPage(
   if (!tenant) redirect("/admin/auth/login");
   if (tenant.status !== "ACTIVE") redirect("/maintenance");
 
-  if (module && !tenant.activeModules.includes(module)) {
-    // The module this page belongs to isn't enabled for this tenant/user.
-    // Bounce to whichever other module area is available, or back to login
-    // (which surfaces a "no access" message) if neither is.
-    if (module === "FLEET") {
-      redirect(tenant.activeModules.includes("STATION") ? "/admin/station" : "/admin/auth/login?error=no_access");
-    } else {
-      redirect(tenant.activeModules.includes("FLEET") ? "/admin" : "/admin/auth/login?error=no_access");
-    }
-  }
-
   const actor: TenantActor = {
     kind: "tenant",
     userId: user.id,
@@ -96,20 +91,53 @@ export async function requireTenantPage(
     activeModules: user.activeModules as Array<"STATION" | "FLEET">,
     permissions: new Set([...user.stationPermissions, ...user.fleetPermissions]),
   };
+
+  // If the caller is an unauthorized landing page, return the authenticated actor
+  // and tenant context immediately to prevent recursive redirect loops.
+  if (options?.allowUnauthorized) {
+    return actor;
+  }
+
+  // Infer the target module from permission if not explicitly provided
+  const inferredModule: "FLEET" | "STATION" | undefined =
+    module ?? (permission ? (isFleetPermissionKey(permission) ? "FLEET" : "STATION") : undefined);
+
+  if (inferredModule && !tenant.activeModules.includes(inferredModule)) {
+    // The module this page belongs to isn't enabled for this tenant.
+    // Bounce to whichever other module area is available, or back to login.
+    if (inferredModule === "FLEET") {
+      redirect(tenant.activeModules.includes("STATION") ? "/admin/station" : "/admin/auth/login?error=no_access");
+    } else {
+      redirect(tenant.activeModules.includes("FLEET") ? "/admin" : "/admin/auth/login?error=no_access");
+    }
+  }
+
+  // Check user-level module assignment (owners have full module access)
+  const userModules = user.activeModules as Array<"STATION" | "FLEET">;
+  if (inferredModule && !user.isOwner && !userModules.includes(inferredModule)) {
+    const hasOtherModule =
+      inferredModule === "STATION" ? userModules.includes("FLEET") : userModules.includes("STATION");
+    if (!hasOtherModule && userModules.length === 0) {
+      redirect("/admin/auth/login?error=no_access");
+    }
+    const targetArea = hasOtherModule ? (inferredModule === "STATION" ? "FLEET" : "STATION") : inferredModule;
+    const dest = targetArea === "STATION" ? "/admin/station/profile" : "/admin/profile";
+    redirect(`${dest}?error=unauthorized`);
+  }
+
   const scopedPermissions =
-    module === "FLEET"
+    inferredModule === "FLEET"
       ? user.fleetPermissions
-      : module === "STATION"
+      : inferredModule === "STATION"
         ? user.stationPermissions
         : [...user.stationPermissions, ...user.fleetPermissions];
   if (
     permission &&
     !hasPermission({ ...actor, permissions: new Set(scopedPermissions) }, permission)
   ) {
-    // Fleet-only pages know their area; other pages default to the Fleet
-    // home (the primary /admin surface) since we can't cheaply resolve
-    // which module the caller belongs to at this layer.
-    redirect(module === "STATION" ? "/admin/station/unauthorized" : "/admin/unauthorized");
+    const targetArea = inferredModule ?? (isFleetPermissionKey(permission) ? "FLEET" : "STATION");
+    const dest = targetArea === "STATION" ? "/admin/station/profile" : "/admin/profile";
+    redirect(`${dest}?error=unauthorized`);
   }
   return actor;
 }

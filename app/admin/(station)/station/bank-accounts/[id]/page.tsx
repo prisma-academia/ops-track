@@ -11,7 +11,7 @@ export default async function StationBankAccountDetailPage({
 }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key, "STATION");
   if (!hasPermission(actor, PERMISSIONS.TENANT_BANK_ACCOUNTS_READ.key)) {
-    redirect("/admin/station/unauthorized");
+    redirect("/admin/station/profile?error=unauthorized");
   }
 
   const { id } = await params;
@@ -28,7 +28,7 @@ export default async function StationBankAccountDetailPage({
 
   const canViewAccount = details.account.scope === "STATION";
   if (!canViewAccount) {
-    redirect("/admin/station/unauthorized");
+    redirect("/admin/station/profile?error=unauthorized");
   }
 
   return (

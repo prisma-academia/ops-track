@@ -13,7 +13,7 @@ export default async function NewPlatformUserPage() {
   });
   return (
     <div>
-      <PageHeader title="Invite platform user" />
+      <PageHeader title="Invite platform user" backHref="/platform/users" />
       <InviteUserForm roles={roles} allPermissions={ALL_PLATFORM_PERMISSION_KEYS} />
     </div>
   );

@@ -335,10 +335,18 @@ export function InviteTenantUserForm({
 
             {error && <p className="text-sm text-destructive font-medium pt-2">{error}</p>}
 
-            <div className="pt-4">
-              <Button type="submit" disabled={isSubmitting} className="w-full gap-2">
+            <div className="pt-4 flex items-center gap-3">
+              <Button type="submit" disabled={isSubmitting} className="flex-1 gap-2">
                 <Save className="h-4 w-4" />
                 {isSubmitting ? "Sending invite…" : "Send Invite"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isSubmitting}
+                onClick={() => router.push(moduleContext === "STATION" ? "/admin/station/users" : "/admin/users")}
+              >
+                Cancel
               </Button>
             </div>
           </CardContent>

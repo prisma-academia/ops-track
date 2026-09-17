@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import {
   User,
@@ -19,6 +19,7 @@ import {
   Truck,
   Check,
   Building,
+  Search,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { FormField } from "@/components/form-field";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { apiPatch } from "@/lib/client/api";
 
 export interface TenantProfileData {
@@ -83,6 +93,35 @@ export function TenantProfileView({ initialUser }: TenantProfileViewProps) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+
+  // Permissions viewing modal state
+  const [showPermissionsModal, setShowPermissionsModal] = useState(false);
+  const [permSearch, setPermSearch] = useState("");
+  const [permTab, setPermTab] = useState<"all" | "station" | "fleet">("all");
+
+  const stationPermList = useMemo(() => {
+    return (user.stationPermissions || []).map((k) => {
+      const found = Object.values(PERMISSIONS).find((p) => p.key === k);
+      return { key: k, description: found?.description ?? k, type: "station" as const };
+    });
+  }, [user.stationPermissions]);
+
+  const fleetPermList = useMemo(() => {
+    return (user.fleetPermissions || []).map((k) => {
+      const found = Object.values(PERMISSIONS).find((p) => p.key === k);
+      return { key: k, description: found?.description ?? k, type: "fleet" as const };
+    });
+  }, [user.fleetPermissions]);
+
+  const filteredPermissions = useMemo(() => {
+    const q = permSearch.toLowerCase().trim();
+    const all = [...stationPermList, ...fleetPermList];
+    return all.filter((p) => {
+      if (permTab !== "all" && p.type !== permTab) return false;
+      if (!q) return true;
+      return p.description.toLowerCase().includes(q) || p.key.toLowerCase().includes(q);
+    });
+  }, [stationPermList, fleetPermList, permSearch, permTab]);
 
   const fullName = [user.firstName, user.lastName, user.otherName]
     .filter(Boolean)
@@ -415,14 +454,27 @@ export function TenantProfileView({ initialUser }: TenantProfileViewProps) {
 
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Granted Permissions</dt>
-                  <dd className="mt-1 text-xs text-foreground font-medium flex items-center gap-2">
-                    <ShieldCheck className="size-4 text-primary" />
-                    {user.isOwner ? (
-                      <span>Full Access (All Permissions Granted)</span>
-                    ) : (
-                      <span>
-                        {user.stationPermissions?.length ?? 0} Station / {user.fleetPermissions?.length ?? 0} Fleet permissions
-                      </span>
+                  <dd className="mt-1 text-xs text-foreground font-medium flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="size-4 text-primary" />
+                      {user.isOwner ? (
+                        <span>Full Access (All Permissions Granted)</span>
+                      ) : (
+                        <span>
+                          {user.stationPermissions?.length ?? 0} Station / {user.fleetPermissions?.length ?? 0} Fleet permissions
+                        </span>
+                      )}
+                    </div>
+                    {!user.isOwner && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowPermissionsModal(true)}
+                        className="h-7 text-xs px-2.5 cursor-pointer"
+                      >
+                        View Permissions
+                      </Button>
                     )}
                   </dd>
                 </div>
@@ -586,6 +638,74 @@ export function TenantProfileView({ initialUser }: TenantProfileViewProps) {
           </div>
         </div>
       </div>
+
+      {/* Permissions Detail Modal */}
+      <Dialog open={showPermissionsModal} onOpenChange={setShowPermissionsModal}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <ShieldCheck className="size-5 text-primary" />
+              Assigned Account Permissions
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              View the specific operational capabilities granted to your user profile.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2 flex-1 min-h-0 flex flex-col">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <Tabs value={permTab} onValueChange={(v) => setPermTab(v as any)} className="w-full sm:w-auto">
+                <TabsList className="grid grid-cols-3 w-full sm:w-auto">
+                  <TabsTrigger value="all" className="text-xs">
+                    All ({stationPermList.length + fleetPermList.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="station" className="text-xs">
+                    Station ({stationPermList.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="fleet" className="text-xs">
+                    Fleet ({fleetPermList.length})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                <Input
+                  placeholder="Filter permissions..."
+                  value={permSearch}
+                  onChange={(e) => setPermSearch(e.target.value)}
+                  className="pl-8 h-9 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1 space-y-2 max-h-[380px]">
+              {filteredPermissions.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground text-xs">
+                  {permSearch ? "No matching permissions found." : "No permissions currently assigned."}
+                </div>
+              ) : (
+                filteredPermissions.map((perm) => (
+                  <div
+                    key={perm.key}
+                    className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span className="text-xs font-medium text-foreground truncate">
+                        {perm.description}
+                      </span>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] font-normal uppercase shrink-0 py-0 h-5">
+                      {perm.type}
+                    </Badge>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

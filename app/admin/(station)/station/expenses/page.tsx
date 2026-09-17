@@ -5,15 +5,22 @@ import { ExpensesManager } from "./expenses-manager";
 import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 import { orgStationBankAccountWhere } from "@/lib/bank-accounts/queries";
 
-export default async function ExpensesPage() {
+export default async function ExpensesPage(props: {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const searchParams = props.searchParams ? await props.searchParams : {};
   const actor = await requireTenantPage(PERMISSIONS.TENANT_EXPENSES_READ.key);
 
   const take = 25;
   const skip = 0;
 
   const activeOrgId = await resolveActiveOrgId(actor);
+  const statusParam = (searchParams.status as string) || undefined;
 
-  const expenseWhere: any = { tenantId: actor.tenantId, status: "APPROVED" };
+  const expenseWhere: any = {
+    tenantId: actor.tenantId,
+    ...(statusParam && statusParam !== "ALL" ? { status: statusParam } : {}),
+  };
   if (activeOrgId) {
     expenseWhere.station = { organizationId: activeOrgId };
   }

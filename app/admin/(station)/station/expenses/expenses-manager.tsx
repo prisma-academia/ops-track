@@ -1,9 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DataTable } from "@/components/data-table";
 import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -15,10 +25,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { formatHumanReadableDate } from "@/lib/utils";
-import { CheckCircle2, Eye, User } from "lucide-react";
+import { CheckCircle2, Eye, Loader2, Plus, User } from "lucide-react";
 import Image from "next/image";
 import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 import { FilePreviewButton } from "@/components/file-viewer-modal";
+import { apiPost } from "@/lib/client/api";
+import { toast } from "sonner";
 
 interface ExpenseUser {
   id: string;
@@ -79,21 +91,35 @@ export function ExpensesManager({
   initialExpenses,
   initialMeta,
   stations,
-  bankAccounts: _bankAccounts,
+  bankAccounts,
 }: {
   initialExpenses: ExpenseRow[];
   initialMeta: any;
   stations: { id: string; name: string; code: string }[];
   bankAccounts: BankAccountOption[];
 }) {
-  const [activeDialog, setActiveDialog] = useState<string | null>(null);
+  const router = useRouter();
+  const [activeDialog, setActiveDialog] = useState<"details" | "create" | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null);
+  const [approvingExpenseId, setApprovingExpenseId] = useState<string | null>(null);
+
+  // Create Expense Form State
+  const [createStationId, setCreateStationId] = useState(stations[0]?.id || "");
+  const [createCategory, setCreateCategory] = useState<string>("FUEL_FOR_GEN");
+  const [createPaymentMethod, setCreatePaymentMethod] = useState<string>("CASH");
+  const [createBankAccountId, setCreateBankAccountId] = useState<string>("");
+  const [createAmount, setCreateAmount] = useState<string>("");
+  const [createDescription, setCreateDescription] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
   const searchParams = useSearchParams();
 
   const appliedFilters: Record<string, string> = {};
   if (searchParams.has("stationId")) appliedFilters.stationId = searchParams.get("stationId")!;
   if (searchParams.has("category")) appliedFilters.category = searchParams.get("category")!;
   if (searchParams.has("paymentMethod")) appliedFilters.paymentMethod = searchParams.get("paymentMethod")!;
+  if (searchParams.has("status")) appliedFilters.status = searchParams.get("status")!;
   if (searchParams.has("amountMin")) appliedFilters.amountMin = searchParams.get("amountMin")!;
   if (searchParams.has("amountMax")) appliedFilters.amountMax = searchParams.get("amountMax")!;
   if (searchParams.has("dateStart")) appliedFilters.dateStart = searchParams.get("dateStart")!;
@@ -112,6 +138,7 @@ export function ExpensesManager({
   const closeDialog = () => {
     setActiveDialog(null);
     setSelectedExpense(null);
+    setCreateError(null);
   };
 
   const activeExpenses = expenses.length > 0 ? expenses : initialExpenses;
@@ -119,6 +146,81 @@ export function ExpensesManager({
   const currentSelectedExpense = selectedExpense
     ? activeExpenses.find((e) => e.id === selectedExpense.id) || selectedExpense
     : null;
+
+  const handleCreateExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+
+    if (!createStationId) {
+      setCreateError("Please select a station");
+      return;
+    }
+
+    const amt = parseFloat(createAmount);
+    if (isNaN(amt) || amt <= 0) {
+      setCreateError("Amount must be greater than 0");
+      return;
+    }
+
+    if (!createDescription.trim()) {
+      setCreateError("Please provide a description");
+      return;
+    }
+
+    if (createPaymentMethod !== "CASH" && !createBankAccountId) {
+      setCreateError("Bank account is required for non-cash payment methods");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await apiPost<{ expense: ExpenseRow }>("/api/tenant/expenses", {
+        stationId: createStationId,
+        category: createCategory,
+        paymentMethod: createPaymentMethod,
+        amount: amt,
+        description: createDescription.trim(),
+        bankAccountId: createPaymentMethod === "CASH" ? null : createBankAccountId,
+      });
+
+      if (res.error) {
+        setCreateError(res.error.message || "Failed to record expense");
+        return;
+      }
+
+      toast.success("Expense recorded successfully");
+      closeDialog();
+      setCreateAmount("");
+      setCreateDescription("");
+      router.refresh();
+    } catch {
+      setCreateError("An unexpected error occurred while saving the expense.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleApproveExpense = async (expenseId: string, status: "APPROVED" | "REJECTED") => {
+    setApprovingExpenseId(expenseId);
+    try {
+      const res = await apiPost<{ expense: ExpenseRow }>(`/api/tenant/expenses/${expenseId}/approve`, {
+        status,
+      });
+
+      if (res.error) {
+        toast.error(res.error.message || `Failed to ${status.toLowerCase()} expense`);
+        return;
+      }
+
+      toast.success(`Expense ${status.toLowerCase()} successfully`);
+      closeDialog();
+      router.refresh();
+    } catch {
+      toast.error(`Failed to ${status.toLowerCase()} expense`);
+    } finally {
+      setApprovingExpenseId(null);
+    }
+  };
 
   const columns: ColumnDef<ExpenseRow>[] = [
     {
@@ -187,16 +289,32 @@ export function ExpensesManager({
       },
     },
     {
-      id: "ticket",
-      header: "Ticket",
-      cell: ({ row }) =>
-        row.original.ticket ? (
-          <a href={`/admin/station/tickets/${row.original.ticket.id}`} className="text-xs font-medium underline">
-            {row.original.ticket.title}
-          </a>
-        ) : (
-          <span className="text-xs text-muted-foreground">—</span>
-        ),
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const status = row.original.status;
+        switch (status) {
+          case "APPROVED":
+            return (
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800 font-semibold">
+                Approved
+              </Badge>
+            );
+          case "REJECTED":
+            return (
+              <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800 font-semibold">
+                Rejected
+              </Badge>
+            );
+          case "PENDING":
+          default:
+            return (
+              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800 font-semibold">
+                Pending
+              </Badge>
+            );
+        }
+      },
     },
     {
       accessorKey: "amount",
@@ -234,7 +352,9 @@ export function ExpensesManager({
               <span className="font-semibold">
                 {approvedUser
                   ? `${approvedUser.firstName ?? ""} ${approvedUser.lastName ?? ""}`.trim()
-                  : "Approved"}
+                  : exp.status === "PENDING"
+                    ? "Pending Sign-off"
+                    : "—"}
               </span>
             </div>
           </div>
@@ -265,7 +385,6 @@ export function ExpensesManager({
     },
   ];
 
-
   return (
     <div className="space-y-6">
       <DataTable
@@ -278,9 +397,15 @@ export function ExpensesManager({
           onPageSizeChange: setPageSize,
         }}
         title="Station Expenses"
-        description="Approved station payouts. Create and review spend from Tickets."
+        description="Track and manage station operational expenses and disbursements."
         filterColumnId="station_name"
         searchPlaceholder="Search by station name…"
+        headerAction={
+          <Button onClick={() => setActiveDialog("create")} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Expense
+          </Button>
+        }
         filterNode={
           <DataTableFilterDrawer
             filters={[
@@ -288,7 +413,18 @@ export function ExpensesManager({
                 type: "combobox",
                 paramName: "stationId",
                 label: "Station",
-                options: stations.map(s => ({ value: s.id, label: s.name })),
+                options: stations.map((s) => ({ value: s.id, label: s.name })),
+              },
+              {
+                type: "select",
+                paramName: "status",
+                label: "Status",
+                options: [
+                  { value: "ALL", label: "All Statuses" },
+                  { value: "PENDING", label: "Pending" },
+                  { value: "APPROVED", label: "Approved" },
+                  { value: "REJECTED", label: "Rejected" },
+                ],
               },
               {
                 type: "select",
@@ -320,6 +456,154 @@ export function ExpensesManager({
       />
 
       {/* ==========================================
+          CREATE EXPENSE DIALOG
+      ========================================== */}
+      {activeDialog === "create" && (
+        <Dialog open={true} onOpenChange={closeDialog}>
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold">Record Station Expense</DialogTitle>
+            </DialogHeader>
+
+            <form onSubmit={handleCreateExpense} className="space-y-4 pt-2">
+              {/* Station Selection */}
+              <div className="space-y-1.5">
+                <Label htmlFor="stationId">Station *</Label>
+                <Select value={createStationId} onValueChange={setCreateStationId}>
+                  <SelectTrigger id="stationId">
+                    <SelectValue placeholder="Select station" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stations.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name} ({s.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Category & Payment Method */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="category">Category *</Label>
+                  <Select value={createCategory} onValueChange={setCreateCategory}>
+                    <SelectTrigger id="category">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(CATEGORY_MAP).map(([val, label]) => (
+                        <SelectItem key={val} value={val}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="paymentMethod">Payment Method *</Label>
+                  <Select
+                    value={createPaymentMethod}
+                    onValueChange={(val) => {
+                      setCreatePaymentMethod(val);
+                      if (val === "CASH") setCreateBankAccountId("");
+                    }}
+                  >
+                    <SelectTrigger id="paymentMethod">
+                      <SelectValue placeholder="Payment Method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(PAYMENT_METHOD_MAP).map(([val, label]) => (
+                        <SelectItem key={val} value={val}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Bank Account for Non-Cash */}
+              {createPaymentMethod !== "CASH" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="bankAccountId">Station Bank Account *</Label>
+                  <Select value={createBankAccountId} onValueChange={setCreateBankAccountId}>
+                    <SelectTrigger id="bankAccountId">
+                      <SelectValue placeholder="Select bank account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {bankAccounts.length === 0 ? (
+                        <div className="p-2 text-xs text-muted-foreground text-center">
+                          No bank accounts configured
+                        </div>
+                      ) : (
+                        bankAccounts.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.bankName} - {b.accountNumber} ({b.accountName})
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Amount */}
+              <div className="space-y-1.5">
+                <Label htmlFor="amount">Amount (₦) *</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="0.00"
+                  value={createAmount}
+                  onChange={(e) => setCreateAmount(e.target.value)}
+                  required
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1.5">
+                <Label htmlFor="description">Description / Purpose *</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Details of the expense..."
+                  value={createDescription}
+                  onChange={(e) => setCreateDescription(e.target.value)}
+                  rows={3}
+                  required
+                />
+              </div>
+
+              {createError && (
+                <p className="text-xs text-destructive bg-destructive/10 p-2.5 rounded-lg">
+                  {createError}
+                </p>
+              )}
+
+              <DialogFooter className="pt-2 gap-2">
+                <Button type="button" variant="outline" onClick={closeDialog}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting} className="gap-2">
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Recording...
+                    </>
+                  ) : (
+                    "Record Expense"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ==========================================
           EXPENSE DETAILS DIALOG
       ========================================== */}
       {activeDialog === "details" && currentSelectedExpense && (
@@ -328,7 +612,7 @@ export function ExpensesManager({
             <DialogHeader className="shrink-0">
               <DialogTitle className="text-lg font-bold">Expense Record Details</DialogTitle>
             </DialogHeader>
-            
+
             <div className="space-y-5 overflow-y-auto pr-2 pb-2">
               {/* Grid of Key Info */}
               <div className="grid grid-cols-2 gap-3 bg-muted/20 p-3 rounded-2xl border border-border/40">
@@ -340,7 +624,7 @@ export function ExpensesManager({
                 <div>
                   <span className="text-xs text-muted-foreground block font-medium">Amount</span>
                   <span className="font-bold text-foreground text-base font-mono">
-                    {Number(currentSelectedExpense.amount).toLocaleString()}
+                    ₦{Number(currentSelectedExpense.amount).toLocaleString()}
                   </span>
                 </div>
                 <div>
@@ -460,6 +744,36 @@ export function ExpensesManager({
             </div>
 
             <DialogFooter className="flex-row items-center sm:justify-end gap-2 shrink-0 pt-2 border-t">
+              {currentSelectedExpense.status === "PENDING" && (
+                <div className="flex items-center gap-2 mr-auto">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleApproveExpense(currentSelectedExpense.id, "REJECTED")}
+                    disabled={approvingExpenseId === currentSelectedExpense.id}
+                  >
+                    {approvingExpenseId === currentSelectedExpense.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      "Reject"
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => handleApproveExpense(currentSelectedExpense.id, "APPROVED")}
+                    disabled={approvingExpenseId === currentSelectedExpense.id}
+                  >
+                    {approvingExpenseId === currentSelectedExpense.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      "Approve"
+                    )}
+                  </Button>
+                </div>
+              )}
               <Button type="button" variant="outline" onClick={closeDialog}>
                 Close
               </Button>
@@ -470,4 +784,3 @@ export function ExpensesManager({
     </div>
   );
 }
-

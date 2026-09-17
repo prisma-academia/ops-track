@@ -102,6 +102,14 @@ export function CreateTransportForm({
   const totalRequested = previouslyTransported + currentlyAllocated;
   const isOverAllocated = selectedOrderId ? totalRequested > targetVolume : false;
   const remainingVolume = Math.max(0, targetVolume - totalRequested);
+  const overVolume = Math.max(0, totalRequested - targetVolume);
+  const scaleBase = isOverAllocated ? (totalRequested || 1) : (targetVolume || 1);
+  const priorPercent = targetVolume > 0 ? (previouslyTransported / scaleBase) * 100 : 0;
+  const currentWithinTarget = isOverAllocated ? Math.max(0, currentlyAllocated - overVolume) : currentlyAllocated;
+  const currentPercent = targetVolume > 0 ? (currentWithinTarget / scaleBase) * 100 : 0;
+  const remainingPercent = targetVolume > 0 && !isOverAllocated ? (remainingVolume / scaleBase) * 100 : 0;
+  const overPercent = isOverAllocated ? (overVolume / scaleBase) * 100 : 0;
+  const allocationPercentage = Math.min(100, Math.round((totalRequested / (targetVolume || 1)) * 100));
 
   const availableOrders = orders.filter((o) => {
     const prev = o.transports.reduce((sum, t) => sum + Number(t.litersCarried), 0);
@@ -229,86 +237,156 @@ export function CreateTransportForm({
                     </span>
                   )}
                 </CardHeader>
-                <CardContent className="pt-6 space-y-6">
-                  {/* Vertical Indicators Summary matching churn-rate-summary */}
-                  <div className="space-y-3 pb-2">
-                    {/* Requested / Total Target */}
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 bg-blue-500 rounded-xs shrink-0" />
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          Total Order Target
-                        </span>
-                      </div>
-                      <span className="font-mono font-bold text-sm text-foreground">
-                        {targetVolume.toLocaleString()}L
-                      </span>
+                <CardContent className="pt-5 space-y-4">
+                  {/* Top Progress & Target Header */}
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Order Target: </span>
+                      <span className="font-mono font-bold text-sm text-foreground">{targetVolume.toLocaleString()}L</span>
                     </div>
-
-                    {/* Assign */}
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 bg-amber-500 rounded-xs shrink-0" />
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          Assigned Volume
+                    <div className="font-mono text-xs">
+                      {isOverAllocated ? (
+                        <span className="text-destructive font-bold">
+                          +{overVolume.toLocaleString()}L Over
                         </span>
-                      </div>
-                      <span className="font-mono font-bold text-sm text-amber-600 dark:text-amber-400">
-                        {currentlyAllocated.toLocaleString()}L
-                      </span>
-                    </div>
-
-                    {/* Remaining */}
-                    <div className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${remainingVolume === 0 ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/40" : "bg-stone-50/60 dark:bg-stone-900/40 border-stone-200 dark:border-stone-800"}`}>
-                      <div className="flex items-center gap-2">
-                        <div className={`h-2.5 w-2.5 rounded-xs shrink-0 ${remainingVolume === 0 ? "bg-emerald-500" : "bg-stone-400"}`} />
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          Remaining Volume
+                      ) : (
+                        <span className="text-muted-foreground font-medium">
+                          {allocationPercentage}% Allocated
                         </span>
-                      </div>
-                      <span className={`font-mono font-bold text-sm ${remainingVolume === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-stone-700 dark:text-stone-300"}`}>
-                        {remainingVolume.toLocaleString()}L
-                      </span>
+                      )}
                     </div>
                   </div>
 
-                  {/* Single Bar Stacked Chart matching churn-rate-chart design */}
-                  <div className="space-y-2 pt-2 border-t border-border/40">
-                    <div className="flex justify-between items-center text-xs font-mono text-muted-foreground font-medium">
-                      <span>Allocation Progress</span>
-                      <span>{Math.min(100, Math.round((totalRequested / (targetVolume || 1)) * 100))}%</span>
-                    </div>
-
+                  {/* Single Stacked Bar Chart with Colors for Each Status */}
+                  <div className="space-y-1.5">
                     <div className="h-4 w-full bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden flex p-0.5 shadow-inner border border-stone-200 dark:border-stone-700 gap-0.5">
-                      {previouslyTransported > 0 && (
+                      {priorPercent > 0 && (
                         <div 
                           className="h-full bg-blue-500 rounded-xs transition-all duration-500" 
-                          style={{ width: `${Math.min(100, (previouslyTransported / (targetVolume || 1)) * 100)}%` }}
-                          title={`Prior Dispatched: ${previouslyTransported.toLocaleString()} L`}
+                          style={{ width: `${priorPercent}%` }}
+                          title={`Prior Dispatched: ${previouslyTransported.toLocaleString()} L (${Math.round((previouslyTransported / (targetVolume || 1)) * 100)}%)`}
                         />
                       )}
-                      {currentlyAllocated > 0 && (
+                      {currentPercent > 0 && (
                         <div 
                           className="h-full bg-amber-500 rounded-xs transition-all duration-500" 
-                          style={{ width: `${Math.min(100, (currentlyAllocated / (targetVolume || 1)) * 100)}%` }}
-                          title={`Assigned in Form: ${currentlyAllocated.toLocaleString()} L`}
+                          style={{ width: `${currentPercent}%` }}
+                          title={`Assigned: ${currentlyAllocated.toLocaleString()} L (${Math.round((currentlyAllocated / (targetVolume || 1)) * 100)}%)`}
                         />
                       )}
-                      {remainingVolume > 0 && (
+                      {remainingPercent > 0 && (
                         <div 
-                          className="h-full bg-stone-300 dark:bg-stone-600 rounded-xs transition-all duration-500" 
-                          style={{ width: `${Math.min(100, (remainingVolume / (targetVolume || 1)) * 100)}%` }}
-                          title={`Remaining: ${remainingVolume.toLocaleString()} L`}
+                          className="h-full bg-stone-200 dark:bg-stone-700/60 rounded-xs transition-all duration-500" 
+                          style={{ width: `${remainingPercent}%` }}
+                          title={`Remaining: ${remainingVolume.toLocaleString()} L (${Math.round((remainingVolume / (targetVolume || 1)) * 100)}%)`}
                         />
                       )}
-                      {remainingVolume === 0 && totalRequested >= targetVolume && (
+                      {overPercent > 0 && (
                         <div 
-                          className="h-full bg-emerald-500 rounded-xs transition-all duration-500" 
-                          style={{ width: "100%" }}
-                          title="Fully Allocated"
+                          className="h-full bg-rose-500 rounded-xs transition-all duration-500 animate-pulse" 
+                          style={{ width: `${overPercent}%` }}
+                          title={`Over-allocated: ${overVolume.toLocaleString()} L`}
                         />
                       )}
                     </div>
+                  </div>
+
+                  {/* Indicators Horizontally Below */}
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    {/* Prior Dispatched */}
+                    <div 
+                      className="p-2.5 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 flex flex-col justify-between"
+                      title={`Prior Dispatched: ${previouslyTransported.toLocaleString()} L`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+                          Prior
+                        </span>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-1">
+                        <span className="font-mono font-bold text-xs text-foreground truncate">
+                          {previouslyTransported.toLocaleString()}L
+                        </span>
+                        <span className="text-[10px] font-mono text-muted-foreground">
+                          {Math.round((previouslyTransported / (targetVolume || 1)) * 100)}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Assigned */}
+                    <div 
+                      className="p-2.5 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 flex flex-col justify-between"
+                      title={`Assigned in Form: ${currentlyAllocated.toLocaleString()} L`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+                          Assigned
+                        </span>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-1">
+                        <span className="font-mono font-bold text-xs text-amber-600 dark:text-amber-400 truncate">
+                          {currentlyAllocated.toLocaleString()}L
+                        </span>
+                        <span className="text-[10px] font-mono text-amber-600/80 dark:text-amber-400/80">
+                          {Math.round((currentlyAllocated / (targetVolume || 1)) * 100)}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Remaining or Excess */}
+                    {isOverAllocated ? (
+                      <div 
+                        className="p-2.5 rounded-lg bg-destructive/10 border border-destructive/20 flex flex-col justify-between"
+                        title={`Excess Over Target: +${overVolume.toLocaleString()} L`}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <div className="h-2 w-2 rounded-full bg-destructive shrink-0" />
+                          <span className="text-[11px] font-semibold text-destructive uppercase tracking-wider truncate">
+                            Excess
+                          </span>
+                        </div>
+                        <div className="flex items-baseline justify-between gap-1">
+                          <span className="font-mono font-bold text-xs text-destructive truncate">
+                            +{overVolume.toLocaleString()}L
+                          </span>
+                          <span className="text-[10px] font-mono text-destructive/80 font-bold">
+                            Over
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div 
+                        className={`p-2.5 rounded-lg border flex flex-col justify-between transition-colors ${
+                          remainingVolume === 0 && targetVolume > 0
+                            ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/40" 
+                            : "bg-stone-50/60 dark:bg-stone-900/40 border-stone-200 dark:border-stone-800"
+                        }`}
+                        title={`Remaining Volume: ${remainingVolume.toLocaleString()} L`}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <div className={`h-2 w-2 rounded-full shrink-0 ${
+                            remainingVolume === 0 && targetVolume > 0 ? "bg-emerald-500" : "bg-stone-400 dark:bg-stone-500"
+                          }`} />
+                          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+                            Remaining
+                          </span>
+                        </div>
+                        <div className="flex items-baseline justify-between gap-1">
+                          <span className={`font-mono font-bold text-xs truncate ${
+                            remainingVolume === 0 && targetVolume > 0 
+                              ? "text-emerald-600 dark:text-emerald-400" 
+                              : "text-stone-700 dark:text-stone-300"
+                          }`}>
+                            {remainingVolume.toLocaleString()}L
+                          </span>
+                          <span className="text-[10px] font-mono text-muted-foreground">
+                            {Math.round((remainingVolume / (targetVolume || 1)) * 100)}%
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

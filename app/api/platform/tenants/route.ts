@@ -92,6 +92,9 @@ export async function POST(request: Request) {
           region: body.region ?? null,
           postalCode: body.postalCode ?? null,
           country: body.country ?? null,
+          // Start trial immediately on provisioning
+          trialStartedAt: new Date(),
+          trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
         },
       });
       // Owner/roles/log belong to the new tenant — bind scope to it so the

@@ -6,14 +6,48 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { parseTenantSettings } from "@/lib/tenant/settings";
 import type { AppModule } from "@/lib/generated/prisma/client";
 
 const Body = z.discriminatedUnion("action", [
+  // Existing lifecycle actions
   z.object({ action: z.enum(["suspend", "archive", "restore"]) }),
   z.object({
     action: z.literal("toggle_module"),
     module: z.enum(["STATION", "FLEET"]),
     enabled: z.boolean(),
+  }),
+
+  // Trial controls
+  z.object({
+    action: z.literal("set_trial"),
+    trialDays: z.number().int().min(1).max(365),
+    trialStartedAt: z.string().datetime().optional(), // ISO string; defaults to now if not set
+    trialEndsAt: z.string().datetime().optional(),    // override computed end date
+  }),
+  z.object({
+    action: z.literal("extend_trial"),
+    days: z.number().int().min(1).max(365),
+  }),
+
+  // Platform-controlled capacity limits + feature gates (settingsJson patch)
+  z.object({
+    action: z.literal("set_settings"),
+    patch: z.object({
+      maxUsers:           z.number().int().min(1).optional(),
+      maxStations:        z.number().int().min(1).optional(),
+      maxOrganizations:   z.number().int().min(1).optional(),
+      allowClientPortal:  z.boolean().optional(),
+      allowApiAccess:     z.boolean().optional(),
+      maintenanceMode:    z.boolean().optional(),
+      maintenanceMessage: z.string().max(500).optional(),
+    }),
+  }),
+
+  // Internal notes
+  z.object({
+    action: z.literal("set_notes"),
+    notes: z.string().max(5000),
   }),
 ]);
 
@@ -31,6 +65,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
     let updated = tenant;
 
+    // ── toggle_module ──────────────────────────────────────────────────────
     if (action === "toggle_module") {
       const module = payload.module as AppModule;
       const activeModules = new Set(tenant.activeModules);
@@ -53,6 +88,56 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         });
         return next;
       });
+
+    // ── set_trial ──────────────────────────────────────────────────────────
+    } else if (action === "set_trial") {
+      const startedAt = payload.trialStartedAt
+        ? new Date(payload.trialStartedAt)
+        : (tenant.trialStartedAt ?? new Date());
+
+      const endsAt = payload.trialEndsAt
+        ? new Date(payload.trialEndsAt)
+        : new Date(startedAt.getTime() + payload.trialDays * 24 * 60 * 60 * 1000);
+
+      updated = await prisma.tenant.update({
+        where: { id },
+        data: {
+          trialDays: payload.trialDays,
+          trialStartedAt: startedAt,
+          trialEndsAt: endsAt,
+        },
+      });
+
+    // ── extend_trial ───────────────────────────────────────────────────────
+    } else if (action === "extend_trial") {
+      const base = tenant.trialEndsAt ?? new Date();
+      const newEnd = new Date(base.getTime() + payload.days * 24 * 60 * 60 * 1000);
+
+      updated = await prisma.tenant.update({
+        where: { id },
+        data: {
+          trialEndsAt: newEnd,
+          trialExtensions: { increment: 1 },
+        },
+      });
+
+    // ── set_settings ───────────────────────────────────────────────────────
+    } else if (action === "set_settings") {
+      const current = parseTenantSettings(tenant.settingsJson);
+      const next = { ...current, ...payload.patch };
+      updated = await prisma.tenant.update({
+        where: { id },
+        data: { settingsJson: next as object },
+      });
+
+    // ── set_notes ──────────────────────────────────────────────────────────
+    } else if (action === "set_notes") {
+      updated = await prisma.tenant.update({
+        where: { id },
+        data: { notes: payload.notes },
+      });
+
+    // ── lifecycle: suspend / archive / restore ─────────────────────────────
     } else {
       const next =
         action === "suspend"
@@ -74,12 +159,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       targetType: "Tenant",
       targetId: id,
       before: action === "toggle_module" ? { activeModules: tenant.activeModules } : { status: tenant.status },
-      after: action === "toggle_module" ? { activeModules: updated.activeModules } : { status: updated.status },
+      after:  action === "toggle_module" ? { activeModules: updated.activeModules } : { status: updated.status },
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
+
     return ok({ tenant: updated });
   } catch (e) {
     return handleError(e);
   }
 }
+

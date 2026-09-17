@@ -12,6 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { apiPost, apiPatch } from "@/lib/client/api";
+import { CheckIcon, ChevronsUpDown, Loader2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
   scope: z.enum(["STATION", "FLEET"]),
@@ -42,6 +46,13 @@ export function BankAccountFormModal({
   hasTransactions = false,
 }: BankAccountFormModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [banks, setBanks] = useState<{name: string, code: string}[]>([]);
+  const [isFetchingBanks, setIsFetchingBanks] = useState(false);
+  const [openBankSelect, setOpenBankSelect] = useState(false);
+  const [selectedBankCode, setSelectedBankCode] = useState<string>("");
+  
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -63,8 +74,64 @@ export function BankAccountFormModal({
         bankName: initialData?.bankName || "",
         isActive: initialData?.isActive ?? true,
       });
+      setIsVerified(!!initialData?.accountName);
+      setSelectedBankCode("");
     }
   }, [isOpen, initialData, fixedScope, reset]);
+
+  // Fetch Banks
+  useEffect(() => {
+    if (isOpen && banks.length === 0) {
+      setIsFetchingBanks(true);
+      fetch('/api/tenant/paystack/banks')
+        .then(res => res.json())
+        .then(res => {
+          if (res?.data) {
+            setBanks(res.data);
+            // If editing, try to find the matching bank code
+            if (initialData?.bankName) {
+              const b = res.data.find((x: any) => x.name === initialData.bankName);
+              if (b) setSelectedBankCode(b.code);
+            }
+          }
+        })
+        .catch(e => console.error("Failed to fetch banks", e))
+        .finally(() => setIsFetchingBanks(false));
+    }
+  }, [isOpen, banks.length, initialData]);
+
+  const accountNumber = watch("accountNumber");
+  const bankName = watch("bankName");
+
+  // Debounced Verification
+  useEffect(() => {
+    if (!isOpen || hasTransactions || isVerified) return;
+    if (accountNumber?.length === 10 && selectedBankCode) {
+      const timer = setTimeout(() => {
+        verifyAccount(accountNumber, selectedBankCode, bankName);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [accountNumber, selectedBankCode, isOpen, hasTransactions, isVerified]);
+
+  const verifyAccount = async (accNum: string, bCode: string, bName: string) => {
+    setIsVerifying(true);
+    try {
+      const res = await fetch(`/api/tenant/paystack/verify?account_number=${encodeURIComponent(accNum)}&bank_code=${encodeURIComponent(bCode)}`);
+      const data = await res.json();
+      if (data?.data?.account_name) {
+        setValue("accountName", data.data.account_name);
+        setIsVerified(true);
+        toast.success(`Account verified: ${data.data.account_name}`, { icon: <CheckIcon className="h-4 w-4 text-green-500" /> });
+      } else {
+        toast.error(data.error?.message || "Could not verify account details");
+      }
+    } catch (e) {
+      toast.error("Failed to connect to verification service");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
@@ -123,13 +190,68 @@ export function BankAccountFormModal({
 
           <div className="space-y-2">
             <Label>Bank Name</Label>
-            <Input {...register("bankName")} placeholder="e.g. Zenith Bank" />
+            <Popover open={openBankSelect} onOpenChange={setOpenBankSelect}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openBankSelect}
+                  className="w-full justify-between"
+                  disabled={hasTransactions}
+                >
+                  {isFetchingBanks ? (
+                    <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading banks...</span>
+                  ) : bankName ? (
+                    bankName
+                  ) : (
+                    "Select bank..."
+                  )}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search bank..." />
+                  <CommandList>
+                    <CommandEmpty>No bank found.</CommandEmpty>
+                    <CommandGroup>
+                      {banks.map((bank) => (
+                        <CommandItem
+                          key={bank.code}
+                          value={bank.name}
+                          onSelect={(currentValue) => {
+                            setValue("bankName", bank.name, { shouldValidate: true });
+                            setSelectedBankCode(bank.code);
+                            setIsVerified(false); // require re-verification
+                            setOpenBankSelect(false);
+                          }}
+                        >
+                          <CheckIcon
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedBankCode === bank.code ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {bank.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             {errors.bankName && <p className="text-sm text-red-500">{errors.bankName.message}</p>}
           </div>
 
           <div className="space-y-2">
             <Label>Account Name</Label>
-            <Input {...register("accountName")} placeholder="e.g. Acme Station Account" />
+            <Input 
+              {...register("accountName")} 
+              placeholder="e.g. Acme Station Account" 
+              readOnly={isVerified}
+              className={isVerified ? "bg-muted cursor-not-allowed opacity-90" : ""}
+            />
+            {isVerified && <p className="text-xs text-green-600">Verified securely via Paystack NIBSS.</p>}
             {errors.accountName && <p className="text-sm text-red-500">{errors.accountName.message}</p>}
           </div>
 
@@ -142,12 +264,23 @@ export function BankAccountFormModal({
                 </span>
               )}
             </div>
-            <Input
-              {...register("accountNumber")}
-              placeholder="e.g. 1012345678"
-              disabled={hasTransactions}
-              className={hasTransactions ? "bg-muted cursor-not-allowed opacity-80" : ""}
-            />
+            <div className="relative">
+              <Input
+                {...register("accountNumber")}
+                placeholder="e.g. 1012345678"
+                disabled={hasTransactions}
+                onChange={(e) => {
+                  setValue("accountNumber", e.target.value, { shouldValidate: true });
+                  if (isVerified) setIsVerified(false);
+                }}
+                className={hasTransactions ? "bg-muted cursor-not-allowed opacity-80" : ""}
+              />
+              {isVerifying && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </div>
             {hasTransactions ? (
               <p className="text-[11px] text-muted-foreground">
                 Account number cannot be changed because this account has transaction records.

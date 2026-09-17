@@ -59,20 +59,35 @@ async function run() {
 
 async function uploadToGoogleDrive(filePath: string, fileName: string) {
   const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  const credentialsJson = process.env.GOOGLE_CREDENTIALS_JSON;
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
-  if (!credentialsPath || !folderId) {
-    console.warn("⚠️  GOOGLE_APPLICATION_CREDENTIALS or GOOGLE_DRIVE_FOLDER_ID not set. Skipping Google Drive upload.");
+  if (!folderId) {
+    console.warn("⚠️  GOOGLE_DRIVE_FOLDER_ID not set. Skipping Google Drive upload.");
+    return;
+  }
+
+  if (!credentialsPath && !credentialsJson) {
+    console.warn("⚠️  Neither GOOGLE_APPLICATION_CREDENTIALS nor GOOGLE_CREDENTIALS_JSON is set. Skipping Google Drive upload.");
     return;
   }
 
   console.log(`\n☁️  Uploading ${fileName} to Google Drive...`);
   
   try {
-    const auth = new google.auth.GoogleAuth({
-      keyFile: credentialsPath,
+    let authOptions: any = {
       scopes: ["https://www.googleapis.com/auth/drive.file"],
-    });
+    };
+
+    if (credentialsJson) {
+      // Use raw JSON string from Vercel environment variables
+      authOptions.credentials = JSON.parse(credentialsJson);
+    } else {
+      // Fallback to local file path
+      authOptions.keyFile = credentialsPath;
+    }
+
+    const auth = new google.auth.GoogleAuth(authOptions);
 
     const drive = google.drive({ version: "v3", auth });
 

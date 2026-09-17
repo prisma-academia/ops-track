@@ -3,6 +3,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { TenantStatusBadge } from "../_components/tenant-status-badge";
 
 export type TenantRow = {
@@ -14,6 +15,9 @@ export type TenantRow = {
   createdAt: string;
   logoUrl: string | null;
   ownerName: string | null;
+  trialEndsAt: string | null;
+  hasActiveSub: boolean;
+  subEndsAt: string | null;
 };
 
 function initials(name: string) {
@@ -60,6 +64,26 @@ const columns: ColumnDef<TenantRow>[] = [
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => <TenantStatusBadge status={row.original.status} />,
+  },
+  {
+    id: "billing",
+    header: "Billing",
+    cell: ({ row }) => {
+      const t = row.original;
+      const now = new Date();
+      if (t.hasActiveSub && t.subEndsAt) {
+        const daysLeft = Math.ceil((new Date(t.subEndsAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysLeft <= 15) {
+          return <Badge variant="outline" className="text-xs border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">Subscr. expiring ({daysLeft}d)</Badge>;
+        }
+        return <Badge variant="outline" className="text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">Active</Badge>;
+      }
+      if (!t.trialEndsAt) return <Badge variant="outline" className="text-xs text-muted-foreground">No trial set</Badge>;
+      const daysLeft = Math.ceil((new Date(t.trialEndsAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysLeft < 0) return <Badge variant="outline" className="text-xs border-destructive/30 bg-destructive/10 text-destructive">Trial expired</Badge>;
+      if (daysLeft <= 5) return <Badge variant="outline" className="text-xs border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">Trial expiring ({daysLeft}d)</Badge>;
+      return <Badge variant="outline" className="text-xs border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300">Trial ({daysLeft}d)</Badge>;
+    },
   },
   {
     accessorKey: "companyEmail",

@@ -63,6 +63,20 @@ enum OrganizationType {
   EXTERNAL // Client company managed by fleet manager
 }
 
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum DemoRequestStatus {
+  PENDING
+  CONTACTED
+  NEGOTIATING
+  CONVERTED
+  LOST
+}
+
 model TenantModule {
   id        String    @id @default(uuid())
   tenantId  String
@@ -97,6 +111,15 @@ model Tenant {
   createdAt    DateTime     @default(now())
   archivedAt   DateTime?
 
+  // Trial lifecycle — managed by platform admin
+  trialDays       Int       @default(14)
+  trialStartedAt  DateTime?
+  trialEndsAt     DateTime?
+  trialExtensions Int       @default(0)
+
+  // Internal platform admin notes (not visible to tenant)
+  notes String?
+
   users                      TenantUser[]
   clients                    Client[]
   pendingClientRegistrations PendingClientRegistration[]
@@ -124,6 +147,7 @@ model Tenant {
 
   activeModules        String[]              @default(["FLEET", "STATION"])
   modules              TenantModule[]
+  subscriptions        TenantSubscription[]
   transporters         Transporter[]
   trucks               Truck[]
   drivers              Driver[]
@@ -146,6 +170,68 @@ model Tenant {
   notificationDeliveries NotificationDelivery[]
 
   @@index([status])
+  @@index([trialEndsAt])
+}
+
+/// A manually-recorded B2B deal. Created by platform admin after negotiation completes.
+/// Tenant is considered "paid/active" while any row here has status=ACTIVE and endDate > now().
+model TenantSubscription {
+  id          String             @id @default(cuid())
+  tenantId    String
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Deal financials
+  amount      Decimal            @db.Decimal(12, 2)
+  currency    String             @default("NGN") // ISO 4217
+  description String?            // e.g. "Annual license — 3 stations"
+  receiptRef  String?            // external invoice/receipt number
+
+  /// Coverage window
+  startDate   DateTime
+  endDate     DateTime
+
+  status      SubscriptionStatus @default(ACTIVE)
+
+  /// Audit
+  recordedById  String           // PlatformUser.id who recorded this deal
+  recordedAt    DateTime         @default(now())
+  revokedById   String?
+  revokedAt     DateTime?
+  revokedReason String?
+
+  @@index([tenantId, status])
+  @@index([endDate])
+  @@map("tenant_subscriptions")
+}
+
+/// Prospect interest captured via the public "Book a Demo" form.
+/// Platform-only; never tenant-scoped.
+model DemoRequest {
+  id          String            @id @default(cuid())
+  status      DemoRequestStatus @default(PENDING)
+
+  // Submitted by prospect
+  companyName  String
+  contactName  String
+  email        String
+  phone        String?
+  companySize  String?  // "1–10", "11–50", "51–200", "200+"
+  industry     String?  // "Fuel Retail", "Logistics", "Transport", "Other"
+  country      String?
+  interestedIn String[] @default([]) // ["STATION", "FLEET"]
+  message      String?
+
+  // Platform admin fields
+  assignedTo          String?   // PlatformUser.id
+  reviewNotes         String?
+  scheduledAt         DateTime? // when demo call is booked
+  convertedToTenantId String?   // set when this lead becomes a tenant
+  reviewedAt          DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([status])
+  @@map("demo_requests")
 }
 
 model PlatformUser {

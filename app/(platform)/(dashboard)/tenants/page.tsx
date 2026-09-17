@@ -19,10 +19,18 @@ export default async function TenantsPage() {
       companyEmail: true,
       createdAt: true,
       settingsJson: true,
+      trialDays: true,
+      trialStartedAt: true,
+      trialEndsAt: true,
       users: {
         where: { isOwner: true },
         take: 1,
         select: { firstName: true, lastName: true, email: true },
+      },
+      subscriptions: {
+        where: { status: "ACTIVE" },
+        take: 1,
+        select: { id: true, endDate: true },
       },
     },
   });
@@ -31,6 +39,7 @@ export default async function TenantsPage() {
     const ownerName = owner
       ? `${owner.firstName ?? ""} ${owner.lastName ?? ""}`.trim() || owner.email
       : null;
+    const activeSub = t.subscriptions[0] ?? null;
     return {
       id: t.id,
       name: t.name,
@@ -40,6 +49,9 @@ export default async function TenantsPage() {
       createdAt: t.createdAt.toISOString(),
       logoUrl: resolveLogoUrl(parseTenantSettings(t.settingsJson).logoKey),
       ownerName,
+      trialEndsAt: t.trialEndsAt?.toISOString() ?? null,
+      hasActiveSub: !!activeSub,
+      subEndsAt: activeSub?.endDate.toISOString() ?? null,
     };
   });
   return (

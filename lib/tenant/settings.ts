@@ -39,7 +39,26 @@ export const tenantSettingsSchema = z.object({
   blockOnUnresolvedVariance: z.boolean().default(false),
   /** Flat fee (tenant currency) for origin-to-depot transport leg payouts */
   originToDepotFee: z.number().min(0).default(0),
+
+  // ── Platform-controlled capacity limits ──────────────────────────────────
+  /** Max number of users allowed for this tenant (enforced during trial) */
+  maxUsers: z.number().int().min(1).default(50),
+  /** Max number of stations allowed (enforced during trial) */
+  maxStations: z.number().int().min(1).default(10),
+  /** Max number of organizations allowed (enforced during trial) */
+  maxOrganizations: z.number().int().min(1).default(5),
+
+  // ── Platform-controlled feature gates ────────────────────────────────────
+  /** Allow tenant's client-facing portal to operate */
+  allowClientPortal: z.boolean().default(true),
+  /** Allow tenant to generate API keys */
+  allowApiAccess: z.boolean().default(false),
+  /** Lock tenant out with a maintenance message (platform override) */
+  maintenanceMode: z.boolean().default(false),
+  /** Custom message shown when maintenanceMode is true */
+  maintenanceMessage: z.string().max(500).default("This workspace is temporarily unavailable. Please contact support."),
 });
+
 
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 

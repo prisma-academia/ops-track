@@ -10,7 +10,7 @@ import { buildOffsetPageMeta } from "@/lib/api/pagination";
 import { failedActivityWhere } from "@/lib/activity/status";
 import { PageHeader } from "@/components/shell";
 import { Card, CardAction, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { TenantActions, TenantModuleToggle } from "./actions";
+import { TenantActions, TenantModuleToggle, TrialControls, PlatformControls, TenantNotesEditor, RevokeSubscriptionButton } from "./actions";
 import { TenantActivityTab } from "./activity-tab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -25,6 +25,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { TenantStatusBadge } from "../../_components/tenant-status-badge";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 import {
   Building2,
   Fuel,
@@ -36,7 +37,12 @@ import {
   Truck,
   Users,
   UserRound,
+  Plus,
+  SlidersHorizontal,
+  FileText,
+  CalendarClock,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 function initials(name: string) {
   return (
@@ -76,6 +82,7 @@ export default async function TenantDrilldownPage({
     include: {
       _count: { select: { users: true, clients: true, stations: true, organizations: true } },
       modules: { select: { module: true, status: true } },
+      subscriptions: { orderBy: { recordedAt: "desc" } },
     },
   });
   if (!tenant) notFound();
@@ -211,6 +218,7 @@ export default async function TenantDrilldownPage({
         <TabsList>
           <TabsTrigger value="modules">Modules</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="controls">Controls</TabsTrigger>
           <TabsTrigger value="activity">Activity Log</TabsTrigger>
         </TabsList>
 
@@ -303,6 +311,140 @@ export default async function TenantDrilldownPage({
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="controls" className="mt-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* ── Trial Panel ── */}
+            <Card>
+              <CardHeader className="border-b border-border/40 pb-3">
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="size-4 text-primary" />
+                  <CardTitle className="text-sm font-semibold">Trial</CardTitle>
+                </div>
+                <CardDescription className="text-xs">Configure the trial window for this tenant.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <TrialControls
+                  tenantId={tenant.id}
+                  trialDays={tenant.trialDays}
+                  trialStartedAt={tenant.trialStartedAt?.toISOString() ?? null}
+                  trialEndsAt={tenant.trialEndsAt?.toISOString() ?? null}
+                />
+              </CardContent>
+            </Card>
+
+            {/* ── Platform Controls ── */}
+            <Card>
+              <CardHeader className="border-b border-border/40 pb-3">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="size-4 text-primary" />
+                  <CardTitle className="text-sm font-semibold">Platform Controls</CardTitle>
+                </div>
+                <CardDescription className="text-xs">Capacity limits and feature gates.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <PlatformControls
+                  tenantId={tenant.id}
+                  settings={{
+                    maxUsers: parseTenantSettings(tenant.settingsJson).maxUsers,
+                    maxStations: parseTenantSettings(tenant.settingsJson).maxStations,
+                    maxOrganizations: parseTenantSettings(tenant.settingsJson).maxOrganizations,
+                    allowClientPortal: parseTenantSettings(tenant.settingsJson).allowClientPortal,
+                    allowApiAccess: parseTenantSettings(tenant.settingsJson).allowApiAccess,
+                    maintenanceMode: parseTenantSettings(tenant.settingsJson).maintenanceMode,
+                    maintenanceMessage: parseTenantSettings(tenant.settingsJson).maintenanceMessage,
+                  }}
+                />
+              </CardContent>
+            </Card>
+
+            {/* ── Subscription History ── */}
+            <Card className="md:col-span-2">
+              <CardHeader className="border-b border-border/40 pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="size-4 text-primary" />
+                    <CardTitle className="text-sm font-semibold">Subscription History</CardTitle>
+                  </div>
+                  <Button size="sm" asChild>
+                    <Link href={`/subscriptions/new?tenantId=${tenant.id}`}>
+                      <Plus className="size-3.5" />
+                      Record Payment
+                    </Link>
+                  </Button>
+                </div>
+                <CardDescription className="text-xs">Manually recorded B2B deals for this tenant.</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                {tenant.subscriptions.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    No payments recorded yet.
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Period</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Receipt</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Recorded</TableHead>
+                        <TableHead></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tenant.subscriptions.map((sub) => (
+                        <TableRow key={sub.id}>
+                          <TableCell className="font-medium tabular-nums">
+                            {sub.currency} {Number(sub.amount).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {sub.startDate.toLocaleDateString()} — {sub.endDate.toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{sub.description ?? "—"}</TableCell>
+                          <TableCell className="font-mono text-xs">{sub.receiptRef ?? "—"}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-xs font-medium",
+                                sub.status === "ACTIVE"
+                                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                  : sub.status === "EXPIRED"
+                                  ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                                  : "border-destructive/30 bg-destructive/10 text-destructive"
+                              )}
+                            >
+                              {sub.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {sub.recordedAt.toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            {sub.status === "ACTIVE" && <RevokeSubscriptionButton subscriptionId={sub.id} />}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ── Internal Notes ── */}
+            <Card className="md:col-span-2">
+              <CardHeader className="border-b border-border/40 pb-3">
+                <CardTitle className="text-sm font-semibold">Internal Notes</CardTitle>
+                <CardDescription className="text-xs">Private notes — not visible to the tenant.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <TenantNotesEditor tenantId={tenant.id} initialNotes={tenant.notes ?? null} />
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="activity" className="mt-4">

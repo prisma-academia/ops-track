@@ -99,6 +99,8 @@ export interface DataTableProps<TData, TValue> {
   hideDateFilter?: boolean;
   /** Extra row content rendered under a parent row (full table width). */
   renderSubRow?: (row: TData) => React.ReactNode | null;
+  /** Optional title to render on the left side of the toolbar. */
+  title?: React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -122,6 +124,7 @@ export function DataTable<TData, TValue>({
   hideSearch = false,
   hideDateFilter = false,
   renderSubRow,
+  title,
 }: DataTableProps<TData, TValue>) {
   const [columnVisibility, setColumnVisibility] =
     useLocalStorage<VisibilityState>(`${tableId}:column-visibility`, {});
@@ -203,6 +206,7 @@ export function DataTable<TData, TValue>({
         pageSize={pagination.pageSize}
         serverPagination={serverPagination}
         renderSubRow={renderSubRow}
+        title={title}
       />
     </DataTableProvider>
   );
@@ -224,6 +228,7 @@ function DataTableBody<TData, TValue>({
   pageSize,
   serverPagination,
   renderSubRow,
+  title,
 }: {
   columns: ColumnDef<TData, TValue>[];
   hideToolbar: boolean;
@@ -240,6 +245,7 @@ function DataTableBody<TData, TValue>({
   pageSize: number;
   serverPagination?: ServerPagination;
   renderSubRow?: (row: TData) => React.ReactNode | null;
+  title?: React.ReactNode;
 }) {
   const router = useRouter();
   const { table, tableContainerRef } = useDataTable<TData>();
@@ -259,6 +265,7 @@ function DataTableBody<TData, TValue>({
               onRefresh={onRefresh}
               hideSearch={hideSearch}
               hideDateFilter={hideDateFilter}
+              title={title}
             />
           </div>
         ) : null}

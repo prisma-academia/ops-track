@@ -7,6 +7,8 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { sendPushNotification } from "@/lib/notifications";
 import { rollupSalesLogStatus, salesPaymentInclude } from "@/lib/sales/payments";
+import { StockMovementService } from "@/lib/inventory/stock-movement-service";
+import { reconcileTankCurrentLiters } from "@/lib/inventory/tank-balance";
 
 const PatchPaymentSchema = z.object({
   status: z.enum(["APPROVED", "REJECTED"]).optional(),
@@ -103,6 +105,42 @@ export async function PATCH(
           approvedAt: new Date(),
         },
       });
+
+      if (rollup === "APPROVED" && payment.salesLog.status !== "APPROVED" && Number(payment.salesLog.litersSold) > 0) {
+        let tankId: string | null = null;
+        if (payment.salesLog.dippingClosingId) {
+          const closing = await tx.dippingClosing.findUnique({
+            where: { id: payment.salesLog.dippingClosingId },
+            include: { session: true },
+          });
+          if (closing) tankId = closing.session.tankId;
+        }
+        if (!tankId) {
+          const tank = await tx.tank.findFirst({
+            where: { 
+              stationId, 
+              tenantId: actor.tenantId, 
+              productType: payment.salesLog.productType as never 
+            },
+            orderBy: { currentLiters: "desc" },
+          });
+          if (tank) tankId = tank.id;
+        }
+
+        if (tankId) {
+          await StockMovementService.recordRetailSale(tx as never, {
+            tenantId: actor.tenantId,
+            stationId,
+            tankId,
+            productType: payment.salesLog.productType as never,
+            quantity: Number(payment.salesLog.litersSold),
+            referenceId: salesLogId,
+            notes: `Retail sale ${payment.salesLog.dippingClosingId ? "from dipping" : ""} approved`,
+            recordedById: actor.userId,
+          });
+          await reconcileTankCurrentLiters(tx as never, tankId);
+        }
+      }
 
       return updated;
     });

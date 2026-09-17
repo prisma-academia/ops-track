@@ -89,9 +89,7 @@ export function SalesDetailsManager({
   const router = useRouter();
 
   const [openEditDialog, setOpenEditDialog] = useState(false);
-  const [openDeductDialog, setOpenDeductDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDeducting, setIsDeducting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [openStationSelect, setOpenStationSelect] = useState(false);
@@ -149,23 +147,6 @@ export function SalesDetailsManager({
     () => (pnlBreakdownRow ? [pnlBreakdownRow] : []),
     [pnlBreakdownRow]
   );
-
-  const handleDeduct = async () => {
-    setIsDeducting(true);
-    const res = await apiPost(`/api/tenant/fleet/deliveries/${delivery.id}/deduct-shortage`, {
-      variance,
-      pricePerLiter: amountPerLiter,
-      totalDeduction: totalDeductionAmount,
-    });
-    setIsDeducting(false);
-
-    if (!res.error) {
-      setOpenDeductDialog(false);
-      router.refresh();
-    } else {
-      alert(res.error.message);
-    }
-  };
 
   const handleEditSale = async () => {
     setIsSubmitting(true);
@@ -618,18 +599,6 @@ export function SalesDetailsManager({
                   <p className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">{fmtMoneyLocal(totalDeductionAmount)}</p>
                 </div>
               </div>
-
-              {hasDeduction ? (
-                <Badge variant="outline" className="w-full justify-center border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900 py-2 text-sm">
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Deduction logged ({fmtMoneyLocal(totalDeductionAmount)})
-                </Badge>
-              ) : (
-                <Button variant="destructive" className="w-full" onClick={() => setOpenDeductDialog(true)}>
-                  <MinusCircle className="w-4 h-4 mr-2" />
-                  Log shortage deduction
-                </Button>
-              )}
             </Card>
           </div>
         )}
@@ -865,40 +834,6 @@ export function SalesDetailsManager({
             </Button>
             <Button onClick={handleEditSale} disabled={isSubmitting}>
               {isSubmitting ? <SpinnerEllipsis /> : "Save Changes"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={openDeductDialog} onOpenChange={(val: boolean) => { if (!isDeducting) setOpenDeductDialog(val); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Log shortage deduction</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <p className="text-sm text-muted-foreground">
-              A shortage of <strong>{fmtQtyLocal(variance)} L</strong> was detected.
-              The driver&apos;s transport fee will be deducted by the value of the lost product.
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 border rounded-md">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest">Shortage</p>
-                <p className="text-lg font-semibold">{fmtQtyLocal(variance)} L</p>
-              </div>
-              <div className="p-3 border rounded-md">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest">Price / Liter</p>
-                <p className="text-lg font-semibold">{fmtMoneyLocal(amountPerLiter)}</p>
-              </div>
-            </div>
-            <div className="p-3 border rounded-md bg-destructive/10 border-destructive/20 text-destructive">
-              <p className="text-xs uppercase tracking-widest">Amount to deduct</p>
-              <p className="text-xl font-bold">{fmtMoneyLocal(totalDeductionAmount)}</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenDeductDialog(false)} disabled={isDeducting}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeduct} disabled={isDeducting}>
-              {isDeducting ? <SpinnerEllipsis /> : "Confirm deduction"}
             </Button>
           </DialogFooter>
         </DialogContent>

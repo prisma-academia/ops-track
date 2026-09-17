@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Truck, AlertTriangle, CheckCircle, Droplets, FileText, Link2, ChevronsUpDown, Printer } from "lucide-react";
+import { ArrowLeft, Truck, AlertTriangle, CheckCircle, Droplets, FileText, Link2, ChevronsUpDown, Printer, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
@@ -23,9 +23,13 @@ import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Droplet } from "lucide-react";
 import { TransportFeeBreakdown, getTransactionFeeLegLabel } from "@/components/fleet/transport-fee-breakdown";
 import { PRODUCT_LOSS_TYPES, getLossTypeLabel, getProductLossType, isNotesRequiredForLossType } from "@/lib/fleet/loss-types";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { FilePreviewButton } from "@/components/file-viewer-modal";
+import { Pie, PieChart } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export function TransportDetailsManager({
   transport,
@@ -43,9 +47,11 @@ export function TransportDetailsManager({
   const [openStatusDialog, setOpenStatusDialog] = useState(false);
   const [openIncidentDialog, setOpenIncidentDialog] = useState(false);
   const [openLinkOrderDialog, setOpenLinkOrderDialog] = useState(false);
+  const [openFinalizeDialog, setOpenFinalizeDialog] = useState(false);
   const [openOrderSelect, setOpenOrderSelect] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState(transport.orderId || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Status form state
@@ -56,7 +62,6 @@ export function TransportDetailsManager({
   const [lostQuantity, setLostQuantity] = useState("");
   const [expensesIncurred, setExpensesIncurred] = useState("");
   const [lossComment, setLossComment] = useState("");
-  const [terminateTrip, setTerminateTrip] = useState(false);
 
   const handleUpdateStatus = async () => {
     setIsSubmitting(true);
@@ -131,8 +136,8 @@ export function TransportDetailsManager({
       return;
     }
 
-    if (quantity > maxLosableVolume + 0.001) {
-      setError(`Lost quantity cannot exceed the ${carriedVolume.toLocaleString()} L loaded on this trip`);
+    if (incidentQuantity > maxLosableVolume) {
+      setError(`Incident quantity cannot exceed ${maxLosableVolume.toLocaleString()} L.`);
       setIsSubmitting(false);
       return;
     }
@@ -158,7 +163,6 @@ export function TransportDetailsManager({
       };
       addLitersLost: number;
       addMaintenanceCost: number;
-      status?: string;
     } = {
       lossLog: {
         lossType,
@@ -170,10 +174,6 @@ export function TransportDetailsManager({
       addMaintenanceCost: expenses,
     };
 
-    if (terminateTrip) {
-      payload.status = "LOSS";
-    }
-
     const res = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, payload);
     setIsSubmitting(false);
 
@@ -181,11 +181,52 @@ export function TransportDetailsManager({
       setError(res.error.message);
     } else {
       setOpenIncidentDialog(false);
-      setLossType("THEFT");
+      setLossType("");
       setLostQuantity("");
       setExpensesIncurred("");
       setLossComment("");
-      setTerminateTrip(false);
+      setOpenIncidentDialog(false);
+      router.refresh();
+    }
+  };
+
+  const hasUnresolvedVariance = remainingVolume > 0.001;
+  const canFinalize = transport.status !== "COMPLETED" && transport.status !== "CANCELLED";
+
+  const sellingPrice = transport.deliveries?.length ? Math.max(...transport.deliveries.map((d: any) => Number(d.amountPerLiter) || 0)) : (Number(transport.order?.pricePerLiter) || 0);
+  const totalDeductionAmount = remainingVolume * sellingPrice;
+
+  const handleFinalizeWithShortage = async () => {
+    if (!window.confirm("Are you sure you want to finalize this transport? This action will mark the transport as COMPLETED and cannot be undone.")) return;
+    
+    setIsFinalizing(true);
+    setError(null);
+
+    const payload: Record<string, any> = {
+      status: "COMPLETED",
+    };
+
+    if (hasUnresolvedVariance) {
+      const normalDeduction = remainingVolume * ratePerLiter;
+      const adjustment = Math.max(0, totalDeductionAmount - normalDeduction);
+
+      payload.lossLog = {
+        lossType: "SHORTAGE",
+        lostQuantity: remainingVolume,
+        expensesIncurred: adjustment,
+        comment: `Final shortage confirmation upon transport completion. Calculated at selling price (₦${sellingPrice.toLocaleString()}/L).`,
+      };
+      payload.addLitersLost = remainingVolume;
+      payload.addMaintenanceCost = adjustment;
+    }
+
+    const res = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, payload);
+    setIsFinalizing(false);
+
+    if (res.error) {
+      setError(res.error.message);
+    } else {
+      setOpenFinalizeDialog(false);
       router.refresh();
     }
   };
@@ -211,11 +252,30 @@ export function TransportDetailsManager({
             </p>
           </div>
         </div>
-        
-        <Button onClick={() => setOpenStatusDialog(true)} variant="outline">
-          <CheckCircle className="h-4 w-4 mr-2" />
-          Update Status
-        </Button>
+        <div className="flex items-center gap-3">
+          {canFinalize && (
+            hasUnresolvedVariance ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" className="border-amber-500 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950" onClick={() => setOpenFinalizeDialog(true)}>
+                      <AlertTriangle className="h-4 w-4 mr-2" />
+                      Finalize Transport
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    There is an unresolved shortage. Finalizing will deduct the cost from the transporter.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <Button onClick={() => setOpenFinalizeDialog(true)}>
+                <Check className="h-4 w-4 mr-2" />
+                Finalize Transport
+              </Button>
+            )
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 p-4 rounded-2xl border bg-card">
@@ -296,50 +356,86 @@ export function TransportDetailsManager({
 
                   return (
                     <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="p-4 rounded-2xl border bg-card shadow-sm flex flex-col justify-center">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Loaded Volume</p>
-                          <p className="text-2xl font-bold text-foreground">{carriedVolume.toLocaleString()} L</p>
-                        </div>
-                        <div className="p-4 rounded-2xl border bg-card shadow-sm flex flex-col justify-center">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Distributed</p>
-                          <p className="text-2xl font-bold text-foreground">{distributedVolume.toLocaleString()} L</p>
-                        </div>
-                        <div className="p-4 rounded-2xl border bg-card shadow-sm flex flex-col justify-center">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Remaining to Deliver</p>
-                          <p className="text-2xl font-bold text-foreground">{remainingVolume.toLocaleString()} L</p>
-                          {loggedLostVolume > 0 && (
-                            <p className="text-xs text-destructive mt-1">{loggedLostVolume.toLocaleString()} L logged as lost</p>
-                          )}
-                        </div>
-                        <div className="p-4 rounded-2xl border bg-card shadow-sm flex flex-col justify-center">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Shortage (Variance)</p>
-                          <div className="flex items-end gap-2">
-                            <p className={cn("text-2xl font-bold", variance > 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-500")}>
-                              {variance.toLocaleString()} L
-                            </p>
-                            {variance > 0 && (
-                              <span className="text-xs font-medium text-destructive mb-1">({variancePercentage.toFixed(2)}%)</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="p-5 rounded-2xl border bg-card shadow-sm">
-                          <div className="flex justify-between items-center mb-3">
-                            <span className="text-sm font-medium text-foreground">Delivery Progress</span>
-                            <span className="text-sm font-bold text-primary">{Math.round(distributedPercentage)}%</span>
+                        <div className="p-6 rounded-2xl border bg-card shadow-sm flex flex-col justify-between">
+                          <div>
+                            <div className="flex justify-between items-center mb-4">
+                              <span className="text-sm font-medium text-foreground">Delivery Progress</span>
+                              <span className="text-sm font-bold text-primary">{Math.round(distributedPercentage)}%</span>
+                            </div>
+                            <ChartContainer
+                              config={{
+                                distributed: { label: "Distributed", color: "var(--primary)" },
+                                remaining: { label: "Remaining", color: "#f59e0b" },
+                                shortage: { label: "Shortage", color: "#ef4444" },
+                              }}
+                              className="h-48 w-full mb-6 mx-auto flex justify-center"
+                            >
+                              <PieChart>
+                                <ChartTooltip
+                                  cursor={false}
+                                  content={<ChartTooltipContent indicator="dot" hideLabel />}
+                                />
+                                <Pie
+                                  data={[
+                                    { name: "Distributed", value: distributedVolume, fill: "var(--color-distributed)" },
+                                    { name: "Remaining", value: remainingVolume, fill: "var(--color-remaining)" },
+                                    ...(variance > 0 ? [{ name: "Shortage", value: variance, fill: "var(--color-shortage)" }] : []),
+                                  ]}
+                                  dataKey="value"
+                                  nameKey="name"
+                                  innerRadius={30}
+                                  outerRadius={60}
+                                  paddingAngle={5}
+                                  stroke="none"
+                                  cornerRadius={4}
+                                />
+                              </PieChart>
+                            </ChartContainer>
                           </div>
-                          <div className="h-4 w-full bg-muted rounded-full overflow-hidden flex">
-                            <div 
-                              className="h-full bg-primary transition-all duration-500"
-                              style={{ width: `${Math.min(distributedPercentage, 100)}%` }}
-                            />
-                          </div>
-                          <div className="flex justify-between mt-3 text-xs text-muted-foreground">
-                            <span>0 L</span>
-                            <span>{carriedVolume.toLocaleString()} L Total</span>
+                          
+                          <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+                            <div className="flex items-start gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-700 mt-1" />
+                              <div>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Loaded Volume</p>
+                                <p className="text-lg font-bold text-foreground leading-none">{carriedVolume.toLocaleString()} L</p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-start gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full bg-primary mt-1" />
+                              <div>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Distributed</p>
+                                <p className="text-lg font-bold text-foreground leading-none">{distributedVolume.toLocaleString()} L</p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-start gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full bg-amber-500 mt-1" />
+                              <div>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Remaining</p>
+                                <div className="flex flex-col gap-1">
+                                  <p className="text-lg font-bold text-foreground leading-none">{remainingVolume.toLocaleString()} L</p>
+                                  {loggedLostVolume > 0 && <span className="text-[10px] text-destructive leading-none font-medium mt-0.5">{loggedLostVolume.toLocaleString()} L logged as lost</span>}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-start gap-2">
+                              <div className={cn("w-2.5 h-2.5 rounded-full mt-1", variance > 0 ? "bg-destructive" : "bg-emerald-500")} />
+                              <div>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Shortage (Variance)</p>
+                                <div className="flex items-end gap-1.5">
+                                  <p className={cn("text-lg font-bold leading-none", variance > 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-500")}>
+                                    {variance.toLocaleString()} L
+                                  </p>
+                                  {variance > 0 && (
+                                    <span className="text-[10px] font-medium text-destructive leading-none mb-0.5">({variancePercentage.toFixed(2)}%)</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                         
@@ -357,8 +453,6 @@ export function TransportDetailsManager({
                   );
                 })()}
               </div>
-
-              <Separator />
 
               {transport.comment ? (
                 <div className="p-5 rounded-2xl border bg-muted/30">
@@ -435,10 +529,9 @@ export function TransportDetailsManager({
                               </Badge>
                             </td>
                             <td className="text-right py-3 px-4">
-                              <Button variant="outline" size="sm" asChild>
-                                <Link href={`/admin/deliveries/${sale.id}/print?from=transport`}>
-                                  <Printer className="w-4 h-4 mr-2" />
-                                  Print Waybill
+                              <Button variant="outline" size="icon" title="Print Waybill" asChild>
+                                <Link href={`/admin/deliveries/${sale.id}/print?from=transport`} target="_blank">
+                                  <Printer className="w-4 h-4" />
                                 </Link>
                               </Button>
                             </td>
@@ -703,7 +796,7 @@ export function TransportDetailsManager({
           if (open) setError(null);
         }}
       >
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-destructive flex items-center gap-2">
               <AlertTriangle className="h-5 w-5" />
@@ -786,16 +879,6 @@ export function TransportDetailsManager({
               </div>
             )}
 
-            <div className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow-sm bg-destructive/5 border-destructive/20">
-              <Checkbox id="terminateTrip" checked={terminateTrip} onCheckedChange={(c) => setTerminateTrip(!!c)} />
-              <div className="space-y-1 leading-none">
-                <Label htmlFor="terminateTrip" className="font-semibold text-destructive">Terminate trip (total loss)</Label>
-                <p className="text-xs text-muted-foreground">
-                  {selectedLossType?.terminateHint ?? "Check this if the transport cannot proceed. The status will be marked as LOSS."}
-                </p>
-              </div>
-            </div>
-
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
@@ -804,6 +887,127 @@ export function TransportDetailsManager({
               {isSubmitting ? <SpinnerEllipsis /> : "Submit Incident"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Finalize Transport Dialog */}
+      <Dialog open={openFinalizeDialog} onOpenChange={setOpenFinalizeDialog}>
+        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-emerald-600" />
+              Finalize Transport
+            </DialogTitle>
+            <DialogDescription>
+              Review the delivery distribution before marking this transport as complete.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead>Delivery / Station</TableHead>
+                    <TableHead className="text-right">Assigned</TableHead>
+                    <TableHead className="text-right">Received</TableHead>
+                    <TableHead className="text-right">Variance</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transport.deliveries?.length ? (
+                    transport.deliveries.map((del: any) => {
+                      const assigned = Number(del.litersDespatched || 0);
+                      const received = del.litersReceived !== null ? Number(del.litersReceived) : null;
+                      const diff = received !== null ? assigned - received : 0;
+                      return (
+                        <TableRow key={del.id}>
+                          <TableCell className="font-medium">{del.station?.name || del.customer?.name || "Unknown"}</TableCell>
+                          <TableCell className="text-right">{assigned.toLocaleString()} L</TableCell>
+                          <TableCell className="text-right">
+                            {received !== null ? (
+                              `${received.toLocaleString()} L`
+                            ) : (
+                              <span className="text-amber-600">Pending</span>
+                            )}
+                          </TableCell>
+                          <TableCell className={`text-right font-mono ${diff > 0 ? "text-rose-600" : diff < 0 ? "text-emerald-600" : ""}`}>
+                            {received !== null ? `${diff > 0 ? "+" : ""}${diff.toLocaleString()} L` : "—"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
+                        No deliveries assigned yet.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+                <tfoot className="bg-muted/50">
+                  <TableRow>
+                    <TableCell className="font-bold">Total Dispatched / Received</TableCell>
+                    <TableCell className="text-right font-bold">{distributedVolume.toLocaleString()} L</TableCell>
+                    <TableCell className="text-right font-bold">
+                      {((transport.deliveries || []).reduce(
+                        (sum: number, sale: any) => sum + (sale.litersReceived !== null && sale.litersReceived !== undefined ? Number(sale.litersReceived) : 0),
+                        0
+                      )).toLocaleString()} L
+                    </TableCell>
+                    <TableCell className="text-right font-bold"></TableCell>
+                  </TableRow>
+                </tfoot>
+              </Table>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl border bg-muted/20">
+                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Loaded Volume</p>
+                <p className="text-xl font-bold font-mono">{carriedVolume.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">L</span></p>
+              </div>
+              <div className={`p-4 rounded-xl border ${hasUnresolvedVariance ? "bg-rose-50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/50" : "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/50"}`}>
+                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">
+                  Unresolved Variance
+                </p>
+                <p className={`text-xl font-bold font-mono ${hasUnresolvedVariance ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                  {remainingVolume.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">L</span>
+                </p>
+              </div>
+            </div>
+
+            {hasUnresolvedVariance && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+                <h4 className="font-semibold text-amber-800 dark:text-amber-400 flex items-center gap-2 mb-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Unresolved Variance Detected
+                </h4>
+                <p className="text-sm text-amber-700 dark:text-amber-500 mb-4">
+                  There is <strong>{remainingVolume.toLocaleString()} L</strong> of product unaccounted for. You can assign this volume to another station or confirm it as a shortage.
+                  <br /><br />
+                  <strong>Note:</strong> A shortage deduction of <strong>₦{totalDeductionAmount.toLocaleString()}</strong> (at ₦{sellingPrice.toLocaleString()}/L) will be applied to the transporter&apos;s net fee.
+                </p>
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <Button variant="outline" className="w-full sm:w-auto" asChild>
+                    <Link href={`/admin/deliveries/new?transportId=${transport.id}`}>
+                      Assign to another station
+                    </Link>
+                  </Button>
+                  <Button variant="destructive" className="w-full sm:w-auto" onClick={handleFinalizeWithShortage} disabled={isFinalizing}>
+                    {isFinalizing ? <SpinnerEllipsis /> : "Confirm Shortage & Complete"}
+                  </Button>
+                </div>
+              </div>
+            )}
+            {error && <p className="text-sm text-destructive font-medium">{error}</p>}
+          </div>
+          {!hasUnresolvedVariance && (
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpenFinalizeDialog(false)} disabled={isFinalizing}>Cancel</Button>
+              <Button onClick={handleFinalizeWithShortage} disabled={isFinalizing}>
+                {isFinalizing ? <SpinnerEllipsis /> : "Complete Transport"}
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
 

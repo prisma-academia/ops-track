@@ -93,6 +93,24 @@ export async function POST(
       );
     }
 
+    // Block dipping if there are unapproved sales logs for this tank's product type
+    const pendingSales = await prisma.salesLog.findFirst({
+      where: {
+        stationId,
+        tenantId: actor.tenantId,
+        productType: tank.productType,
+        status: { notIn: ["APPROVED", "REJECTED"] },
+      },
+    });
+
+    if (pendingSales) {
+      throw new DomainError(
+        400,
+        "pending_sales_exists",
+        "Cannot record dipping: There are unapproved sales for this product type. Please approve or reject pending sales first to ensure accurate stock reconciliation."
+      );
+    }
+
     // Validate opening and closing window rules for today
     if (resolvedDippingType) {
       const today = new Date();

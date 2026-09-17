@@ -61,6 +61,24 @@ export async function POST(
       throw new DomainError(400, "active_shifts_running", "Cannot record dipping: Active shifts must be closed first.");
     }
 
+    // Block dipping session if there are unapproved sales logs for this tank's product type
+    const pendingSales = await prisma.salesLog.findFirst({
+      where: {
+        stationId,
+        tenantId: actor.tenantId,
+        productType: tank.productType,
+        status: { notIn: ["APPROVED", "REJECTED"] },
+      },
+    });
+
+    if (pendingSales) {
+      throw new DomainError(
+        400,
+        "pending_sales_exists",
+        "Cannot open session: There are unapproved sales for this product type. Please approve or reject pending sales first to ensure accurate stock reconciliation."
+      );
+    }
+
     // Variance detection: fetch last session for this tank
     const lastSession = await prisma.dippingSession.findFirst({
       where: { tankId: body.tankId, tenantId: actor.tenantId },

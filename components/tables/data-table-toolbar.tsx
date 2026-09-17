@@ -24,6 +24,7 @@ interface DataTableToolbarProps {
   onRefresh?: () => void;
   hideSearch?: boolean;
   hideDateFilter?: boolean;
+  title?: React.ReactNode;
 }
 
 export function DataTableToolbar<TData>({
@@ -32,6 +33,7 @@ export function DataTableToolbar<TData>({
   onRefresh,
   hideSearch = false,
   hideDateFilter = false,
+  title,
 }: DataTableToolbarProps) {
   const { table } = useDataTable<TData>();
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
@@ -50,6 +52,10 @@ export function DataTableToolbar<TData>({
               onChange={(event) => table.setGlobalFilter(event.target.value)}
               className="h-9 pl-8"
             />
+          </div>
+        ) : title ? (
+          <div className="mr-auto font-semibold">
+            {title}
           </div>
         ) : null}
 

@@ -235,19 +235,7 @@ export async function POST(
         include: salesLogInclude,
       });
 
-      if (tankId && body.litersSold > 0) {
-        await StockMovementService.recordRetailSale(tx as never, {
-          tenantId: actor.tenantId,
-          stationId,
-          tankId,
-          productType: body.productType as never,
-          quantity: body.litersSold,
-          referenceId: log.id,
-          notes: `Retail sale ${body.dippingClosingId ? "from dipping" : ""}`,
-          recordedById: actor.userId,
-        });
-        await reconcileTankCurrentLiters(tx as never, tankId);
-      }
+      // Stock deduction is now deferred until the SalesLog is APPROVED.
 
       await FinanceService.recordRetailSaleRevenue(tx as never, {
         tenantId: actor.tenantId,

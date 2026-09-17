@@ -102,6 +102,38 @@ export async function PATCH(
       }
     }
 
+    let finalLitersDelivered = body.litersDelivered ?? (existing.litersDelivered ? Number(existing.litersDelivered) : undefined);
+
+    if (body.status === "COMPLETED" && existing.status !== "COMPLETED") {
+      const deliveries = await prisma.delivery.findMany({
+        where: { transportId: existing.id, tenantId: actor.tenantId },
+        include: { waybillAllocations: true }
+      });
+
+      let sumReceived = 0;
+      let allAllocationsCompleted = true;
+      let hasAllocations = false;
+
+      for (const delivery of deliveries) {
+        for (const alloc of delivery.waybillAllocations) {
+          hasAllocations = true;
+          sumReceived += Number(alloc.litersReceived ?? 0);
+          if (alloc.status !== "COMPLETED" && alloc.status !== "CANCELLED") {
+            allAllocationsCompleted = false;
+          }
+        }
+      }
+
+      if (hasAllocations) {
+        if (!allAllocationsCompleted) {
+          throw new DomainError(400, "invalid_state", "All associated waybills must be COMPLETED or CANCELLED before completing this transport.");
+        }
+        
+        // Reconcile the delivered volume based on actual received at stations
+        finalLitersDelivered = sumReceived;
+      }
+    }
+
     // Calculate financials
     const ratePerLiter = Number(existing.ratePerLiter);
     const litersCarried = Number(existing.litersCarried);
@@ -122,7 +154,7 @@ export async function PATCH(
       where: { id },
       data: {
         ...(body.orderId !== undefined && { orderId: body.orderId }),
-        ...(body.litersDelivered !== undefined && { litersDelivered: body.litersDelivered }),
+        ...(finalLitersDelivered !== undefined && { litersDelivered: finalLitersDelivered }),
         maintenanceCost: currentMaintenance,
         litersLost: currentLitersLost,
         totalDeduction,

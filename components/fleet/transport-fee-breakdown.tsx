@@ -11,6 +11,9 @@ import {
   type TransportFeeTransport,
 } from "@/lib/fleet/transport-fees";
 import type { TransportFeeLeg } from "@/lib/generated/prisma/client";
+import { DataTable } from "@/components/tables";
+import { DataTableColumnHeader } from "@/components/tables/data-table-column-header";
+import { type ColumnDef } from "@tanstack/react-table";
 
 type FeeBreakdownTransport = TransportFeeTransport & {
   lossLogs?: Array<{
@@ -148,149 +151,177 @@ export function TransportFeeBreakdown({
     (fullTripRow?.expected ?? 0) - (fullTripRow?.paid ?? 0) - lossDeduction - fleetExpense
   );
 
+  const tableData = legRows.map((row) => {
+    const isPrimary = row.feeLeg === "DEPOT_TO_PRIMARY";
+    const delivery = row.deliveryId ? deliveries.find((d) => d.id === row.deliveryId) : null;
+    const attributed = row.deliveryId ? lossByDeliveryId.get(row.deliveryId) : undefined;
+    const rowRate = isPrimary ? ratePerLiter : delivery ? toNum(delivery.transportRate) : 0;
+    const rowLoss = isPrimary ? unattributedAmount : attributed?.amount ?? 0;
+    const rowLostLiters = isPrimary ? unattributedLiters : attributed?.liters ?? 0;
+    const lossDestination = isPrimary
+      ? unattributedAmount > 0
+        ? transport.destination || "Primary"
+        : null
+      : attributed
+        ? attributed.destination
+        : null;
+    const rowFleet = isPrimary ? fleetExpense : 0;
+    const remaining = Math.max(0, row.expected - row.paid - rowLoss - rowFleet);
+
+    return {
+      ...row,
+      isPrimary,
+      rowRate,
+      rowLoss,
+      rowLostLiters,
+      lossDestination,
+      rowFleet,
+      remaining,
+    };
+  });
+
+  const columns: ColumnDef<typeof tableData[0]>[] = [
+    {
+      accessorKey: "label",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Fee Leg" />,
+      cell: ({ row }) => {
+        const { label, rowLostLiters, lossDestination, rowRate } = row.original;
+        return (
+          <div>
+            <p className="font-medium">{label}</p>
+            {rowLostLiters > 0 && (
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {rowLostLiters.toLocaleString()} L lost
+                {lossDestination ? ` at ${lossDestination}` : ""}
+                {rowRate > 0 ? ` × ${formatRate(rowRate)}` : ""}
+              </p>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "rowRate",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Rate / L" className="justify-end" />,
+      cell: ({ row }) => <div className="text-right font-mono">{formatRate(row.original.rowRate)}</div>,
+    },
+    {
+      accessorKey: "expected",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Expected" className="justify-end" />,
+      cell: ({ row }) => <div className="text-right font-mono">{formatMoney(row.original.expected)}</div>,
+    },
+    {
+      accessorKey: "rowLoss",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Loss deduction" className="justify-end" />,
+      cell: ({ row }) => {
+        const { rowLoss, lossDestination } = row.original;
+        return (
+          <div className={cn("text-right font-mono", rowLoss > 0 && "text-destructive")}>
+            <p>{rowLoss > 0 ? `−${formatMoney(rowLoss)}` : formatMoney(0)}</p>
+            {lossDestination && rowLoss > 0 ? (
+              <p className="text-[11px] font-sans font-medium text-muted-foreground mt-0.5">
+                {lossDestination}
+              </p>
+            ) : null}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "rowFleet",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Fleet expense" className="justify-end" />,
+      cell: ({ row }) => (
+        <div className={cn("text-right font-mono", row.original.rowFleet > 0 && "text-amber-600 dark:text-amber-500")}>
+          {formatMoney(row.original.rowFleet)}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "paid",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Paid" className="justify-end" />,
+      cell: ({ row }) => (
+        <div className="text-right font-mono text-emerald-600 dark:text-emerald-500">
+          {formatMoney(row.original.paid)}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "remaining",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Remaining" className="justify-end" />,
+      cell: ({ row }) => <div className="text-right font-mono">{formatMoney(row.original.remaining)}</div>,
+    },
+    {
+      accessorKey: "status",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Status" className="justify-end" />,
+      cell: ({ row }) => <div className="flex justify-end">{feeLegStatusBadge(row.original.status)}</div>,
+    },
+  ];
+
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg">Financial Overview</CardTitle>
-        <CardDescription>
-          Haul fees, rate per liter, loss deduction, and fleet expense for this trip.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto rounded-xl border border-border/50">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/50 bg-muted/50">
-                <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Fee Leg</th>
-                <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Rate / L</th>
-                <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Expected</th>
-                <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Loss deduction</th>
-                <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Fleet expense</th>
-                <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Paid</th>
-                <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Remaining</th>
-                <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {legRows.map((row) => {
-                const isPrimary = row.feeLeg === "DEPOT_TO_PRIMARY";
-                const delivery = row.deliveryId
-                  ? deliveries.find((d) => d.id === row.deliveryId)
-                  : null;
-                const attributed = row.deliveryId ? lossByDeliveryId.get(row.deliveryId) : undefined;
-                const rowRate = isPrimary
-                  ? ratePerLiter
-                  : delivery
-                    ? toNum(delivery.transportRate)
-                    : 0;
-                const rowLoss = isPrimary ? unattributedAmount : attributed?.amount ?? 0;
-                const rowLostLiters = isPrimary ? unattributedLiters : attributed?.liters ?? 0;
-                const lossDestination = isPrimary
-                  ? unattributedAmount > 0
-                    ? transport.destination || "Primary"
-                    : null
-                  : attributed
-                    ? attributed.destination
-                    : null;
-                const rowFleet = isPrimary ? fleetExpense : 0;
-                const remaining = Math.max(0, row.expected - row.paid - rowLoss - rowFleet);
-
-                return (
-                  <tr
-                    key={`${row.feeLeg}-${row.deliveryId || "default"}`}
-                    className="border-b border-border/50"
-                  >
-                    <td className="py-3 px-4">
-                      <p className="font-medium">{row.label}</p>
-                      {rowLostLiters > 0 && (
-                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                          {rowLostLiters.toLocaleString()} L lost
-                          {lossDestination ? ` at ${lossDestination}` : ""}
-                          {rowRate > 0 ? ` × ${formatRate(rowRate)}` : ""}
-                        </p>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono">{formatRate(rowRate)}</td>
-                    <td className="py-3 px-4 text-right font-mono">{formatMoney(row.expected)}</td>
-                    <td
-                      className={cn(
-                        "py-3 px-4 text-right font-mono",
-                        rowLoss > 0 && "text-destructive"
-                      )}
-                    >
-                      <p>{rowLoss > 0 ? `−${formatMoney(rowLoss)}` : formatMoney(0)}</p>
-                      {lossDestination && rowLoss > 0 ? (
-                        <p className="text-[11px] font-sans font-medium text-muted-foreground mt-0.5">
-                          {lossDestination}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td
-                      className={cn(
-                        "py-3 px-4 text-right font-mono",
-                        rowFleet > 0 && "text-amber-600 dark:text-amber-500"
-                      )}
-                    >
-                      {formatMoney(rowFleet)}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono text-emerald-600 dark:text-emerald-500">
-                      {formatMoney(row.paid)}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono">{formatMoney(remaining)}</td>
-                    <td className="py-3 px-4 text-right">{feeLegStatusBadge(row.status)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            {fullTripRow && (
-              <tfoot>
-                <tr className="border-t-2 border-primary/20 bg-primary/5 dark:bg-primary/10">
-                  <td className="py-3.5 px-4">
-                    <p className="font-bold text-foreground">Full trip</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Expected minus paid, loss deduction, and fleet expense
-                    </p>
-                    {lossByDeliveryId.size > 0 ? (
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Loss at{" "}
-                        {Array.from(lossByDeliveryId.values())
-                          .map((entry) => entry.destination)
-                          .join(", ")}
-                      </p>
-                    ) : null}
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-mono text-muted-foreground">—</td>
-                  <td className="py-3.5 px-4 text-right font-mono font-bold text-foreground">
-                    {formatMoney(fullTripRow.expected)}
-                  </td>
-                  <td
-                    className={cn(
-                      "py-3.5 px-4 text-right font-mono font-bold",
-                      lossDeduction > 0 ? "text-destructive" : "text-foreground"
-                    )}
-                  >
-                    {lossDeduction > 0 ? `−${formatMoney(lossDeduction)}` : formatMoney(0)}
-                  </td>
-                  <td
-                    className={cn(
-                      "py-3.5 px-4 text-right font-mono font-bold",
-                      fleetExpense > 0 ? "text-amber-600 dark:text-amber-500" : "text-foreground"
-                    )}
-                  >
-                    {formatMoney(fleetExpense)}
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-500">
-                    {formatMoney(fullTripRow.paid)}
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-mono font-bold text-foreground">
-                    {formatMoney(netOutstanding)}
-                  </td>
-                  <td className="py-3.5 px-4 text-right">{feeLegStatusBadge(fullTripRow.status)}</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+      <CardContent className="space-y-4 pt-0">
+        <DataTable
+          columns={columns}
+          data={tableData}
+          tableId="transport-fee-breakdown-v1"
+          hideSearch
+          hideDateFilter
+          title={
+            <div>
+              <h3 className="text-lg font-semibold tracking-tight">Financial Overview</h3>
+              <p className="text-sm text-muted-foreground font-normal">
+                Haul fees, rate per liter, loss deduction, and fleet expense for this trip.
+              </p>
+            </div>
+          }
+        />
+        {fullTripRow && (
+          <div className="border-t-2 border-primary/20 bg-primary/5 dark:bg-primary/10 p-4 rounded-xl flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="font-bold text-foreground">Full trip summary</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Expected minus paid, loss deduction, and fleet expense
+              </p>
+              {lossByDeliveryId.size > 0 ? (
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Loss at{" "}
+                  {Array.from(lossByDeliveryId.values())
+                    .map((entry) => entry.destination)
+                    .join(", ")}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex gap-6 text-right flex-wrap justify-end">
+              <div>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Expected</p>
+                <p className="font-mono font-bold text-foreground">{formatMoney(fullTripRow.expected)}</p>
+              </div>
+              {lossDeduction > 0 && (
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Loss Ded.</p>
+                  <p className="font-mono font-bold text-destructive">−{formatMoney(lossDeduction)}</p>
+                </div>
+              )}
+              {fleetExpense > 0 && (
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Fleet Exp.</p>
+                  <p className="font-mono font-bold text-amber-600 dark:text-amber-500">{formatMoney(fleetExpense)}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Paid</p>
+                <p className="font-mono font-bold text-emerald-600 dark:text-emerald-500">{formatMoney(fullTripRow.paid)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Remaining</p>
+                <p className="font-mono font-bold text-foreground">{formatMoney(netOutstanding)}</p>
+              </div>
+              <div className="self-end pb-0.5">
+                {feeLegStatusBadge(fullTripRow.status)}
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

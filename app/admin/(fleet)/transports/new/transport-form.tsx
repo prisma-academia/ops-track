@@ -150,9 +150,10 @@ export function CreateTransportForm({
         </CardHeader>
       </Card>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-6xl">
-        <div className="xl:col-span-2 space-y-6">
-        <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
+      <div className="space-y-6 max-w-6xl">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div className={selectedOrderId ? "xl:col-span-2 space-y-6" : "xl:col-span-3 space-y-6"}>
+          <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
           {isOverAllocated && (
             <div className="mx-6 mt-6 p-3 text-sm font-medium rounded-md bg-destructive/15 text-destructive border border-destructive/20 flex items-center">
               Total dispatched volume ({totalRequested.toLocaleString()}L) exceeds the ordered volume ({targetVolume.toLocaleString()}L).
@@ -215,7 +216,107 @@ export function CreateTransportForm({
 
           </CardContent>
         </Card>
+          </div>
 
+          {selectedOrderId && (
+            <div className="xl:col-span-1 space-y-6">
+              <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs sticky top-6 shadow-sm">
+                <CardHeader className="pb-3 border-b border-border/30 flex flex-row items-center justify-between">
+                  <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Order Volume Tracker</CardTitle>
+                  {selectedProductType && (
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                      {selectedProductType}
+                    </span>
+                  )}
+                </CardHeader>
+                <CardContent className="pt-6 space-y-6">
+                  {/* Vertical Indicators Summary matching churn-rate-summary */}
+                  <div className="space-y-3 pb-2">
+                    {/* Requested / Total Target */}
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2.5 w-2.5 bg-blue-500 rounded-xs shrink-0" />
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Total Order Target
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-sm text-foreground">
+                        {targetVolume.toLocaleString()}L
+                      </span>
+                    </div>
+
+                    {/* Assign */}
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2.5 w-2.5 bg-amber-500 rounded-xs shrink-0" />
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Assigned Volume
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-sm text-amber-600 dark:text-amber-400">
+                        {currentlyAllocated.toLocaleString()}L
+                      </span>
+                    </div>
+
+                    {/* Remaining */}
+                    <div className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${remainingVolume === 0 ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/40" : "bg-stone-50/60 dark:bg-stone-900/40 border-stone-200 dark:border-stone-800"}`}>
+                      <div className="flex items-center gap-2">
+                        <div className={`h-2.5 w-2.5 rounded-xs shrink-0 ${remainingVolume === 0 ? "bg-emerald-500" : "bg-stone-400"}`} />
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Remaining Volume
+                        </span>
+                      </div>
+                      <span className={`font-mono font-bold text-sm ${remainingVolume === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-stone-700 dark:text-stone-300"}`}>
+                        {remainingVolume.toLocaleString()}L
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Single Bar Stacked Chart matching churn-rate-chart design */}
+                  <div className="space-y-2 pt-2 border-t border-border/40">
+                    <div className="flex justify-between items-center text-xs font-mono text-muted-foreground font-medium">
+                      <span>Allocation Progress</span>
+                      <span>{Math.min(100, Math.round((totalRequested / (targetVolume || 1)) * 100))}%</span>
+                    </div>
+
+                    <div className="h-4 w-full bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden flex p-0.5 shadow-inner border border-stone-200 dark:border-stone-700 gap-0.5">
+                      {previouslyTransported > 0 && (
+                        <div 
+                          className="h-full bg-blue-500 rounded-xs transition-all duration-500" 
+                          style={{ width: `${Math.min(100, (previouslyTransported / (targetVolume || 1)) * 100)}%` }}
+                          title={`Prior Dispatched: ${previouslyTransported.toLocaleString()} L`}
+                        />
+                      )}
+                      {currentlyAllocated > 0 && (
+                        <div 
+                          className="h-full bg-amber-500 rounded-xs transition-all duration-500" 
+                          style={{ width: `${Math.min(100, (currentlyAllocated / (targetVolume || 1)) * 100)}%` }}
+                          title={`Assigned in Form: ${currentlyAllocated.toLocaleString()} L`}
+                        />
+                      )}
+                      {remainingVolume > 0 && (
+                        <div 
+                          className="h-full bg-stone-300 dark:bg-stone-600 rounded-xs transition-all duration-500" 
+                          style={{ width: `${Math.min(100, (remainingVolume / (targetVolume || 1)) * 100)}%` }}
+                          title={`Remaining: ${remainingVolume.toLocaleString()} L`}
+                        />
+                      )}
+                      {remainingVolume === 0 && totalRequested >= targetVolume && (
+                        <div 
+                          className="h-full bg-emerald-500 rounded-xs transition-all duration-500" 
+                          style={{ width: "100%" }}
+                          title="Fully Allocated"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-6">
         {fields.map((field, index) => {
           const transporterId = watch(`assignments.${index}.transporterId`);
           const truckId = watch(`assignments.${index}.truckId`);
@@ -453,104 +554,6 @@ export function CreateTransportForm({
           </Button>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           {formState.errors.assignments?.root && <p className="text-sm text-red-600">{formState.errors.assignments.root.message}</p>}
-        </div>
-        
-        {/* Right Sidebar for Stats */}
-        <div className="xl:col-span-1 space-y-6">
-          {selectedOrderId && (
-            <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs sticky top-6 shadow-sm">
-              <CardHeader className="pb-3 border-b border-border/30 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Order Volume Tracker</CardTitle>
-                {selectedProductType && (
-                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
-                    {selectedProductType}
-                  </span>
-                )}
-              </CardHeader>
-              <CardContent className="pt-6 space-y-6">
-                {/* Vertical Indicators Summary matching churn-rate-summary */}
-                <div className="space-y-3 pb-2">
-                  {/* Requested / Total Target */}
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2.5 w-2.5 bg-blue-500 rounded-xs shrink-0" />
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Total Order Target
-                      </span>
-                    </div>
-                    <span className="font-mono font-bold text-sm text-foreground">
-                      {targetVolume.toLocaleString()}L
-                    </span>
-                  </div>
-
-                  {/* Assign */}
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2.5 w-2.5 bg-amber-500 rounded-xs shrink-0" />
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Assigned Volume
-                      </span>
-                    </div>
-                    <span className="font-mono font-bold text-sm text-amber-600 dark:text-amber-400">
-                      {currentlyAllocated.toLocaleString()}L
-                    </span>
-                  </div>
-
-                  {/* Remaining */}
-                  <div className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${remainingVolume === 0 ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/40" : "bg-stone-50/60 dark:bg-stone-900/40 border-stone-200 dark:border-stone-800"}`}>
-                    <div className="flex items-center gap-2">
-                      <div className={`h-2.5 w-2.5 rounded-xs shrink-0 ${remainingVolume === 0 ? "bg-emerald-500" : "bg-stone-400"}`} />
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Remaining Volume
-                      </span>
-                    </div>
-                    <span className={`font-mono font-bold text-sm ${remainingVolume === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-stone-700 dark:text-stone-300"}`}>
-                      {remainingVolume.toLocaleString()}L
-                    </span>
-                  </div>
-                </div>
-
-                {/* Single Bar Stacked Chart matching churn-rate-chart design */}
-                <div className="space-y-2 pt-2 border-t border-border/40">
-                  <div className="flex justify-between items-center text-xs font-mono text-muted-foreground font-medium">
-                    <span>Allocation Progress</span>
-                    <span>{Math.min(100, Math.round((totalRequested / (targetVolume || 1)) * 100))}%</span>
-                  </div>
-
-                  <div className="h-4 w-full bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden flex p-0.5 shadow-inner border border-stone-200 dark:border-stone-700 gap-0.5">
-                    {previouslyTransported > 0 && (
-                      <div 
-                        className="h-full bg-blue-500 rounded-xs transition-all duration-500" 
-                        style={{ width: `${Math.min(100, (previouslyTransported / (targetVolume || 1)) * 100)}%` }}
-                        title={`Prior Dispatched: ${previouslyTransported.toLocaleString()} L`}
-                      />
-                    )}
-                    {currentlyAllocated > 0 && (
-                      <div 
-                        className="h-full bg-amber-500 rounded-xs transition-all duration-500" 
-                        style={{ width: `${Math.min(100, (currentlyAllocated / (targetVolume || 1)) * 100)}%` }}
-                        title={`Assigned in Form: ${currentlyAllocated.toLocaleString()} L`}
-                      />
-                    )}
-                    {remainingVolume > 0 && (
-                      <div 
-                        className="h-full bg-stone-300 dark:bg-stone-600 rounded-xs transition-all duration-500" 
-                        style={{ width: `${Math.min(100, (remainingVolume / (targetVolume || 1)) * 100)}%` }}
-                        title={`Remaining: ${remainingVolume.toLocaleString()} L`}
-                      />
-                    )}
-                    {remainingVolume === 0 && totalRequested >= targetVolume && (
-                      <div 
-                        className="h-full bg-emerald-500 rounded-xs transition-all duration-500" 
-                        style={{ width: "100%" }}
-                        title="Fully Allocated"
-                      />
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
 

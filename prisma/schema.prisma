@@ -1358,12 +1358,18 @@ model Transport {
   tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   orderId       String?
   order         Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  transporterId String
-  transporter   Transporter @relation(fields: [transporterId], references: [id], onDelete: Restrict)
+  transporterId String?
+  transporter   Transporter? @relation(fields: [transporterId], references: [id], onDelete: Restrict)
   truckId       String?
   truck         Truck?      @relation(fields: [truckId], references: [id], onDelete: Restrict)
   driverId      String?
   driver        Driver?     @relation(fields: [driverId], references: [id], onDelete: Restrict)
+
+  // Fields for one-time ad-hoc transporters
+  isOneTime              Boolean  @default(false)
+  oneTimeTransporterName String?
+  oneTimeTruckPlate      String?
+  oneTimeDriverName      String?
 
   destination         String
   productType         ProductType?

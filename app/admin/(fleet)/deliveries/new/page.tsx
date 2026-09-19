@@ -42,7 +42,11 @@ export default async function NewSalePage(
       order: { select: { reference: true, productType: true, litersOrdered: true, supplier: true, sourceDepot: true, status: true } },
       deliveries: { select: { litersDespatched: true } },
       truck: { select: { name: true, plateNumber: true, capacityLiters: true } },
-      transporter: { select: { name: true } }
+      transporter: { select: { name: true } },
+      isOneTime: true,
+      oneTimeTransporterName: true,
+      oneTimeTruckPlate: true,
+      oneTimeDriverName: true,
     },
     orderBy: { createdAt: "desc" },
   });

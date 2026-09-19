@@ -168,6 +168,10 @@ export type TransportReportRow = {
   truck?: { plateNumber: string | null };
   transporter?: { id: string; name: string };
   driver?: { firstName: string; lastName: string };
+  isOneTime?: boolean | null;
+  oneTimeTransporterName?: string | null;
+  oneTimeTruckPlate?: string | null;
+  oneTimeDriverName?: string | null;
   order?: { id?: string; reference: string; sourceDepot?: string | null };
   expectedFee: number;
   paidTransport: number;
@@ -223,7 +227,11 @@ export function mapTransportReportRow(transport: {
   totalDeduction: unknown;
   truck: { plateNumber: string | null } | null;
   driver: { firstName: string; lastName: string } | null;
-  transporter: { id: string; name: string };
+  transporter: { id: string; name: string } | null;
+  isOneTime?: boolean | null;
+  oneTimeTransporterName?: string | null;
+  oneTimeTruckPlate?: string | null;
+  oneTimeDriverName?: string | null;
   order: { id: string; reference: string | null; sourceDepot?: string | null } | null;
   deliveries: MappedDelivery[];
   transactions: Array<{ type: string; category: string; amount: unknown }>;
@@ -241,7 +249,11 @@ export function mapTransportReportRow(transport: {
     driver: transport.driver
       ? { firstName: transport.driver.firstName, lastName: transport.driver.lastName }
       : undefined,
-    transporter: { id: transport.transporter.id, name: transport.transporter.name },
+    transporter: transport.transporter ? { id: transport.transporter.id, name: transport.transporter.name } : undefined,
+    isOneTime: transport.isOneTime,
+    oneTimeTransporterName: transport.oneTimeTransporterName,
+    oneTimeTruckPlate: transport.oneTimeTruckPlate,
+    oneTimeDriverName: transport.oneTimeDriverName,
     order: transport.order
       ? {
           id: transport.order.id,

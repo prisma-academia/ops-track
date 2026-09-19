@@ -55,8 +55,12 @@ type CreateSaleFormProps = {
       status: string;
     } | null;
     deliveries?: { litersDespatched: any }[];
-    truck: { name: string; plateNumber: string | null; capacityLiters: any };
-    transporter: { name: string };
+    truck?: { name: string; plateNumber: string | null; capacityLiters: any } | null;
+    transporter?: { name: string } | null;
+    isOneTime?: boolean | null;
+    oneTimeTransporterName?: string | null;
+    oneTimeTruckPlate?: string | null;
+    oneTimeDriverName?: string | null;
   }[];
   preselectedTransportId?: string;
 };
@@ -111,7 +115,7 @@ function TripSummaryCard({
   const utilization = carried > 0 ? Math.min(100, Math.round((distributed / carried) * 100)) : 0;
   const afterDispatchUtilization =
     carried > 0 ? Math.min(100, Math.round(((distributed + dispatching) / carried) * 100)) : 0;
-  const truckLabel = transport.truck.plateNumber || transport.truck.name;
+  const truckLabel = (transport.truck?.plateNumber || transport.oneTimeTruckPlate) || (transport.truck?.name || "One-Time Truck");
 
   return (
     <Card className="border-border/60 bg-card/80 backdrop-blur-xs sticky top-6 shadow-sm">
@@ -154,7 +158,7 @@ function TripSummaryCard({
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transport</span>
           </div>
           <TripSummaryRow label="Destination" value={transport.destination} />
-          <TripSummaryRow label="Transporter" value={transport.transporter.name} />
+          <TripSummaryRow label="Transporter" value={transport.transporter?.name || transport.oneTimeTransporterName || "Unknown"} />
           <TripSummaryRow label="Truck" value={truckLabel} />
           <TripSummaryRow
             label="Status"
@@ -547,7 +551,7 @@ export function CreateSaleForm({
                             return (
                               <CommandItem
                                 key={t.id}
-                                value={`${t.order?.reference || ''} ${t.order?.sourceDepot || ''} ${t.destination} ${t.truck.plateNumber || ''} ${t.truck.name} ${t.transporter?.name || ''} ${t.id}`.toLowerCase()}
+                                value={`${t.order?.reference || ''} ${t.order?.sourceDepot || ''} ${t.destination} ${t.truck?.plateNumber || t.oneTimeTruckPlate || ''} ${t.truck?.name || ''} ${t.transporter?.name || t.oneTimeTransporterName || ''} ${t.id}`.toLowerCase()}
                                 onSelect={() => {
                                   setValue("transportId", t.id, { shouldValidate: true });
                                   setOpenTransportSelect(false);
@@ -568,7 +572,7 @@ export function CreateSaleForm({
                                   </div>
                                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                                     <span className="truncate">
-                                      {t.truck.plateNumber || t.truck.name} • {t.transporter.name}
+                                      {(t.truck?.plateNumber || t.oneTimeTruckPlate) || (t.truck?.name || "")} • {t.transporter?.name || t.oneTimeTransporterName}
                                     </span>
                                     {t.createdAt && (
                                       <span className="text-[10px] text-muted-foreground/80 shrink-0 ml-2 font-mono">

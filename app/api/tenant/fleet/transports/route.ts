@@ -12,13 +12,35 @@ const CreateTransportSchema = z.object({
   orderId: z.string().optional().nullable(),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional().nullable(),
   assignments: z.array(z.object({
-    transporterId: z.string().min(1),
-    truckId: z.string().min(1),
-    driverId: z.string().min(1),
+    transporterId: z.string().nullish().or(z.literal("")),
+    truckId: z.string().nullish().or(z.literal("")),
+    driverId: z.string().nullish().or(z.literal("")),
+    isOneTime: z.boolean().default(false).optional(),
+    oneTimeTransporterName: z.string().optional().nullable(),
+    oneTimeTruckPlate: z.string().optional().nullable(),
+    oneTimeDriverName: z.string().optional().nullable(),
     destination: z.string().min(1),
     ratePerLiter: z.number().positive(),
     litersCarried: z.number().positive(),
-  })).min(1, "At least one truck assignment is required")
+  })).min(1, "At least one truck assignment is required").superRefine((data, ctx) => {
+    data.forEach((assignment, index) => {
+      if (assignment.isOneTime) {
+        if (!assignment.oneTimeTransporterName) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Transporter name is required for one-time assignment", path: [index, "oneTimeTransporterName"] });
+        }
+        if (!assignment.oneTimeTruckPlate) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Truck plate is required for one-time assignment", path: [index, "oneTimeTruckPlate"] });
+        }
+        if (!assignment.oneTimeDriverName) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Driver name is required for one-time assignment", path: [index, "oneTimeDriverName"] });
+        }
+      } else {
+        if (!assignment.transporterId) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Transporter ID is required", path: [index, "transporterId"] });
+        }
+      }
+    });
+  })
 });
 
 export async function GET(request: Request) {
@@ -71,9 +93,13 @@ export async function POST(request: Request) {
           data: {
             tenantId: actor.tenantId,
             orderId: body.orderId ?? null,
-            transporterId: assignment.transporterId,
-            truckId: assignment.truckId,
-            driverId: assignment.driverId,
+            transporterId: assignment.isOneTime ? null : assignment.transporterId,
+            truckId: assignment.isOneTime ? null : assignment.truckId,
+            driverId: assignment.isOneTime ? null : assignment.driverId,
+            isOneTime: !!assignment.isOneTime,
+            oneTimeTransporterName: assignment.oneTimeTransporterName ?? null,
+            oneTimeTruckPlate: assignment.oneTimeTruckPlate ?? null,
+            oneTimeDriverName: assignment.oneTimeDriverName ?? null,
             destination: assignment.destination,
             productType: body.productType ?? null,
             ratePerLiter: assignment.ratePerLiter,
@@ -96,8 +122,8 @@ export async function POST(request: Request) {
           targetId: t.id,
           after: {
             destination: t.destination,
-            transporter: t.transporter.name,
-            truck: t.truck?.name || "Any Truck",
+            transporter: t.isOneTime ? t.oneTimeTransporterName : t.transporter?.name,
+            truck: t.isOneTime ? t.oneTimeTruckPlate : (t.truck?.name || "Any Truck"),
             litersCarried: t.litersCarried
           } as object,
           ip: meta.ip,

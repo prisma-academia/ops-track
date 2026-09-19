@@ -411,7 +411,7 @@ export async function getFleetOverviewData(
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5)
 
-  const topTransporterIds = transporterGroupRaw.map((t) => t.transporterId)
+  const topTransporterIds = transporterGroupRaw.map((t) => t.transporterId).filter((id): id is string => id !== null)
   const transporters = await prisma.transporter.findMany({
     where: { id: { in: topTransporterIds } },
     select: { id: true, name: true },

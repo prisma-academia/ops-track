@@ -248,7 +248,7 @@ export function TransportDetailsManager({
               </Badge>
             </h2>
             <p className="text-xs text-muted-foreground mt-1">
-              {transport.transporter?.name} • {transport.truck?.name || "No truck"} • {transport.productType || "—"}
+              {transport.isOneTime ? transport.oneTimeTransporterName : transport.transporter?.name} • {transport.isOneTime ? transport.oneTimeTruckPlate : (transport.truck?.name || "No truck")} • {transport.productType || "—"}
             </p>
           </div>
         </div>
@@ -281,15 +281,15 @@ export function TransportDetailsManager({
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 p-4 rounded-2xl border bg-card">
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Transporter</p>
-          <p className="text-sm font-medium text-foreground mt-0.5">{transport.transporter.name}</p>
+          <p className="text-sm font-medium text-foreground mt-0.5">{transport.isOneTime ? transport.oneTimeTransporterName : transport.transporter?.name}</p>
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Truck</p>
-          <p className="text-sm font-medium text-foreground mt-0.5">{transport.truck?.name || "Unassigned"}</p>
+          <p className="text-sm font-medium text-foreground mt-0.5">{transport.isOneTime ? transport.oneTimeTruckPlate : (transport.truck?.name || "Unassigned")}</p>
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Driver</p>
-          <p className="text-sm font-medium text-foreground mt-0.5">{transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : "Unassigned"}</p>
+          <p className="text-sm font-medium text-foreground mt-0.5">{transport.isOneTime ? transport.oneTimeDriverName : (transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : "Unassigned")}</p>
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Product Type</p>

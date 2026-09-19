@@ -23,13 +23,41 @@ const Schema = z.object({
   orderId: z.string().optional().nullable(),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional().nullable(),
   assignments: z.array(z.object({
-    transporterId: z.string().min(1, "Please select a transporter"),
-    truckId: z.string().min(1, "Please select a truck"),
-    driverId: z.string().min(1, "Please select a driver"),
+    isOneTime: z.boolean().default(false).optional(),
+    transporterId: z.string().nullish().or(z.literal("")),
+    truckId: z.string().nullish().or(z.literal("")),
+    driverId: z.string().nullish().or(z.literal("")),
+    oneTimeTransporterName: z.string().optional().nullable(),
+    oneTimeTruckPlate: z.string().optional().nullable(),
+    oneTimeDriverName: z.string().optional().nullable(),
     destination: z.string().min(1, "Destination is required"),
     ratePerLiter: z.coerce.number().min(1, "Rate is required"),
     litersCarried: z.coerce.number().min(1, "Volume is required"),
-  })).min(1, "At least one truck assignment is required"),
+  })).min(1, "At least one truck assignment is required").superRefine((data, ctx) => {
+    data.forEach((assignment, index) => {
+      if (assignment.isOneTime) {
+        if (!assignment.oneTimeTransporterName) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Transporter name is required", path: [index, "oneTimeTransporterName"] });
+        }
+        if (!assignment.oneTimeTruckPlate) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Truck plate is required", path: [index, "oneTimeTruckPlate"] });
+        }
+        if (!assignment.oneTimeDriverName) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Driver name is required", path: [index, "oneTimeDriverName"] });
+        }
+      } else {
+        if (!assignment.transporterId) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a transporter", path: [index, "transporterId"] });
+        }
+        if (!assignment.truckId) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a truck", path: [index, "truckId"] });
+        }
+        if (!assignment.driverId) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a driver", path: [index, "driverId"] });
+        }
+      }
+    });
+  }),
 });
 
 const NIGERIAN_STATES = [
@@ -71,9 +99,13 @@ export function CreateTransportForm({
       orderId: preselectedOrderId || "",
       productType: "PMS",
       assignments: [{
+        isOneTime: false,
         transporterId: "",
         truckId: "",
         driverId: "",
+        oneTimeTransporterName: "",
+        oneTimeTruckPlate: "",
+        oneTimeDriverName: "",
         destination: "",
         ratePerLiter: "" as any,
         litersCarried: "" as any,
@@ -229,15 +261,15 @@ export function CreateTransportForm({
           {selectedOrderId && (
             <div className="xl:col-span-1 space-y-6">
               <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs sticky top-6 shadow-sm">
-                <CardHeader className="pb-3 border-b border-border/30 flex flex-row items-center justify-between">
+                <CardHeader className="pb-0 border-b border-border/30 flex flex-row items-center justify-between">
                   <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Order Volume Tracker</CardTitle>
                   {selectedProductType && (
-                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                    <span className="text-xs font-mono font-bold px-2 rounded bg-primary/10 text-primary border border-primary/20">
                       {selectedProductType}
                     </span>
                   )}
                 </CardHeader>
-                <CardContent className="pt-5 space-y-4">
+                <CardContent className="space-y-4">
                   {/* Top Progress & Target Header */}
                   <div className="flex items-baseline justify-between">
                     <div>
@@ -290,104 +322,6 @@ export function CreateTransportForm({
                       )}
                     </div>
                   </div>
-
-                  {/* Indicators Horizontally Below */}
-                  <div className="grid grid-cols-3 gap-2 pt-1">
-                    {/* Prior Dispatched */}
-                    <div 
-                      className="p-2.5 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 flex flex-col justify-between"
-                      title={`Prior Dispatched: ${previouslyTransported.toLocaleString()} L`}
-                    >
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <div className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
-                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
-                          Prior
-                        </span>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-1">
-                        <span className="font-mono font-bold text-xs text-foreground truncate">
-                          {previouslyTransported.toLocaleString()}L
-                        </span>
-                        <span className="text-[10px] font-mono text-muted-foreground">
-                          {Math.round((previouslyTransported / (targetVolume || 1)) * 100)}%
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Assigned */}
-                    <div 
-                      className="p-2.5 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 flex flex-col justify-between"
-                      title={`Assigned in Form: ${currentlyAllocated.toLocaleString()} L`}
-                    >
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <div className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
-                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
-                          Assigned
-                        </span>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-1">
-                        <span className="font-mono font-bold text-xs text-amber-600 dark:text-amber-400 truncate">
-                          {currentlyAllocated.toLocaleString()}L
-                        </span>
-                        <span className="text-[10px] font-mono text-amber-600/80 dark:text-amber-400/80">
-                          {Math.round((currentlyAllocated / (targetVolume || 1)) * 100)}%
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Remaining or Excess */}
-                    {isOverAllocated ? (
-                      <div 
-                        className="p-2.5 rounded-lg bg-destructive/10 border border-destructive/20 flex flex-col justify-between"
-                        title={`Excess Over Target: +${overVolume.toLocaleString()} L`}
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <div className="h-2 w-2 rounded-full bg-destructive shrink-0" />
-                          <span className="text-[11px] font-semibold text-destructive uppercase tracking-wider truncate">
-                            Excess
-                          </span>
-                        </div>
-                        <div className="flex items-baseline justify-between gap-1">
-                          <span className="font-mono font-bold text-xs text-destructive truncate">
-                            +{overVolume.toLocaleString()}L
-                          </span>
-                          <span className="text-[10px] font-mono text-destructive/80 font-bold">
-                            Over
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div 
-                        className={`p-2.5 rounded-lg border flex flex-col justify-between transition-colors ${
-                          remainingVolume === 0 && targetVolume > 0
-                            ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/40" 
-                            : "bg-stone-50/60 dark:bg-stone-900/40 border-stone-200 dark:border-stone-800"
-                        }`}
-                        title={`Remaining Volume: ${remainingVolume.toLocaleString()} L`}
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <div className={`h-2 w-2 rounded-full shrink-0 ${
-                            remainingVolume === 0 && targetVolume > 0 ? "bg-emerald-500" : "bg-stone-400 dark:bg-stone-500"
-                          }`} />
-                          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
-                            Remaining
-                          </span>
-                        </div>
-                        <div className="flex items-baseline justify-between gap-1">
-                          <span className={`font-mono font-bold text-xs truncate ${
-                            remainingVolume === 0 && targetVolume > 0 
-                              ? "text-emerald-600 dark:text-emerald-400" 
-                              : "text-stone-700 dark:text-stone-300"
-                          }`}>
-                            {remainingVolume.toLocaleString()}L
-                          </span>
-                          <span className="text-[10px] font-mono text-muted-foreground">
-                            {Math.round((remainingVolume / (targetVolume || 1)) * 100)}%
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -396,6 +330,7 @@ export function CreateTransportForm({
 
         <div className="space-y-6">
         {fields.map((field, index) => {
+          const isOneTime = watch(`assignments.${index}.isOneTime`);
           const transporterId = watch(`assignments.${index}.transporterId`);
           const truckId = watch(`assignments.${index}.truckId`);
           const driverId = watch(`assignments.${index}.driverId`);
@@ -423,13 +358,73 @@ export function CreateTransportForm({
                 </Button>
               )}
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <Truck className="h-4 w-4" />
-                  Truck Assignment #{index + 1}
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                    <Truck className="h-4 w-4" />
+                    Truck Assignment #{index + 1}
+                  </CardTitle>
+                  <div className="flex items-center gap-2 mr-6">
+                    <Controller
+                      control={control}
+                      name={`assignments.${index}.isOneTime`}
+                      render={({ field }) => (
+                        <Checkbox 
+                          id={`one-time-toggle-${index}`}
+                          checked={field.value} 
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked);
+                            if (checked) {
+                              setValue(`assignments.${index}.transporterId`, "", { shouldValidate: false });
+                              setValue(`assignments.${index}.truckId`, "", { shouldValidate: false });
+                              setValue(`assignments.${index}.driverId`, "", { shouldValidate: false });
+                            } else {
+                              setValue(`assignments.${index}.oneTimeTransporterName`, "", { shouldValidate: false });
+                              setValue(`assignments.${index}.oneTimeTruckPlate`, "", { shouldValidate: false });
+                              setValue(`assignments.${index}.oneTimeDriverName`, "", { shouldValidate: false });
+                            }
+                          }} 
+                        />
+                      )}
+                    />
+                    <Label htmlFor={`one-time-toggle-${index}`} className="text-sm cursor-pointer select-none">
+                      One-Time Transporter
+                    </Label>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-3 gap-4">
+                {isOneTime ? (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label className={fieldErrors?.oneTimeTransporterName ? "text-destructive" : ""}>Transporter Name*</Label>
+                      <Input 
+                        {...register(`assignments.${index}.oneTimeTransporterName`)} 
+                        placeholder="e.g. Acme Logistics" 
+                        className={fieldErrors?.oneTimeTransporterName ? "border-destructive" : ""} 
+                      />
+                      {fieldErrors?.oneTimeTransporterName && <p className="text-xs text-destructive">{String(fieldErrors.oneTimeTransporterName.message)}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <Label className={fieldErrors?.oneTimeTruckPlate ? "text-destructive" : ""}>Truck Plate Number*</Label>
+                      <Input 
+                        {...register(`assignments.${index}.oneTimeTruckPlate`)} 
+                        placeholder="e.g. KJA-123XD" 
+                        className={fieldErrors?.oneTimeTruckPlate ? "border-destructive" : ""} 
+                      />
+                      {fieldErrors?.oneTimeTruckPlate && <p className="text-xs text-destructive">{String(fieldErrors.oneTimeTruckPlate.message)}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <Label className={fieldErrors?.oneTimeDriverName ? "text-destructive" : ""}>Driver Name*</Label>
+                      <Input 
+                        {...register(`assignments.${index}.oneTimeDriverName`)} 
+                        placeholder="e.g. John Doe" 
+                        className={fieldErrors?.oneTimeDriverName ? "border-destructive" : ""} 
+                      />
+                      {fieldErrors?.oneTimeDriverName && <p className="text-xs text-destructive">{String(fieldErrors.oneTimeDriverName.message)}</p>}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label className={fieldErrors?.transporterId ? "text-destructive" : ""}>Transporter*</Label>
                     <Popover open={openStates[`transporter-${index}`]} onOpenChange={(val) => togglePopover(`transporter-${index}`, val)}>
@@ -516,9 +511,10 @@ export function CreateTransportForm({
                         </Command>
                       </PopoverContent>
                     </Popover>
-                    {fieldErrors?.driverId && <p className="text-xs text-destructive">{fieldErrors.driverId.message}</p>}
+                    {fieldErrors?.driverId && <p className="text-xs text-destructive">{String(fieldErrors.driverId.message)}</p>}
                   </div>
                 </div>
+                )}
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
@@ -618,9 +614,13 @@ export function CreateTransportForm({
                 return;
               }
               append({
+                isOneTime: false,
                 transporterId: "",
                 truckId: "",
                 driverId: "",
+                oneTimeTransporterName: "",
+                oneTimeTruckPlate: "",
+                oneTimeDriverName: "",
                 destination: "",
                 ratePerLiter: "" as any,
                 litersCarried: "" as any

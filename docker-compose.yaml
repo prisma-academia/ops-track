@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  ops-track:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: ops-track
+    environment:
+      - NODE_ENV=production
+      # Pass your actual env vars here or use env_file
+      # - DATABASE_URL=${DATABASE_URL}
+    # env_file:
+    #   - .env
+    networks:
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ops-track.rule=Host(`${DOMAIN}`) || HostRegexp(`{subdomain:[a-zA-Z0-9-]+}.${DOMAIN}`)"
+      - "traefik.http.routers.ops-track.entrypoints=websecure" # Use web for HTTP or websecure for HTTPS
+      - "traefik.http.routers.ops-track.tls.certresolver=letsencrypt" # Assuming Dokploy uses letsencrypt certresolver
+      - "traefik.http.services.ops-track.loadbalancer.server.port=3000"
+    restart: unless-stopped
+
+networks:
+  dokploy-network:
+    external: true

@@ -14,6 +14,7 @@ const NAV = [
   { href: "/users",        title: "Users",         icon: "CircleUserRound",permission: PERMISSIONS.PLATFORM_USERS_READ.key },
   { href: "/role-templates",title: "Roles",        icon: "Shield",       permission: PERMISSIONS.PLATFORM_ROLES_READ.key },
   { href: "/activity",    title: "Audit Logs",    icon: "Activity",     permission: PERMISSIONS.PLATFORM_ACTIVITY_READ.key },
+  { href: "/health",      title: "System Health", icon: "Activity",     permission: PERMISSIONS.PLATFORM_ACTIVITY_READ.key },
   { href: "/settings",    title: "Settings",      icon: "Settings",     permission: null },
 ];
 

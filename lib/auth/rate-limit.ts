@@ -123,3 +123,15 @@ export async function enforceRateLimit(
     logger.warn({ err: e, preset: preset.name }, "rate_limit_check_failed_open");
   }
 }
+
+export async function checkRedisHealth(): Promise<boolean> {
+  const r = getRedis();
+  if (!r) return false;
+  try {
+    await r.ping();
+    return true;
+  } catch (e) {
+    console.error("Redis Health Check Failed:", e);
+    return false;
+  }
+}

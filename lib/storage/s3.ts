@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, HeadBucketCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "@/lib/env";
+import { prisma } from "@/lib/db/client";
 
 /**
  * Tenant branding object storage (PRD §5.8, §8.3, §16.6).
@@ -28,7 +29,7 @@ const CONTENT_TYPE_EXT: Record<string, string> = {
   "application/pdf": "pdf",
 };
 
-export type PresignKind = "logo" | "receipt";
+export type PresignKind = "payment-receipt" | "sales-receipt" | "settings" | "waybill-uploads" | "expense-receipt" | "logo" | "profile" | "receipt";
 
 export function isAllowedImageType(contentType: string): boolean {
   return (
@@ -104,7 +105,22 @@ export async function createPresignedUpload(input: {
 }): Promise<{ url: string; key: string; publicUrl: string }> {
   const ext = CONTENT_TYPE_EXT[input.contentType];
   if (!ext) throw new Error("Unsupported content type.");
-  const key = `tenants/${input.tenantId}/branding/${input.kind}-${randomBytes(8).toString("hex")}.${ext}`;
+  
+  let tenantName = "unknown";
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: input.tenantId },
+      select: { name: true }
+    });
+    if (tenant?.name) {
+      tenantName = tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    }
+  } catch (error) {
+    console.error("Failed to fetch tenant name for S3 upload:", error);
+  }
+
+  const key = `tenants/${tenantName}-${input.tenantId}/${input.kind}/${randomBytes(8).toString("hex")}.${ext}`;
+  
   const command = new PutObjectCommand({
     Bucket: env.S3_BUCKET!,
     Key: key,
@@ -112,4 +128,16 @@ export async function createPresignedUpload(input: {
   });
   const url = await getSignedUrl(getClient(), command, { expiresIn: 300 });
   return { url, key, publicUrl: publicUrlForKey(key) };
+}
+
+export async function checkS3Health(): Promise<boolean> {
+  if (!s3Configured()) return false;
+  try {
+    const command = new HeadBucketCommand({ Bucket: env.S3_BUCKET! });
+    await getClient().send(command);
+    return true;
+  } catch (e) {
+    console.error("S3 Health Check Failed:", e);
+    return false;
+  }
 }

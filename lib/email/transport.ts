@@ -18,3 +18,14 @@ export function getTransport(): Transporter {
 }
 
 export const FROM = env.SMTP_FROM;
+
+export async function checkSmtpHealth(): Promise<boolean> {
+  try {
+    const transporter = getTransport();
+    await transporter.verify();
+    return true;
+  } catch (e) {
+    console.error("SMTP Health Check Failed:", e);
+    return false;
+  }
+}

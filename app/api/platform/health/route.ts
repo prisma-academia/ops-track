@@ -11,7 +11,7 @@ export async function GET() {
     await requirePlatformActor(PERMISSIONS.PLATFORM_ACTIVITY_READ.key);
 
     const [dbResult, s3Result, smtpResult, redisResult] = await Promise.allSettled([
-      prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false),
+      prisma.tenant.findFirst({ select: { id: true } }).then(() => true).catch(() => false),
       checkS3Health(),
       checkSmtpHealth(),
       checkRedisHealth(),

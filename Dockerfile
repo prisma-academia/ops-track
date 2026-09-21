@@ -10,6 +10,7 @@ RUN npm ci
 COPY . .
 
 # Build the application (this also runs prisma generate based on package.json)
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
 # Expose the port Next.js runs on

@@ -2,8 +2,8 @@ node_modules
 npm-debug.log
 .git
 .next
-# .env
-# .env.*.local
+.env
+.env.*.local
 Dockerfile
 docker-compose.yml
 .claude

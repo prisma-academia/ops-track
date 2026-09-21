@@ -13,9 +13,7 @@
     "db:migrate:deploy": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "prisma db push && prisma db seed",
-    "db:reset": "tsx scripts/safe-db-reset.ts",
     "db:backup": "tsx scripts/backup-db.ts",
-    "db:clear-station": "tsx scripts/clear-station-data.ts",
     "cron:backup": "tsx scripts/cron-backup.ts"
   },
   "dependencies": {

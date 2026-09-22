@@ -94,6 +94,20 @@ export async function PATCH(
       }
     }
 
+    // Verify staff belongs to tenant and has STATION module enabled
+    if (body.staffUserIds && body.staffUserIds.length > 0) {
+      const validStaffCount = await prisma.tenantUser.count({
+        where: {
+          id: { in: body.staffUserIds },
+          tenantId: actor.tenantId,
+          activeModules: { has: "STATION" },
+        },
+      });
+      if (validStaffCount !== body.staffUserIds.length) {
+        throw new DomainError(400, "invalid_staff", "Assigned station manager must be an active user with the station module enabled.");
+      }
+    }
+
     // Set up staff changes
     const staffData = body.staffUserIds
       ? {

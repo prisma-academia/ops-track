@@ -89,8 +89,16 @@ export default async function StationDetailPage({
     station.tanks = repairedTanks;
   }
 
+  const staffIds = station.staff.map((s) => s.id);
   const users = await prisma.tenantUser.findMany({
-    where: { tenantId: actor.tenantId },
+    where: {
+      tenantId: actor.tenantId,
+      status: "ACTIVE",
+      OR: [
+        { activeModules: { has: "STATION" as const } },
+        ...(staffIds.length > 0 ? [{ id: { in: staffIds } }] : []),
+      ],
+    },
     select: {
       id: true,
       email: true,

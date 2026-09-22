@@ -24,9 +24,23 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { formatHumanReadableDate } from "@/lib/utils";
-import { CheckCircle2, Eye, Loader2, Plus, User } from "lucide-react";
+import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { Check, CheckCircle2, ChevronsUpDown, Eye, Loader2, Plus, User } from "lucide-react";
 import Image from "next/image";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 import { FilePreviewButton } from "@/components/file-viewer-modal";
 import { apiPost } from "@/lib/client/api";
@@ -113,6 +127,12 @@ export function ExpensesManager({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const [openStationSelect, setOpenStationSelect] = useState(false);
+  const [openBankSelect, setOpenBankSelect] = useState(false);
+
+  const selectedStation = stations.find((s) => s.id === createStationId);
+  const selectedBank = bankAccounts.find((b) => b.id === createBankAccountId);
+
   const searchParams = useSearchParams();
 
   const appliedFilters: Record<string, string> = {};
@@ -139,6 +159,10 @@ export function ExpensesManager({
     setActiveDialog(null);
     setSelectedExpense(null);
     setCreateError(null);
+    setCreateAmount("");
+    setCreateDescription("");
+    setOpenStationSelect(false);
+    setOpenBankSelect(false);
   };
 
   const activeExpenses = expenses.length > 0 ? expenses : initialExpenses;
@@ -156,7 +180,7 @@ export function ExpensesManager({
       return;
     }
 
-    const amt = parseFloat(createAmount);
+    const amt = parseFloat(createAmount.replace(/,/g, ""));
     if (isNaN(amt) || amt <= 0) {
       setCreateError("Amount must be greater than 0");
       return;
@@ -460,7 +484,7 @@ export function ExpensesManager({
       ========================================== */}
       {activeDialog === "create" && (
         <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-lg font-bold">Record Station Expense</DialogTitle>
             </DialogHeader>
@@ -469,18 +493,58 @@ export function ExpensesManager({
               {/* Station Selection */}
               <div className="space-y-1.5">
                 <Label htmlFor="stationId">Station *</Label>
-                <Select value={createStationId} onValueChange={setCreateStationId}>
-                  <SelectTrigger id="stationId">
-                    <SelectValue placeholder="Select station" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stations.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name} ({s.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={openStationSelect} onOpenChange={setOpenStationSelect}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="stationId"
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openStationSelect}
+                      className="w-full justify-between font-normal"
+                    >
+                      <span className="truncate">
+                        {selectedStation
+                          ? `${selectedStation.name} (${selectedStation.code})`
+                          : "Select station..."}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="p-0"
+                    style={{ width: "var(--radix-popover-trigger-width)" }}
+                    align="start"
+                  >
+                    <Command>
+                      <CommandInput placeholder="Search station by name or code..." />
+                      <CommandList>
+                        <CommandEmpty>No station found.</CommandEmpty>
+                        <CommandGroup>
+                          {stations.map((s) => (
+                            <CommandItem
+                              key={s.id}
+                              value={`${s.name} ${s.code}`}
+                              onSelect={() => {
+                                setCreateStationId(s.id);
+                                setOpenStationSelect(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 shrink-0",
+                                  createStationId === s.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <span className="font-medium">{s.name}</span>
+                              <span className="text-xs text-muted-foreground ml-1.5">({s.code})</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               {/* Category & Payment Method */}
@@ -488,10 +552,10 @@ export function ExpensesManager({
                 <div className="space-y-1.5">
                   <Label htmlFor="category">Category *</Label>
                   <Select value={createCategory} onValueChange={setCreateCategory}>
-                    <SelectTrigger id="category">
+                    <SelectTrigger id="category" className="w-full">
                       <SelectValue placeholder="Category" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper">
                       {Object.entries(CATEGORY_MAP).map(([val, label]) => (
                         <SelectItem key={val} value={val}>
                           {label}
@@ -510,10 +574,10 @@ export function ExpensesManager({
                       if (val === "CASH") setCreateBankAccountId("");
                     }}
                   >
-                    <SelectTrigger id="paymentMethod">
+                    <SelectTrigger id="paymentMethod" className="w-full">
                       <SelectValue placeholder="Payment Method" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper">
                       {Object.entries(PAYMENT_METHOD_MAP).map(([val, label]) => (
                         <SelectItem key={val} value={val}>
                           {label}
@@ -528,35 +592,76 @@ export function ExpensesManager({
               {createPaymentMethod !== "CASH" && (
                 <div className="space-y-1.5">
                   <Label htmlFor="bankAccountId">Station Bank Account *</Label>
-                  <Select value={createBankAccountId} onValueChange={setCreateBankAccountId}>
-                    <SelectTrigger id="bankAccountId">
-                      <SelectValue placeholder="Select bank account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {bankAccounts.length === 0 ? (
-                        <div className="p-2 text-xs text-muted-foreground text-center">
-                          No bank accounts configured
-                        </div>
-                      ) : (
-                        bankAccounts.map((b) => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {b.bankName} - {b.accountNumber} ({b.accountName})
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={openBankSelect} onOpenChange={setOpenBankSelect}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="bankAccountId"
+                        type="button"
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openBankSelect}
+                        className="w-full justify-between font-normal"
+                      >
+                        <span className="truncate">
+                          {selectedBank
+                            ? `${selectedBank.bankName} - ${selectedBank.accountNumber} (${selectedBank.accountName})`
+                            : "Select bank account..."}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="p-0"
+                      style={{ width: "var(--radix-popover-trigger-width)" }}
+                      align="start"
+                    >
+                      <Command>
+                        <CommandInput placeholder="Search bank, account number or name..." />
+                        <CommandList>
+                          <CommandEmpty>No bank account found.</CommandEmpty>
+                          <CommandGroup>
+                            {bankAccounts.length === 0 ? (
+                              <div className="p-3 text-xs text-muted-foreground text-center">
+                                No bank accounts configured
+                              </div>
+                            ) : (
+                              bankAccounts.map((b) => (
+                                <CommandItem
+                                  key={b.id}
+                                  value={`${b.bankName} ${b.accountNumber} ${b.accountName}`}
+                                  onSelect={() => {
+                                    setCreateBankAccountId(b.id);
+                                    setOpenBankSelect(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4 shrink-0",
+                                      createBankAccountId === b.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <div className="flex flex-col text-left">
+                                    <span className="font-medium text-sm">{b.bankName}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {b.accountNumber} • {b.accountName}
+                                    </span>
+                                  </div>
+                                </CommandItem>
+                              ))
+                            )}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               )}
 
               {/* Amount */}
               <div className="space-y-1.5">
                 <Label htmlFor="amount">Amount (₦) *</Label>
-                <Input
+                <FormattedNumberInput
                   id="amount"
-                  type="number"
-                  step="any"
-                  min="0"
                   placeholder="0.00"
                   value={createAmount}
                   onChange={(e) => setCreateAmount(e.target.value)}

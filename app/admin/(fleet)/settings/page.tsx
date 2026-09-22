@@ -6,12 +6,16 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { parseTenantSettings } from "@/lib/tenant/settings";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 import Link from "next/link";
-import { UserPen, Building2, MapPin, Globe, Phone, Mail, CheckCircle2 } from "lucide-react";
+import { UserPen, Building2, MapPin, Globe, Phone, Mail, CheckCircle2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { POPULAR_CURRENCIES } from "@/components/ui/currency-select";
+import { POPULAR_TIMEZONES } from "@/components/ui/timezone-select";
+import { POPULAR_LOCALES } from "@/components/ui/locale-select";
 
 function textOrFallback(value: string | null | undefined) {
   const trimmed = value?.trim();
@@ -205,7 +209,7 @@ export default async function TenantSettingsProfilePage() {
               <CardTitle className="text-lg">System Configuration</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InfoField label="Primary Color">
                   <div className="flex items-center gap-2">
                     <div
@@ -215,35 +219,60 @@ export default async function TenantSettingsProfilePage() {
                     <span className="font-mono">{settings.primaryColor}</span>
                   </div>
                 </InfoField>
-                <InfoField label="Default Currency">{settings.currency}</InfoField>
-                <InfoField label="Timezone">{settings.timezone}</InfoField>
-                <InfoField label="Locale">{settings.locale}</InfoField>
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Inventory Variance</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <InfoField label="Variance Threshold">
-                  {settings.varianceThreshold.toLocaleString()} L
+                <InfoField label="Default Currency">
+                  {(() => {
+                    const c = POPULAR_CURRENCIES.find((item) => item.code === settings.currency);
+                    return (
+                      <div className="flex items-center gap-2">
+                        {c ? (
+                          <>
+                            <span className="flex size-5 items-center justify-center rounded bg-muted text-xs font-mono font-semibold border">
+                              {c.symbol}
+                            </span>
+                            <span className="font-semibold">{c.code}</span>
+                            <span className="text-muted-foreground text-xs">({c.name})</span>
+                          </>
+                        ) : (
+                          <span className="font-mono">{settings.currency}</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </InfoField>
-                <InfoField label="Block on unresolved variance">
-                  {settings.blockOnUnresolvedVariance ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded-full text-xs font-medium">
-                      Enabled
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">Disabled</span>
-                  )}
+
+                <InfoField label="Timezone">
+                  {(() => {
+                    const tz = POPULAR_TIMEZONES.find((item) => item.value === settings.timezone);
+                    return (
+                      <div className="flex items-center gap-2">
+                        <Clock className="size-3.5 text-muted-foreground" />
+                        <span className="font-medium">{settings.timezone}</span>
+                        {tz && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                            {tz.offset}
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </InfoField>
+
+                <InfoField label="Locale">
+                  {(() => {
+                    const loc = POPULAR_LOCALES.find((item) => item.code === settings.locale);
+                    return (
+                      <div className="flex items-center gap-2">
+                        <Globe className="size-3.5 text-muted-foreground" />
+                        <span>{loc ? loc.name : settings.locale}</span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                          {settings.locale}
+                        </Badge>
+                      </div>
+                    );
+                  })()}
                 </InfoField>
               </div>
-              <p className="text-xs text-muted-foreground mt-4">
-                Alerts trigger above this volume difference. When blocking is enabled, new dipping sessions are prevented if there is an unresolved variance ticket.
-              </p>
             </CardContent>
           </Card>
         </div>

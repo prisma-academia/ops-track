@@ -9,7 +9,11 @@ export default async function NewStationPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_STATIONS_WRITE.key);
 
   const users = await prisma.tenantUser.findMany({
-    where: { tenantId: actor.tenantId },
+    where: {
+      tenantId: actor.tenantId,
+      status: "ACTIVE",
+      activeModules: { has: "STATION" as const },
+    },
     select: {
       id: true,
       email: true,

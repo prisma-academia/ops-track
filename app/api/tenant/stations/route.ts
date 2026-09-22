@@ -139,6 +139,20 @@ export async function POST(request: Request) {
       throw new DomainError(409, "code_taken", "Station code is already in use for this tenant.");
     }
 
+    // Verify staff belongs to tenant and has STATION module enabled
+    if (body.staffUserIds && body.staffUserIds.length > 0) {
+      const validStaffCount = await prisma.tenantUser.count({
+        where: {
+          id: { in: body.staffUserIds },
+          tenantId: actor.tenantId,
+          activeModules: { has: "STATION" },
+        },
+      });
+      if (validStaffCount !== body.staffUserIds.length) {
+        throw new DomainError(400, "invalid_staff", "Assigned station manager must be an active user with the station module enabled.");
+      }
+    }
+
     // Connect staff if provided
     const staffConnect = body.staffUserIds && body.staffUserIds.length > 0
       ? body.staffUserIds.map((id) => ({ id }))

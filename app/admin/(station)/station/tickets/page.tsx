@@ -7,7 +7,6 @@ import { TicketsManager } from "./tickets-manager";
 import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 import { TICKET_INCLUDE } from "@/lib/tickets/includes";
 import { withOriginStory } from "@/lib/tickets/ticket-service";
-import { orgStationBankAccountWhere } from "@/lib/bank-accounts/queries";
 
 export const metadata = { title: "Tickets" };
 
@@ -48,16 +47,6 @@ export default async function TicketsPage() {
     orderBy: { name: "asc" },
   });
 
-  const bankAccounts = await prisma.bankAccount.findMany({
-    where: orgStationBankAccountWhere({
-      tenantId: actor.tenantId,
-      organizationId: actor.organizationId ?? activeOrgId,
-      isActive: true,
-    }),
-    select: { id: true, bankName: true, accountName: true, accountNumber: true },
-    orderBy: { bankName: "asc" },
-  });
-
   const serializedTickets = JSON.parse(JSON.stringify(tickets.map(withOriginStory)));
   const serializedStations = JSON.parse(JSON.stringify(stations));
 
@@ -66,7 +55,6 @@ export default async function TicketsPage() {
       <TicketsManager
         initialTickets={serializedTickets}
         stations={serializedStations}
-        bankAccounts={JSON.parse(JSON.stringify(bankAccounts))}
         canCreate={hasPermission(actor, PERMISSIONS.TENANT_TICKETS_WRITE.key)}
       />
     </Suspense>

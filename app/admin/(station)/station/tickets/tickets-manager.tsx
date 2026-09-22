@@ -4,7 +4,15 @@ import * as React from "react";
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
-import { Plus } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  Check,
+  ChevronsUpDown,
+  CircleDot,
+  Plus,
+  Wrench,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -12,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { NumberInput } from "@/components/ui/number-input";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +35,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
   DataTable,
   DataTableColumnHeader,
   TableInsightCards,
@@ -35,12 +55,42 @@ import {
 } from "@/components/tables";
 import { TicketStatusBadge, TicketTypeBadge } from "@/components/tickets/ticket-badges";
 import { apiPost } from "@/lib/client/api";
+import { cn } from "@/lib/utils";
 
 const ORIGIN_LABELS: Record<string, string> = {
   SYSTEM: "System",
   MOBILE: "Mobile",
   ADMIN: "Admin",
 };
+
+const TICKET_CATEGORIES = [
+  {
+    value: "EQUIPMENT_FAULT",
+    label: "Equipment fault",
+    description: "Pump, dispenser, tank, ATG, generator, or POS hardware issue",
+    icon: Wrench,
+  },
+  {
+    value: "INCIDENT_REPORT",
+    label: "Incident report",
+    description: "Fuel spill, safety violation, security, dispute, or power outage",
+    icon: AlertCircle,
+  },
+  {
+    value: "CASH_DISCREPANCY",
+    label: "Cash discrepancy",
+    description: "Till shortfall, POS reconciliation mismatch, or drawer difference",
+    icon: AlertTriangle,
+  },
+  {
+    value: "OTHER",
+    label: "Other issue",
+    description: "General operational concern or uncategorized station issue",
+    icon: CircleDot,
+  },
+] as const;
+
+type TicketCategoryValue = (typeof TICKET_CATEGORIES)[number]["value"];
 
 function personName(
   person?: { firstName?: string | null; lastName?: string | null; email?: string | null } | null,
@@ -50,35 +100,25 @@ function personName(
   return name || person.email || "—";
 }
 
-function formatNaira(value: unknown) {
-  if (value == null || value === "") return "—";
-  const amount = Number(value);
-  if (Number.isNaN(amount)) return "—";
-  return `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 type TicketRow = {
   id: string;
   createdAt: string;
   stationId?: string | null;
-  station?: { name?: string | null } | null;
+  station?: { name?: string | null; code?: string | null } | null;
   category: string;
   title: string;
   status: string;
   origin: string;
-  requestedAmount?: number | string | null;
   raisedBy?: { firstName?: string | null; lastName?: string | null; email?: string | null } | null;
 };
 
 export function TicketsManager({
   initialTickets,
   stations,
-  bankAccounts = [],
   canCreate = false,
 }: {
   initialTickets: any[];
   stations: { id: string; name: string; code: string }[];
-  bankAccounts?: { id: string; bankName: string; accountName: string; accountNumber: string }[];
   canCreate?: boolean;
 }) {
   const router = useRouter();
@@ -87,18 +127,22 @@ export function TicketsManager({
 
   const [ticketList, setTicketList] = useState<TicketRow[]>(initialTickets);
   const [createOpen, setCreateOpen] = useState(false);
+  const [openStationSelect, setOpenStationSelect] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [createForm, setCreateForm] = useState({
+  const [createForm, setCreateForm] = useState<{
+    stationId: string;
+    category: TicketCategoryValue;
+    title: string;
+    description: string;
+  }>({
     stationId: stations[0]?.id ?? "",
-    type: "EXPENSE" as "EXPENSE" | "EQUIPMENT_FAULT" | "INCIDENT_REPORT",
+    category: "EQUIPMENT_FAULT",
     title: "",
     description: "",
-    spendIntent: "REQUEST" as "REQUEST" | "ALREADY_PAID",
-    requestedAmount: "",
-    requestedCategory: "OTHER",
-    paymentMethod: "CASH",
-    bankAccountId: "",
   });
+
+  const selectedStation = stations.find((s) => s.id === createForm.stationId);
+  const selectedCategory = TICKET_CATEGORIES.find((c) => c.value === createForm.category);
 
   const rows = useMemo(() => {
     if (!initialCategory) return ticketList;
@@ -178,14 +222,6 @@ export function TicketsManager({
         ),
       },
       {
-        accessorKey: "requestedAmount",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Amount" />,
-        meta: { label: "Amount" },
-        cell: ({ row }) => (
-          <span className="font-mono tabular-nums">{formatNaira(row.original.requestedAmount)}</span>
-        ),
-      },
-      {
         accessorKey: "status",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
         meta: { label: "Status" },
@@ -195,61 +231,43 @@ export function TicketsManager({
     [],
   );
 
-  async function handleCreateTicket() {
-    if (!createForm.stationId || !createForm.description.trim()) {
-      toast.error("Station and description are required.");
+  async function handleCreateTicket(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+
+    if (!createForm.stationId) {
+      toast.error("Please select a station.");
       return;
     }
-    if (
-      createForm.type === "EXPENSE" &&
-      (!createForm.requestedAmount || Number(createForm.requestedAmount) <= 0 || !createForm.requestedCategory)
-    ) {
-      toast.error("Expense tickets need a positive amount and expense category.");
+    if (!createForm.description.trim()) {
+      toast.error("Please provide a description of the issue.");
       return;
     }
+
     setCreating(true);
     try {
-      const category =
-        createForm.type === "EXPENSE"
-          ? createForm.spendIntent === "ALREADY_PAID"
-            ? "EXPENSE_VERIFY"
-            : "EXPENSE_REQUEST"
-          : createForm.type;
       const res = await apiPost<{ ticket: TicketRow }>("/api/tenant/tickets", {
         stationId: createForm.stationId,
-        category,
+        category: createForm.category,
         title: createForm.title.trim() || undefined,
         description: createForm.description.trim(),
-        spendIntent: createForm.type === "EXPENSE" ? createForm.spendIntent : "NONE",
-        requestedAmount: createForm.type === "EXPENSE" ? Number(createForm.requestedAmount) : undefined,
-        requestedCategory: createForm.type === "EXPENSE" ? createForm.requestedCategory : undefined,
-        alreadyPaid:
-          createForm.type === "EXPENSE" && createForm.spendIntent === "ALREADY_PAID"
-            ? {
-                paymentMethod: createForm.paymentMethod,
-                bankAccountId: createForm.paymentMethod === "CASH" ? null : createForm.bankAccountId || null,
-              }
-            : undefined,
       });
+
       if (res.error) {
         toast.error(res.error.message || "Failed to create ticket.");
         return;
       }
-      toast.success("Ticket created.");
+
+      toast.success("Ticket created successfully.");
       if (res.data?.ticket) {
         setTicketList((prev) => [res.data!.ticket, ...prev]);
       }
       setCreateOpen(false);
+      setOpenStationSelect(false);
       setCreateForm({
         stationId: stations[0]?.id ?? "",
-        type: "EXPENSE",
+        category: "EQUIPMENT_FAULT",
         title: "",
         description: "",
-        spendIntent: "REQUEST",
-        requestedAmount: "",
-        requestedCategory: "OTHER",
-        paymentMethod: "CASH",
-        bankAccountId: "",
       });
       router.refresh();
     } finally {
@@ -263,7 +281,7 @@ export function TicketsManager({
         <div>
           <h1 className="text-xl font-semibold text-foreground">Tickets</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Inventory alerts, operator tickets, and expense approvals in one inbox.
+            Inventory alerts, operator tickets, and incident reports in one inbox.
           </p>
         </div>
         {canCreate && (
@@ -288,169 +306,143 @@ export function TicketsManager({
       />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-2xl overflow-visible">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Create ticket</DialogTitle>
+            <DialogTitle>Create Station Ticket</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-1">
+
+          <form onSubmit={handleCreateTicket} className="space-y-4 pt-1">
+            {/* Station Selection - Search and Select */}
             <div className="space-y-1.5">
-              <Label>Station</Label>
-              <Select
-                value={createForm.stationId}
-                onValueChange={(stationId) => setCreateForm((prev) => ({ ...prev, stationId }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select station" />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  {stations.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name} ({s.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="ticketStationId">Station *</Label>
+              <Popover open={openStationSelect} onOpenChange={setOpenStationSelect}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="ticketStationId"
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openStationSelect}
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {selectedStation
+                        ? `${selectedStation.name} (${selectedStation.code})`
+                        : "Select station..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="p-0"
+                  style={{ width: "var(--radix-popover-trigger-width)" }}
+                  align="start"
+                >
+                  <Command>
+                    <CommandInput placeholder="Search station by name or code..." />
+                    <CommandList>
+                      <CommandEmpty>No station found.</CommandEmpty>
+                      <CommandGroup>
+                        {stations.map((s) => (
+                          <CommandItem
+                            key={s.id}
+                            value={`${s.name} ${s.code}`}
+                            onSelect={() => {
+                              setCreateForm((prev) => ({ ...prev, stationId: s.id }));
+                              setOpenStationSelect(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4 shrink-0",
+                                createForm.stationId === s.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <span className="font-medium">{s.name}</span>
+                            <span className="text-xs text-muted-foreground ml-1.5">({s.code})</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
+            {/* Ticket Category / Issue Type */}
             <div className="space-y-1.5">
-              <Label>Type</Label>
+              <Label htmlFor="ticketCategory">Ticket Type *</Label>
               <Select
-                value={createForm.type}
-                onValueChange={(type) =>
-                  setCreateForm((prev) => ({ ...prev, type: type as typeof prev.type }))
+                value={createForm.category}
+                onValueChange={(val) =>
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    category: val as TicketCategoryValue,
+                  }))
                 }
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
+                <SelectTrigger id="ticketCategory" className="w-full">
+                  <SelectValue placeholder="Select ticket type" />
                 </SelectTrigger>
                 <SelectContent position="popper">
-                  <SelectItem value="EXPENSE">Expense</SelectItem>
-                  <SelectItem value="EQUIPMENT_FAULT">Equipment fault</SelectItem>
-                  <SelectItem value="INCIDENT_REPORT">Report incident</SelectItem>
+                  {TICKET_CATEGORIES.map((cat) => {
+                    const Icon = cat.icon;
+                    return (
+                      <SelectItem key={cat.value} value={cat.value}>
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-4 w-4 text-muted-foreground" />
+                          <span>{cat.label}</span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
+              {selectedCategory && (
+                <p className="text-xs text-muted-foreground">
+                  {selectedCategory.description}
+                </p>
+              )}
             </div>
 
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label>Title (optional)</Label>
+            {/* Title */}
+            <div className="space-y-1.5">
+              <Label htmlFor="ticketTitle">Title (optional)</Label>
               <Input
+                id="ticketTitle"
                 value={createForm.title}
                 onChange={(e) => setCreateForm((prev) => ({ ...prev, title: e.target.value }))}
-                placeholder="Short summary"
+                placeholder="Short summary (e.g., Pump 2 dispensing slowly, ATG sensor error)"
               />
             </div>
 
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label>Description</Label>
+            {/* Description */}
+            <div className="space-y-1.5">
+              <Label htmlFor="ticketDescription">Description *</Label>
               <Textarea
+                id="ticketDescription"
                 value={createForm.description}
                 onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
-                placeholder="Describe what happened"
-                rows={2}
+                placeholder="Describe what happened, equipment involved, and any immediate actions taken..."
+                rows={3}
+                required
               />
             </div>
 
-            {createForm.type === "EXPENSE" && (
-              <>
-                <div className="space-y-1.5">
-                  <Label>Intent</Label>
-                  <Select
-                    value={createForm.spendIntent}
-                    onValueChange={(spendIntent) =>
-                      setCreateForm((prev) => ({ ...prev, spendIntent: spendIntent as typeof prev.spendIntent }))
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="REQUEST">Request money</SelectItem>
-                      <SelectItem value="ALREADY_PAID">Already paid</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Amount</Label>
-                  <NumberInput
-                    value={createForm.requestedAmount}
-                    onChange={(value) =>
-                      setCreateForm((prev) => ({ ...prev, requestedAmount: value === "" ? "" : String(value) }))
-                    }
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Expense category</Label>
-                  <Select
-                    value={createForm.requestedCategory}
-                    onValueChange={(requestedCategory) =>
-                      setCreateForm((prev) => ({ ...prev, requestedCategory }))
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="FUEL_FOR_GEN">Generator fuel</SelectItem>
-                      <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
-                      <SelectItem value="UTILITIES">Utilities</SelectItem>
-                      <SelectItem value="STATIONERY">Stationery</SelectItem>
-                      <SelectItem value="OTHER">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {createForm.spendIntent === "ALREADY_PAID" ? (
-                  <div className="space-y-1.5">
-                    <Label>How it was paid</Label>
-                    <Select
-                      value={createForm.paymentMethod}
-                      onValueChange={(paymentMethod) => setCreateForm((prev) => ({ ...prev, paymentMethod }))}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent position="popper">
-                        <SelectItem value="CASH">Cash</SelectItem>
-                        <SelectItem value="POS">POS</SelectItem>
-                        <SelectItem value="BANK_TRANSFER">Bank transfer</SelectItem>
-                        <SelectItem value="CHEQUE">Cheque</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                  <div className="hidden sm:block" />
-                )}
-                {createForm.spendIntent === "ALREADY_PAID" && createForm.paymentMethod !== "CASH" && (
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <Label>Account used</Label>
-                    <Select
-                      value={createForm.bankAccountId}
-                      onValueChange={(bankAccountId) => setCreateForm((prev) => ({ ...prev, bankAccountId }))}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select account" />
-                      </SelectTrigger>
-                      <SelectContent position="popper">
-                        {bankAccounts.map((a) => (
-                          <SelectItem key={a.id} value={a.id}>
-                            {a.bankName} · {a.accountNumber}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreateTicket} disabled={creating}>
-              {creating ? "Creating..." : "Create ticket"}
-            </Button>
-          </DialogFooter>
+            <DialogFooter className="pt-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateOpen(false)}
+                disabled={creating}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating}>
+                {creating ? "Creating..." : "Create ticket"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

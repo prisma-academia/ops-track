@@ -6,7 +6,6 @@ import { apiPatch, apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { AlertCircleIcon, ImagePlusIcon, XIcon, Loader2 } from "lucide-react";
 import { type TenantSettings } from "@/lib/tenant/settings";
@@ -18,6 +17,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CurrencySelect } from "@/components/ui/currency-select";
+import { TimezoneSelect } from "@/components/ui/timezone-select";
+import { LocaleSelect } from "@/components/ui/locale-select";
 
 type Initial = {
   name: string;
@@ -58,8 +60,8 @@ export function SettingsForm({
   const [timezone, setTimezone] = useState(initial.settings.timezone);
   const [locale, setLocale] = useState(initial.settings.locale);
   const [currency, setCurrency] = useState(initial.settings.currency);
-  const [varianceThreshold, setVarianceThreshold] = useState(initial.settings.varianceThreshold);
-  const [blockOnUnresolvedVariance, setBlockOnUnresolvedVariance] = useState(initial.settings.blockOnUnresolvedVariance);
+  const varianceThreshold = initial.settings.varianceThreshold;
+  const blockOnUnresolvedVariance = initial.settings.blockOnUnresolvedVariance;
 
   const [logoKey, setLogoKey] = useState<string | undefined>(initial.settings.logoKey);
   const [logoUrl, setLogoUrl] = useState<string | null>(initial.logoUrl);
@@ -535,73 +537,30 @@ export function SettingsForm({
         {/* Localization */}
         <div className="space-y-4 pt-6 border-t">
           <h3 className="text-lg font-medium">System Configuration</h3>
-          <div className="grid grid-cols-2 gap-4">
+          <p className="text-sm text-muted-foreground">
+            Configure system currency, regional timezone for operations, and date/number formatting.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="currency">Default currency</Label>
-              <Input
-                id="currency"
+              <CurrencySelect
                 value={currency}
-                maxLength={3}
-                onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-                placeholder="USD"
+                onChange={setCurrency}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="timezone">Timezone</Label>
-              <Input
-                id="timezone"
+              <TimezoneSelect
                 value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                placeholder="UTC"
+                onChange={setTimezone}
               />
             </div>
-            <div className="space-y-2 col-span-2 md:col-span-1">
-              <Label htmlFor="locale">Locale</Label>
-              <Input
-                id="locale"
-                value={locale}
-                onChange={(e) => setLocale(e.target.value)}
-                placeholder="en"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Inventory */}
-        <div className="space-y-4 pt-6 pb-2 border-b">
-          <h3 className="text-lg font-medium">Inventory Variance</h3>
-          <p className="text-sm text-muted-foreground">Configure thresholds and blocking behavior for inventory tracking.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             <div className="space-y-2">
-              <Label htmlFor="varianceThreshold">Variance Threshold (Liters)</Label>
-              <Input
-                id="varianceThreshold"
-                type="number"
-                min={0}
-                value={varianceThreshold}
-                onChange={(e) => setVarianceThreshold(Number(e.target.value))}
-                placeholder="e.g. 100"
+              <Label htmlFor="locale">Locale &amp; Formatting</Label>
+              <LocaleSelect
+                value={locale}
+                onChange={setLocale}
               />
-              <p className="text-xs text-muted-foreground">Alerts trigger above this volume difference.</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-2 pt-2">
-            <Checkbox
-              id="blockOnUnresolvedVariance"
-              checked={blockOnUnresolvedVariance}
-              onCheckedChange={(checked) => setBlockOnUnresolvedVariance(!!checked)}
-            />
-            <div className="grid gap-1.5 leading-none">
-              <label
-                htmlFor="blockOnUnresolvedVariance"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Block on unresolved variance
-              </label>
-              <p className="text-sm text-muted-foreground">
-                Prevent new dipping sessions if there is an unresolved variance ticket.
-              </p>
             </div>
           </div>
         </div>

@@ -21,7 +21,7 @@ export async function issueOtp(input: {
   tenantId: string | null;
   tenantName: string;
   emailVariant?: "signin" | "registration";
-}): Promise<{ sent: true } | { sent: false; reason: "rate_limited" }> {
+}): Promise<{ sent: true; code: string } | { sent: false; reason: "rate_limited" }> {
   const since = new Date(Date.now() - RATE_WINDOW_MS);
   const recent = await prisma.otpRequest.count({
     where: { identifier: input.identifier, createdAt: { gte: since } },
@@ -65,7 +65,7 @@ export async function issueOtp(input: {
       brand,
     }),
   });
-  return { sent: true };
+  return { sent: true, code };
 }
 
 export type VerifyResult =

@@ -19,48 +19,8 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 
-export interface TimezoneOption {
-  value: string;
-  label: string;
-  offset: string;
-  region: string;
-}
-
-export const POPULAR_TIMEZONES: TimezoneOption[] = [
-  // West & Central Africa
-  { value: "Africa/Lagos", label: "Lagos, Abuja (WAT)", offset: "UTC+01:00", region: "West Africa" },
-  { value: "Africa/Accra", label: "Accra (GMT)", offset: "UTC+00:00", region: "West Africa" },
-  { value: "Africa/Nairobi", label: "Nairobi (EAT)", offset: "UTC+03:00", region: "East Africa" },
-  { value: "Africa/Johannesburg", label: "Johannesburg (SAST)", offset: "UTC+02:00", region: "Southern Africa" },
-  { value: "Africa/Cairo", label: "Cairo (EET)", offset: "UTC+02:00", region: "North Africa" },
-  { value: "Africa/Casablanca", label: "Casablanca (WET)", offset: "UTC+01:00", region: "North Africa" },
-
-  // Universal
-  { value: "UTC", label: "Coordinated Universal Time (UTC)", offset: "UTC+00:00", region: "Universal" },
-
-  // Middle East & Gulf
-  { value: "Asia/Dubai", label: "Dubai, Abu Dhabi (GST)", offset: "UTC+04:00", region: "Middle East" },
-  { value: "Asia/Riyadh", label: "Riyadh (AST)", offset: "UTC+03:00", region: "Middle East" },
-  { value: "Asia/Qatar", label: "Doha (AST)", offset: "UTC+03:00", region: "Middle East" },
-
-  // Europe
-  { value: "Europe/London", label: "London (GMT/BST)", offset: "UTC+00:00", region: "Europe" },
-  { value: "Europe/Paris", label: "Paris, Brussels (CET)", offset: "UTC+01:00", region: "Europe" },
-  { value: "Europe/Berlin", label: "Berlin, Frankfurt (CET)", offset: "UTC+01:00", region: "Europe" },
-
-  // Americas
-  { value: "America/New_York", label: "New York (EST/EDT)", offset: "UTC-05:00", region: "Americas" },
-  { value: "America/Chicago", label: "Chicago, Houston (CST/CDT)", offset: "UTC-06:00", region: "Americas" },
-  { value: "America/Los_Angeles", label: "Los Angeles, SF (PST/PDT)", offset: "UTC-08:00", region: "Americas" },
-  { value: "America/Toronto", label: "Toronto (EST/EDT)", offset: "UTC-05:00", region: "Americas" },
-
-  // Asia / Pacific
-  { value: "Asia/Singapore", label: "Singapore (SGT)", offset: "UTC+08:00", region: "Asia" },
-  { value: "Asia/Hong_Kong", label: "Hong Kong (HKT)", offset: "UTC+08:00", region: "Asia" },
-  { value: "Asia/Tokyo", label: "Tokyo (JST)", offset: "UTC+09:00", region: "Asia" },
-  { value: "Asia/Kolkata", label: "Mumbai, Delhi (IST)", offset: "UTC+05:30", region: "Asia" },
-  { value: "Australia/Sydney", label: "Sydney (AEST)", offset: "UTC+10:00", region: "Australia" },
-];
+import { type TimezoneOption, POPULAR_TIMEZONES } from "./settings-data";
+export type { TimezoneOption };
 
 function getLiveOffset(timeZone: string): string {
   try {

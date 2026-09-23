@@ -19,29 +19,8 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 
-export interface LocaleOption {
-  code: string;
-  name: string;
-  nativeName?: string;
-  region: string;
-}
-
-export const POPULAR_LOCALES: LocaleOption[] = [
-  { code: "en-NG", name: "English (Nigeria)", nativeName: "English", region: "Nigeria" },
-  { code: "en-US", name: "English (United States)", nativeName: "English", region: "United States" },
-  { code: "en-GB", name: "English (United Kingdom)", nativeName: "English", region: "United Kingdom" },
-  { code: "en", name: "English (Standard / Default)", nativeName: "English", region: "International" },
-  { code: "fr-FR", name: "French (France)", nativeName: "Français", region: "France" },
-  { code: "fr-SN", name: "French (Senegal)", nativeName: "Français", region: "West Africa" },
-  { code: "fr", name: "French (Standard)", nativeName: "Français", region: "International" },
-  { code: "ar-SA", name: "Arabic (Saudi Arabia)", nativeName: "العربية", region: "Middle East" },
-  { code: "ar-AE", name: "Arabic (United Arab Emirates)", nativeName: "العربية", region: "Middle East" },
-  { code: "ar-EG", name: "Arabic (Egypt)", nativeName: "العربية", region: "North Africa" },
-  { code: "es-ES", name: "Spanish (Spain)", nativeName: "Español", region: "Spain" },
-  { code: "pt-BR", name: "Portuguese (Brazil)", nativeName: "Português", region: "Brazil" },
-  { code: "de-DE", name: "German (Germany)", nativeName: "Deutsch", region: "Germany" },
-  { code: "zh-CN", name: "Chinese (Simplified)", nativeName: "简体中文", region: "China" },
-];
+import { type LocaleOption, POPULAR_LOCALES } from "./settings-data";
+export type { LocaleOption };
 
 interface LocaleSelectProps {
   value?: string;

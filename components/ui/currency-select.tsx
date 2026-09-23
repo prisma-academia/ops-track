@@ -18,39 +18,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-export interface CurrencyOption {
-  code: string;
-  name: string;
-  symbol: string;
-  region?: string;
-}
-
-export const POPULAR_CURRENCIES: CurrencyOption[] = [
-  { code: "NGN", name: "Nigerian Naira", symbol: "₦", region: "Nigeria" },
-  { code: "USD", name: "US Dollar", symbol: "$", region: "United States" },
-  { code: "GBP", name: "British Pound", symbol: "£", region: "United Kingdom" },
-  { code: "EUR", name: "Euro", symbol: "€", region: "European Union" },
-  { code: "GHS", name: "Ghanaian Cedi", symbol: "GH₵", region: "Ghana" },
-  { code: "KES", name: "Kenyan Shilling", symbol: "KSh", region: "Kenya" },
-  { code: "ZAR", name: "South African Rand", symbol: "R", region: "South Africa" },
-  { code: "AED", name: "UAE Dirham", symbol: "د.إ", region: "United Arab Emirates" },
-  { code: "SAR", name: "Saudi Riyal", symbol: "﷼", region: "Saudi Arabia" },
-  { code: "CAD", name: "Canadian Dollar", symbol: "CA$", region: "Canada" },
-  { code: "AUD", name: "Australian Dollar", symbol: "AU$", region: "Australia" },
-  { code: "EGP", name: "Egyptian Pound", symbol: "E£", region: "Egypt" },
-  { code: "RWF", name: "Rwandan Franc", symbol: "FRw", region: "Rwanda" },
-  { code: "TZS", name: "Tanzanian Shilling", symbol: "TSh", region: "Tanzania" },
-  { code: "UGX", name: "Ugandan Shilling", symbol: "USh", region: "Uganda" },
-  { code: "XOF", name: "West African CFA", symbol: "CFA", region: "West Africa" },
-  { code: "XAF", name: "Central African CFA", symbol: "FCFA", region: "Central Africa" },
-  { code: "CNY", name: "Chinese Yuan", symbol: "¥", region: "China" },
-  { code: "JPY", name: "Japanese Yen", symbol: "¥", region: "Japan" },
-  { code: "INR", name: "Indian Rupee", symbol: "₹", region: "India" },
-  { code: "CHF", name: "Swiss Franc", symbol: "CHF", region: "Switzerland" },
-  { code: "QAR", name: "Qatari Riyal", symbol: "QR", region: "Qatar" },
-  { code: "KWD", name: "Kuwaiti Dinar", symbol: "KD", region: "Kuwait" },
-  { code: "BRL", name: "Brazilian Real", symbol: "R$", region: "Brazil" },
-];
+import { type CurrencyOption, POPULAR_CURRENCIES } from "./settings-data";
+export type { CurrencyOption };
 
 interface CurrencySelectProps {
   value?: string;

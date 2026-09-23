@@ -13,9 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { POPULAR_CURRENCIES } from "@/components/ui/currency-select";
-import { POPULAR_TIMEZONES } from "@/components/ui/timezone-select";
-import { POPULAR_LOCALES } from "@/components/ui/locale-select";
+import { POPULAR_CURRENCIES, POPULAR_TIMEZONES, POPULAR_LOCALES } from "@/components/ui/settings-data";
 
 function textOrFallback(value: string | null | undefined) {
   const trimmed = value?.trim();

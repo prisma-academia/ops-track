@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/client";
 import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { parseTenantSettings } from "@/lib/tenant/settings";
+import { resolveLogoUrl } from "@/lib/email/branding";
 
 /**
  * Public, unauthenticated. Lists ACTIVE tenants for the platform login
@@ -24,7 +25,7 @@ export async function GET() {
       return {
         slug: t.slug,
         name: t.name,
-        logoUrl: settings.logoKey || null,
+        logoUrl: resolveLogoUrl(settings.logoKey),
       };
     });
     return ok({ tenants });

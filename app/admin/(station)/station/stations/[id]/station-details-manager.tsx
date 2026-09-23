@@ -780,6 +780,22 @@ export function StationDetailsManager({
                         lastClosingDip={lastClosing ? Number(lastClosing.closingLiters) : null}
                         lastClosingAt={lastClosing ? formatHumanReadableDate(lastClosing.recordedAt) : null}
                         className="group-hover:border-primary/40 group-hover:shadow-md transition-all duration-200 pt-8 h-full"
+                        rightSide={
+                          <div className="flex flex-col justify-center gap-3 pr-1">
+                            <div className="flex flex-col items-center gap-1" title={`${tankPumps.length} Pumps`}>
+                              <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                <Fuel size={16} />
+                              </div>
+                              <span className="text-xs font-bold font-mono text-foreground">{tankPumps.length}</span>
+                            </div>
+                            <div className="flex flex-col items-center gap-1" title={`${nozzleCount} Nozzles`}>
+                              <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                <Droplet size={16} />
+                              </div>
+                              <span className="text-xs font-bold font-mono text-foreground">{nozzleCount}</span>
+                            </div>
+                          </div>
+                        }
                       />
                     </Link>
                     <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-1 pointer-events-none">
@@ -799,20 +815,6 @@ export function StationDetailsManager({
                         </Button>
                         <StatusBadge status={tank.status || "ACTIVE"} />
                       </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col justify-center gap-4 bg-card border border-border rounded-xl shadow-xs p-3 shrink-0">
-                    <div className="flex flex-col items-center gap-1" title={`${tankPumps.length} Pumps`}>
-                      <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                        <Fuel size={16} />
-                      </div>
-                      <span className="text-xs font-bold font-mono text-foreground">{tankPumps.length}</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1" title={`${nozzleCount} Nozzles`}>
-                      <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                        <Droplet size={16} />
-                      </div>
-                      <span className="text-xs font-bold font-mono text-foreground">{nozzleCount}</span>
                     </div>
                   </div>
                 </div>

@@ -17,6 +17,7 @@ interface AssetTankProps {
   variant?: "default" | "compact";
   layout?: "station" | "fleet";
   productLabel?: string | null;
+  rightSide?: React.ReactNode;
   className?: string;
 }
 
@@ -79,6 +80,7 @@ export const AssetTank: React.FC<AssetTankProps> = ({
   lastClosingAt,
   variant = "default",
   layout = "station",
+  rightSide,
   className,
 }) => {
   const uid = useId().replace(/:/g, "");
@@ -294,8 +296,11 @@ export const AssetTank: React.FC<AssetTankProps> = ({
         </div>
       </div>
 
-      <div className={cn("relative mx-auto", isFleet ? "w-full max-w-[320px]" : "w-[72%] max-w-[196px]")}>
-        {isFleet ? FleetSvg : StationSvg}
+      <div className="flex w-full items-center justify-center gap-4">
+        <div className={cn("relative", isFleet ? "w-full max-w-[320px]" : rightSide ? "w-[60%] max-w-[150px]" : "w-[72%] max-w-[196px]")}>
+          {isFleet ? FleetSvg : StationSvg}
+        </div>
+        {rightSide && <div className="shrink-0">{rightSide}</div>}
       </div>
       <StatsCard rows={isFleet ? fleetStats : stationStats} />
     </div>

@@ -765,8 +765,8 @@ export function StationDetailsManager({
               const lastClosing = tank.dippingSessions?.[0]?.closings?.[0];
 
               return (
-                <div key={tank.id} className="flex flex-col gap-2">
-                  <div className="relative group">
+                <div key={tank.id} className="flex items-stretch gap-2">
+                  <div className="relative group flex-1 min-w-0">
                     <Link href={`/admin/station/stations/${station.id}/tanks/${tank.id}`}>
                       <AssetTank
                         variant="compact"
@@ -779,7 +779,7 @@ export function StationDetailsManager({
                         temperature={tank.temperature == null ? null : Number(tank.temperature)}
                         lastClosingDip={lastClosing ? Number(lastClosing.closingLiters) : null}
                         lastClosingAt={lastClosing ? formatHumanReadableDate(lastClosing.recordedAt) : null}
-                        className="group-hover:border-primary/40 group-hover:shadow-md transition-all duration-200 pt-8"
+                        className="group-hover:border-primary/40 group-hover:shadow-md transition-all duration-200 pt-8 h-full"
                       />
                     </Link>
                     <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-1 pointer-events-none">
@@ -801,11 +801,20 @@ export function StationDetailsManager({
                       </div>
                     </div>
                   </div>
-                  {(tankPumps.length > 0 || nozzleCount > 0) && (
-                    <p className="text-[10px] text-center text-muted-foreground">
-                      {`${tankPumps.length} pump${tankPumps.length !== 1 ? "s" : ""} · ${nozzleCount} nozzle${nozzleCount !== 1 ? "s" : ""}`}
-                    </p>
-                  )}
+                  <div className="flex flex-col justify-center gap-4 bg-card border border-border rounded-xl shadow-xs p-3 shrink-0">
+                    <div className="flex flex-col items-center gap-1" title={`${tankPumps.length} Pumps`}>
+                      <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                        <Fuel size={16} />
+                      </div>
+                      <span className="text-xs font-bold font-mono text-foreground">{tankPumps.length}</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1" title={`${nozzleCount} Nozzles`}>
+                      <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                        <Droplet size={16} />
+                      </div>
+                      <span className="text-xs font-bold font-mono text-foreground">{nozzleCount}</span>
+                    </div>
+                  </div>
                 </div>
               );
             })}

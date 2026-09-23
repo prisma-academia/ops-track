@@ -57,7 +57,7 @@ import { cn, formatHumanReadableDate } from "@/lib/utils";
 import { apiPost } from "@/lib/client/api";
 
 type BankAccount = { id: string; bankName: string; accountName: string; accountNumber: string };
-type ModalKind = "approve" | "reject" | "payout" | "increase" | "spend" | null;
+type ModalKind = "approve" | "reject" | null;
 
 type HistoryEvent = {
   id: string;
@@ -66,14 +66,6 @@ type HistoryEvent = {
   title: string;
   detail?: string;
   actor?: string;
-};
-
-const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
-  FUEL_FOR_GEN: "Generator fuel",
-  MAINTENANCE: "Maintenance",
-  UTILITIES: "Utilities",
-  STATIONERY: "Stationery",
-  OTHER: "Other",
 };
 
 function personName(
@@ -89,15 +81,6 @@ function money(value: unknown) {
   const amount = Number(value);
   if (Number.isNaN(amount)) return "—";
   return `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function isSpendTicket(ticket: { category: string; spendIntent?: string | null }) {
-  return (
-    ticket.category === "EXPENSE_REQUEST" ||
-    ticket.category === "EXPENSE_VERIFY" ||
-    ticket.spendIntent === "REQUEST" ||
-    ticket.spendIntent === "ALREADY_PAID"
-  );
 }
 
 function OriginIcon({ origin }: { origin: string }) {
@@ -188,42 +171,12 @@ export function TicketDetails({
   const router = useRouter();
   const [modal, setModal] = useState<ModalKind>(null);
   const [remark, setRemark] = useState("");
-  const [approvedAmount, setApprovedAmount] = useState(
-    ticket.approvedAmount != null
-      ? String(ticket.approvedAmount)
-      : ticket.requestedAmount != null
-        ? String(ticket.requestedAmount)
-        : "",
-  );
-  const [payoutAmount, setPayoutAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("BANK_TRANSFER");
-  const [bankAccountId, setBankAccountId] = useState("");
-  const [bankOpen, setBankOpen] = useState(false);
-  const [payoutErrors, setPayoutErrors] = useState<{
-    amount?: string;
-    paymentMethod?: string;
-    bankAccountId?: string;
-  }>({});
-  const [increaseAmount, setIncreaseAmount] = useState("");
-  const [increaseReason, setIncreaseReason] = useState("");
-  const [spendAmount, setSpendAmount] = useState("");
-  const [spendCategory, setSpendCategory] = useState("MAINTENANCE");
-  const [spendDescription, setSpendDescription] = useState("");
   const [processing, setProcessing] = useState(false);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
 
-  const spend = isSpendTicket(ticket);
   const closed = ticket.status === "CLOSED" || ticket.status === "REJECTED";
   const canApprove = canResolve && (ticket.status === "PENDING_APPROVAL" || ticket.status === "OPEN");
-  const canPayout =
-    canResolve &&
-    spend &&
-    (ticket.status === "APPROVED" || (ticket.status === "RESOLVED" && !ticket.expenseId));
-  const canAttachSpend =
-    canResolve && !spend && ticket.status !== "CLOSED" && ticket.status !== "REJECTED";
-  const canIncrease =
-    canResolve && spend && (ticket.status === "APPROVED" || ticket.status === "PENDING_APPROVAL");
-  const hasActions = canApprove || canPayout || canIncrease || canAttachSpend;
+  const hasActions = canApprove;
 
   const evidence: string[] = Array.isArray(ticket.evidenceUrls) ? ticket.evidenceUrls : [];
   const children: any[] = Array.isArray(ticket.children) ? ticket.children : [];
@@ -232,8 +185,6 @@ export function TicketDetails({
   function closeModal() {
     if (processing) return;
     setModal(null);
-    setBankOpen(false);
-    setPayoutErrors({});
   }
 
   async function refresh(ticketId?: string) {
@@ -250,106 +201,16 @@ export function TicketDetails({
     const res = await apiPost<{ ticket: unknown }>(`/api/tenant/tickets/${ticket.id}/resolve`, {
       action,
       remark,
-      approvedAmount: spend && action === "APPROVE" && approvedAmount ? Number(approvedAmount) : undefined,
     });
     setProcessing(false);
     if (res.error) {
       toast.error(res.error.message || "Failed to update ticket.");
       return;
     }
-    toast.success(action === "REJECT" ? "Ticket declined." : spend ? "Ticket approved." : "Ticket resolved.");
+    toast.success(action === "REJECT" ? "Ticket declined." : "Ticket resolved.");
     setModal(null);
     setRemark("");
     refresh();
-  }
-
-  async function payout() {
-    const nextErrors: { amount?: string; paymentMethod?: string; bankAccountId?: string } = {};
-    const amount = payoutAmount ? Number(payoutAmount) : 0;
-    const cap =
-      ticket.approvedAmount != null
-        ? Number(ticket.approvedAmount)
-        : ticket.requestedAmount != null
-          ? Number(ticket.requestedAmount)
-          : null;
-
-    if (!payoutAmount || Number.isNaN(amount) || amount <= 0) {
-      nextErrors.amount = "Enter a payout amount greater than zero.";
-    } else if (cap != null && amount > cap) {
-      nextErrors.amount = `Cannot exceed the approved amount of ${money(cap)}.`;
-    }
-    if (!paymentMethod) {
-      nextErrors.paymentMethod = "Select a payment method.";
-    }
-    if (!bankAccountId) {
-      nextErrors.bankAccountId = "Select the outflow bank account.";
-    }
-    if (Object.keys(nextErrors).length > 0) {
-      setPayoutErrors(nextErrors);
-      return;
-    }
-
-    setPayoutErrors({});
-    setProcessing(true);
-    const res = await apiPost<{ ticket: unknown }>(`/api/tenant/tickets/${ticket.id}/payout`, {
-      paymentMethod,
-      bankAccountId,
-      amount,
-    });
-    setProcessing(false);
-    if (res.error) {
-      toast.error(res.error.message || "Failed to record payout.");
-      return;
-    }
-    toast.success("Payout recorded.");
-    setModal(null);
-    refresh();
-  }
-
-  async function requestIncrease() {
-    if (!increaseAmount || !increaseReason.trim()) {
-      toast.error("New amount and reason are required.");
-      return;
-    }
-    setProcessing(true);
-    const res = await apiPost<{ ticket: unknown }>(`/api/tenant/tickets/${ticket.id}/request-increase`, {
-      newRequestedAmount: Number(increaseAmount),
-      reason: increaseReason.trim(),
-    });
-    setProcessing(false);
-    if (res.error) {
-      toast.error(res.error.message || "Failed to request increase.");
-      return;
-    }
-    toast.success("Increase requested.");
-    setIncreaseAmount("");
-    setIncreaseReason("");
-    setModal(null);
-    refresh();
-  }
-
-  async function attachSpend() {
-    if (!spendAmount || !spendDescription.trim()) {
-      toast.error("Amount and description are required.");
-      return;
-    }
-    setProcessing(true);
-    const res = await apiPost<{ ticket: { id: string } }>(`/api/tenant/tickets/${ticket.id}/attach-spend`, {
-      spendIntent: "REQUEST",
-      requestedAmount: Number(spendAmount),
-      requestedCategory: spendCategory,
-      description: spendDescription.trim(),
-    });
-    setProcessing(false);
-    if (res.error) {
-      toast.error(res.error.message || "Failed to attach spend.");
-      return;
-    }
-    toast.success("Spend request created.");
-    setSpendAmount("");
-    setSpendDescription("");
-    setModal(null);
-    refresh(res.data?.ticket?.id);
   }
 
   return (
@@ -509,7 +370,7 @@ export function TicketDetails({
                     <>
                       <Button className="w-full justify-start gap-2" onClick={() => setModal("approve")}>
                         <BadgeCheck className="size-4" />
-                        {spend ? "Approve" : "Resolve"}
+                        Resolve
                       </Button>
                       <Button
                         variant="outline"
@@ -520,36 +381,6 @@ export function TicketDetails({
                         Decline
                       </Button>
                     </>
-                  )}
-                  {canPayout && (
-                    <Button
-                      variant={canApprove ? "outline" : "default"}
-                      className="w-full justify-start gap-2"
-                      onClick={() => setModal("payout")}
-                    >
-                      <Banknote className="size-4" />
-                      Record payout
-                    </Button>
-                  )}
-                  {canIncrease && (
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start gap-2"
-                      onClick={() => setModal("increase")}
-                    >
-                      <TrendingUp className="size-4" />
-                      Request increase
-                    </Button>
-                  )}
-                  {canAttachSpend && (
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start gap-2"
-                      onClick={() => setModal("spend")}
-                    >
-                      <Link2 className="size-4" />
-                      Attach spend
-                    </Button>
                   )}
                 </>
               ) : !canResolve && !closed ? (
@@ -576,24 +407,12 @@ export function TicketDetails({
       <Dialog open={modal === "approve"} onOpenChange={(open) => !open && closeModal()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{spend ? "Approve this request" : "Resolve this ticket"}</DialogTitle>
+            <DialogTitle>Resolve this ticket</DialogTitle>
             <DialogDescription>
-              {spend
-                ? "Set the amount they can spend, then add a note for the record."
-                : "Add a short note explaining how this was resolved."}
+              Add a short note explaining how this was resolved.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            {spend && (
-              <div className="space-y-1.5">
-                <Label>Approved amount</Label>
-                <NumberInput
-                  value={approvedAmount}
-                  onChange={(value) => setApprovedAmount(value === "" ? "" : String(value))}
-                  placeholder="Approved amount"
-                />
-              </div>
-            )}
             <div className="space-y-1.5">
               <Label>Note</Label>
               <Textarea
@@ -608,8 +427,8 @@ export function TicketDetails({
             <Button variant="outline" onClick={closeModal} disabled={processing}>
               Cancel
             </Button>
-            <Button onClick={() => resolve(spend ? "APPROVE" : "RESOLVE")} disabled={processing}>
-              {processing ? "Saving..." : spend ? "Approve" : "Resolve"}
+            <Button onClick={() => resolve("RESOLVE")} disabled={processing}>
+              {processing ? "Saving..." : "Resolve"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -641,221 +460,8 @@ export function TicketDetails({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={modal === "payout"} onOpenChange={(open) => !open && closeModal()}>
-        <DialogContent className="overflow-visible">
-          <DialogHeader>
-            <DialogTitle>Record payout</DialogTitle>
-            <DialogDescription>This posts the station expense and ledger payment.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className={payoutErrors.amount ? "text-destructive" : undefined}>Amount</Label>
-              <NumberInput
-                value={payoutAmount}
-                onChange={(value) => {
-                  setPayoutAmount(value === "" ? "" : String(value));
-                  if (payoutErrors.amount) setPayoutErrors((prev) => ({ ...prev, amount: undefined }));
-                }}
-                aria-invalid={!!payoutErrors.amount}
-              />
-              {payoutErrors.amount && <p className="text-xs text-destructive">{payoutErrors.amount}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label className={payoutErrors.paymentMethod ? "text-destructive" : undefined}>Payment method</Label>
-              <Select
-                value={paymentMethod}
-                onValueChange={(value) => {
-                  setPaymentMethod(value);
-                  if (payoutErrors.paymentMethod) {
-                    setPayoutErrors((prev) => ({ ...prev, paymentMethod: undefined }));
-                  }
-                }}
-              >
-                <SelectTrigger className="w-full" aria-invalid={!!payoutErrors.paymentMethod}>
-                  <SelectValue placeholder="Select method" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="POS">POS</SelectItem>
-                  <SelectItem value="BANK_TRANSFER">Bank transfer</SelectItem>
-                  <SelectItem value="CHEQUE">Cheque</SelectItem>
-                </SelectContent>
-              </Select>
-              {payoutErrors.paymentMethod && (
-                <p className="text-xs text-destructive">{payoutErrors.paymentMethod}</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label className={payoutErrors.bankAccountId ? "text-destructive" : undefined}>Outflow account</Label>
-              <Popover open={bankOpen} onOpenChange={setBankOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={bankOpen}
-                    aria-invalid={!!payoutErrors.bankAccountId}
-                    className={cn(
-                      "h-9 w-full justify-between font-normal",
-                      !bankAccountId && "text-muted-foreground",
-                      payoutErrors.bankAccountId && "border-destructive aria-invalid:ring-destructive/20",
-                    )}
-                  >
-                    <span className="truncate">
-                      {bankAccountId
-                        ? (() => {
-                            const account = bankAccounts.find((a) => a.id === bankAccountId);
-                            return account
-                              ? `${account.bankName} · ${account.accountName} · ${account.accountNumber}`
-                              : "Select account";
-                          })()
-                        : "Search and select account"}
-                    </span>
-                    <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="p-0" align="start" style={{ width: "var(--radix-popover-trigger-width)" }}>
-                  <Command>
-                    <CommandInput placeholder="Search bank, name, or number..." />
-                    <CommandList>
-                      <CommandEmpty>No bank accounts found.</CommandEmpty>
-                      <CommandGroup>
-                        {bankAccounts.map((account) => (
-                          <CommandItem
-                            key={account.id}
-                            value={`${account.bankName} ${account.accountName} ${account.accountNumber}`}
-                            onSelect={() => {
-                              setBankAccountId(account.id);
-                              setBankOpen(false);
-                              if (payoutErrors.bankAccountId) {
-                                setPayoutErrors((prev) => ({ ...prev, bankAccountId: undefined }));
-                              }
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "size-4 shrink-0",
-                                bankAccountId === account.id ? "opacity-100" : "opacity-0",
-                              )}
-                            />
-                            <div className="flex min-w-0 flex-col text-left">
-                              <span className="text-sm font-medium">{account.bankName}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {account.accountName} · {account.accountNumber}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              {payoutErrors.bankAccountId && (
-                <p className="text-xs text-destructive">{payoutErrors.bankAccountId}</p>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeModal} disabled={processing}>
-              Cancel
-            </Button>
-            <Button onClick={payout} disabled={processing}>
-              {processing ? "Paying..." : "Record payout"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      <Dialog open={modal === "increase"} onOpenChange={(open) => !open && closeModal()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Request amount increase</DialogTitle>
-            <DialogDescription>
-              Current request is {money(ticket.requestedAmount)}
-              {ticket.approvedAmount != null ? ` (approved ${money(ticket.approvedAmount)})` : ""}.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>New amount</Label>
-              <NumberInput
-                value={increaseAmount}
-                onChange={(value) => setIncreaseAmount(value === "" ? "" : String(value))}
-                placeholder="New requested amount"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Reason</Label>
-              <Input
-                value={increaseReason}
-                onChange={(e) => setIncreaseReason(e.target.value)}
-                placeholder="Price change, extra parts…"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeModal} disabled={processing}>
-              Cancel
-            </Button>
-            <Button onClick={requestIncrease} disabled={processing}>
-              {processing ? "Submitting..." : "Submit request"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      <Dialog open={modal === "spend"} onOpenChange={(open) => !open && closeModal()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Attach spend request</DialogTitle>
-            <DialogDescription>
-              Keeps this issue open and creates a linked spend ticket for approval.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Amount</Label>
-              <NumberInput
-                value={spendAmount}
-                onChange={(value) => setSpendAmount(value === "" ? "" : String(value))}
-                placeholder="Requested amount"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Category</Label>
-              <Select value={spendCategory} onValueChange={setSpendCategory}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="FUEL_FOR_GEN">Generator fuel</SelectItem>
-                  <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
-                  <SelectItem value="UTILITIES">Utilities</SelectItem>
-                  <SelectItem value="STATIONERY">Stationery</SelectItem>
-                  <SelectItem value="OTHER">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>What it is for</Label>
-              <Textarea
-                value={spendDescription}
-                onChange={(e) => setSpendDescription(e.target.value)}
-                placeholder="Describe the spend"
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeModal} disabled={processing}>
-              Cancel
-            </Button>
-            <Button onClick={attachSpend} disabled={processing}>
-              {processing ? "Creating..." : "Create spend ticket"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <FileViewerModal
         isOpen={!!viewerUrl}

@@ -13,13 +13,6 @@ const ORIGIN_LABELS: Record<string, string> = {
   ADMIN: "Admin",
 };
 
-const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
-  FUEL_FOR_GEN: "Generator fuel",
-  MAINTENANCE: "Maintenance",
-  UTILITIES: "Utilities",
-  STATIONERY: "Stationery",
-  OTHER: "Other",
-};
 
 function personName(
   person?: { firstName?: string | null; lastName?: string | null; email?: string | null } | null,
@@ -68,8 +61,6 @@ export function TicketPrintView({
   company: PrintCompanyInfo;
 }) {
   const ref = ticket.id.substring(0, 8).toUpperCase();
-  const children: any[] = Array.isArray(ticket.children) ? ticket.children : [];
-
   return (
     <div className="space-y-4">
       <div className="flex justify-end gap-2 print:hidden">
@@ -171,21 +162,7 @@ export function TicketPrintView({
             </div>
           )}
 
-          {children.length > 0 && (
-            <div className="mb-4 rounded-lg border border-gray-200 p-4">
-              <h3 className="mb-1 border-b border-gray-100 pb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                Linked spend
-              </h3>
-              {children.map((child) => (
-                <DetailRow
-                  key={child.id}
-                  label={child.title}
-                  value={`${money(child.requestedAmount)} · ${STATUS_LABELS[child.status] || child.status}`}
-                  compact
-                />
-              ))}
-            </div>
-          )}
+
 
 
 

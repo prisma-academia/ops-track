@@ -81,6 +81,7 @@ export default async function SalesPage({
           select: {
             id: true,
             destination: true,
+            productType: true,
             truck: { select: { id: true, name: true } }
           }
         },
@@ -97,6 +98,9 @@ export default async function SalesPage({
     const litersDespatched = Number(delivery.litersDespatched);
     const litersReceived = delivery.litersReceived ? Number(delivery.litersReceived) : null;
     const variance = litersReceived !== null ? litersDespatched - litersReceived : null;
+    const isExternalClient = Boolean(delivery.customer || !delivery.station);
+    const productType = delivery.transport?.productType || "PMS";
+    const volumeUnit = productType === "LPG" ? "KG" : "L";
 
     return {
       id: delivery.id,
@@ -111,6 +115,8 @@ export default async function SalesPage({
       status: delivery.status,
       transactionCount: delivery._count.transactions,
       createdAt: delivery.createdAt.toISOString(),
+      isExternalClient,
+      volumeUnit,
     };
   });
 

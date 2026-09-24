@@ -4,6 +4,7 @@ import { NavLinkItem } from "@/components/landing-page/navbar";
 import { DownloadAppSection } from "@/components/landing-page/download-app";
 import Feature01 from "@/components/landing-page/features";
 import Testimonial01 from "@/components/landing-page/testimonials";
+import PricingSection from "@/components/landing-page/pricing";
 import Faq from "@/components/landing-page/faq";
 import Footer from "@/components/landing-page/footer";
 import type { BrandList } from "@/components/landing-page/testimonials/brand-slider";
@@ -17,6 +18,8 @@ const Hero02Page = ({
 }) => {
   const navData: NavLinkItem[] = [
     { name: "Home", href: "/", isActive: true },
+    { name: "Pricing", href: "/#pricing", isActive: false },
+    { name: "FAQs", href: "/#faq", isActive: false },
     { name: "Book Demo", href: "https://calendly.com/opstrack/30min", isActive: false },
     { name: "Register", href: "/auth/register", isActive: false },
   ];
@@ -28,6 +31,7 @@ const Hero02Page = ({
         <Feature01 />
         <Testimonial01 partnerLogos={partnerLogos} />
         <DownloadAppSection />
+        <PricingSection />
         <Faq />
       </main>
       <Footer />

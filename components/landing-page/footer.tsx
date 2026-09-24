@@ -10,12 +10,12 @@ import { StoreButtons } from "@/components/landing-page/store-buttons";
 export default function Footer() {
   const footerLinks = [
     { label: "Home", href: "/" },
-    { label: "Platform sign in", href: "/auth/login" },
-    { label: "Go to workspace", href: "/auth/login" },
+    { label: "Pricing", href: "/#pricing" },
+    { label: "FAQs", href: "/#faq" },
     { label: "Register", href: "/auth/register" },
+    { label: "Platform sign in", href: "/auth/login" },
     { label: "Fleet", href: "/auth/login" },
     { label: "Stations", href: "/auth/login" },
-    { label: "Transport", href: "/auth/login" },
     { label: "Download app", href: "/#download" },
   ];
 

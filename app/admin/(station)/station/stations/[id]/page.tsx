@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
 import { reconcileNegativeTanks } from "@/lib/inventory/tank-balance";
 import { redirect } from "next/navigation";
 import { StationDetailsManager } from "./station-details-manager";
@@ -12,6 +12,9 @@ export default async function StationDetailPage({
 }) {
   const { id } = await params;
   const actor = await requireTenantPage(PERMISSIONS.TENANT_STATIONS_READ.key);
+  const canEditTank =
+    hasPermission(actor, PERMISSIONS.TENANT_TANKS_WRITE.key) ||
+    hasPermission(actor, PERMISSIONS.TENANT_STATIONS_WRITE.key);
 
   const station = await prisma.station.findUnique({
     where: { id },
@@ -37,6 +40,21 @@ export default async function StationDetailPage({
                 select: { closingLiters: true, recordedAt: true },
               },
             },
+          },
+          _count: {
+            select: {
+              dippings: true,
+              waybillDippings: true,
+              pumps: true,
+              stockMovements: true,
+            },
+          },
+          stockMovements: {
+            where: {
+              movementType: { not: "OPENING_BALANCE" },
+            },
+            take: 1,
+            select: { id: true },
           },
         },
       },
@@ -84,6 +102,21 @@ export default async function StationDetailPage({
             },
           },
         },
+        _count: {
+          select: {
+            dippings: true,
+            waybillDippings: true,
+            pumps: true,
+            stockMovements: true,
+          },
+        },
+        stockMovements: {
+          where: {
+            movementType: { not: "OPENING_BALANCE" },
+          },
+          take: 1,
+          select: { id: true },
+        },
       },
     });
     station.tanks = repairedTanks;
@@ -115,6 +148,7 @@ export default async function StationDetailPage({
     <StationDetailsManager
       station={serializedStation}
       users={users}
+      canEditTank={canEditTank}
     />
   );
 }

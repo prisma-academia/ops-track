@@ -48,7 +48,9 @@ import {
   Pencil,
   ChevronsUpDown,
   Check,
-  ArrowLeft
+  ArrowLeft,
+  Lock,
+  AlertCircle
 } from "lucide-react";
 import { AssetTank } from "@/components/asset-tank";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
@@ -154,9 +156,11 @@ const StatusBadge = ({ status }: { status: string }) => {
 export function StationDetailsManager({
   station,
   users,
+  canEditTank = true,
 }: {
   station: any;
   users: any[];
+  canEditTank?: boolean;
 }) {
   const router = useRouter();
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
@@ -317,9 +321,37 @@ export function StationDetailsManager({
   };
 
   const handleEditTank = editTankForm.handleSubmit(async (values) => {
-    if (!editingTank) return;
+    if (!editingTank || !canEditTank) return;
     setApiError(null);
-    const res = await apiPatch(`/api/tenant/stations/${station.id}/tanks/${editingTank.id}`, values);
+
+    const hasRecords = Boolean(
+      (editingTank._count?.dippings ?? 0) > 0 ||
+      (editingTank._count?.waybillDippings ?? 0) > 0 ||
+      (editingTank._count?.pumps ?? 0) > 0 ||
+      (editingTank._count?.stockMovements ?? 0) > 1 ||
+      (editingTank.stockMovements && editingTank.stockMovements.length > 0) ||
+      (editingTank.dippingSessions && editingTank.dippingSessions.length > 0) ||
+      (station.pumps?.some((p: any) => p.tankId === editingTank.id))
+    );
+
+    const effectiveStock = Number(editingTank.currentLiters || 0);
+    if (values.capacity < effectiveStock) {
+      setApiError(`Tank capacity cannot be reduced below current stock (${effectiveStock.toLocaleString()} L).`);
+      return;
+    }
+
+    const payload: any = {
+      name: values.name,
+      waterLevel: values.waterLevel,
+      temperature: values.temperature,
+      capacity: values.capacity,
+    };
+    if (!hasRecords) {
+      payload.productType = values.productType;
+      payload.currentLiters = values.currentLiters;
+    }
+
+    const res = await apiPatch(`/api/tenant/stations/${station.id}/tanks/${editingTank.id}`, payload);
     if (res.error) {
       setApiError(res.error.message);
     } else {
@@ -328,6 +360,7 @@ export function StationDetailsManager({
   });
 
   const openEditTankDialog = (tank: any, e?: React.MouseEvent) => {
+    if (!canEditTank) return;
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -803,16 +836,18 @@ export function StationDetailsManager({
                         {tank.productType}
                       </Badge>
                       <div className="flex items-center gap-1.5 pointer-events-auto">
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="size-6 text-muted-foreground hover:text-foreground hover:bg-background/80 rounded-md"
-                          onClick={(e) => openEditTankDialog(tank, e)}
-                          title="Edit Tank Information"
-                        >
-                          <Pencil size={12} />
-                        </Button>
+                        {canEditTank && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-6 text-muted-foreground hover:text-foreground hover:bg-background/80 rounded-md"
+                            onClick={(e) => openEditTankDialog(tank, e)}
+                            title="Edit Tank Information"
+                          >
+                            <Pencil size={12} />
+                          </Button>
+                        )}
                         <StatusBadge status={tank.status || "ACTIVE"} />
                       </div>
                     </div>
@@ -1232,109 +1267,167 @@ export function StationDetailsManager({
       )}
 
       {/* Edit Tank Dialog */}
-      {activeDialog === "edit-tank" && editingTank && (
-        <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Pencil className="size-5 text-primary" />
-                Edit Tank Information
-              </DialogTitle>
-              <DialogDescription className="text-xs">
-                Update parameters and details for {editingTank.name}.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleEditTank} className="space-y-4 pt-2">
-              <FormField label="Tank Name" htmlFor="et_name" error={editTankForm.formState.errors.name?.message}>
-                <TextInput id="et_name" placeholder="e.g. PMS Tank 1" {...editTankForm.register("name")} />
-              </FormField>
-              
-              <FormField label="Product Type" htmlFor="et_prod" error={editTankForm.formState.errors.productType?.message}>
-                <select id="et_prod" className="rounded border border-input bg-background text-foreground px-3 py-2 text-sm w-full" {...editTankForm.register("productType")}>
-                  <option value="PMS">PMS (Petrol)</option>
-                  <option value="AGO">AGO (Diesel)</option>
-                  <option value="DPK">DPK (Kerosene)</option>
-                  <option value="LPG">LPG (Gas)</option>
-                </select>
-              </FormField>
+      {activeDialog === "edit-tank" && editingTank && canEditTank && (() => {
+        const editingTankHasRecords = Boolean(
+          (editingTank._count?.dippings ?? 0) > 0 ||
+          (editingTank._count?.waybillDippings ?? 0) > 0 ||
+          (editingTank._count?.pumps ?? 0) > 0 ||
+          (editingTank._count?.stockMovements ?? 0) > 1 ||
+          (editingTank.stockMovements && editingTank.stockMovements.length > 0) ||
+          (editingTank.dippingSessions && editingTank.dippingSessions.length > 0) ||
+          (station.pumps?.some((p: any) => p.tankId === editingTank.id))
+        );
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Liters Capacity" htmlFor="et_cap" error={editTankForm.formState.errors.capacity?.message}>
-                  <Controller
-                    name="capacity"
-                    control={editTankForm.control}
-                    render={({ field }) => (
-                      <FormattedNumberInput
-                        id="et_cap"
-                        placeholder="e.g. 45000"
-                        value={field.value as string | number}
-                        onChange={(e: any) => field.onChange(e.target.value)}
-                        prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
-                      />
-                    )}
-                  />
+        return (
+          <Dialog open={true} onOpenChange={closeDialog}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Pencil className="size-5 text-primary" />
+                  Edit Tank Information
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Update parameters and details for {editingTank.name}.
+                </DialogDescription>
+              </DialogHeader>
+
+              {editingTankHasRecords && (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
+                  <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-semibold">Protected Tank Records</p>
+                    <p className="text-[11px] text-amber-700/90 dark:text-amber-300/80 leading-relaxed">
+                      Product type and current stock are locked because this tank has operational records (pumps, dippings, or stock ledger entries).
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleEditTank} className="space-y-4 pt-2">
+                <FormField label="Tank Name" htmlFor="et_name" error={editTankForm.formState.errors.name?.message}>
+                  <TextInput id="et_name" placeholder="e.g. PMS Tank 1" {...editTankForm.register("name")} />
+                </FormField>
+                
+                <FormField
+                  label={
+                    <div className="flex items-center justify-between">
+                      <span>Product Type</span>
+                      {editingTankHasRecords && (
+                        <span className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1 font-normal">
+                          <Lock className="size-3" /> Locked (records exist)
+                        </span>
+                      )}
+                    </div>
+                  }
+                  htmlFor="et_prod"
+                  error={editTankForm.formState.errors.productType?.message}
+                >
+                  <select
+                    id="et_prod"
+                    disabled={editingTankHasRecords}
+                    className="rounded border border-input bg-background text-foreground px-3 py-2 text-sm w-full disabled:opacity-60 disabled:bg-muted/50 disabled:cursor-not-allowed"
+                    {...editTankForm.register("productType")}
+                  >
+                    <option value="PMS">PMS (Petrol)</option>
+                    <option value="AGO">AGO (Diesel)</option>
+                    <option value="DPK">DPK (Kerosene)</option>
+                    <option value="LPG">LPG (Gas)</option>
+                  </select>
                 </FormField>
 
-                <FormField label="Current Stock (Liters)" htmlFor="et_liters" error={editTankForm.formState.errors.currentLiters?.message}>
-                  <Controller
-                    name="currentLiters"
-                    control={editTankForm.control}
-                    render={({ field }) => (
-                      <FormattedNumberInput
-                        id="et_liters"
-                        placeholder="e.g. 15000"
-                        value={(field.value ?? "") as string | number}
-                        onChange={(e: any) => field.onChange(e.target.value)}
-                        prefixIcon={<Flame className="w-4 h-4 text-emerald-500" />}
-                      />
-                    )}
-                  />
-                </FormField>
-              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Liters Capacity" htmlFor="et_cap" error={editTankForm.formState.errors.capacity?.message}>
+                    <Controller
+                      name="capacity"
+                      control={editTankForm.control}
+                      render={({ field }) => (
+                        <FormattedNumberInput
+                          id="et_cap"
+                          placeholder="e.g. 45000"
+                          value={field.value as string | number}
+                          onChange={(e: any) => field.onChange(e.target.value)}
+                          prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
+                        />
+                      )}
+                    />
+                  </FormField>
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Water level (L, optional)" htmlFor="et_water" error={editTankForm.formState.errors.waterLevel?.message}>
-                  <Controller
-                    name="waterLevel"
-                    control={editTankForm.control}
-                    render={({ field }) => (
-                      <FormattedNumberInput
-                        id="et_water"
-                        placeholder="e.g. 12"
-                        value={(field.value ?? "") as string | number}
-                        onChange={(e: any) => field.onChange(e.target.value)}
-                      />
-                    )}
-                  />
-                </FormField>
-                <FormField label="Temperature (°C, optional)" htmlFor="et_temp" error={editTankForm.formState.errors.temperature?.message}>
-                  <Controller
-                    name="temperature"
-                    control={editTankForm.control}
-                    render={({ field }) => (
-                      <FormattedNumberInput
-                        id="et_temp"
-                        placeholder="e.g. 28"
-                        value={(field.value ?? "") as string | number}
-                        onChange={(e: any) => field.onChange(e.target.value)}
-                      />
-                    )}
-                  />
-                </FormField>
-              </div>
+                  <FormField
+                    label={
+                      <div className="flex items-center justify-between">
+                        <span>Current Stock (L)</span>
+                        {editingTankHasRecords && (
+                          <span className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1 font-normal">
+                            <Lock className="size-3" /> Managed by ops
+                          </span>
+                        )}
+                      </div>
+                    }
+                    htmlFor="et_liters"
+                    error={editTankForm.formState.errors.currentLiters?.message}
+                  >
+                    <Controller
+                      name="currentLiters"
+                      control={editTankForm.control}
+                      render={({ field }) => (
+                        <FormattedNumberInput
+                          id="et_liters"
+                          disabled={editingTankHasRecords}
+                          placeholder="e.g. 15000"
+                          value={(field.value ?? "") as string | number}
+                          onChange={(e: any) => field.onChange(e.target.value)}
+                          prefixIcon={<Flame className="w-4 h-4 text-emerald-500" />}
+                          className={editingTankHasRecords ? "opacity-60 bg-muted/50 cursor-not-allowed pointer-events-none" : ""}
+                        />
+                      )}
+                    />
+                  </FormField>
+                </div>
 
-              {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Water level (L, optional)" htmlFor="et_water" error={editTankForm.formState.errors.waterLevel?.message}>
+                    <Controller
+                      name="waterLevel"
+                      control={editTankForm.control}
+                      render={({ field }) => (
+                        <FormattedNumberInput
+                          id="et_water"
+                          placeholder="e.g. 12"
+                          value={(field.value ?? "") as string | number}
+                          onChange={(e: any) => field.onChange(e.target.value)}
+                        />
+                      )}
+                    />
+                  </FormField>
+                  <FormField label="Temperature (°C, optional)" htmlFor="et_temp" error={editTankForm.formState.errors.temperature?.message}>
+                    <Controller
+                      name="temperature"
+                      control={editTankForm.control}
+                      render={({ field }) => (
+                        <FormattedNumberInput
+                          id="et_temp"
+                          placeholder="e.g. 28"
+                          value={(field.value ?? "") as string | number}
+                          onChange={(e: any) => field.onChange(e.target.value)}
+                        />
+                      )}
+                    />
+                  </FormField>
+                </div>
 
-              <DialogFooter className="pt-4">
-                <Button type="button" variant="outline" onClick={closeDialog} disabled={editTankForm.formState.isSubmitting}>Cancel</Button>
-                <Button type="submit" disabled={editTankForm.formState.isSubmitting} className="gap-2">
-                  {editTankForm.formState.isSubmitting ? <><SpinnerEllipsis /><span>Saving...</span></> : "Save Changes"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
+                {apiError && <p className="text-xs text-red-600">{apiError}</p>}
+
+                <DialogFooter className="pt-4">
+                  <Button type="button" variant="outline" onClick={closeDialog} disabled={editTankForm.formState.isSubmitting}>Cancel</Button>
+                  <Button type="submit" disabled={editTankForm.formState.isSubmitting} className="gap-2">
+                    {editTankForm.formState.isSubmitting ? <><SpinnerEllipsis /><span>Saving...</span></> : "Save Changes"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </div>
   );
 }

@@ -7,7 +7,7 @@ export function FormField({
   required,
   children,
 }: {
-  label: string;
+  label: ReactNode;
   htmlFor: string;
   error?: string;
   required?: boolean;

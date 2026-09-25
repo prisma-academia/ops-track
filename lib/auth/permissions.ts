@@ -21,6 +21,7 @@ export const PERMISSIONS = {
   TENANT_STATION_ROLES_WRITE: { key: "tenant.station.roles:write", module: "tenant.station.roles", description: "Modify organization station role templates" },
   TENANT_STATIONS_READ: { key: "tenant.stations:read", module: "tenant.stations", description: "View stations, tanks & pricing" },
   TENANT_STATIONS_WRITE: { key: "tenant.stations:write", module: "tenant.stations", description: "Manage stations, tanks & pricing" },
+  TENANT_TANKS_WRITE: { key: "tenant.tanks:write", module: "tenant.stations", description: "Manage and edit station tanks" },
   TENANT_WAYBILLS_READ: { key: "tenant.waybills:read", module: "tenant.waybills", description: "View waybills" },
   TENANT_WAYBILLS_WRITE: { key: "tenant.waybills:write", module: "tenant.waybills", description: "Manage waybills" },
   TENANT_WAYBILL_DIPPINGS_WRITE: { key: "tenant.waybill-dippings:write", module: "tenant.waybills", description: "Edit or delete waybill dippings" },

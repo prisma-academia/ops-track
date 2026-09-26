@@ -60,6 +60,17 @@ export async function GET(request: Request) {
           code: true,
         },
       },
+      delivery: {
+        include: {
+          transport: {
+            include: {
+              transporter: true,
+              truck: true,
+              driver: true,
+            },
+          },
+        },
+      },
       waybill: {
         include: {
           recordedBy: {
@@ -136,35 +147,57 @@ export async function GET(request: Request) {
       meta = buildPageMeta(allocations, take);
     }
 
-    const mapped = allocations.map((a) => ({
-      id: a.id, // Return allocation ID as waybill ID for the mobile client
-      stationId: a.stationId,
-      number: a.waybill.number,
-      productType: a.waybill.productType,
-      litersLoaded: Number(a.litersToDispense),
-      litersReceived: a.litersReceived ? Number(a.litersReceived) : null,
-      truckPlate: a.waybill.truckPlate,
-      driverName: a.waybill.driverName,
-      driverPhone: a.waybill.driverPhone,
-      status: a.status,
-      gpsLatitude: a.gpsLatitude ? Number(a.gpsLatitude) : null,
-      gpsLongitude: a.gpsLongitude ? Number(a.gpsLongitude) : null,
-      pictures: a.waybill.pictures || [],
-      arrivalPictures: a.arrivalPictures || [],
-      deliveryDatetime: a.waybill.deliveryDatetime?.toISOString() ?? null,
-      arrivalTime: a.arrivalTime?.toISOString() ?? null,
-      supplier: a.waybill.supplier,
-      depot: a.waybill.depot,
-      transportCompany: a.waybill.transportCompany,
-      truckNumberVerified: a.truckNumberVerified,
-      driverVerified: a.driverVerified,
-      waybillVerified: a.waybillVerified,
-      dispatchedAt: a.waybill.dispatchedAt.toISOString(),
-      deliveredAt: a.deliveredAt?.toISOString() ?? null,
-      recordedById: a.waybill.recordedById,
-      recordedBy: a.waybill.recordedBy,
-      station: a.station,
-    }));
+    const mapped = allocations.map((a) => {
+      const transport = a.delivery?.transport;
+      const isOneTime = Boolean(transport?.isOneTime);
+      const truckPlate = isOneTime
+        ? (transport?.oneTimeTruckPlate || a.waybill.truckPlate)
+        : (a.waybill.truckPlate && a.waybill.truckPlate !== "N/A"
+            ? a.waybill.truckPlate
+            : (transport?.truck?.plateNumber || transport?.truck?.name || a.waybill.truckPlate));
+      const driverName = isOneTime
+        ? (transport?.oneTimeDriverName || a.waybill.driverName)
+        : (a.waybill.driverName && a.waybill.driverName !== "Unknown Driver"
+            ? a.waybill.driverName
+            : (transport?.driver ? `${transport.driver.firstName} ${transport.driver.lastName}`.trim() : a.waybill.driverName));
+      const transportCompany = isOneTime
+        ? (transport?.oneTimeTransporterName || a.waybill.transportCompany)
+        : (transport?.transporter?.name || a.waybill.transportCompany);
+
+      return {
+        id: a.id, // Return allocation ID as waybill ID for the mobile client
+        stationId: a.stationId,
+        number: a.waybill.number,
+        productType: a.waybill.productType,
+        litersLoaded: Number(a.litersToDispense),
+        litersReceived: a.litersReceived ? Number(a.litersReceived) : null,
+        truckPlate,
+        driverName,
+        driverPhone: a.waybill.driverPhone,
+        status: a.status,
+        gpsLatitude: a.gpsLatitude ? Number(a.gpsLatitude) : null,
+        gpsLongitude: a.gpsLongitude ? Number(a.gpsLongitude) : null,
+        pictures: a.waybill.pictures || [],
+        arrivalPictures: a.arrivalPictures || [],
+        deliveryDatetime: a.waybill.deliveryDatetime?.toISOString() ?? null,
+        arrivalTime: a.arrivalTime?.toISOString() ?? null,
+        supplier: a.waybill.supplier,
+        depot: a.waybill.depot,
+        transportCompany,
+        truckNumberVerified: a.truckNumberVerified,
+        driverVerified: a.driverVerified,
+        waybillVerified: a.waybillVerified,
+        dispatchedAt: a.waybill.dispatchedAt.toISOString(),
+        deliveredAt: a.deliveredAt?.toISOString() ?? null,
+        recordedById: a.waybill.recordedById,
+        recordedBy: a.waybill.recordedBy,
+        station: a.station,
+        isOneTime,
+        oneTimeTransporterName: transport?.oneTimeTransporterName ?? null,
+        oneTimeTruckPlate: transport?.oneTimeTruckPlate ?? null,
+        oneTimeDriverName: transport?.oneTimeDriverName ?? null,
+      };
+    });
 
     return ok(mapped, meta);
   } catch (e) {

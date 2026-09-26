@@ -28,6 +28,17 @@ export default async function DeliveryPnlPage() {
       station: {
         select: { id: true, name: true, code: true },
       },
+      delivery: {
+        include: {
+          transport: {
+            select: {
+              isOneTime: true,
+              oneTimeTruckPlate: true,
+              truck: { select: { plateNumber: true, name: true } },
+            },
+          },
+        },
+      },
       waybill: {
         select: { truckPlate: true, productType: true },
       },
@@ -134,7 +145,11 @@ export default async function DeliveryPnlPage() {
         stationName: a.station.name,
         deliveryDate: cycleStart.toISOString(),
         cycleEndDate: cycleEnd.toISOString(),
-        truckPlate: a.waybill.truckPlate,
+        truckPlate: a.delivery?.transport?.isOneTime
+          ? (a.delivery.transport.oneTimeTruckPlate || a.waybill.truckPlate)
+          : (a.waybill.truckPlate && a.waybill.truckPlate !== "N/A"
+              ? a.waybill.truckPlate
+              : (a.delivery?.transport?.truck?.plateNumber || a.delivery?.transport?.truck?.name || a.waybill.truckPlate)),
         productType,
         dispatchedQty,
         receivedQty,

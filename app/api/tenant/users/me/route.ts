@@ -53,6 +53,13 @@ export async function GET() {
             id: true,
             name: true,
             code: true,
+            location: true,
+            state: true,
+            lga: true,
+            ward: true,
+            latitude: true,
+            longitude: true,
+            altitude: true,
           },
           orderBy: { name: "asc" },
         },
@@ -63,18 +70,40 @@ export async function GET() {
       throw new DomainError(404, "not_found", "User profile not found.");
     }
 
+    const stations = user.isOwner
+      ? await prisma.station.findMany({
+          where: { tenantId: user.tenantId },
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            location: true,
+            state: true,
+            lga: true,
+            ward: true,
+            latitude: true,
+            longitude: true,
+            altitude: true,
+          },
+          orderBy: { name: "asc" },
+        })
+      : user.stations;
+
     return ok({
       user: {
         id: user.id,
+        name: `${user.firstName} ${user.lastName}`.trim(),
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
         otherName: user.otherName,
         phone: user.phone,
+        role: user.isOwner ? "Owner" : "Admin",
         isOwner: user.isOwner,
         status: user.status,
         bannedReason: user.bannedReason,
         activeModules: user.activeModules,
+        permissions: Array.from(new Set([...user.stationPermissions, ...user.fleetPermissions])),
         stationPermissions: user.stationPermissions,
         fleetPermissions: user.fleetPermissions,
         failedLoginAttempts: user.failedLoginAttempts,
@@ -83,7 +112,7 @@ export async function GET() {
         lastLoginAt: user.lastLoginAt,
         tenant: user.tenant,
         organization: user.organization,
-        stations: user.stations,
+        stations,
       },
     });
   } catch (e) {

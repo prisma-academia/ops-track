@@ -61,6 +61,10 @@ export interface WaybillDetailsData {
   } | null;
   allocations: Allocation[];
   dippings: SerializedDipping[];
+  isOneTime?: boolean;
+  oneTimeTransporterName?: string | null;
+  oneTimeTruckPlate?: string | null;
+  oneTimeDriverName?: string | null;
 }
 
 interface WaybillDetailsManagerProps {
@@ -391,6 +395,11 @@ export function WaybillDetailsManager({
             <div className="flex items-center gap-2">
               <Truck className="size-4 text-primary" />
               <h3 className="text-sm font-semibold text-foreground">Transport &amp; Fleet Details</h3>
+              {waybill.isOneTime && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  One-Time Transport
+                </span>
+              )}
             </div>
             <span className="font-mono text-xs font-bold bg-muted px-2.5 py-0.5 rounded border border-border/60 text-foreground">
               {waybill.truckPlate}
@@ -437,8 +446,11 @@ export function WaybillDetailsManager({
                 <dt className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wider font-semibold">
                   Transport Company
                 </dt>
-                <dd className="font-medium text-foreground">
-                  {waybill.transportCompany || "—"}
+                <dd className="font-medium text-foreground flex items-center gap-1.5">
+                  <span>{waybill.transportCompany || "—"}</span>
+                  {waybill.isOneTime && (
+                    <span className="text-[10px] text-muted-foreground font-normal">(Ad-hoc)</span>
+                  )}
                 </dd>
               </div>
               <div className="border-t border-border/40 pt-4 col-span-2 flex items-center justify-between flex-wrap gap-2">

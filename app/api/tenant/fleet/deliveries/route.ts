@@ -154,17 +154,27 @@ export async function POST(request: Request) {
           const randomNum = Math.floor(Math.random() * 900) + 100;
           const wbNumber = `WB-${prefix}-${today}-${t.productType ?? "PMS"}-${randomNum}`;
 
+          const truckPlate = t.isOneTime
+            ? (t.oneTimeTruckPlate || "N/A")
+            : (t.truck?.plateNumber || t.truck?.name || "N/A");
+          const driverName = t.isOneTime
+            ? (t.oneTimeDriverName || "Unknown Driver")
+            : (t.driver ? `${t.driver.firstName} ${t.driver.lastName}`.trim() : "Unknown Driver");
+          const transportCompany = t.isOneTime
+            ? (t.oneTimeTransporterName ?? null)
+            : (t.transporter?.name ?? null);
+
           await tx.waybill.create({
             data: {
               tenantId: actor.tenantId,
               number: wbNumber,
               productType: (t.productType as any) ?? "PMS",
               litersLoaded: s.litersDespatched,
-              truckPlate: t.truck?.plateNumber || t.truck?.name || "N/A",
-              driverName: t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "Unknown Driver",
+              truckPlate,
+              driverName,
               driverPhone: t.driver?.phone ?? null,
               supplier: t.order?.supplier || "Fleet Management",
-              transportCompany: t.transporter?.name ?? null,
+              transportCompany,
               recordedById: actor.userId,
               allocations: {
                 create: [{

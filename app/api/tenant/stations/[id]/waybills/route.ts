@@ -24,11 +24,54 @@ export async function GET(
 
     const where = { stationId, tenantId: actor.tenantId };
     const include = {
+      delivery: {
+        include: {
+          transport: {
+            include: {
+              transporter: true,
+              truck: true,
+              driver: true,
+            },
+          },
+        },
+      },
       waybill: {
         include: {
           recordedBy: { select: { firstName: true, lastName: true } },
         },
       },
+    };
+
+    const mapAllocation = (a: any) => {
+      const transport = a.delivery?.transport;
+      const isOneTime = Boolean(transport?.isOneTime);
+      const truckPlate = isOneTime
+        ? (transport?.oneTimeTruckPlate || a.waybill?.truckPlate)
+        : (a.waybill?.truckPlate && a.waybill.truckPlate !== "N/A"
+            ? a.waybill.truckPlate
+            : (transport?.truck?.plateNumber || transport?.truck?.name || a.waybill?.truckPlate));
+      const driverName = isOneTime
+        ? (transport?.oneTimeDriverName || a.waybill?.driverName)
+        : (a.waybill?.driverName && a.waybill.driverName !== "Unknown Driver"
+            ? a.waybill.driverName
+            : (transport?.driver ? `${transport.driver.firstName} ${transport.driver.lastName}`.trim() : a.waybill?.driverName));
+      const transportCompany = isOneTime
+        ? (transport?.oneTimeTransporterName || a.waybill?.transportCompany)
+        : (transport?.transporter?.name || a.waybill?.transportCompany);
+
+      return {
+        ...a,
+        waybill: a.waybill ? {
+          ...a.waybill,
+          truckPlate,
+          driverName,
+          transportCompany,
+          isOneTime,
+          oneTimeTransporterName: transport?.oneTimeTransporterName ?? null,
+          oneTimeTruckPlate: transport?.oneTimeTruckPlate ?? null,
+          oneTimeDriverName: transport?.oneTimeDriverName ?? null,
+        } : a.waybill,
+      };
     };
 
     if (useOffset) {
@@ -43,7 +86,7 @@ export async function GET(
           include,
         }),
       ]);
-      return ok(rows, buildOffsetPageMeta(totalCount, page, take));
+      return ok(rows.map(mapAllocation), buildOffsetPageMeta(totalCount, page, take));
     }
 
     const allocations = await prisma.waybillAllocation.findMany({
@@ -52,7 +95,7 @@ export async function GET(
       include,
     });
 
-    return ok(allocations);
+    return ok(allocations.map(mapAllocation));
   } catch (e) {
     return handleError(e);
   }

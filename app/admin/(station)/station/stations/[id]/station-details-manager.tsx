@@ -726,8 +726,13 @@ export function StationDetailsManager({
                   </div>
                   <div className="col-span-2">
                     <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Driver / Truck</p>
-                    <p className="text-muted-foreground mt-0.5">
-                      {lastWaybill.waybill?.driverName ?? "—"} • {lastWaybill.waybill?.truckPlate ?? "—"}
+                    <p className="text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <span>{lastWaybill.waybill?.driverName ?? "—"} • {lastWaybill.waybill?.truckPlate ?? "—"}</span>
+                      {lastWaybill.waybill?.isOneTime && (
+                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          One-Time
+                        </span>
+                      )}
                     </p>
                   </div>
                   {lastWaybill.litersReceived != null && (

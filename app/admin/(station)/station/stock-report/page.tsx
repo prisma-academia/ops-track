@@ -17,7 +17,11 @@ export default async function StockReportPage() {
           code: true,
         },
       },
-      delivery: true,
+      delivery: {
+        include: {
+          transport: true,
+        },
+      },
       waybill: {
         select: {
           id: true,
@@ -148,7 +152,7 @@ export default async function StockReportPage() {
         id: a.id,
         sn: index + 1,
         deliveryDate: a.waybill.dispatchedAt.toISOString(),
-        truckNo: a.waybill.truckPlate,
+        truckNo: (a.delivery?.transport?.isOneTime ? a.delivery.transport.oneTimeTruckPlate : null) || a.waybill.truckPlate,
         waybillNumber: a.waybill.number,
         productType: a.waybill.productType,
         stationId: a.stationId,

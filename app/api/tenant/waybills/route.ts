@@ -8,6 +8,7 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 import { sendPushNotification } from "@/lib/notifications";
 import { resolveActiveOrgId } from "@/lib/auth/org-scope";
+import { resolveWaybillTransportInfo } from "@/lib/waybill-transport";
 
 const CreateWaybillSchema = z.object({
   number: z.string().min(1).max(50),
@@ -81,6 +82,21 @@ export async function GET(request: Request) {
               lastName: true,
             },
           },
+          allocations: {
+            include: {
+              delivery: {
+                include: {
+                  transport: {
+                    include: {
+                      transporter: true,
+                      truck: true,
+                      driver: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     };
@@ -148,21 +164,8 @@ export async function GET(request: Request) {
     }
 
     const mapped = allocations.map((a) => {
-      const transport = a.delivery?.transport;
-      const isOneTime = Boolean(transport?.isOneTime);
-      const truckPlate = isOneTime
-        ? (transport?.oneTimeTruckPlate || a.waybill.truckPlate)
-        : (a.waybill.truckPlate && a.waybill.truckPlate !== "N/A"
-            ? a.waybill.truckPlate
-            : (transport?.truck?.plateNumber || transport?.truck?.name || a.waybill.truckPlate));
-      const driverName = isOneTime
-        ? (transport?.oneTimeDriverName || a.waybill.driverName)
-        : (a.waybill.driverName && a.waybill.driverName !== "Unknown Driver"
-            ? a.waybill.driverName
-            : (transport?.driver ? `${transport.driver.firstName} ${transport.driver.lastName}`.trim() : a.waybill.driverName));
-      const transportCompany = isOneTime
-        ? (transport?.oneTimeTransporterName || a.waybill.transportCompany)
-        : (transport?.transporter?.name || a.waybill.transportCompany);
+      const transport = a.delivery?.transport || a.waybill?.allocations?.find((wa: any) => wa.delivery?.transport)?.delivery?.transport;
+      const tInfo = resolveWaybillTransportInfo(transport, a.waybill);
 
       return {
         id: a.id, // Return allocation ID as waybill ID for the mobile client
@@ -171,8 +174,8 @@ export async function GET(request: Request) {
         productType: a.waybill.productType,
         litersLoaded: Number(a.litersToDispense),
         litersReceived: a.litersReceived ? Number(a.litersReceived) : null,
-        truckPlate,
-        driverName,
+        truckPlate: tInfo.truckPlate,
+        driverName: tInfo.driverName,
         driverPhone: a.waybill.driverPhone,
         status: a.status,
         gpsLatitude: a.gpsLatitude ? Number(a.gpsLatitude) : null,
@@ -183,7 +186,7 @@ export async function GET(request: Request) {
         arrivalTime: a.arrivalTime?.toISOString() ?? null,
         supplier: a.waybill.supplier,
         depot: a.waybill.depot,
-        transportCompany,
+        transportCompany: tInfo.transportCompany,
         truckNumberVerified: a.truckNumberVerified,
         driverVerified: a.driverVerified,
         waybillVerified: a.waybillVerified,
@@ -192,10 +195,10 @@ export async function GET(request: Request) {
         recordedById: a.waybill.recordedById,
         recordedBy: a.waybill.recordedBy,
         station: a.station,
-        isOneTime,
-        oneTimeTransporterName: transport?.oneTimeTransporterName ?? null,
-        oneTimeTruckPlate: transport?.oneTimeTruckPlate ?? null,
-        oneTimeDriverName: transport?.oneTimeDriverName ?? null,
+        isOneTime: tInfo.isOneTime,
+        oneTimeTransporterName: tInfo.oneTimeTransporterName,
+        oneTimeTruckPlate: tInfo.oneTimeTruckPlate,
+        oneTimeDriverName: tInfo.oneTimeDriverName,
       };
     });
 

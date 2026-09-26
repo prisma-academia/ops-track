@@ -6,6 +6,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { checkAndCreateVarianceTicket } from "@/lib/variance";
+import { resolveWaybillTransportInfo } from "@/lib/waybill-transport";
 
 const DeliverWaybillSchema = z.object({
   litersReceived: z.coerce.number().positive().optional().nullable(),
@@ -59,6 +60,21 @@ export async function GET(
                 lastName: true,
               },
             },
+            allocations: {
+              include: {
+                delivery: {
+                  include: {
+                    transport: {
+                      include: {
+                        transporter: true,
+                        truck: true,
+                        driver: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         dippings: {
@@ -79,21 +95,8 @@ export async function GET(
       throw new DomainError(404, "not_found", "Waybill allocation not found.");
     }
 
-    const transport = allocation.delivery?.transport;
-    const isOneTime = Boolean(transport?.isOneTime);
-    const truckPlate = isOneTime
-      ? (transport?.oneTimeTruckPlate || allocation.waybill.truckPlate)
-      : (allocation.waybill.truckPlate && allocation.waybill.truckPlate !== "N/A"
-          ? allocation.waybill.truckPlate
-          : (transport?.truck?.plateNumber || transport?.truck?.name || allocation.waybill.truckPlate));
-    const driverName = isOneTime
-      ? (transport?.oneTimeDriverName || allocation.waybill.driverName)
-      : (allocation.waybill.driverName && allocation.waybill.driverName !== "Unknown Driver"
-          ? allocation.waybill.driverName
-          : (transport?.driver ? `${transport.driver.firstName} ${transport.driver.lastName}`.trim() : allocation.waybill.driverName));
-    const transportCompany = isOneTime
-      ? (transport?.oneTimeTransporterName || allocation.waybill.transportCompany)
-      : (transport?.transporter?.name || allocation.waybill.transportCompany);
+    const transport = allocation.delivery?.transport || allocation.waybill.allocations?.find((wa: any) => wa.delivery?.transport)?.delivery?.transport;
+    const tInfo = resolveWaybillTransportInfo(transport, allocation.waybill);
 
     const mapped = {
       id: allocation.id,
@@ -102,8 +105,8 @@ export async function GET(
       productType: allocation.waybill.productType,
       litersLoaded: Number(allocation.litersToDispense),
       litersReceived: allocation.litersReceived ? Number(allocation.litersReceived) : null,
-      truckPlate,
-      driverName,
+      truckPlate: tInfo.truckPlate,
+      driverName: tInfo.driverName,
       driverPhone: allocation.waybill.driverPhone,
       status: allocation.status,
       gpsLatitude: allocation.gpsLatitude ? Number(allocation.gpsLatitude) : null,
@@ -114,7 +117,7 @@ export async function GET(
       arrivalTime: allocation.arrivalTime?.toISOString() ?? null,
       supplier: allocation.waybill.supplier,
       depot: allocation.waybill.depot,
-      transportCompany,
+      transportCompany: tInfo.transportCompany,
       truckNumberVerified: allocation.truckNumberVerified,
       driverVerified: allocation.driverVerified,
       waybillVerified: allocation.waybillVerified,
@@ -124,10 +127,10 @@ export async function GET(
       recordedBy: allocation.waybill.recordedBy,
       station: allocation.station,
       dippings: allocation.dippings,
-      isOneTime,
-      oneTimeTransporterName: transport?.oneTimeTransporterName ?? null,
-      oneTimeTruckPlate: transport?.oneTimeTruckPlate ?? null,
-      oneTimeDriverName: transport?.oneTimeDriverName ?? null,
+      isOneTime: tInfo.isOneTime,
+      oneTimeTransporterName: tInfo.oneTimeTransporterName,
+      oneTimeTruckPlate: tInfo.oneTimeTruckPlate,
+      oneTimeDriverName: tInfo.oneTimeDriverName,
     };
 
     return ok(mapped);
@@ -187,7 +190,25 @@ export async function PATCH(
         deliveredAt: new Date(),
       },
       include: {
-        waybill: true,
+        waybill: {
+          include: {
+            allocations: {
+              include: {
+                delivery: {
+                  include: {
+                    transport: {
+                      include: {
+                        transporter: true,
+                        truck: true,
+                        driver: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         delivery: {
           include: {
             transport: {
@@ -294,21 +315,8 @@ export async function PATCH(
 
     console.log("AUDIT DONE, RETURNING MAPPED");
 
-    const transport = allocation.delivery?.transport;
-    const isOneTime = Boolean(transport?.isOneTime);
-    const truckPlate = isOneTime
-      ? (transport?.oneTimeTruckPlate || allocation.waybill.truckPlate)
-      : (allocation.waybill.truckPlate && allocation.waybill.truckPlate !== "N/A"
-          ? allocation.waybill.truckPlate
-          : (transport?.truck?.plateNumber || transport?.truck?.name || allocation.waybill.truckPlate));
-    const driverName = isOneTime
-      ? (transport?.oneTimeDriverName || allocation.waybill.driverName)
-      : (allocation.waybill.driverName && allocation.waybill.driverName !== "Unknown Driver"
-          ? allocation.waybill.driverName
-          : (transport?.driver ? `${transport.driver.firstName} ${transport.driver.lastName}`.trim() : allocation.waybill.driverName));
-    const transportCompany = isOneTime
-      ? (transport?.oneTimeTransporterName || allocation.waybill.transportCompany)
-      : (transport?.transporter?.name || allocation.waybill.transportCompany);
+    const transport = allocation.delivery?.transport || (allocation.waybill as any)?.allocations?.find((wa: any) => wa.delivery?.transport)?.delivery?.transport;
+    const tInfo = resolveWaybillTransportInfo(transport, allocation.waybill);
 
     const mapped = {
       id: allocation.id,
@@ -317,8 +325,8 @@ export async function PATCH(
       productType: allocation.waybill.productType,
       litersLoaded: Number(allocation.litersToDispense),
       litersReceived: allocation.litersReceived ? Number(allocation.litersReceived) : null,
-      truckPlate,
-      driverName,
+      truckPlate: tInfo.truckPlate,
+      driverName: tInfo.driverName,
       driverPhone: allocation.waybill.driverPhone,
       status: allocation.status,
       gpsLatitude: allocation.gpsLatitude ? Number(allocation.gpsLatitude) : null,
@@ -329,7 +337,7 @@ export async function PATCH(
       arrivalTime: allocation.arrivalTime?.toISOString() ?? null,
       supplier: allocation.waybill.supplier,
       depot: allocation.waybill.depot,
-      transportCompany,
+      transportCompany: tInfo.transportCompany,
       truckNumberVerified: allocation.truckNumberVerified,
       driverVerified: allocation.driverVerified,
       waybillVerified: allocation.waybillVerified,
@@ -337,10 +345,10 @@ export async function PATCH(
       deliveredAt: allocation.deliveredAt?.toISOString() ?? null,
       recordedById: allocation.waybill.recordedById,
       stationId_number: `${allocation.stationId}_${allocation.waybill.number}`,
-      isOneTime,
-      oneTimeTransporterName: transport?.oneTimeTransporterName ?? null,
-      oneTimeTruckPlate: transport?.oneTimeTruckPlate ?? null,
-      oneTimeDriverName: transport?.oneTimeDriverName ?? null,
+      isOneTime: tInfo.isOneTime,
+      oneTimeTransporterName: tInfo.oneTimeTransporterName,
+      oneTimeTruckPlate: tInfo.oneTimeTruckPlate,
+      oneTimeDriverName: tInfo.oneTimeDriverName,
     };
 
     return ok({ waybill: mapped });

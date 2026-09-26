@@ -24,6 +24,10 @@ export type WaybillRow = {
     name: string;
     code: string;
   }[];
+  isOneTime?: boolean;
+  oneTimeTransporterName?: string | null;
+  oneTimeTruckPlate?: string | null;
+  oneTimeDriverName?: string | null;
 };
 
 export function WaybillsTable({
@@ -47,6 +51,9 @@ export function WaybillsTable({
         const w = row.original;
         const stationNames = w.stations?.map(s => s.name).join(", ") || "No stations";
         const stationCodes = w.stations?.map(s => s.code).join(", ") || "";
+        const plate = (w.isOneTime ? (w.oneTimeTruckPlate || w.truckPlate) : w.truckPlate)?.replace(/^N\/A$/, "");
+        const driver = (w.isOneTime ? (w.oneTimeDriverName || w.driverName) : w.driverName)?.replace(/^Unknown Driver$/, "");
+
         return (
           <div className="flex items-center gap-3 py-1">
             <div className="size-10 flex items-center justify-center shrink-0">
@@ -59,10 +66,22 @@ export function WaybillsTable({
               />
             </div>
             <div className="flex flex-col">
-              <span className="font-semibold text-foreground">{w.number}</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-semibold text-foreground">{w.number}</span>
+                {w.isOneTime && (
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    One-Time
+                  </span>
+                )}
+              </div>
               <span className="text-xs text-muted-foreground font-mono truncate max-w-[200px]" title={`${stationNames} · ${stationCodes}`}>
                 {stationNames}
               </span>
+              {(plate || driver) && (
+                <span className="text-[11px] text-muted-foreground">
+                  {[plate, driver].filter(Boolean).join(" · ")}
+                </span>
+              )}
             </div>
           </div>
         );

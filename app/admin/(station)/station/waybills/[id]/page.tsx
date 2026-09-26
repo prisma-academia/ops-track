@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { WaybillDetailsManager } from "./waybill-details-manager";
+import { resolveWaybillTransportInfo } from "@/lib/waybill-transport";
 
 export default async function WaybillDetailsPage({
   params,
@@ -138,35 +139,19 @@ export default async function WaybillDetailsPage({
   }));
 
   const transport = waybill.allocations.find((a) => a.delivery?.transport)?.delivery?.transport;
-  const isOneTime = Boolean(transport?.isOneTime);
-
-  const truckPlate = isOneTime
-    ? (transport?.oneTimeTruckPlate || waybill.truckPlate)
-    : (waybill.truckPlate && waybill.truckPlate !== "N/A"
-        ? waybill.truckPlate
-        : (transport?.truck?.plateNumber || transport?.truck?.name || waybill.truckPlate));
-
-  const driverName = isOneTime
-    ? (transport?.oneTimeDriverName || waybill.driverName)
-    : (waybill.driverName && waybill.driverName !== "Unknown Driver"
-        ? waybill.driverName
-        : (transport?.driver ? `${transport.driver.firstName} ${transport.driver.lastName}`.trim() : waybill.driverName));
-
-  const transportCompany = isOneTime
-    ? (transport?.oneTimeTransporterName || waybill.transportCompany)
-    : (transport?.transporter?.name || waybill.transportCompany);
+  const tInfo = resolveWaybillTransportInfo(transport, waybill);
 
   const serializedWaybill = {
     id: waybill.id,
     number: waybill.number,
     productType: waybill.productType,
     litersLoaded: Number(waybill.litersLoaded),
-    truckPlate,
-    driverName,
+    truckPlate: tInfo.truckPlate,
+    driverName: tInfo.driverName,
     driverPhone: waybill.driverPhone,
     supplier: waybill.supplier,
     depot: waybill.depot,
-    transportCompany,
+    transportCompany: tInfo.transportCompany,
     pictures: Array.isArray(waybill.pictures) ? (waybill.pictures as string[]) : [],
     dispatchedAt: waybill.dispatchedAt.toISOString(),
     deliveryDatetime: waybill.deliveryDatetime ? waybill.deliveryDatetime.toISOString() : null,
@@ -178,10 +163,10 @@ export default async function WaybillDetailsPage({
       : null,
     allocations: serializedAllocations,
     dippings: serializedDippings,
-    isOneTime,
-    oneTimeTransporterName: transport?.oneTimeTransporterName ?? null,
-    oneTimeTruckPlate: transport?.oneTimeTruckPlate ?? null,
-    oneTimeDriverName: transport?.oneTimeDriverName ?? null,
+    isOneTime: tInfo.isOneTime,
+    oneTimeTransporterName: tInfo.oneTimeTransporterName,
+    oneTimeTruckPlate: tInfo.oneTimeTruckPlate,
+    oneTimeDriverName: tInfo.oneTimeDriverName,
   };
 
   return (

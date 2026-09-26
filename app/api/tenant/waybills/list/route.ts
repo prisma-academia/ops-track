@@ -3,6 +3,7 @@ import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
+import { resolveWaybillTransportInfo } from "@/lib/waybill-transport";
 
 export async function GET(request: Request) {
   try {
@@ -83,18 +84,8 @@ export async function GET(request: Request) {
       if (allDelivered) combinedStatus = "COMPLETED";
       else if (anyDelivered) combinedStatus = "DELIVERED";
 
-      const transport = w.allocations[0]?.delivery?.transport;
-      const isOneTime = Boolean(transport?.isOneTime);
-      const truckPlate = isOneTime
-        ? (transport?.oneTimeTruckPlate || w.truckPlate)
-        : (w.truckPlate && w.truckPlate !== "N/A"
-            ? w.truckPlate
-            : (transport?.truck?.plateNumber || transport?.truck?.name || w.truckPlate));
-      const driverName = isOneTime
-        ? (transport?.oneTimeDriverName || w.driverName)
-        : (w.driverName && w.driverName !== "Unknown Driver"
-            ? w.driverName
-            : (transport?.driver ? `${transport.driver.firstName} ${transport.driver.lastName}`.trim() : w.driverName));
+      const transport = w.allocations.find((a) => a.delivery?.transport)?.delivery?.transport || w.allocations[0]?.delivery?.transport;
+      const tInfo = resolveWaybillTransportInfo(transport, w);
 
       return {
         id: w.id,
@@ -103,16 +94,16 @@ export async function GET(request: Request) {
         productType: w.productType,
         litersLoaded: Number(w.litersLoaded),
         litersReceived: anyDelivered ? totalReceived : null,
-        truckPlate,
-        driverName,
+        truckPlate: tInfo.truckPlate,
+        driverName: tInfo.driverName,
         driverPhone: w.driverPhone,
         dispatchedAt: w.dispatchedAt.toISOString(),
         deliveredAt: null,
         stations: w.allocations.map(a => a.station),
-        isOneTime,
-        oneTimeTransporterName: transport?.oneTimeTransporterName ?? null,
-        oneTimeTruckPlate: transport?.oneTimeTruckPlate ?? null,
-        oneTimeDriverName: transport?.oneTimeDriverName ?? null,
+        isOneTime: tInfo.isOneTime,
+        oneTimeTransporterName: tInfo.oneTimeTransporterName,
+        oneTimeTruckPlate: tInfo.oneTimeTruckPlate,
+        oneTimeDriverName: tInfo.oneTimeDriverName,
       };
     });
 

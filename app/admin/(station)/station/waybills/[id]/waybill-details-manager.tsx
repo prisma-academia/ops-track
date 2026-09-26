@@ -80,6 +80,40 @@ export function WaybillDetailsManager({
 }: WaybillDetailsManagerProps) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
+  const isOneTime = Boolean(
+    waybill.isOneTime ||
+    waybill.oneTimeTruckPlate ||
+    waybill.oneTimeDriverName ||
+    waybill.oneTimeTransporterName
+  );
+
+  const cleanVal = (val?: string | null, placeholder?: string) => {
+    if (!val) return null;
+    const t = val.trim();
+    if (!t || t === "—" || t === "-" || (placeholder && t.toLowerCase() === placeholder.toLowerCase())) {
+      return null;
+    }
+    return t;
+  };
+
+  const displayTruckPlate = (
+    isOneTime
+      ? (cleanVal(waybill.oneTimeTruckPlate, "N/A") || cleanVal(waybill.truckPlate, "N/A"))
+      : (cleanVal(waybill.truckPlate, "N/A") || cleanVal(waybill.oneTimeTruckPlate, "N/A"))
+  ) || "—";
+
+  const displayDriverName = (
+    isOneTime
+      ? (cleanVal(waybill.oneTimeDriverName, "Unknown Driver") || cleanVal(waybill.driverName, "Unknown Driver"))
+      : (cleanVal(waybill.driverName, "Unknown Driver") || cleanVal(waybill.oneTimeDriverName, "Unknown Driver"))
+  ) || "—";
+
+  const displayTransportCompany = (
+    isOneTime
+      ? (cleanVal(waybill.oneTimeTransporterName, "N/A") || cleanVal(waybill.transportCompany, "N/A"))
+      : (cleanVal(waybill.transportCompany, "N/A") || cleanVal(waybill.oneTimeTransporterName, "N/A"))
+  ) || "—";
+
   const totalAllocated = waybill.allocations.reduce(
     (acc, a) => acc + Number(a.litersToDispense),
     0
@@ -395,14 +429,14 @@ export function WaybillDetailsManager({
             <div className="flex items-center gap-2">
               <Truck className="size-4 text-primary" />
               <h3 className="text-sm font-semibold text-foreground">Transport &amp; Fleet Details</h3>
-              {waybill.isOneTime && (
+              {isOneTime && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                   One-Time Transport
                 </span>
               )}
             </div>
             <span className="font-mono text-xs font-bold bg-muted px-2.5 py-0.5 rounded border border-border/60 text-foreground">
-              {waybill.truckPlate}
+              {displayTruckPlate}
             </span>
           </div>
           <CardContent className="p-5">
@@ -412,7 +446,7 @@ export function WaybillDetailsManager({
                   Truck Plate Number
                 </dt>
                 <dd className="font-bold text-base text-foreground tracking-wide font-mono">
-                  {waybill.truckPlate}
+                  {displayTruckPlate}
                 </dd>
               </div>
               <div>
@@ -421,7 +455,7 @@ export function WaybillDetailsManager({
                 </dt>
                 <dd className="font-bold text-base text-foreground flex items-center gap-1.5">
                   <User className="size-4 text-muted-foreground" />
-                  {waybill.driverName}
+                  {displayDriverName}
                 </dd>
               </div>
               <div>
@@ -447,8 +481,8 @@ export function WaybillDetailsManager({
                   Transport Company
                 </dt>
                 <dd className="font-medium text-foreground flex items-center gap-1.5">
-                  <span>{waybill.transportCompany || "—"}</span>
-                  {waybill.isOneTime && (
+                  <span>{displayTransportCompany}</span>
+                  {isOneTime && (
                     <span className="text-[10px] text-muted-foreground font-normal">(Ad-hoc)</span>
                   )}
                 </dd>

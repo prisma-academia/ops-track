@@ -3,6 +3,7 @@ import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
+import { resolveWaybillTransportInfo } from "@/lib/waybill-transport";
 
 export async function GET(
   request: Request,
@@ -38,38 +39,40 @@ export async function GET(
       waybill: {
         include: {
           recordedBy: { select: { firstName: true, lastName: true } },
+          allocations: {
+            include: {
+              delivery: {
+                include: {
+                  transport: {
+                    include: {
+                      transporter: true,
+                      truck: true,
+                      driver: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     };
 
     const mapAllocation = (a: any) => {
-      const transport = a.delivery?.transport;
-      const isOneTime = Boolean(transport?.isOneTime);
-      const truckPlate = isOneTime
-        ? (transport?.oneTimeTruckPlate || a.waybill?.truckPlate)
-        : (a.waybill?.truckPlate && a.waybill.truckPlate !== "N/A"
-            ? a.waybill.truckPlate
-            : (transport?.truck?.plateNumber || transport?.truck?.name || a.waybill?.truckPlate));
-      const driverName = isOneTime
-        ? (transport?.oneTimeDriverName || a.waybill?.driverName)
-        : (a.waybill?.driverName && a.waybill.driverName !== "Unknown Driver"
-            ? a.waybill.driverName
-            : (transport?.driver ? `${transport.driver.firstName} ${transport.driver.lastName}`.trim() : a.waybill?.driverName));
-      const transportCompany = isOneTime
-        ? (transport?.oneTimeTransporterName || a.waybill?.transportCompany)
-        : (transport?.transporter?.name || a.waybill?.transportCompany);
+      const transport = a.delivery?.transport || a.waybill?.allocations?.find((wa: any) => wa.delivery?.transport)?.delivery?.transport;
+      const tInfo = resolveWaybillTransportInfo(transport, a.waybill);
 
       return {
         ...a,
         waybill: a.waybill ? {
           ...a.waybill,
-          truckPlate,
-          driverName,
-          transportCompany,
-          isOneTime,
-          oneTimeTransporterName: transport?.oneTimeTransporterName ?? null,
-          oneTimeTruckPlate: transport?.oneTimeTruckPlate ?? null,
-          oneTimeDriverName: transport?.oneTimeDriverName ?? null,
+          truckPlate: tInfo.truckPlate,
+          driverName: tInfo.driverName,
+          transportCompany: tInfo.transportCompany,
+          isOneTime: tInfo.isOneTime,
+          oneTimeTransporterName: tInfo.oneTimeTransporterName,
+          oneTimeTruckPlate: tInfo.oneTimeTruckPlate,
+          oneTimeDriverName: tInfo.oneTimeDriverName,
         } : a.waybill,
       };
     };

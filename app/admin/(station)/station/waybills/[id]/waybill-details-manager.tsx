@@ -34,7 +34,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
 
-import { AllocationsTableWithModal, ConfirmArrivalModal, LogDippingModal, type Allocation } from "./allocations-table-with-modal";
+import { ConfirmArrivalModal, LogDippingModal, type Allocation } from "./allocations-table-with-modal";
 import {
   DischargeDippingsTable,
   type SerializedDipping,
@@ -135,6 +135,14 @@ export function WaybillDetailsManager({
   const totalDischarged = waybill.dippings.reduce((acc, dip) => {
     return acc + (dip.afterLiters ? Number(dip.afterLiters) - Number(dip.beforeLiters) : 0);
   }, 0);
+
+  const assignedStationName =
+    waybill.allocations.length > 0
+      ? Array.from(new Set(waybill.allocations.map((a) => a.station?.name).filter(Boolean))).join(", ")
+      : "No Station Assigned";
+
+  const assignedStationCode =
+    waybill.allocations.length === 1 ? waybill.allocations[0].station?.code : null;
 
   const createdByName = waybill.recordedBy
     ? `${waybill.recordedBy.firstName ?? ""} ${waybill.recordedBy.lastName ?? ""}`.trim() || "—"
@@ -239,12 +247,21 @@ export function WaybillDetailsManager({
               <h1 className="text-xl font-bold tracking-tight text-foreground">
                 Waybill {waybill.number}
               </h1>
-              <span className="flex items-center gap-1.5">
-                <Building2 className="size-3.5 text-muted-foreground/80" />
-                {waybill.station.name}
-              </span>
+              <Badge variant="secondary" className="font-mono text-xs uppercase">
+                {waybill.productType}
+              </Badge>
             </div>
-            <div className="flex items-center gap-x-4 gap-y-1 text-xs text-muted-foreground flex-wrap">
+            {/* Station assigned name directly below waybill number */}
+            <div className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-foreground/90">
+              <Building2 className="size-3.5 text-primary shrink-0" />
+              <span>{assignedStationName}</span>
+              {assignedStationCode && (
+                <span className="text-[11px] font-mono text-muted-foreground font-normal">
+                  ({assignedStationCode})
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-x-4 gap-y-1 text-xs text-muted-foreground flex-wrap pt-0.5">
               <span className="flex items-center gap-1.5">
                 <Calendar className="size-3.5 text-muted-foreground/80" />
                 Dispatched {formatHumanReadableDate(waybill.dispatchedAt)}
@@ -331,323 +348,320 @@ export function WaybillDetailsManager({
         </Card>
       </TooltipProvider>
 
-      {/* 3. Logistics & Supply Details 2-Column Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-        {/* Card 1: Supply & Dispatch Information */}
-        <Card className="shadow-xs border-border/40 bg-card flex flex-col justify-between p-0 overflow-hidden rounded-xl">
-          <div className="px-5 py-3.5 border-b border-border/40 bg-muted/20 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Package className="size-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">Supply &amp; Dispatch Information</h3>
-            </div>
-            <Badge variant="secondary" className="font-mono text-xs uppercase">
-              {waybill.productType}
-            </Badge>
-          </div>
-          <CardContent className="p-5">
-            <dl className="grid grid-cols-2 gap-y-5 gap-x-6 text-sm">
-              <div>
-                <dt className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wider font-semibold">
-                  Product Type
-                </dt>
-                <dd className="font-bold text-base text-foreground flex items-center gap-1.5">
-                  <Fuel className="size-4 text-muted-foreground" />
-                  {waybill.productType}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wider font-semibold">
-                  Total Volume Loaded
-                </dt>
-                <dd className="font-bold text-base text-foreground tabular-nums">
-                  {waybill.litersLoaded.toLocaleString()} L
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wider font-semibold">
-                  Supplier
-                </dt>
-                <dd className="font-medium text-foreground flex items-center gap-1.5">
-                  <Building2 className="size-3.5 text-muted-foreground shrink-0" />
-                  <span className="truncate">{waybill.supplier || "—"}</span>
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wider font-semibold">
-                  Loading Depot
-                </dt>
-                <dd className="font-medium text-foreground flex items-center gap-1.5">
-                  <MapPin className="size-3.5 text-muted-foreground shrink-0" />
-                  <span className="truncate">{waybill.depot || "—"}</span>
-                </dd>
-              </div>
-              <div className="border-t border-border/40 pt-4">
-                <dt className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wider font-semibold">
-                  Dispatched At
-                </dt>
-                <dd className="font-medium text-foreground flex items-center gap-1.5">
-                  <Calendar className="size-3.5 text-muted-foreground shrink-0" />
-                  <span>{formatHumanReadableDate(waybill.dispatchedAt)}</span>
-                </dd>
-              </div>
-              <div className="border-t border-border/40 pt-4">
-                <dt className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wider font-semibold">
-                  Expected Delivery
-                </dt>
-                <dd className="font-medium text-foreground flex items-center gap-1.5">
-                  <Clock className="size-3.5 text-muted-foreground shrink-0" />
-                  <span>{formatHumanReadableDate(waybill.deliveryDatetime)}</span>
-                </dd>
-              </div>
-            </dl>
-          </CardContent>
-        </Card>
+      {/* 3. Merged Waybill Delivery & Operations Hub */}
+      <div className="space-y-6">
+        {waybill.allocations.map((a, index) => {
+          const expected = Number(a.litersToDispense);
+          const received = a.litersReceived ? Number(a.litersReceived) : null;
+          const allocationVariance = received !== null ? received - expected : null;
+          const isDelivered = a.status === "DELIVERED" || a.status === "COMPLETED";
+          const verifiedCount = [a.truckNumberVerified, a.driverVerified, a.waybillVerified].filter(Boolean).length;
 
-        {/* Card 2: Transport & Fleet Details */}
-        <Card className="shadow-xs border-border/40 bg-card flex flex-col justify-between p-0 overflow-hidden rounded-xl">
-          <div className="px-5 py-3.5 border-b border-border/40 bg-muted/20 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Truck className="size-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">Transport &amp; Fleet Details</h3>
-              {isOneTime && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                  One-Time Transport
-                </span>
-              )}
-            </div>
-            <span className="font-mono text-xs font-bold bg-muted px-2.5 py-0.5 rounded border border-border/60 text-foreground">
-              {displayTruckPlate}
-            </span>
-          </div>
-          <CardContent className="p-5">
-            <dl className="grid grid-cols-2 gap-y-5 gap-x-6 text-sm">
-              <div>
-                <dt className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wider font-semibold">
-                  Truck Plate Number
-                </dt>
-                <dd className="font-bold text-base text-foreground tracking-wide font-mono">
-                  {displayTruckPlate}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wider font-semibold">
-                  Driver Name
-                </dt>
-                <dd className="font-bold text-base text-foreground flex items-center gap-1.5">
-                  <User className="size-4 text-muted-foreground" />
-                  {displayDriverName}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wider font-semibold">
-                  Driver Phone
-                </dt>
-                <dd className="font-medium text-foreground">
-                  {waybill.driverPhone ? (
-                    <a
-                      href={`tel:${waybill.driverPhone}`}
-                      className="flex items-center gap-1.5 text-primary hover:underline"
-                    >
-                      <Phone className="size-3.5 text-muted-foreground" />
-                      {waybill.driverPhone}
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wider font-semibold">
-                  Transport Company
-                </dt>
-                <dd className="font-medium text-foreground flex items-center gap-1.5">
-                  <span>{displayTransportCompany}</span>
-                  {isOneTime && (
-                    <span className="text-[10px] text-muted-foreground font-normal">(Ad-hoc)</span>
-                  )}
-                </dd>
-              </div>
-              <div className="border-t border-border/40 pt-4 col-span-2 flex items-center justify-between flex-wrap gap-2">
-                <div>
-                  <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
-                    Station Destinations
-                  </dt>
-                  <dd className="font-medium text-foreground">
-                    {waybill.allocations.length} Station Drop{waybill.allocations.length === 1 ? "" : "s"} scheduled
-                  </dd>
-                </div>
-                {waybill.pictures && waybill.pictures.length > 0 && (
-                  <div className="text-right">
-                    <dt className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wider font-semibold">
-                      Manifest Photos
-                    </dt>
-                    <dd className="flex items-center gap-2">
-                      {waybill.pictures.slice(0, 3).map((pic, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => setSelectedImage(pic)}
-                          className="relative size-8 rounded border border-border/60 overflow-hidden hover:opacity-80 transition-opacity"
-                        >
-                          <Image
-                            src={pic}
-                            alt={`Manifest ${idx + 1}`}
-                            fill
-                            className="object-cover"
-                          />
-                        </button>
-                      ))}
-                      {waybill.pictures.length > 3 && (
-                        <span className="text-xs text-muted-foreground font-mono">
-                          +{waybill.pictures.length - 3} more
+          return (
+            <Card key={a.id} className="shadow-xs border-border/40 bg-card p-0 overflow-hidden rounded-xl">
+              {/* Header Bar: Station Identity & Status */}
+              <div className="px-5 py-4 border-b border-border/40 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                    <Building2 className="size-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base font-bold text-foreground">{a.station.name}</h2>
+                      {a.station.code && (
+                        <Badge variant="outline" className="font-mono text-[10px] uppercase">
+                          {a.station.code}
+                        </Badge>
+                      )}
+                      {waybill.allocations.length > 1 && (
+                        <span className="text-xs text-muted-foreground font-medium">
+                          (Drop {index + 1} of {waybill.allocations.length})
                         </span>
                       )}
-                    </dd>
-                  </div>
-                )}
-              </div>
-            </dl>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 4. Station Allocations Section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-              <MapPin className="size-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-foreground">Station Allocations</h2>
-              <p className="text-xs text-muted-foreground">
-                Volume allocations, pricing, arrival verification, and delivery completion per station
-              </p>
-            </div>
-          </div>
-          <Badge variant="secondary" className="font-mono text-xs">
-            {waybill.allocations.length} {waybill.allocations.length === 1 ? "Station" : "Stations"}
-          </Badge>
-        </div>
-
-        <div className="space-y-4">
-          {waybill.allocations.map((a) => {
-            const expected = Number(a.litersToDispense);
-            const received = a.litersReceived ? Number(a.litersReceived) : null;
-            const allocationVariance = received !== null ? received - expected : null;
-            const isDelivered = a.status === "DELIVERED" || a.status === "COMPLETED";
-            const verifiedCount = [a.truckNumberVerified, a.driverVerified, a.waybillVerified].filter(Boolean).length;
-
-            return (
-              <div key={a.id} className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* Left Card: Allocation Information */}
-                <Card className="shadow-xs border-border/40 bg-card p-0 overflow-hidden rounded-xl col-span-2">
-                  <div className="px-4 py-3 border-b border-border/40 bg-muted/20 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded-lg bg-indigo-500/10">
-                        <MapPin className="size-3.5 text-indigo-600 dark:text-indigo-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-semibold text-foreground">{a.station.name}</h3>
-                        <p className="text-[10px] text-muted-foreground font-mono">{a.station.code}</p>
-                      </div>
                     </div>
-                    <Badge variant="outline" className={
-                      isDelivered
-                        ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 text-[10px]"
-                        : "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 text-[10px]"
-                    }>
-                      {a.status}
-                    </Badge>
+                    <p className="text-xs text-muted-foreground">
+                      Waybill Logistics, Transport Fleet &amp; Delivery Fulfillment
+                    </p>
                   </div>
-                  <CardContent className="p-4">
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {isOneTime && (
+                    <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      One-Time Transport
+                    </span>
+                  )}
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "font-semibold text-xs px-2.5 py-0.5",
+                      isDelivered
+                        ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                        : "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20"
+                    )}
+                  >
+                    {a.status}
+                  </Badge>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border/50">
+                    {verifiedCount}/3 Verified
+                  </span>
+                </div>
+              </div>
+
+              {/* 2-Column Balanced Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border/40">
+                {/* LEFT COLUMN: Origin, Transit & Carrier Logistics */}
+                <div className="p-5 space-y-6">
+                  {/* Subsection 1: Supply & Dispatch Information */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3.5">
+                      <div className="flex items-center gap-2">
+                        <Package className="size-4 text-primary" />
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          Supply &amp; Dispatch Information
+                        </h3>
+                      </div>
+                      <Badge variant="secondary" className="font-mono text-[10px] uppercase">
+                        {waybill.productType}
+                      </Badge>
+                    </div>
+
                     <dl className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
                       <div>
-                        <dt className="text-muted-foreground mb-0.5 text-[10px] uppercase tracking-wider font-semibold">Expected Volume</dt>
-                        <dd className="font-bold text-base text-foreground tabular-nums">{expected.toLocaleString()} L</dd>
+                        <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                          Product Type
+                        </dt>
+                        <dd className="font-bold text-sm text-foreground flex items-center gap-1.5">
+                          <Fuel className="size-3.5 text-muted-foreground" />
+                          {waybill.productType}
+                        </dd>
                       </div>
                       <div>
-                        <dt className="text-muted-foreground mb-0.5 text-[10px] uppercase tracking-wider font-semibold">Received Volume</dt>
-                        <dd className="font-bold text-base tabular-nums">
-                          {received !== null ? (
-                            <span className="text-emerald-600 dark:text-emerald-400">{received.toLocaleString()} L</span>
+                        <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                          Total Volume Loaded
+                        </dt>
+                        <dd className="font-bold text-sm text-foreground tabular-nums">
+                          {waybill.litersLoaded.toLocaleString()} L
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                          Supplier
+                        </dt>
+                        <dd className="font-medium text-sm text-foreground flex items-center gap-1.5">
+                          <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+                          <span className="truncate">{waybill.supplier || "—"}</span>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                          Loading Depot
+                        </dt>
+                        <dd className="font-medium text-sm text-foreground flex items-center gap-1.5">
+                          <MapPin className="size-3.5 text-muted-foreground shrink-0" />
+                          <span className="truncate">{waybill.depot || "—"}</span>
+                        </dd>
+                      </div>
+                      <div className="border-t border-border/40 pt-3">
+                        <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                          Dispatched At
+                        </dt>
+                        <dd className="font-medium text-xs text-foreground flex items-center gap-1.5">
+                          <Calendar className="size-3.5 text-muted-foreground shrink-0" />
+                          <span>{formatHumanReadableDate(waybill.dispatchedAt)}</span>
+                        </dd>
+                      </div>
+                      <div className="border-t border-border/40 pt-3">
+                        <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                          Expected Delivery
+                        </dt>
+                        <dd className="font-medium text-xs text-foreground flex items-center gap-1.5">
+                          <Clock className="size-3.5 text-muted-foreground shrink-0" />
+                          <span>{formatHumanReadableDate(waybill.deliveryDatetime)}</span>
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  {/* Subsection 2: Transport & Fleet Details */}
+                  <div className="border-t border-border/40 pt-5">
+                    <div className="flex items-center justify-between mb-3.5">
+                      <div className="flex items-center gap-2">
+                        <Truck className="size-4 text-primary" />
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          Transport &amp; Fleet Details
+                        </h3>
+                      </div>
+                      <span className="font-mono text-xs font-bold bg-muted px-2 py-0.5 rounded border border-border/60 text-foreground">
+                        {displayTruckPlate}
+                      </span>
+                    </div>
+
+                    <dl className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                      <div>
+                        <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                          Truck Plate Number
+                        </dt>
+                        <dd className="font-bold text-sm text-foreground tracking-wide font-mono">
+                          {displayTruckPlate}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                          Driver Name
+                        </dt>
+                        <dd className="font-bold text-sm text-foreground flex items-center gap-1.5">
+                          <User className="size-3.5 text-muted-foreground" />
+                          {displayDriverName}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                          Driver Phone
+                        </dt>
+                        <dd className="font-medium text-sm text-foreground">
+                          {waybill.driverPhone ? (
+                            <a
+                              href={`tel:${waybill.driverPhone}`}
+                              className="flex items-center gap-1.5 text-primary hover:underline"
+                            >
+                              <Phone className="size-3.5 text-muted-foreground" />
+                              {waybill.driverPhone}
+                            </a>
                           ) : (
-                            <span className="text-muted-foreground italic font-normal">Pending</span>
+                            "—"
                           )}
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-muted-foreground mb-0.5 text-[10px] uppercase tracking-wider font-semibold">Cost / Liter</dt>
-                        <dd className="font-semibold text-foreground tabular-nums">₦{Number(a.costPerLiter).toFixed(2)}</dd>
+                        <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                          Transport Company
+                        </dt>
+                        <dd className="font-medium text-sm text-foreground flex items-center gap-1.5">
+                          <span>{displayTransportCompany}</span>
+                          {isOneTime && (
+                            <span className="text-[10px] text-muted-foreground font-normal">(Ad-hoc)</span>
+                          )}
+                        </dd>
                       </div>
-                      <div>
-                        <dt className="text-muted-foreground mb-0.5 text-[10px] uppercase tracking-wider font-semibold">Transport Cost</dt>
-                        <dd className="font-semibold text-foreground tabular-nums">₦{Number(a.transportationCost).toLocaleString()}</dd>
-                      </div>
-                      {allocationVariance !== null && (
-                        <div className="col-span-2 pt-3 border-t border-border/40">
-                          <dt className="text-muted-foreground mb-0.5 text-[10px] uppercase tracking-wider font-semibold">Variance</dt>
-                          <dd className={cn(
-                            "font-bold text-base tabular-nums",
-                            allocationVariance < 0 ? "text-rose-600 dark:text-rose-400" : allocationVariance > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
-                          )}>
-                            {allocationVariance > 0 ? "+" : ""}{allocationVariance.toLocaleString()} L
-                          </dd>
-                        </div>
-                      )}
                     </dl>
-                  </CardContent>
-                </Card>
 
-                {/* Right Card: Arrival, Progress & Verification */}
-                <Card className="shadow-xs border-border/40 bg-card p-0 overflow-hidden rounded-xl">
-                  <div className="px-4 py-3 border-b border-border/40 bg-muted/20 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded-lg bg-emerald-500/10">
-                        <Truck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                      </div>
-                      <h3 className="text-sm font-semibold text-foreground">Delivery & Verification</h3>
-                    </div>
-                    <span className="text-[10px] font-semibold text-muted-foreground">
-                      {verifiedCount}/3 Checks
-                    </span>
-                  </div>
-                  <CardContent className="p-4 space-y-4">
-                    {/* Arrival Photos */}
-                    <div>
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Arrival Photos</p>
-                      {a.arrivalPictures && a.arrivalPictures.length > 0 ? (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {a.arrivalPictures.slice(0, 4).map((pic, idx) => (
+                    {/* Manifest Documentation Photos */}
+                    {waybill.pictures && waybill.pictures.length > 0 && (
+                      <div className="mt-4 pt-3 border-t border-border/40">
+                        <dt className="text-muted-foreground mb-2 text-[11px] uppercase tracking-wider font-semibold">
+                          Manifest Documents ({waybill.pictures.length})
+                        </dt>
+                        <dd className="flex items-center gap-2 flex-wrap">
+                          {waybill.pictures.map((pic, idx) => (
                             <button
                               key={idx}
                               type="button"
                               onClick={() => setSelectedImage(pic)}
-                              className="relative size-14 rounded-lg border border-border/60 overflow-hidden hover:opacity-80 transition-opacity shadow-sm"
+                              className="relative size-12 rounded-lg border border-border/60 overflow-hidden hover:opacity-80 transition-opacity shadow-2xs"
                             >
                               <Image
                                 src={pic}
-                                alt={`Arrival ${idx + 1}`}
+                                alt={`Manifest ${idx + 1}`}
                                 fill
                                 className="object-cover"
                               />
                             </button>
                           ))}
-                          {a.arrivalPictures.length > 4 && (
-                            <span className="text-xs text-muted-foreground font-mono">+{a.arrivalPictures.length - 4} more</span>
-                          )}
+                        </dd>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* RIGHT COLUMN: Station Allocation, Verification & Actions */}
+                <div className="p-5 space-y-6 bg-muted/5 flex flex-col justify-between">
+                  <div className="space-y-6">
+                    {/* Subsection 3: Station Allocation & Financials */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3.5">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="size-4 text-indigo-600 dark:text-indigo-400" />
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            Station Allocation &amp; Financials
+                          </h3>
                         </div>
-                      ) : (
-                        <div className="flex items-center justify-center h-14 rounded-lg border border-dashed border-border/60 bg-muted/20">
-                          <span className="text-xs text-muted-foreground">No arrival photos yet</span>
+                        <Badge variant="outline" className="font-mono text-[10px]">
+                          ₦{Number(a.costPerLiter).toFixed(2)} / L
+                        </Badge>
+                      </div>
+
+                      <dl className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                        <div>
+                          <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                            Expected Volume
+                          </dt>
+                          <dd className="font-bold text-sm text-foreground tabular-nums">
+                            {expected.toLocaleString()} L
+                          </dd>
                         </div>
-                      )}
+                        <div>
+                          <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                            Received Volume
+                          </dt>
+                          <dd className="font-bold text-sm tabular-nums">
+                            {received !== null ? (
+                              <span className="text-emerald-600 dark:text-emerald-400">{received.toLocaleString()} L</span>
+                            ) : (
+                              <span className="text-muted-foreground italic font-normal">Pending</span>
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                            Cost / Liter
+                          </dt>
+                          <dd className="font-semibold text-sm text-foreground tabular-nums">
+                            ₦{Number(a.costPerLiter).toFixed(2)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground mb-0.5 text-[11px] uppercase tracking-wider font-semibold">
+                            Transport Cost
+                          </dt>
+                          <dd className="font-semibold text-sm text-foreground tabular-nums">
+                            ₦{Number(a.transportationCost).toLocaleString()}
+                          </dd>
+                        </div>
+                        {allocationVariance !== null && (
+                          <div className="col-span-2 pt-3 border-t border-border/40 flex items-center justify-between">
+                            <dt className="text-muted-foreground text-[11px] uppercase tracking-wider font-semibold">
+                              Station Variance
+                            </dt>
+                            <dd className={cn(
+                              "font-bold text-sm tabular-nums flex items-center gap-1",
+                              allocationVariance < 0 ? "text-rose-600 dark:text-rose-400" : allocationVariance > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                            )}>
+                              {allocationVariance === 0 ? <CheckCircle2 className="size-3.5" /> : <AlertCircle className="size-3.5" />}
+                              {allocationVariance > 0 ? "+" : ""}{allocationVariance.toLocaleString()} L
+                            </dd>
+                          </div>
+                        )}
+                      </dl>
                     </div>
 
-                    {/* Progress Indicator */}
-                    <div>
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Delivery Progress</p>
-                      <div className="flex items-center gap-1">
+                    {/* Subsection 4: Delivery Progress Stepper */}
+                    <div className="border-t border-border/40 pt-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Clock className="size-4 text-emerald-600 dark:text-emerald-400" />
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            Delivery Progress
+                          </h3>
+                        </div>
+                        {isDelivered && a.deliveredAt && (
+                          <span className="text-[11px] text-muted-foreground font-medium">
+                            Arrived {formatHumanReadableDate(a.deliveredAt)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
                         {["DISPATCHED", "IN_TRANSIT", "DELIVERED"].map((step, idx) => {
                           const stepDone =
                             step === "DISPATCHED" ? true :
@@ -656,7 +670,7 @@ export function WaybillDetailsManager({
                           return (
                             <React.Fragment key={step}>
                               <div className={cn(
-                                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-semibold transition-colors",
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors",
                                 stepDone
                                   ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
                                   : "bg-muted text-muted-foreground"
@@ -673,56 +687,105 @@ export function WaybillDetailsManager({
                           );
                         })}
                       </div>
-                      {isDelivered && a.deliveredAt && (
-                        <p className="text-[10px] text-muted-foreground mt-1.5">
-                          Arrived {formatHumanReadableDate(a.deliveredAt)}
-                        </p>
-                      )}
                     </div>
 
-                    {/* Verification Checklist */}
-                    <div>
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Arrival Checks</p>
-                      <div className="space-y-1.5">
+                    {/* Subsection 5: Arrival Verification Checklist */}
+                    <div className="border-t border-border/40 pt-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            Arrival Verification Checklist
+                          </h3>
+                        </div>
+                        <span className="text-[11px] font-semibold text-muted-foreground">
+                          {verifiedCount}/3 Completed
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {[
                           { label: "Truck plate verified", checked: a.truckNumberVerified },
-                          { label: "Driver credentials verified", checked: a.driverVerified },
+                          { label: "Driver verified", checked: a.driverVerified },
                           { label: "Waybill manifest verified", checked: a.waybillVerified },
                         ].map((check) => (
-                          <div key={check.label} className="flex items-center gap-2 text-xs">
+                          <div
+                            key={check.label}
+                            className={cn(
+                              "flex items-center gap-2 p-2.5 rounded-lg border text-xs transition-colors",
+                              check.checked
+                                ? "bg-emerald-500/5 border-emerald-500/20 text-foreground font-medium"
+                                : "bg-muted/30 border-border/50 text-muted-foreground"
+                            )}
+                          >
                             <div className={cn(
-                              "size-4 rounded-full flex items-center justify-center",
+                              "size-4 rounded-full flex items-center justify-center shrink-0",
                               check.checked
                                 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                                 : "bg-muted text-muted-foreground/40"
                             )}>
                               <CheckCircle2 className="size-3" />
                             </div>
-                            <span className={check.checked ? "text-foreground font-medium" : "text-muted-foreground"}>
-                              {check.label}
-                            </span>
+                            <span className="truncate">{check.label}</span>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    {a.status === "DISPATCHED" && (
-                      <div className="pt-2 border-t border-border/40">
+                    {/* Subsection 6: Physical Arrival Photos */}
+                    <div className="border-t border-border/40 pt-5">
+                      <div className="flex items-center justify-between mb-2.5">
+                        <dt className="text-muted-foreground text-[11px] uppercase tracking-wider font-semibold">
+                          Arrival Photos
+                        </dt>
+                        {a.arrivalPictures && a.arrivalPictures.length > 0 && (
+                          <span className="text-[11px] text-muted-foreground font-mono">
+                            {a.arrivalPictures.length} captured
+                          </span>
+                        )}
+                      </div>
+                      {a.arrivalPictures && a.arrivalPictures.length > 0 ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {a.arrivalPictures.map((pic, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setSelectedImage(pic)}
+                              className="relative size-14 rounded-lg border border-border/60 overflow-hidden hover:opacity-80 transition-opacity shadow-2xs"
+                            >
+                              <Image
+                                src={pic}
+                                alt={`Arrival ${idx + 1}`}
+                                fill
+                                className="object-cover"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center h-14 rounded-lg border border-dashed border-border/60 bg-muted/20">
+                          <span className="text-xs text-muted-foreground">No arrival photos captured yet</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Subsection 7: Operational Action Button */}
+                  {(a.status === "DISPATCHED" || a.status === "DELIVERED") && (
+                    <div className="pt-4 border-t border-border/40 mt-6">
+                      {a.status === "DISPATCHED" && (
                         <ConfirmArrivalModal allocation={a} onSuccess={() => router.refresh()} />
-                      </div>
-                    )}
-                    {a.status === "DELIVERED" && (
-                      <div className="pt-2 border-t border-border/40">
+                      )}
+                      {a.status === "DELIVERED" && (
                         <LogDippingModal allocation={a} onSuccess={() => router.refresh()} />
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            );
-          })}
-        </div>
+            </Card>
+          );
+        })}
       </div>
 
       {/* 5. Discharge Dippings Section */}

@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   Calendar,
@@ -12,7 +13,6 @@ import {
   Truck,
   Phone,
   Building2,
-  Droplets,
   Droplet,
   CheckCircle2,
   AlertCircle,
@@ -34,7 +34,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
 
-import { AllocationsTableWithModal, type Allocation } from "./allocations-table-with-modal";
+import { AllocationsTableWithModal, ConfirmArrivalModal, LogDippingModal, type Allocation } from "./allocations-table-with-modal";
 import {
   DischargeDippingsTable,
   type SerializedDipping,
@@ -79,6 +79,7 @@ export function WaybillDetailsManager({
   canEditDippings,
 }: WaybillDetailsManagerProps) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const router = useRouter();
 
   const isOneTime = Boolean(
     waybill.isOneTime ||
@@ -135,15 +136,19 @@ export function WaybillDetailsManager({
     return acc + (dip.afterLiters ? Number(dip.afterLiters) - Number(dip.beforeLiters) : 0);
   }, 0);
 
+  const createdByName = waybill.recordedBy
+    ? `${waybill.recordedBy.firstName ?? ""} ${waybill.recordedBy.lastName ?? ""}`.trim() || "—"
+    : "—";
+
   const statCards = [
     {
-      title: "Loaded Volume",
-      value: `${waybill.litersLoaded.toLocaleString()} L`,
-      fullValue: `Total loaded volume dispatched from depot: ${waybill.litersLoaded.toLocaleString()} L`,
-      icon: Droplets,
+      title: waybill.supplier || "Company Dispatched",
+      value: createdByName,
+      fullValue: `Waybill dispatched by ${waybill.supplier || "—"}, recorded by ${createdByName}`,
+      icon: Building2,
       valueColor: "text-foreground",
-      iconColor: "text-blue-600 dark:text-blue-400",
-      bgColor: "bg-blue-500/10",
+      iconColor: "text-violet-600 dark:text-violet-400",
+      bgColor: "bg-violet-500/10",
     },
     {
       title: "Allocated Volume",
@@ -264,10 +269,6 @@ export function WaybillDetailsManager({
               <span className="flex items-center gap-1.5">
                 <Calendar className="size-3.5 text-muted-foreground/80" />
                 Dispatched {formatHumanReadableDate(waybill.dispatchedAt)}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <User className="size-3.5 text-muted-foreground/80" />
-                Created by {waybill.recordedBy?.firstName} {waybill.recordedBy?.lastName}
               </span>
               {waybill.deliveryDatetime && (
                 <span className="flex items-center gap-1.5">
@@ -550,10 +551,199 @@ export function WaybillDetailsManager({
           </Badge>
         </div>
 
-        <AllocationsTableWithModal
-          allocations={waybill.allocations}
-          dispatchedAt={waybill.dispatchedAt}
-        />
+        <div className="space-y-4">
+          {waybill.allocations.map((a) => {
+            const expected = Number(a.litersToDispense);
+            const received = a.litersReceived ? Number(a.litersReceived) : null;
+            const allocationVariance = received !== null ? received - expected : null;
+            const isDelivered = a.status === "DELIVERED" || a.status === "COMPLETED";
+            const verifiedCount = [a.truckNumberVerified, a.driverVerified, a.waybillVerified].filter(Boolean).length;
+
+            return (
+              <div key={a.id} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Left Card: Allocation Information */}
+                <Card className="shadow-xs border-border/40 bg-card p-0 overflow-hidden rounded-xl">
+                  <div className="px-4 py-3 border-b border-border/40 bg-muted/20 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-indigo-500/10">
+                        <MapPin className="size-3.5 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">{a.station.name}</h3>
+                        <p className="text-[10px] text-muted-foreground font-mono">{a.station.code}</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className={
+                      isDelivered
+                        ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 text-[10px]"
+                        : "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 text-[10px]"
+                    }>
+                      {a.status}
+                    </Badge>
+                  </div>
+                  <CardContent className="p-4">
+                    <dl className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                      <div>
+                        <dt className="text-muted-foreground mb-0.5 text-[10px] uppercase tracking-wider font-semibold">Expected Volume</dt>
+                        <dd className="font-bold text-base text-foreground tabular-nums">{expected.toLocaleString()} L</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground mb-0.5 text-[10px] uppercase tracking-wider font-semibold">Received Volume</dt>
+                        <dd className="font-bold text-base tabular-nums">
+                          {received !== null ? (
+                            <span className="text-emerald-600 dark:text-emerald-400">{received.toLocaleString()} L</span>
+                          ) : (
+                            <span className="text-muted-foreground italic font-normal">Pending</span>
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground mb-0.5 text-[10px] uppercase tracking-wider font-semibold">Cost / Liter</dt>
+                        <dd className="font-semibold text-foreground tabular-nums">₦{Number(a.costPerLiter).toFixed(2)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground mb-0.5 text-[10px] uppercase tracking-wider font-semibold">Transport Cost</dt>
+                        <dd className="font-semibold text-foreground tabular-nums">₦{Number(a.transportationCost).toLocaleString()}</dd>
+                      </div>
+                      {allocationVariance !== null && (
+                        <div className="col-span-2 pt-3 border-t border-border/40">
+                          <dt className="text-muted-foreground mb-0.5 text-[10px] uppercase tracking-wider font-semibold">Variance</dt>
+                          <dd className={cn(
+                            "font-bold text-base tabular-nums",
+                            allocationVariance < 0 ? "text-rose-600 dark:text-rose-400" : allocationVariance > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                          )}>
+                            {allocationVariance > 0 ? "+" : ""}{allocationVariance.toLocaleString()} L
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  </CardContent>
+                </Card>
+
+                {/* Right Card: Arrival, Progress & Verification */}
+                <Card className="shadow-xs border-border/40 bg-card p-0 overflow-hidden rounded-xl">
+                  <div className="px-4 py-3 border-b border-border/40 bg-muted/20 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-emerald-500/10">
+                        <Truck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-foreground">Delivery & Verification</h3>
+                    </div>
+                    <span className="text-[10px] font-semibold text-muted-foreground">
+                      {verifiedCount}/3 Checks
+                    </span>
+                  </div>
+                  <CardContent className="p-4 space-y-4">
+                    {/* Arrival Photos */}
+                    <div>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Arrival Photos</p>
+                      {a.arrivalPictures && a.arrivalPictures.length > 0 ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {a.arrivalPictures.slice(0, 4).map((pic, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setSelectedImage(pic)}
+                              className="relative size-14 rounded-lg border border-border/60 overflow-hidden hover:opacity-80 transition-opacity shadow-sm"
+                            >
+                              <Image
+                                src={pic}
+                                alt={`Arrival ${idx + 1}`}
+                                fill
+                                className="object-cover"
+                              />
+                            </button>
+                          ))}
+                          {a.arrivalPictures.length > 4 && (
+                            <span className="text-xs text-muted-foreground font-mono">+{a.arrivalPictures.length - 4} more</span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center h-14 rounded-lg border border-dashed border-border/60 bg-muted/20">
+                          <span className="text-xs text-muted-foreground">No arrival photos yet</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Progress Indicator */}
+                    <div>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Delivery Progress</p>
+                      <div className="flex items-center gap-1">
+                        {["DISPATCHED", "IN_TRANSIT", "DELIVERED"].map((step, idx) => {
+                          const stepDone =
+                            step === "DISPATCHED" ? true :
+                            step === "IN_TRANSIT" ? isDelivered :
+                            isDelivered;
+                          return (
+                            <React.Fragment key={step}>
+                              <div className={cn(
+                                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-semibold transition-colors",
+                                stepDone
+                                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                                  : "bg-muted text-muted-foreground"
+                              )}>
+                                {step === "DISPATCHED" && <Package className="size-3" />}
+                                {step === "IN_TRANSIT" && <Truck className="size-3" />}
+                                {step === "DELIVERED" && <MapPin className="size-3" />}
+                                {step === "DISPATCHED" ? "Dispatched" : step === "IN_TRANSIT" ? "In Transit" : "Delivered"}
+                              </div>
+                              {idx < 2 && (
+                                <div className={cn("flex-1 h-[2px] rounded", stepDone ? "bg-slate-900 dark:bg-slate-100" : "bg-muted")} />
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
+                      {isDelivered && a.deliveredAt && (
+                        <p className="text-[10px] text-muted-foreground mt-1.5">
+                          Arrived {formatHumanReadableDate(a.deliveredAt)}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Verification Checklist */}
+                    <div>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Arrival Checks</p>
+                      <div className="space-y-1.5">
+                        {[
+                          { label: "Truck plate verified", checked: a.truckNumberVerified },
+                          { label: "Driver credentials verified", checked: a.driverVerified },
+                          { label: "Waybill manifest verified", checked: a.waybillVerified },
+                        ].map((check) => (
+                          <div key={check.label} className="flex items-center gap-2 text-xs">
+                            <div className={cn(
+                              "size-4 rounded-full flex items-center justify-center",
+                              check.checked
+                                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                : "bg-muted text-muted-foreground/40"
+                            )}>
+                              <CheckCircle2 className="size-3" />
+                            </div>
+                            <span className={check.checked ? "text-foreground font-medium" : "text-muted-foreground"}>
+                              {check.label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    {a.status === "DISPATCHED" && (
+                      <div className="pt-2 border-t border-border/40">
+                        <ConfirmArrivalModal allocation={a} onSuccess={() => router.refresh()} />
+                      </div>
+                    )}
+                    {a.status === "DELIVERED" && (
+                      <div className="pt-2 border-t border-border/40">
+                        <LogDippingModal allocation={a} onSuccess={() => router.refresh()} />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* 5. Discharge Dippings Section */}

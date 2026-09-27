@@ -240,7 +240,7 @@ export function DischargeDippingsTable({
         <Table>
           <TableHeader className="bg-muted/30">
             <TableRow>
-              <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Station</TableHead>
+              {/* <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Station</TableHead> */}
               <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Tank</TableHead>
               <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Recorded By</TableHead>
               <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Date</TableHead>
@@ -255,7 +255,7 @@ export function DischargeDippingsTable({
               const net = dip.afterLiters ? Number(dip.afterLiters) - Number(dip.beforeLiters) : 0;
               return (
                 <TableRow key={dip.id} className="text-sm">
-                  <TableCell className="font-semibold">{dip.tank.station.name}</TableCell>
+                  {/* <TableCell className="font-semibold">{dip.tank.station.name}</TableCell> */}
                   <TableCell className="font-medium">{dip.tank.name}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {dip.recordedBy

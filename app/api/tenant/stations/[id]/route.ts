@@ -5,7 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { computeStationOverpayment } from "@/lib/sales/payments";
+import { computeStationLedger, computeStationOverpayment } from "@/lib/sales/payments";
 
 const UpdateStationSchema = z.object({
   code: z.string().min(2).max(50).optional(),
@@ -56,9 +56,12 @@ export async function GET(
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
-    const derivedBalance = await computeStationOverpayment(id, actor.tenantId);
+    const [derivedBalance, ledgerSummary] = await Promise.all([
+      computeStationOverpayment(id, actor.tenantId),
+      computeStationLedger(id, actor.tenantId),
+    ]);
 
-    return ok({ ...station, derivedBalance });
+    return ok({ ...station, derivedBalance, ledgerSummary });
   } catch (e) {
     return handleError(e);
   }

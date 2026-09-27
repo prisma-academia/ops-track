@@ -251,16 +251,6 @@ export function WaybillDetailsManager({
                 {waybill.productType}
               </Badge>
             </div>
-            {/* Station assigned name directly below waybill number */}
-            <div className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-foreground/90">
-              <Building2 className="size-3.5 text-primary shrink-0" />
-              <span>{assignedStationName}</span>
-              {assignedStationCode && (
-                <span className="text-[11px] font-mono text-muted-foreground font-normal">
-                  ({assignedStationCode})
-                </span>
-              )}
-            </div>
             <div className="flex items-center gap-x-4 gap-y-1 text-xs text-muted-foreground flex-wrap pt-0.5">
               <span className="flex items-center gap-1.5">
                 <Calendar className="size-3.5 text-muted-foreground/80" />

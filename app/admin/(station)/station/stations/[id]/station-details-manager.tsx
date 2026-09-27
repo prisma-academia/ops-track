@@ -50,7 +50,8 @@ import {
   Check,
   ArrowLeft,
   Lock,
-  AlertCircle
+  AlertCircle,
+  Landmark,
 } from "lucide-react";
 import { AssetTank } from "@/components/asset-tank";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
@@ -157,10 +158,19 @@ export function StationDetailsManager({
   station,
   users,
   canEditTank = true,
+  initialLedger,
 }: {
   station: any;
   users: any[];
   canEditTank?: boolean;
+  initialLedger?: {
+    expectedRevenue: number;
+    totalReceived: number;
+    balance: number;
+    overpayment: number;
+    underpayment: number;
+    totalSalesCount: number;
+  };
 }) {
   const router = useRouter();
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
@@ -172,7 +182,8 @@ export function StationDetailsManager({
 
   const [recentSales, setRecentSales] = useState<any[]>([]);
   const [todayExpenses, setTodayExpenses] = useState<any[]>([]);
-  const [lastWaybill, setLastWaybill] = useState<any | null>(null);
+  const [recentWaybills, setRecentWaybills] = useState<any[]>([]);
+  const [stationLedger, setStationLedger] = useState(initialLedger || null);
   const [overviewLoading, setOverviewLoading] = useState(true);
 
   const tankForm = useForm({
@@ -406,19 +417,23 @@ export function StationDetailsManager({
     async function loadOverview() {
       setOverviewLoading(true);
       const base = `/api/tenant/stations/${station.id}`;
-      const [salesRes, expensesRes, waybillRes] = await Promise.all([
-        apiGet<any[]>(`${base}/sales-logs?page=1&take=5&status=APPROVED`),
+      const [salesRes, expensesRes, waybillRes, stationRes] = await Promise.all([
+        apiGet<any[]>(`${base}/sales-logs?page=1&take=3&status=APPROVED`),
         apiGet<any[]>(`${base}/expenses?page=1&take=50&status=APPROVED`),
-        apiGet<any[]>(`${base}/waybills?page=1&take=1`),
+        apiGet<any[]>(`${base}/waybills?page=1&take=3`),
+        apiGet<any>(`${base}`),
       ]);
 
       if (cancelled) return;
 
-      setRecentSales(Array.isArray(salesRes.data) ? salesRes.data : []);
+      setRecentSales(Array.isArray(salesRes.data) ? salesRes.data.slice(0, 3) : []);
       const expenses = Array.isArray(expensesRes.data) ? expensesRes.data : [];
       setTodayExpenses(expenses.filter((e) => isToday(e.createdAt)));
-      const waybills = Array.isArray(waybillRes.data) ? waybillRes.data : [];
-      setLastWaybill(waybills[0] ?? null);
+      const waybills = Array.isArray(waybillRes.data) ? waybillRes.data.slice(0, 3) : [];
+      setRecentWaybills(waybills);
+      if (stationRes.data?.ledgerSummary) {
+        setStationLedger(stationRes.data.ledgerSummary);
+      }
       setOverviewLoading(false);
     }
 
@@ -465,19 +480,11 @@ export function StationDetailsManager({
               <Pencil className="h-4 w-4" />
               Edit Station
             </Button>
-            <Button variant="outline" onClick={openAddTankDialog} className="gap-2">
-              <Droplet className="h-4 w-4 text-primary" />
-              Add Tank
-            </Button>
-            <Button variant="outline" onClick={openAddPumpDialog} className="gap-2">
-              <Fuel className="h-4 w-4 text-primary" />
-              Add Pump
-            </Button>
           </CardAction>
         </CardHeader>
       </Card>
 
-      {/* ---------------- STATION INFO & PRICES GRID ---------------- */}
+      {/* ---------------- STATION INFO & LEDGER GRID ---------------- */}
       <div className="grid gap-6 md:grid-cols-2 items-stretch">
         {/* Station Information Card */}
         <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
@@ -486,98 +493,230 @@ export function StationDetailsManager({
               <Store size={16} className="text-primary" />
               Station Information
             </CardTitle>
-            <CardDescription className="text-xs">Operational status and location details</CardDescription>
+            <CardDescription className="text-xs">Operational status, location and fuel pricing</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col justify-between">
-            <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
-              <div className="col-span-2 flex items-center gap-3">
-                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                  <User size={16} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              {/* Left Column: Station Manager, State, Ward / LGA, Station Code */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <User size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Station Manager</p>
+                    <p className="font-semibold text-foreground truncate">{managerName}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Station Manager</p>
-                  <p className="font-semibold text-foreground">{managerName}</p>
+
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <Landmark size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">State</p>
+                    <p className="font-semibold text-foreground truncate">{station.state || "N/A"}</p>
+                  </div>
                 </div>
-              </div>
-              
-              <div className="flex items-start gap-3">
-                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-0.5">
-                  <Store size={16} />
+
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <MapPin size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Ward / LGA</p>
+                    <p className="font-semibold text-foreground truncate text-xs">
+                      {[station.ward, station.lga].filter(Boolean).join(" / ") || "N/A"}
+                    </p>
+                    {station.location && (
+                      <p className="text-[10px] text-muted-foreground truncate">{station.location}</p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Station Code</p>
-                  <Badge variant="outline" className="font-mono text-[10px] px-2 py-0.5 h-5 bg-background">{station.code}</Badge>
+
+                <div className="flex items-center gap-3 pt-0.5">
+                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <Store size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Station Code</p>
+                    <Badge variant="outline" className="font-mono text-[10px] px-2 py-0.5 h-5 bg-background mt-0.5">{station.code}</Badge>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-start gap-3">
-                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-0.5">
-                  <MapPin size={16} />
+              {/* Right Column: Product and Prices with Icons */}
+              <div className="border-t sm:border-t-0 sm:border-l border-stone-200 dark:border-stone-800 pt-3 sm:pt-0 sm:pl-4 flex flex-col justify-center">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                  <Fuel size={13} className="text-primary" />
+                  Product & Prices
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {["PMS", "AGO", "DPK", "LPG"].map((product) => {
+                    const price = latestPrices[product];
+                    return (
+                      <div
+                        key={product}
+                        className="flex items-center gap-2 p-2 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50"
+                      >
+                        <div className="p-1.5 bg-primary/10 text-primary rounded-md shrink-0">
+                          {PRODUCT_ICONS[product] || <Flame size={12} />}
+                        </div>
+                        <div className="min-w-0 overflow-hidden">
+                          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider truncate">
+                            {PRODUCT_NAMES[product] ? PRODUCT_NAMES[product].split(" ")[0] : product}
+                          </p>
+                          <p className="text-xs font-bold text-foreground font-mono truncate">
+                            {price != null ? (
+                              `₦${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            ) : (
+                              "—"
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Location / Ward / LGA</p>
-                  <p className="font-semibold text-foreground text-xs leading-tight">
-                    {station.ward ? `${station.ward}, ` : ""}{station.lga ? `${station.lga}, ` : ""}{station.state || "N/A"}
-                  </p>
-                  {station.location && (
-                    <p className="text-[11px] text-muted-foreground mt-1 line-clamp-1">{station.location}</p>
+              </div>
+            </div>
+
+            {((station.latitude != null) || (station.longitude != null) || (station.altitude != null)) && (
+              <div className="flex items-center gap-3 border-t border-dashed border-stone-200 dark:border-stone-800 pt-3 mt-3">
+                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">GPS</div>
+                <div className="flex gap-4 text-xs font-mono">
+                  {station.latitude != null && (
+                    <div><span className="text-muted-foreground">LAT:</span> <span className="font-medium text-foreground">{Number(station.latitude).toFixed(6)}</span></div>
+                  )}
+                  {station.longitude != null && (
+                    <div><span className="text-muted-foreground">LON:</span> <span className="font-medium text-foreground">{Number(station.longitude).toFixed(6)}</span></div>
+                  )}
+                  {station.altitude != null && (
+                    <div><span className="text-muted-foreground">ALT:</span> <span className="font-medium text-foreground">{Number(station.altitude).toFixed(1)}m</span></div>
                   )}
                 </div>
               </div>
-
-              {((station.latitude != null) || (station.longitude != null) || (station.altitude != null)) && (
-                <div className="col-span-2 flex items-center gap-3 border-t border-dashed border-stone-200 dark:border-stone-800 pt-3 mt-1">
-                  <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">GPS Coordinates</div>
-                  <div className="flex gap-4 text-xs font-mono">
-                    {station.latitude != null && (
-                      <div><span className="text-muted-foreground">LAT:</span> <span className="font-medium text-foreground">{Number(station.latitude).toFixed(6)}</span></div>
-                    )}
-                    {station.longitude != null && (
-                      <div><span className="text-muted-foreground">LON:</span> <span className="font-medium text-foreground">{Number(station.longitude).toFixed(6)}</span></div>
-                    )}
-                    {station.altitude != null && (
-                      <div><span className="text-muted-foreground">ALT:</span> <span className="font-medium text-foreground">{Number(station.altitude).toFixed(1)}m</span></div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Consolidated Prices Card */}
+        {/* Station Ledger Card */}
         <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Fuel size={16} className="text-primary" />
-              Product Prices
-            </CardTitle>
-            <CardDescription className="text-xs">Active retail fuel prices per unit</CardDescription>
+          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <Wallet size={16} className="text-primary" />
+                Station Ledger
+              </CardTitle>
+              <CardDescription className="text-xs">Sales revenue, collections, and settlement balance</CardDescription>
+            </div>
+            {stationLedger && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] font-medium px-2 py-0.5",
+                  stationLedger.balance < 0
+                    ? "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30"
+                    : stationLedger.balance > 0
+                    ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
+                    : "text-muted-foreground border-stone-200 bg-stone-50 dark:bg-stone-900/30"
+                )}
+              >
+                {stationLedger.balance < 0
+                  ? "Unsettled Debt"
+                  : stationLedger.balance > 0
+                  ? "Overpayment / Surplus"
+                  : "Balanced"}
+              </Badge>
+            )}
           </CardHeader>
-          <CardContent className="flex-1">
-            <div className="grid grid-cols-2 gap-3">
-              {["PMS", "AGO", "DPK", "LPG"].map((product) => {
-                const price = latestPrices[product];
-                return (
-                  <div key={product} className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
-                    <div className="p-2 bg-primary/10 text-primary rounded-lg shrink-0">
-                      {PRODUCT_ICONS[product] || <Flame size={14} />}
-                    </div>
-                    <div className="overflow-hidden">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate">
-                        {PRODUCT_NAMES[product] ? PRODUCT_NAMES[product].split(" ")[0] : product}
-                      </p>
-                      <p className="text-base font-bold text-foreground font-mono mt-0.5 truncate">
-                        {price != null ? (
-                          `₦${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        ) : (
-                          "—"
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
+          <CardContent className="flex-1 flex flex-col justify-between">
+            {/* Top Net Position Banner */}
+            <div className={cn(
+              "p-3 rounded-xl border flex items-center justify-between mb-3",
+              stationLedger && stationLedger.balance < 0
+                ? "bg-rose-500/5 border-rose-500/15"
+                : stationLedger && stationLedger.balance > 0
+                ? "bg-emerald-500/5 border-emerald-500/15"
+                : "bg-stone-50/60 dark:bg-stone-900/60 border-stone-200 dark:border-stone-800"
+            )}>
+              <div>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                  {stationLedger && stationLedger.balance < 0
+                    ? "Net Debt / Shortage"
+                    : stationLedger && stationLedger.balance > 0
+                    ? "Net Overpayment Credit"
+                    : "Net Sales Balance"}
+                </p>
+                <p className={cn(
+                  "text-xl font-bold font-mono mt-0.5",
+                  stationLedger && stationLedger.balance < 0
+                    ? "text-rose-600"
+                    : stationLedger && stationLedger.balance > 0
+                    ? "text-emerald-600"
+                    : "text-foreground"
+                )}>
+                  {stationLedger
+                    ? `${stationLedger.balance < 0 ? "-₦" : stationLedger.balance > 0 ? "+₦" : "₦"}${Math.abs(stationLedger.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : "₦0.00"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-muted-foreground font-medium">
+                  {stationLedger?.totalSalesCount ?? 0} Sales Logged
+                </p>
+                <Link
+                  href="/admin/station/sales-reports"
+                  className="text-[11px] font-medium text-primary hover:underline inline-flex items-center gap-1 mt-1"
+                >
+                  Full Report &rarr;
+                </Link>
+              </div>
+            </div>
+
+            {/* 4 Financial Metric Tiles */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Debt / Shortage
+                </p>
+                <p className={cn(
+                  "text-sm font-bold font-mono mt-0.5 truncate",
+                  (stationLedger?.underpayment ?? 0) > 0 ? "text-rose-600" : "text-foreground"
+                )}>
+                  ₦{Number(stationLedger?.underpayment || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Overpayment
+                </p>
+                <p className={cn(
+                  "text-sm font-bold font-mono mt-0.5 truncate",
+                  (stationLedger?.overpayment ?? 0) > 0 ? "text-emerald-600" : "text-foreground"
+                )}>
+                  ₦{Number(stationLedger?.overpayment || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Total Remitted
+                </p>
+                <p className="text-sm font-bold font-mono text-foreground mt-0.5 truncate">
+                  ₦{Number(stationLedger?.totalReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Expected Sales
+                </p>
+                <p className="text-sm font-bold font-mono text-foreground mt-0.5 truncate">
+                  ₦{Number(stationLedger?.expectedRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -592,7 +731,7 @@ export function StationDetailsManager({
               <TrendingUp size={15} className="text-emerald-500" />
               Recent Sales
             </CardTitle>
-            <CardDescription className="text-xs">Latest recorded sales logs</CardDescription>
+            <CardDescription className="text-xs">Last 3 recorded sales logs</CardDescription>
           </CardHeader>
           <CardContent>
             {overviewLoading ? (
@@ -603,7 +742,7 @@ export function StationDetailsManager({
               <p className="text-xs text-muted-foreground py-4 text-center">No sales recorded yet.</p>
             ) : (
               <div className="space-y-3">
-                {recentSales.map((sale) => {
+                {recentSales.slice(0, 3).map((sale) => {
                   const revenue = Number(sale.amountPos) + Number(sale.amountTransfer);
                   return (
                     <div key={sale.id} className="flex items-center justify-between gap-3 py-2 border-b border-border/40 last:border-0">
@@ -682,85 +821,49 @@ export function StationDetailsManager({
           </CardContent>
         </Card>
 
-        {/* Last Waybill */}
+        {/* Recent Waybills */}
         <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Truck size={15} className="text-blue-500" />
-              Last Waybill
+              Recent Waybills
             </CardTitle>
-            <CardDescription className="text-xs">Most recent fuel delivery</CardDescription>
+            <CardDescription className="text-xs">Last 3 fuel deliveries</CardDescription>
           </CardHeader>
           <CardContent>
             {overviewLoading ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground text-xs">
                 <SpinnerEllipsis />
               </div>
-            ) : !lastWaybill ? (
+            ) : recentWaybills.length === 0 ? (
               <p className="text-xs text-muted-foreground py-4 text-center">No waybill deliveries yet.</p>
             ) : (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-sm font-bold text-foreground">{lastWaybill.waybill?.number ?? "—"}</span>
-                  <Badge variant="outline" className={cn(
-                    "text-[9px]",
-                    lastWaybill.status === "DELIVERED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" :
-                    lastWaybill.status === "IN_TRANSIT" ? "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/30" :
-                    "text-stone-600 border-stone-200 bg-stone-50 dark:bg-stone-900/30"
-                  )}>
-                    {lastWaybill.status}
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Dispatched</p>
-                    <p className="font-medium text-foreground mt-0.5">
-                      {formatHumanReadableDate(lastWaybill.waybill?.dispatchedAt).split(" ").slice(0, 3).join(" ")}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Volume</p>
-                    <p className="font-mono font-semibold text-foreground mt-0.5">
-                      {Number(lastWaybill.litersToDispense || 0).toLocaleString()} L
-                    </p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Driver / Truck</p>
-                    {(() => {
-                      const wb = lastWaybill.waybill;
-                      const isOneTime = Boolean(wb?.isOneTime || wb?.oneTimeTruckPlate || wb?.oneTimeDriverName);
-                      const plate = (isOneTime ? (wb?.oneTimeTruckPlate || wb?.truckPlate) : wb?.truckPlate)?.replace(/^N\/A$/, "");
-                      const driver = (isOneTime ? (wb?.oneTimeDriverName || wb?.driverName) : wb?.driverName)?.replace(/^Unknown Driver$/, "");
-                      return (
-                        <p className="text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
-                          <span>{[driver || "—", plate || "—"].join(" • ")}</span>
-                          {isOneTime && (
-                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                              One-Time
-                            </span>
-                          )}
+              <div className="space-y-3">
+                {recentWaybills.map((wb) => {
+                  const productType = wb.waybill?.productType || wb.productType || "PMS";
+                  const dispatchedAt = wb.waybill?.dispatchedAt || wb.dispatchedAt;
+                  const qty = Number(wb.litersToDispense || wb.litersReceived || 0);
+
+                  return (
+                    <div key={wb.id} className="flex items-center justify-between gap-3 py-2 border-b border-border/40 last:border-0">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-[9px] font-mono">
+                            {productType}
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground truncate">
+                            {dispatchedAt ? formatHumanReadableDate(dispatchedAt).split(" ").slice(0, 3).join(" ") : "—"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-mono font-semibold text-foreground">
+                          {qty.toLocaleString()} L
                         </p>
-                      );
-                    })()}
-                  </div>
-                  {lastWaybill.litersReceived != null && (
-                    <div className="col-span-2 pt-2 border-t border-border/40">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Variance</span>
-                        {(() => {
-                          const dispatched = Number(lastWaybill.litersToDispense) || 0;
-                          const received = Number(lastWaybill.litersReceived);
-                          const variance = received - dispatched;
-                          return (
-                            <span className={cn("font-mono font-semibold text-sm", variance < 0 ? "text-rose-600" : "text-emerald-600")}>
-                              {variance > 0 ? "+" : ""}{variance.toLocaleString()} L
-                            </span>
-                          );
-                        })()}
                       </div>
                     </div>
-                  )}
-                </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>

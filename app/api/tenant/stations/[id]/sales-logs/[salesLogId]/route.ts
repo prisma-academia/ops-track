@@ -61,14 +61,14 @@ export async function DELETE(
       throw new DomainError(404, "not_found", "Sales log not found.");
     }
 
-    // Guard: never delete finalised reports
-    if (salesLog.status === "APPROVED" || salesLog.status === "PARTIAL") {
-      throw new DomainError(
-        400,
-        "cannot_delete",
-        "Cannot delete an approved or partially approved sales report.",
-      );
-    }
+    // Guard: never delete finalised reports (TEMPORARILY DISABLED)
+    // if (salesLog.status === "APPROVED" || salesLog.status === "PARTIAL") {
+    //   throw new DomainError(
+    //     400,
+    //     "cannot_delete",
+    //     "Cannot delete an approved or partially approved sales report.",
+    //   );
+    // }
 
     // Guard: refuse if any child repayment is APPROVED
     const approvedChildren = salesLog.debtRepayments.filter((r) => r.status === "APPROVED");
@@ -113,6 +113,11 @@ export async function DELETE(
 
       // 3. Delete the sales log itself (payments cascade via schema)
       await tx.salesLog.delete({ where: { id: salesLogId } });
+
+      // 4. Delete the associated StockMovement (temporary cleanup logic)
+      await tx.stockMovement.deleteMany({
+        where: { referenceId: salesLogId }
+      });
     });
 
     // Best-effort cleanup of uploaded receipt files (non-blocking)

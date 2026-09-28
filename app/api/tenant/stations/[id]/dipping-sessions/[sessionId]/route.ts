@@ -39,3 +39,30 @@ export async function PATCH(
     return handleError(e);
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string, sessionId: string }> }
+) {
+  try {
+    await requireCsrf(request);
+    const { id: stationId, sessionId } = await params;
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_WRITE.key, "STATION");
+
+    const session = await prisma.dippingSession.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!session || session.tenantId !== actor.tenantId || session.stationId !== stationId) {
+      throw new DomainError(404, "not_found", "Session not found.");
+    }
+
+    await prisma.dippingSession.delete({
+      where: { id: sessionId },
+    });
+
+    return ok({ deleted: true });
+  } catch (e) {
+    return handleError(e);
+  }
+}

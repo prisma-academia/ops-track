@@ -37,6 +37,8 @@ import {
   type DataTableFilterField,
 } from "@/components/tables";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { apiDelete } from "@/lib/client/api";
+import { Trash2 } from "lucide-react";
 
 interface SalesReportRow {
   id: string;
@@ -401,6 +403,30 @@ export function SalesReportsManager({
           if (!Array.isArray(value)) return true;
           return value.includes(row.getValue(id));
         },
+      },
+      {
+        id: "actions",
+        header: () => null,
+        cell: ({ row }) => (
+          <Button
+            variant="destructive"
+            size="icon"
+            className="h-8 w-8"
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (confirm("Are you sure you want to permanently delete this sales report?")) {
+                const res = await apiDelete(`/api/tenant/stations/${row.original.stationId}/sales-logs/${row.original.id}`);
+                if (res.error) {
+                  alert("Failed to delete: " + res.error.message);
+                } else {
+                  window.location.reload();
+                }
+              }
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        ),
       },
     ],
     []

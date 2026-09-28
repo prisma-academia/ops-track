@@ -94,33 +94,43 @@ export async function DELETE(
     }
 
     await prisma.$transaction(async (tx) => {
-      // 1. Unlink from DippingClosing so the closing can generate a fresh sale
-      if (salesLog.dippingClosingId) {
-        await tx.dippingClosing.update({
-          where: { id: salesLog.dippingClosingId },
-          data: { generateddeliveryId: null },
-        });
-      }
+      // 1. Unlink from DippingClosing 
+      await tx.dippingClosing.updateMany({
+        where: { generateddeliveryId: salesLogId },
+        data: { generateddeliveryId: null },
+      });
 
-      // 2. Delete child debt repayments (non-approved ones — we already guarded above)
+      // 2. Unlink from Transactions
+      await tx.transaction.updateMany({
+        where: { salesLogId },
+        data: { salesLogId: null },
+      });
+
+      // 3. Delete child debt repayments
       if (salesLog.debtRepayments.length > 0) {
         const childIds = salesLog.debtRepayments.map((r) => r.id);
-        // Payments are cascade-deleted by Prisma schema
+        await tx.salesPayment.deleteMany({
+          where: { salesLogId: { in: childIds } },
+        });
         await tx.salesLog.deleteMany({
           where: { id: { in: childIds } },
         });
       }
 
-      // 3. Delete the sales log itself (payments cascade via schema)
-      await tx.salesLog.delete({ where: { id: salesLogId } });
+      // 4. Delete payments
+      await tx.salesPayment.deleteMany({
+        where: { salesLogId },
+      });
 
-      // 4. Delete the associated StockMovement (temporary cleanup logic)
+      // 5. Delete associated StockMovement
       await tx.stockMovement.deleteMany({
         where: { referenceId: salesLogId }
       });
+
+      // 6. Delete the sales log itself
+      await tx.salesLog.delete({ where: { id: salesLogId } });
     });
 
-    // Best-effort cleanup of uploaded receipt files (non-blocking)
     cleanupUploadedFiles(receiptUrls).catch((err) => {
       console.warn("Receipt cleanup error (non-critical):", err);
     });
@@ -142,7 +152,8 @@ export async function DELETE(
     });
 
     return ok({ deleted: true });
-  } catch (e) {
-    return handleError(e);
+  } catch (e: any) {
+    console.error("DELETE SalesLog Error:", e);
+    return new Response(JSON.stringify({ error: { code: "server_error", message: e.message || "Something went wrong" } }), { status: 500 });
   }
 }

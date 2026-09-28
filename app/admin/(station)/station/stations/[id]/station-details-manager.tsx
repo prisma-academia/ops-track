@@ -116,10 +116,10 @@ const EditStationSchema = z.object({
 });
 
 const PRODUCT_ICONS: Record<string, React.ReactNode> = {
-  PMS: <Flame size={14} className="text-rose-500" />,
-  AGO: <Droplet size={14} className="text-amber-500" />,
-  DPK: <Droplet size={14} className="text-blue-500" />,
-  LPG: <Cloud size={14} className="text-slate-500" />,
+  PMS: <Flame size={16} className="text-rose-500" />,
+  AGO: <Droplet size={16} className="text-amber-500" />,
+  DPK: <Droplet size={16} className="text-blue-500" />,
+  LPG: <Cloud size={16} className="text-slate-500" />,
 };
 
 const PRODUCT_NAMES: Record<string, string> = {
@@ -170,6 +170,7 @@ export function StationDetailsManager({
     overpayment: number;
     underpayment: number;
     totalSalesCount: number;
+    varianceItems?: any[];
   };
 }) {
   const router = useRouter();
@@ -459,6 +460,16 @@ export function StationDetailsManager({
 
   const todayExpensesTotal = todayExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
+  const isUnderpayment = (stationLedger?.balance ?? 0) < 0;
+  const isOverpayment = (stationLedger?.balance ?? 0) > 0;
+  const isSettled = (stationLedger?.balance ?? 0) === 0;
+
+  const varianceList = (stationLedger?.varianceItems || []).filter((item: any) => {
+    if (isUnderpayment) return item.variance < 0;
+    if (isOverpayment) return item.variance > 0;
+    return item.variance !== 0;
+  });
+
   return (
     <div className="space-y-6">
       {/* ---------------- FULL WIDTH HEADER CARD ---------------- */}
@@ -545,39 +556,30 @@ export function StationDetailsManager({
                 </div>
               </div>
 
-              {/* Right Column: Product and Prices with Icons */}
-              <div className="border-t sm:border-t-0 sm:border-l border-stone-200 dark:border-stone-800 pt-3 sm:pt-0 sm:pl-4 flex flex-col justify-center">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                  <Fuel size={13} className="text-primary" />
-                  Product & Prices
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {["PMS", "AGO", "DPK", "LPG"].map((product) => {
-                    const price = latestPrices[product];
-                    return (
-                      <div
-                        key={product}
-                        className="flex items-center gap-2 p-2 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50"
-                      >
-                        <div className="p-1.5 bg-primary/10 text-primary rounded-md shrink-0">
-                          {PRODUCT_ICONS[product] || <Flame size={12} />}
-                        </div>
-                        <div className="min-w-0 overflow-hidden">
-                          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider truncate">
-                            {PRODUCT_NAMES[product] ? PRODUCT_NAMES[product].split(" ")[0] : product}
-                          </p>
-                          <p className="text-xs font-bold text-foreground font-mono truncate">
-                            {price != null ? (
-                              `₦${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                            ) : (
-                              "—"
-                            )}
-                          </p>
-                        </div>
+              {/* Right Column: Product and Prices with same UI as left, no divider */}
+              <div className="space-y-3">
+                {["PMS", "AGO", "DPK", "LPG"].map((product) => {
+                  const price = latestPrices[product];
+                  return (
+                    <div key={product} className="flex items-center gap-3">
+                      <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                        {PRODUCT_ICONS[product] || <Flame size={16} />}
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate">
+                          {PRODUCT_NAMES[product] ? PRODUCT_NAMES[product].split(" ")[0] : product} Price
+                        </p>
+                        <p className="font-semibold text-foreground font-mono mt-0.5">
+                          {price != null ? (
+                            `₦${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / L`
+                          ) : (
+                            "—"
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -608,51 +610,59 @@ export function StationDetailsManager({
                 <Wallet size={16} className="text-primary" />
                 Station Ledger
               </CardTitle>
-              <CardDescription className="text-xs">Sales revenue, collections, and settlement balance</CardDescription>
+              <CardDescription className="text-xs">Sales revenue and settlement status</CardDescription>
             </div>
             {stationLedger && (
               <Badge
                 variant="outline"
                 className={cn(
                   "text-[10px] font-medium px-2 py-0.5",
-                  stationLedger.balance < 0
+                  isUnderpayment
                     ? "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30"
-                    : stationLedger.balance > 0
+                    : isOverpayment
                     ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
                     : "text-muted-foreground border-stone-200 bg-stone-50 dark:bg-stone-900/30"
                 )}
               >
-                {stationLedger.balance < 0
-                  ? "Unsettled Debt"
-                  : stationLedger.balance > 0
-                  ? "Overpayment / Surplus"
-                  : "Balanced"}
+                {isUnderpayment
+                  ? "Underpayment"
+                  : isOverpayment
+                  ? "Overpayment"
+                  : "Settled"}
               </Badge>
             )}
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col justify-between">
-            {/* Top Net Position Banner */}
+          <CardContent className="flex-1 flex flex-col justify-between space-y-3">
+            {/* Station Ledger Balance Hero Box */}
             <div className={cn(
-              "p-3 rounded-xl border flex items-center justify-between mb-3",
-              stationLedger && stationLedger.balance < 0
+              "p-4 rounded-xl border flex items-center justify-between",
+              isUnderpayment
                 ? "bg-rose-500/5 border-rose-500/15"
-                : stationLedger && stationLedger.balance > 0
+                : isOverpayment
                 ? "bg-emerald-500/5 border-emerald-500/15"
                 : "bg-stone-50/60 dark:bg-stone-900/60 border-stone-200 dark:border-stone-800"
             )}>
-              <div>
-                <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                  {stationLedger && stationLedger.balance < 0
-                    ? "Net Debt / Shortage"
-                    : stationLedger && stationLedger.balance > 0
-                    ? "Net Overpayment Credit"
-                    : "Net Sales Balance"}
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full",
+                    isUnderpayment
+                      ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 font-bold"
+                      : isOverpayment
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 font-bold"
+                      : "bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300 font-bold"
+                  )}>
+                    {isUnderpayment ? "Underpayment" : isOverpayment ? "Overpayment" : "Settled"}
+                  </span>
+                </div>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider pt-1">
+                  Station Ledger Balance
                 </p>
                 <p className={cn(
-                  "text-xl font-bold font-mono mt-0.5",
-                  stationLedger && stationLedger.balance < 0
+                  "text-2xl font-bold font-mono",
+                  isUnderpayment
                     ? "text-rose-600"
-                    : stationLedger && stationLedger.balance > 0
+                    : isOverpayment
                     ? "text-emerald-600"
                     : "text-foreground"
                 )}>
@@ -662,60 +672,89 @@ export function StationDetailsManager({
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-[10px] text-muted-foreground font-medium">
+                <p className="text-[11px] text-muted-foreground font-medium">
                   {stationLedger?.totalSalesCount ?? 0} Sales Logged
                 </p>
                 <Link
                   href="/admin/station/sales-reports"
-                  className="text-[11px] font-medium text-primary hover:underline inline-flex items-center gap-1 mt-1"
+                  className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 mt-1.5"
                 >
-                  Full Report &rarr;
+                  Sales Report &rarr;
                 </Link>
               </div>
             </div>
 
-            {/* 4 Financial Metric Tiles */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  Debt / Shortage
+            {/* Below: Reason for Over or Under / Related Sales */}
+            <div className="flex-1 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 p-3.5 flex flex-col justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span>
+                    {isUnderpayment
+                      ? "Reason for Underpayment"
+                      : isOverpayment
+                      ? "Reason for Overpayment"
+                      : "Settlement Status"}
+                  </span>
+                  {varianceList.length > 0 && (
+                    <span className="text-[9px] font-mono text-muted-foreground">
+                      {varianceList.length} sales with variance
+                    </span>
+                  )}
                 </p>
-                <p className={cn(
-                  "text-sm font-bold font-mono mt-0.5 truncate",
-                  (stationLedger?.underpayment ?? 0) > 0 ? "text-rose-600" : "text-foreground"
-                )}>
-                  ₦{Number(stationLedger?.underpayment || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
 
-              <div className="p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  Overpayment
-                </p>
-                <p className={cn(
-                  "text-sm font-bold font-mono mt-0.5 truncate",
-                  (stationLedger?.overpayment ?? 0) > 0 ? "text-emerald-600" : "text-foreground"
-                )}>
-                  ₦{Number(stationLedger?.overpayment || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-
-              <div className="p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  Total Remitted
-                </p>
-                <p className="text-sm font-bold font-mono text-foreground mt-0.5 truncate">
-                  ₦{Number(stationLedger?.totalReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-
-              <div className="p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  Expected Sales
-                </p>
-                <p className="text-sm font-bold font-mono text-foreground mt-0.5 truncate">
-                  ₦{Number(stationLedger?.expectedRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
+                {varianceList.length > 0 ? (
+                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                    {varianceList.slice(0, 4).map((item: any) => {
+                      const formattedDate = formatHumanReadableDate(item.logDate).split(" ").slice(0, 3).join(" ");
+                      const isShortage = item.variance < 0;
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-2.5 rounded-lg bg-background border border-stone-200/80 dark:border-stone-800/80 text-xs space-y-1"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <Badge variant="secondary" className="text-[9px] font-mono px-1.5 py-0">
+                                {item.productType}
+                              </Badge>
+                              <span className="text-[10px] text-muted-foreground">{formattedDate}</span>
+                            </div>
+                            <span className={cn(
+                              "font-mono font-bold text-[11px]",
+                              isShortage ? "text-rose-600" : "text-emerald-600"
+                            )}>
+                              {isShortage ? "-₦" : "+₦"}{Math.abs(item.variance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          {item.reason ? (
+                            <p className="text-[11px] text-foreground font-medium italic">
+                              &ldquo;{item.reason}&rdquo;
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-muted-foreground">
+                              Expected ₦{Number(item.expectedRevenue).toLocaleString()} · Received ₦{Number(item.totalReceived).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : isUnderpayment ? (
+                  <p className="text-xs text-muted-foreground py-2">
+                    Underpayment of ₦{Math.abs(stationLedger?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} across station sales logs.
+                  </p>
+                ) : isOverpayment ? (
+                  <p className="text-xs text-muted-foreground py-2">
+                    Surplus remittance of ₦{Math.abs(stationLedger?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} recorded on station sales logs.
+                  </p>
+                ) : (
+                  <div className="flex items-center gap-2.5 py-3 text-xs text-emerald-600 dark:text-emerald-400">
+                    <div className="size-7 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                      <Check size={14} className="text-emerald-600" />
+                    </div>
+                    <span className="font-medium">All recorded sales are settled and balanced. No debt or surplus exists.</span>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>

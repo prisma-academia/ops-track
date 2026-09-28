@@ -131,6 +131,18 @@ export function resolvePaymentInputs(body: {
   return paymentsFromLegacy(body);
 }
 
+export type StationLedgerVarianceItem = {
+  id: string;
+  productType: string;
+  logDate: string;
+  litersSold: number;
+  expectedRevenue: number;
+  totalReceived: number;
+  variance: number;
+  reason?: string | null;
+  status: string;
+};
+
 export type StationLedgerSummary = {
   expectedRevenue: number;
   totalReceived: number;
@@ -138,6 +150,7 @@ export type StationLedgerSummary = {
   overpayment: number;
   underpayment: number;
   totalSalesCount: number;
+  varianceItems: StationLedgerVarianceItem[];
 };
 
 export async function computeStationLedger(
@@ -148,6 +161,10 @@ export async function computeStationLedger(
     where: { stationId, tenantId, status: { not: "REJECTED" } },
     select: {
       id: true,
+      productType: true,
+      logDate: true,
+      reason: true,
+      status: true,
       litersSold: true,
       pricePerLiter: true,
       amountPos: true,
@@ -167,6 +184,7 @@ export async function computeStationLedger(
   let totalReceived = 0;
   let overpayment = 0;
   let underpayment = 0;
+  const varianceItems: StationLedgerVarianceItem[] = [];
 
   for (const p of parents) {
     const pExpected = Number(p.litersSold || 0) * Number(p.pricePerLiter || 0);
@@ -197,8 +215,30 @@ export async function computeStationLedger(
     const diff = saleReceived - pExpected;
     if (diff > 0) {
       overpayment += diff;
+      varianceItems.push({
+        id: p.id,
+        productType: p.productType,
+        logDate: p.logDate instanceof Date ? p.logDate.toISOString() : String(p.logDate),
+        litersSold: Number(p.litersSold || 0),
+        expectedRevenue: pExpected,
+        totalReceived: saleReceived,
+        variance: diff,
+        reason: p.reason ?? null,
+        status: p.status,
+      });
     } else if (diff < 0) {
       underpayment += Math.abs(diff);
+      varianceItems.push({
+        id: p.id,
+        productType: p.productType,
+        logDate: p.logDate instanceof Date ? p.logDate.toISOString() : String(p.logDate),
+        litersSold: Number(p.litersSold || 0),
+        expectedRevenue: pExpected,
+        totalReceived: saleReceived,
+        variance: diff,
+        reason: p.reason ?? null,
+        status: p.status,
+      });
     }
   }
 
@@ -224,6 +264,7 @@ export async function computeStationLedger(
     overpayment,
     underpayment,
     totalSalesCount: parents.length,
+    varianceItems,
   };
 }
 

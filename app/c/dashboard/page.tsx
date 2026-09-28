@@ -29,6 +29,10 @@ export default async function ClientDashboardPage() {
           where: { isActive: true },
           orderBy: { createdAt: "desc" },
         },
+        drivers: {
+          where: { isActive: true },
+          orderBy: { createdAt: "desc" },
+        },
         fuelOrders: {
           orderBy: { createdAt: "desc" },
           take: 20,
@@ -60,6 +64,10 @@ export default async function ClientDashboardPage() {
       tankCapacity: Number(v.tankCapacity),
       dailyLimitLiters: v.dailyLimitLiters ? Number(v.dailyLimitLiters) : null,
       createdAt: v.createdAt.toISOString(),
+    })),
+    drivers: (client.drivers || []).map((d) => ({
+      ...d,
+      createdAt: d.createdAt.toISOString(),
     })),
     fuelOrders: client.fuelOrders.map((o) => ({
       ...o,

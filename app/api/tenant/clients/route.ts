@@ -29,45 +29,79 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const useOffset = url.searchParams.has("page");
     
+    const stationId = url.searchParams.get("stationId");
+    const includeDetails = url.searchParams.get("includeDetails") === "true";
+
+    const where: any = { tenantId: actor.tenantId };
+    if (stationId) {
+      where.allowedStations = { some: { stationId } };
+    }
+
+    const includeClause: any = {
+      _count: {
+        select: {
+          allowedStations: true,
+          vehicles: true,
+          drivers: true,
+          fuelOrders: true,
+        },
+      },
+      ...(includeDetails
+        ? {
+            vehicles: {
+              where: { isActive: true },
+              select: {
+                id: true,
+                plateNumber: true,
+                makeModel: true,
+                fuelType: true,
+                tankCapacity: true,
+                dailyLimitLiters: true,
+              },
+            },
+            drivers: {
+              where: { isActive: true },
+              select: {
+                id: true,
+                fullName: true,
+                phone: true,
+                licenseNumber: true,
+                driverPhotoUrl: true,
+                idCardPhotoUrl: true,
+              },
+            },
+            allowedStations: {
+              include: {
+                station: {
+                  select: { id: true, name: true, code: true },
+                },
+              },
+            },
+          }
+        : {}),
+    };
+
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
       const [totalCount, rows] = await Promise.all([
-        prisma.client.count({ where: { tenantId: actor.tenantId } }),
+        prisma.client.count({ where }),
         prisma.client.findMany({
-          where: { tenantId: actor.tenantId },
+          where,
           orderBy: { createdAt: "desc" },
           take,
           skip,
-          include: {
-            _count: {
-              select: {
-                allowedStations: true,
-                vehicles: true,
-                drivers: true,
-                fuelOrders: true,
-              },
-            },
-          },
+          include: includeClause,
         }),
       ]);
       return ok(rows, buildOffsetPageMeta(totalCount, page, take));
     } else {
       const { cursor, take } = parsePagination(url.searchParams);
       const rows = await prisma.client.findMany({
-        where: { tenantId: actor.tenantId },
+        where,
         orderBy: { createdAt: "desc" },
         take,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-        include: {
-          _count: {
-            select: {
-              allowedStations: true,
-              vehicles: true,
-              drivers: true,
-              fuelOrders: true,
-            },
-          },
-        },
+        include: includeClause,
       });
       return ok(rows, buildPageMeta(rows, take));
     }

@@ -15,14 +15,79 @@ const DispenseSchema = z.object({
   liters: z.number().positive(),
   pricePerLiter: z.number().positive(),
   odometerReading: z.number().nonnegative().optional().nullable(),
-  driverPhotoUrl: z.string().url().optional().nullable(),
-  notes: z.string().max(500).optional().nullable(),
+  driverPhotoUrl: z.string().optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
 });
+
+export async function GET(request: Request) {
+  try {
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_CLIENTS_READ.key);
+    const url = new URL(request.url);
+    const stationId = url.searchParams.get("stationId");
+
+    const where: any = { tenantId: actor.tenantId };
+    if (stationId) where.stationId = stationId;
+
+    const orders = await prisma.clientFuelOrder.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      include: {
+        client: {
+          select: {
+            id: true,
+            companyName: true,
+            email: true,
+            phone: true,
+            billingModel: true,
+          },
+        },
+        vehicle: {
+          select: {
+            id: true,
+            plateNumber: true,
+            makeModel: true,
+            fuelType: true,
+            tankCapacity: true,
+          },
+        },
+        driver: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            licenseNumber: true,
+            driverPhotoUrl: true,
+          },
+        },
+        station: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
+        manager: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return ok({ orders });
+  } catch (e) {
+    return handleError(e);
+  }
+}
 
 export async function POST(request: Request) {
   try {
     await requireCsrf(request);
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_WRITE.key);
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_CLIENTS_WRITE.key);
     const body = DispenseSchema.parse(await request.json());
     const meta = requestMeta(request);
 

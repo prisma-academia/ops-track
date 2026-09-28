@@ -20,7 +20,23 @@ import {
   MapPin,
   ArrowRight,
   Printer,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 interface StationOption {
   id: string;
@@ -34,6 +50,7 @@ interface StationOption {
 export function ClientDispenseTerminal({ stations }: { stations: StationOption[] }) {
   const router = useRouter();
   const [selectedStationId, setSelectedStationId] = useState<string>(stations[0]?.id || "");
+  const [stationOpen, setStationOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [matches, setMatches] = useState<any[]>([]);
@@ -196,22 +213,60 @@ export function ClientDispenseTerminal({ stations }: { stations: StationOption[]
             </div>
           </div>
 
-          <div className="sm:w-64">
-            <select
-              value={selectedStationId}
-              onChange={(e) => {
-                setSelectedStationId(e.target.value);
-                setSelectedMatch(null);
-                setMatches([]);
-              }}
-              className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm"
-            >
-              {stations.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.code})
-                </option>
-              ))}
-            </select>
+          <div className="sm:w-72">
+            <Popover open={stationOpen} onOpenChange={setStationOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={stationOpen}
+                  className="w-full justify-between h-9 text-xs font-normal bg-background"
+                >
+                  <span className="truncate">
+                    {activeStation
+                      ? `${activeStation.name} (${activeStation.code})`
+                      : "Select Station..."}
+                  </span>
+                  <ChevronsUpDown className="ml-2 size-3.5 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0" align="end">
+                <Command>
+                  <CommandInput placeholder="Search station by name or code..." className="h-8 text-xs" />
+                  <CommandList>
+                    <CommandEmpty>No station found.</CommandEmpty>
+                    <CommandGroup>
+                      {stations.map((s) => (
+                        <CommandItem
+                          key={s.id}
+                          value={`${s.name} ${s.code} ${s.location || ""} ${s.state || ""}`}
+                          onSelect={() => {
+                            setSelectedStationId(s.id);
+                            setSelectedMatch(null);
+                            setMatches([]);
+                            setStationOpen(false);
+                          }}
+                          className="text-xs flex items-center justify-between cursor-pointer"
+                        >
+                          <div className="flex flex-col min-w-0 pr-2">
+                            <span className="font-medium truncate">{s.name}</span>
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              Code: {s.code}{s.state ? ` • ${s.state}` : ""}
+                            </span>
+                          </div>
+                          <Check
+                            className={cn(
+                              "size-3.5 shrink-0",
+                              selectedStationId === s.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </Card>

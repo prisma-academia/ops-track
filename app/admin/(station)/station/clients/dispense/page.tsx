@@ -40,7 +40,7 @@ export default async function ClientDispensePage() {
   }));
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
+    <div className="w-full space-y-4">
       <PageHeader
         title="Corporate Client Fuel Dispensing Terminal"
         backHref="/admin/station/clients"

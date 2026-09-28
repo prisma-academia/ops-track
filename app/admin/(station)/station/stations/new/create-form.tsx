@@ -27,10 +27,11 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { ArrowLeft, Save, User, ShieldCheck, ChevronsUpDown, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Save, User, ShieldCheck, ChevronsUpDown, Mail, Phone, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import nigerianLocations from "@/constant/nigerian-locations.json";
+import { StationManagersSelector } from "@/components/station-managers-selector";
 
 const Schema = z.object({
   organizationId: z.string().min(1, "Please select an organization"),
@@ -43,7 +44,7 @@ const Schema = z.object({
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
   altitude: z.number().optional().nullable(),
-  managerId: z.string().optional().or(z.literal("")),
+  staffUserIds: z.array(z.string()).default([]),
 });
 
 type Values = z.infer<typeof Schema>;
@@ -61,7 +62,6 @@ export function CreateStationForm({
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [openManagerSelect, setOpenManagerSelect] = useState(false);
   const [openStateSelect, setOpenStateSelect] = useState(false);
   const [openLgaSelect, setOpenLgaSelect] = useState(false);
   const [openWardSelect, setOpenWardSelect] = useState(false);
@@ -79,12 +79,11 @@ export function CreateStationForm({
       latitude: null,
       longitude: null,
       altitude: null,
-      managerId: "",
+      staffUserIds: [] as string[],
     },
   });
 
-  const selectedManagerId = watch("managerId");
-  const selectedManager = users.find((u) => u.id === selectedManagerId);
+  const selectedStaffUserIds = watch("staffUserIds") || [];
   const selectedState = watch("state");
   const selectedLga = watch("lga");
   const selectedWard = watch("ward");
@@ -154,7 +153,7 @@ export function CreateStationForm({
     setError(null);
     const payload = {
       ...values,
-      staffUserIds: values.managerId ? [values.managerId] : [],
+      staffUserIds: values.staffUserIds || [],
     };
     
     const res = await apiPost<{ station: { id: string } }>("/api/tenant/stations", payload);
@@ -384,105 +383,18 @@ export function CreateStationForm({
         {/* Staff Assignment */}
         <Card className="lg:col-span-1 border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-              Assign Station Manager
+            <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <Users size={16} className="text-primary" />
+              Assign Station Managers
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="manager-select" className={formState.errors.managerId ? "text-destructive" : ""}>Select Manager</Label>
-              <Popover open={openManagerSelect} onOpenChange={setOpenManagerSelect}>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    id="manager-select"
-                    className="w-full justify-between font-normal"
-                  >
-                    <span className="truncate">
-                      {selectedManager
-                        ? (selectedManager.firstName || selectedManager.lastName
-                            ? `${selectedManager.firstName ?? ""} ${selectedManager.lastName ?? ""}`.trim()
-                            : selectedManager.email)
-                        : "Unassigned"}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search users..." />
-                    <CommandList>
-                      <CommandEmpty>No user found.</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          value="unassigned"
-                          onSelect={() => {
-                            setValue("managerId", "", { shouldValidate: true });
-                            setOpenManagerSelect(false);
-                          }}
-                          data-checked={!selectedManagerId}
-                        >
-                          Unassigned
-                        </CommandItem>
-                        {users.map((u) => {
-                          const label = u.firstName || u.lastName
-                            ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-                            : u.email;
-                          return (
-                            <CommandItem
-                              key={u.id}
-                              value={`${label} ${u.email}`.toLowerCase()}
-                              onSelect={() => {
-                                setValue("managerId", u.id, { shouldValidate: true });
-                                setOpenManagerSelect(false);
-                              }}
-                              data-checked={selectedManagerId === u.id}
-                            >
-                              {label}
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              {formState.errors.managerId && <p className="text-xs text-destructive">{formState.errors.managerId.message}</p>}
-            </div>
-
-            {selectedManager && (
-              <div className="mt-4 flex items-center gap-4 rounded-xl border border-border bg-gradient-to-br from-stone-50 to-stone-100/50 p-4 shadow-sm dark:from-stone-900/50 dark:to-stone-900/20">
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-4 ring-primary/5">
-                  <User size={20} strokeWidth={2.5} />
-                </div>
-                <div className="flex-1 space-y-1 overflow-hidden">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {selectedManager.firstName || selectedManager.lastName 
-                        ? `${selectedManager.firstName ?? ""} ${selectedManager.lastName ?? ""}`.trim()
-                        : "No Name Provided"}
-                    </p>
-                    <div className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                      <ShieldCheck size={12} />
-                      <span>Manager</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1 mt-1.5">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Mail size={12} className="shrink-0 opacity-70" />
-                      <span className="truncate">{selectedManager.email}</span>
-                    </div>
-                    {selectedManager.phone && (
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Phone size={12} className="shrink-0 opacity-70" />
-                        <span className="truncate">{selectedManager.phone}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+          <CardContent>
+            <StationManagersSelector
+              users={users}
+              value={selectedStaffUserIds}
+              onChange={(ids) => setValue("staffUserIds", ids, { shouldValidate: true })}
+              error={formState.errors.staffUserIds?.message as string | undefined}
+            />
           </CardContent>
         </Card>
       </div>

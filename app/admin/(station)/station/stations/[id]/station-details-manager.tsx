@@ -52,10 +52,12 @@ import {
   Lock,
   AlertCircle,
   Landmark,
+  Users,
 } from "lucide-react";
 import { AssetTank } from "@/components/asset-tank";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import nigerianLocations from "@/constant/nigerian-locations.json";
+import { StationManagersSelector } from "@/components/station-managers-selector";
 
 const optionalReading = z.preprocess((value) => {
   if (value === "" || value === undefined || value === null) return null;
@@ -177,8 +179,7 @@ export function StationDetailsManager({
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [nozzleCount, setNozzleCount] = useState<number>(1);
-  const [selectedManagerId, setSelectedManagerId] = useState<string>("");
-  const [openManagerSelect, setOpenManagerSelect] = useState(false);
+  const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>([]);
   const [isAssigningManager, setIsAssigningManager] = useState(false);
 
   const [recentSales, setRecentSales] = useState<any[]>([]);
@@ -294,7 +295,7 @@ export function StationDetailsManager({
     setApiError(null);
     setIsAssigningManager(true);
     const res = await apiPatch(`/api/tenant/stations/${station.id}`, {
-      managerId: selectedManagerId || null,
+      staffUserIds: selectedManagerIds,
     });
     if (res.error) {
       setApiError(res.error.message);
@@ -307,7 +308,7 @@ export function StationDetailsManager({
     setApiError(null);
     const res = await apiPatch(`/api/tenant/stations/${station.id}`, {
       ...values,
-      staffUserIds: selectedManagerId ? [selectedManagerId] : [],
+      staffUserIds: selectedManagerIds,
     });
     if (res.error) {
       setApiError(res.error.message);
@@ -317,7 +318,7 @@ export function StationDetailsManager({
   });
 
   const openEditStation = () => {
-    setSelectedManagerId(station.staff && station.staff.length > 0 ? station.staff[0].id : "");
+    setSelectedManagerIds(Array.isArray(station.staff) ? station.staff.map((s: any) => s.id) : []);
     editStationForm.reset({
       name: station.name || "",
       code: station.code || "",
@@ -442,9 +443,11 @@ export function StationDetailsManager({
     return () => { cancelled = true; };
   }, [station.id]);
 
-  // Derive manager from staff (take first or show none)
-  const manager = station.staff && station.staff.length > 0 ? station.staff[0] : null;
-  const managerName = manager ? `${manager.firstName ?? ""} ${manager.lastName ?? ""}`.trim() : "Unassigned";
+  // Derive managers from staff
+  const managers = Array.isArray(station.staff) ? station.staff : [];
+  const managerNames = managers.length > 0
+    ? managers.map((m: any) => `${m.firstName ?? ""} ${m.lastName ?? ""}`.trim() || m.email).join(", ")
+    : "Unassigned";
 
   // Derive latest prices per product type from priceControls
   const latestPrices: Record<string, number> = {};
@@ -507,16 +510,20 @@ export function StationDetailsManager({
             <CardDescription className="text-xs">Operational status, location and fuel pricing</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col justify-between">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 text-sm">
               {/* Left Column: Station Manager, State, Ward / LGA, Station Code */}
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                    <User size={16} />
+                <div className="flex items-start gap-3">
+                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-0.5">
+                    {managers.length > 1 ? <Users size={16} /> : <User size={16} />}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Station Manager</p>
-                    <p className="font-semibold text-foreground truncate">{managerName}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                      {managers.length > 1 ? `Station Managers (${managers.length})` : "Station Manager"}
+                    </p>
+                    <p className="font-semibold text-foreground truncate text-xs leading-snug" title={managerNames}>
+                      {managerNames}
+                    </p>
                   </div>
                 </div>
 
@@ -991,18 +998,6 @@ export function StationDetailsManager({
                         {tank.productType}
                       </Badge>
                       <div className="flex items-center gap-1.5 pointer-events-auto">
-                        {canEditTank && (
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="size-6 text-muted-foreground hover:text-foreground hover:bg-background/80 rounded-md"
-                            onClick={(e) => openEditTankDialog(tank, e)}
-                            title="Edit Tank Information"
-                          >
-                            <Pencil size={12} />
-                          </Button>
-                        )}
                         <StatusBadge status={tank.status || "ACTIVE"} />
                       </div>
                     </div>
@@ -1017,7 +1012,7 @@ export function StationDetailsManager({
       {/* Edit Station & Assign Manager Dialog */}
       {activeDialog === "edit-station" && (
         <Dialog open={true} onOpenChange={closeDialog}>
-          <DialogContent className="sm:max-w-3xl">
+          <DialogContent className="sm:max-w-4xl">
             <DialogHeader>
               <DialogTitle>Edit Station & Management</DialogTitle>
             </DialogHeader>
@@ -1034,8 +1029,13 @@ export function StationDetailsManager({
                   </FormField>
 
                   {/* State and Station Code - Same Row */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">   
+                    {/* Station Code */}
+                    <FormField label="Station Code" htmlFor="s_code" error={editStationForm.formState.errors.code?.message}>
+                      <Input id="s_code" {...editStationForm.register("code")} />
+                    </FormField>
                     {/* State */}
+                    
                     <FormField label="State" htmlFor="s_state" error={editStationForm.formState.errors.state?.message}>
                       <Popover open={openStateSelect} onOpenChange={setOpenStateSelect}>
                         <PopoverTrigger asChild>
@@ -1077,11 +1077,6 @@ export function StationDetailsManager({
                         </PopoverContent>
                       </Popover>
                       <input type="hidden" {...editStationForm.register("state")} />
-                    </FormField>
-
-                    {/* Station Code */}
-                    <FormField label="Station Code" htmlFor="s_code" error={editStationForm.formState.errors.code?.message}>
-                      <Input id="s_code" {...editStationForm.register("code")} />
                     </FormField>
                   </div>
 
@@ -1181,70 +1176,12 @@ export function StationDetailsManager({
                 {/* Right Column: Manager Assignment */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-semibold border-b pb-2 mb-4">Management</h3>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Select Manager</label>
-                    <Popover open={openManagerSelect} onOpenChange={setOpenManagerSelect}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full justify-between font-normal bg-background text-foreground"
-                        >
-                          <span className="truncate">
-                            {selectedManagerId === "" ? "Unassigned" : (
-                              users.find(u => u.id === selectedManagerId)
-                                ? (() => {
-                                    const u = users.find(u => u.id === selectedManagerId)!;
-                                    return u.firstName || u.lastName
-                                      ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-                                      : u.email;
-                                  })()
-                                : "Select..."
-                            )}
-                          </span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Search users..." />
-                          <CommandList>
-                            <CommandEmpty>No user found.</CommandEmpty>
-                            <CommandGroup>
-                              <CommandItem
-                                value="unassigned"
-                                onSelect={() => {
-                                  setSelectedManagerId("");
-                                  setOpenManagerSelect(false);
-                                }}
-                              >
-                                Unassigned
-                                {selectedManagerId === "" && <Check className="ml-auto h-4 w-4" />}
-                              </CommandItem>
-                              {users.map((u) => {
-                                const label = u.firstName || u.lastName
-                                  ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-                                  : u.email;
-                                return (
-                                  <CommandItem
-                                    key={u.id}
-                                    value={`${label} ${u.email}`.toLowerCase()}
-                                    onSelect={() => {
-                                      setSelectedManagerId(u.id);
-                                      setOpenManagerSelect(false);
-                                    }}
-                                  >
-                                    {label} ({u.email})
-                                    {selectedManagerId === u.id && <Check className="ml-auto h-4 w-4" />}
-                                  </CommandItem>
-                                );
-                              })}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                  <StationManagersSelector
+                    users={users}
+                    value={selectedManagerIds}
+                    onChange={setSelectedManagerIds}
+                    compactCards={true}
+                  />
                 </div>
 
               </div>

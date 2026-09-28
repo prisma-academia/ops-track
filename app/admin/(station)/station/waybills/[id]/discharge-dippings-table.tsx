@@ -231,11 +231,6 @@ export function DischargeDippingsTable({
               <p className="text-xs text-muted-foreground">Physical tank dipstick readings logged at destination stations</p>
             </div>
           </div>
-          {canEdit && (
-            <span className="text-xs text-muted-foreground bg-background px-3 py-1 rounded-md border border-border/50 self-start sm:self-auto font-normal">
-              Click <span className="font-semibold text-foreground">&quot;Edit&quot;</span> to correct dip readings or reassign tanks.
-            </span>
-          )}
         </div>
         <Table>
           <TableHeader className="bg-muted/30">
@@ -247,7 +242,6 @@ export function DischargeDippingsTable({
               <TableHead className="text-right font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Before</TableHead>
               <TableHead className="text-right font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">After</TableHead>
               <TableHead className="text-right font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Net</TableHead>
-              {canEdit && <TableHead className="w-[90px] text-right font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Action</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -278,25 +272,13 @@ export function DischargeDippingsTable({
                   <TableCell className="text-right tabular-nums font-semibold">
                     {net.toLocaleString()}
                   </TableCell>
-                  {canEdit && (
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10"
-                        onClick={() => openEditModal(dip)}
-                      >
-                        <Edit3 className="size-3.5 mr-1" /> Edit
-                      </Button>
-                    </TableCell>
-                  )}
                 </TableRow>
               );
             })}
           </TableBody>
           <TableFooter className="bg-transparent border-t">
             <TableRow className="hover:bg-transparent border-b-0">
-              <TableCell colSpan={canEdit ? 7 : 6} className="text-right text-muted-foreground pb-1">
+              <TableCell colSpan={6} className="text-right text-muted-foreground pb-1">
                 Total Loaded Quantity
               </TableCell>
               <TableCell className="text-right tabular-nums font-medium pb-1">
@@ -304,7 +286,7 @@ export function DischargeDippingsTable({
               </TableCell>
             </TableRow>
             <TableRow className="hover:bg-transparent border-b-0">
-              <TableCell colSpan={canEdit ? 7 : 6} className="text-right text-muted-foreground py-1">
+              <TableCell colSpan={6} className="text-right text-muted-foreground py-1">
                 Discharged
               </TableCell>
               <TableCell className="text-right tabular-nums font-bold text-foreground py-1">
@@ -312,7 +294,7 @@ export function DischargeDippingsTable({
               </TableCell>
             </TableRow>
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={canEdit ? 7 : 6} className="text-right text-muted-foreground pt-1">
+              <TableCell colSpan={6} className="text-right text-muted-foreground pt-1">
                 Variance
               </TableCell>
               <TableCell

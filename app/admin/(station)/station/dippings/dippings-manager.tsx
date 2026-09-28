@@ -33,8 +33,6 @@ import {
   type DataTableFilterField,
 } from "@/components/tables";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
-import { apiDelete } from "@/lib/client/api";
-import { Trash2 } from "lucide-react";
 
 export type DippingRow = {
   id: string;
@@ -311,41 +309,6 @@ export function DippingsManager({
         filterFn: (row, id, value) => {
           if (!Array.isArray(value)) return true;
           return value.includes(row.getValue(id));
-        },
-      },
-      {
-        id: "actions",
-        header: () => null,
-        cell: ({ row }) => {
-          // We only support deleting sessions for this quick cleanup
-          if (row.original.source !== "SESSION") return null;
-          
-          return (
-            <Button
-              variant="destructive"
-              size="icon"
-              className="h-8 w-8"
-              onClick={async (e) => {
-                e.stopPropagation();
-                if (row.original.id.startsWith("session-close")) {
-                  alert("Please click the delete button on the Opening Dip row to delete the entire session.");
-                  return;
-                }
-                if (confirm("Are you sure you want to permanently delete this dipping session?")) {
-                  // The ID format in the table is `session-open-{id}`
-                  const sessionId = row.original.id.replace("session-open-", "");
-                  const res = await apiDelete(`/api/tenant/stations/${row.original.stationId}/dipping-sessions/${sessionId}`);
-                  if (res.error) {
-                    alert("Failed to delete: " + res.error.message);
-                  } else {
-                    window.location.reload();
-                  }
-                }
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )
         },
       },
     ],

@@ -849,18 +849,7 @@ export function StationDetailsManager({
                         {tank.productType}
                       </Badge>
                       <div className="flex items-center gap-1.5 pointer-events-auto">
-                        {canEditTank && (
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="size-6 text-muted-foreground hover:text-foreground hover:bg-background/80 rounded-md"
-                            onClick={(e) => openEditTankDialog(tank, e)}
-                            title="Edit Tank Information"
-                          >
-                            <Pencil size={12} />
-                          </Button>
-                        )}
+
                         <StatusBadge status={tank.status || "ACTIVE"} />
                       </div>
                     </div>

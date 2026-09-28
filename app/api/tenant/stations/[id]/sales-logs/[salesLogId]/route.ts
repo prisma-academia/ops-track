@@ -61,14 +61,14 @@ export async function DELETE(
       throw new DomainError(404, "not_found", "Sales log not found.");
     }
 
-    // Guard: never delete finalised reports (TEMPORARILY DISABLED)
-    // if (salesLog.status === "APPROVED" || salesLog.status === "PARTIAL") {
-    //   throw new DomainError(
-    //     400,
-    //     "cannot_delete",
-    //     "Cannot delete an approved or partially approved sales report.",
-    //   );
-    // }
+    // Guard: never delete finalised reports
+    if (salesLog.status === "APPROVED" || salesLog.status === "PARTIAL") {
+      throw new DomainError(
+        400,
+        "cannot_delete",
+        "Cannot delete an approved or partially approved sales report.",
+      );
+    }
 
     // Guard: refuse if any child repayment is APPROVED
     const approvedChildren = salesLog.debtRepayments.filter((r) => r.status === "APPROVED");
@@ -122,12 +122,7 @@ export async function DELETE(
         where: { salesLogId },
       });
 
-      // 5. Delete associated StockMovement
-      await tx.stockMovement.deleteMany({
-        where: { referenceId: salesLogId }
-      });
-
-      // 6. Delete the sales log itself
+      // 5. Delete the sales log itself
       await tx.salesLog.delete({ where: { id: salesLogId } });
     });
 
@@ -152,8 +147,7 @@ export async function DELETE(
     });
 
     return ok({ deleted: true });
-  } catch (e: any) {
-    console.error("DELETE SalesLog Error:", e);
-    return new Response(JSON.stringify({ error: { code: "server_error", message: e.message || "Something went wrong" } }), { status: 500 });
+  } catch (e) {
+    return handleError(e);
   }
 }

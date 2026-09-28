@@ -131,28 +131,146 @@ export function resolvePaymentInputs(body: {
   return paymentsFromLegacy(body);
 }
 
-export async function computeStationOverpayment(stationId: string, tenantId: string) {
+export type StationLedgerVarianceItem = {
+  id: string;
+  productType: string;
+  logDate: string;
+  litersSold: number;
+  expectedRevenue: number;
+  totalReceived: number;
+  variance: number;
+  reason?: string | null;
+  status: string;
+};
+
+export type StationLedgerSummary = {
+  expectedRevenue: number;
+  totalReceived: number;
+  balance: number;
+  overpayment: number;
+  underpayment: number;
+  totalSalesCount: number;
+  varianceItems: StationLedgerVarianceItem[];
+};
+
+export async function computeStationLedger(
+  stationId: string,
+  tenantId: string
+): Promise<StationLedgerSummary> {
   const logs = await prisma.salesLog.findMany({
     where: { stationId, tenantId, status: { not: "REJECTED" } },
     select: {
+      id: true,
+      productType: true,
+      logDate: true,
+      reason: true,
+      status: true,
       litersSold: true,
       pricePerLiter: true,
       amountPos: true,
       amountTransfer: true,
+      appliedCredit: true,
+      isDebtRepayment: true,
+      parentdeliveryId: true,
       payments: { select: { amount: true, status: true } },
     },
+    orderBy: { logDate: "desc" },
   });
 
-  return logs.reduce((acc, log) => {
-    const expected = Number(log.litersSold || 0) * Number(log.pricePerLiter || 0);
-    const received =
-      log.payments.length > 0
-        ? log.payments
-            .filter((p) => p.status !== "REJECTED")
-            .reduce((sum, p) => sum + Number(p.amount), 0)
-        : Number(log.amountPos || 0) + Number(log.amountTransfer || 0);
-    return acc + (received - expected);
-  }, 0);
+  const parents = logs.filter((r) => !r.isDebtRepayment && !r.parentdeliveryId);
+  const children = logs.filter((r) => r.isDebtRepayment && r.parentdeliveryId);
+
+  let expectedRevenue = 0;
+  let totalReceived = 0;
+  let overpayment = 0;
+  let underpayment = 0;
+  const varianceItems: StationLedgerVarianceItem[] = [];
+
+  for (const p of parents) {
+    const pExpected = Number(p.litersSold || 0) * Number(p.pricePerLiter || 0);
+    expectedRevenue += pExpected;
+
+    const pReceived =
+      p.payments.length > 0
+        ? p.payments
+            .filter((pm) => pm.status !== "REJECTED")
+            .reduce((sum, pm) => sum + Number(pm.amount), 0)
+        : Number(p.amountPos || 0) + Number(p.amountTransfer || 0);
+
+    const childRepayments = children.filter((c) => c.parentdeliveryId === p.id);
+    const childTotal = childRepayments.reduce((sum, c) => {
+      const cReceived =
+        c.payments.length > 0
+          ? c.payments
+              .filter((pm) => pm.status !== "REJECTED")
+              .reduce((s, pm) => s + Number(pm.amount), 0)
+          : Number(c.amountPos || 0) + Number(c.amountTransfer || 0);
+      return sum + cReceived;
+    }, 0);
+
+    const appliedCredit = Number(p.appliedCredit || 0);
+    const saleReceived = pReceived + childTotal + appliedCredit;
+    totalReceived += saleReceived;
+
+    const diff = saleReceived - pExpected;
+    if (diff > 0) {
+      overpayment += diff;
+      varianceItems.push({
+        id: p.id,
+        productType: p.productType,
+        logDate: p.logDate instanceof Date ? p.logDate.toISOString() : String(p.logDate),
+        litersSold: Number(p.litersSold || 0),
+        expectedRevenue: pExpected,
+        totalReceived: saleReceived,
+        variance: diff,
+        reason: p.reason ?? null,
+        status: p.status,
+      });
+    } else if (diff < 0) {
+      underpayment += Math.abs(diff);
+      varianceItems.push({
+        id: p.id,
+        productType: p.productType,
+        logDate: p.logDate instanceof Date ? p.logDate.toISOString() : String(p.logDate),
+        litersSold: Number(p.litersSold || 0),
+        expectedRevenue: pExpected,
+        totalReceived: saleReceived,
+        variance: diff,
+        reason: p.reason ?? null,
+        status: p.status,
+      });
+    }
+  }
+
+  // Also include any orphan debt repayments if any exist
+  const orphanChildren = children.filter(
+    (c) => !parents.some((p) => p.id === c.parentdeliveryId)
+  );
+  for (const c of orphanChildren) {
+    const cReceived =
+      c.payments.length > 0
+        ? c.payments
+            .filter((pm) => pm.status !== "REJECTED")
+            .reduce((s, pm) => s + Number(pm.amount), 0)
+        : Number(c.amountPos || 0) + Number(c.amountTransfer || 0);
+    totalReceived += cReceived;
+    overpayment += cReceived;
+  }
+
+  return {
+    expectedRevenue,
+    totalReceived,
+    balance: totalReceived - expectedRevenue,
+    overpayment,
+    underpayment,
+    totalSalesCount: parents.length,
+    varianceItems,
+  };
+}
+
+export async function computeStationOverpayment(stationId: string, tenantId: string) {
+  const ledger = await computeStationLedger(stationId, tenantId);
+  return ledger.balance;
 }
 
 export function receivedFromPayments(

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
 import { reconcileNegativeTanks } from "@/lib/inventory/tank-balance";
+import { computeStationLedger } from "@/lib/sales/payments";
 import { redirect } from "next/navigation";
 import { StationDetailsManager } from "./station-details-manager";
 
@@ -142,6 +143,10 @@ export default async function StationDetailPage({
     orderBy: { email: "asc" },
   });
 
+  const [ledgerSummary] = await Promise.all([
+    computeStationLedger(id, actor.tenantId),
+  ]);
+
   const serializedStation = JSON.parse(JSON.stringify(station));
 
   return (
@@ -149,6 +154,7 @@ export default async function StationDetailPage({
       station={serializedStation}
       users={users}
       canEditTank={canEditTank}
+      initialLedger={ledgerSummary}
     />
   );
 }

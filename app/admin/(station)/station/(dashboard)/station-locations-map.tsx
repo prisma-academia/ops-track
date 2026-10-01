@@ -1,17 +1,22 @@
 "use client"
 
-import { Card, CardAction, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
     Map,
     MapControls,
     MapMarker,
     MarkerContent,
+    MarkerPopup,
     MarkerTooltip,
     type MapRef,
+    type MapViewport,
 } from "@/components/ui/map"
-import { Fuel, Search } from "lucide-react"
-import { useRef, useState } from "react"
+import { Box, Search } from "lucide-react"
+import Image from "next/image"
+import Link from "next/link"
+import { useEffect, useRef, useState } from "react"
 
 export interface StationMapStation {
   id: string
@@ -67,17 +72,29 @@ export default function StationLocationsMap({
   const mapRef = useRef<MapRef>(null)
   const [search, setSearch] = useState("")
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null)
+  const [is3d, setIs3d] = useState(false)
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
+  const [viewport, setViewport] = useState<MapViewport>({
+    center,
+    zoom: locatedStations.length === 1 ? 12 : 5,
+    bearing: 0,
+    pitch: 0,
+  })
 
   function focusStation(station: StationMapStation) {
     setSelectedStationId(station.id)
     if (hasCoordinates(station)) {
-      mapRef.current?.flyTo({
+      setViewport((current) => ({
+        ...current,
         center: [station.longitude, station.latitude],
         zoom: 12,
-        duration: 900,
-      })
+      }))
     }
   }
+
+  useEffect(() => {
+    mapRef.current?.easeTo({ pitch: is3d ? 60 : 0, duration: 600 })
+  }, [is3d])
 
   const normalizedSearch = search.trim().toLocaleLowerCase()
   const filteredStations = stations.filter((station) =>
@@ -87,27 +104,35 @@ export default function StationLocationsMap({
   )
 
   return (
-    <Card className="w-full overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between gap-4">
-        <div className="space-y-1">
-          <CardTitle>Station Locations</CardTitle>
-          <CardDescription>Station sites across your organization</CardDescription>
-        </div>
-        <CardAction className="shrink-0 text-sm text-muted-foreground">
-          {locatedStations.length} of {stations.length} mapped
-        </CardAction>
-      </CardHeader>
+    <Card className="w-full overflow-hidden py-0">
       <div className="grid min-h-[720px] grid-cols-1 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="relative h-[420px] min-w-0 sm:h-[480px] lg:h-[520px]">
           <Map
             ref={mapRef}
-            center={center}
-            zoom={locatedStations.length === 1 ? 12 : 5}
+            viewport={viewport}
+            onViewportChange={setViewport}
             bounds={bounds}
             fitBoundsOptions={{ padding: 48, maxZoom: 12 }}
+            styles={is3d ? {
+              light: "https://tiles.openfreemap.org/styles/liberty",
+              dark: "https://tiles.openfreemap.org/styles/liberty",
+            } : undefined}
             className="h-full w-full"
           >
-            <MapControls position="top-right" showCompass />
+            <MapControls
+              position="top-right"
+              showCompass
+              showLocate
+              showFullscreen
+              onLocate={({ longitude, latitude }) => {
+                setUserLocation([longitude, latitude])
+                setViewport((current) => ({
+                  ...current,
+                  center: [longitude, latitude],
+                  zoom: 14,
+                }))
+              }}
+            />
             {locatedStations.map((station) => (
               <MapMarker
                 key={station.id}
@@ -117,35 +142,92 @@ export default function StationLocationsMap({
                 onClick={() => focusStation(station)}
               >
                 <MarkerContent>
-                  <div className={`grid size-8 place-items-center rounded-full border-2 border-white text-primary-foreground shadow-md ${selectedStationId === station.id ? "bg-emerald-700 ring-4 ring-emerald-500/30" : "bg-primary"}`}>
-                    <Fuel className="size-4" />
+                  <div className={`grid size-10 place-items-center rounded-full border-2 border-white bg-background shadow-md ${selectedStationId === station.id ? "ring-4 ring-emerald-500/30" : ""}`}>
+                    <Image
+                      src="/assets/icons/gps.png"
+                      alt=""
+                      width={500}
+                      height={300}
+                      className="h-8 w-8 object-contain"
+                    />
                   </div>
                 </MarkerContent>
                 <MarkerTooltip
                   offset={20}
-                  className="w-64 rounded-lg border border-border bg-card p-3 text-card-foreground shadow-lg"
+                  className="w-56 rounded-lg border border-border bg-card p-3 text-card-foreground shadow-lg"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-semibold leading-5">{station.name}</p>
-                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      {station.code}
+                  <div className="mb-2 grid h-20 place-items-center rounded-md bg-muted">
+                    <Image
+                      src="/assets/icons/gps.png"
+                      alt="Station location placeholder"
+                      width={500}
+                      height={300}
+                      className="h-16 w-16 object-contain"
+                    />
+                  </div>
+                  <p className="text-sm font-semibold">{station.name}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{station.code}</p>
+                </MarkerTooltip>
+                <MarkerPopup
+                  closeButton
+                  className="w-72 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-xl"
+                >
+                  <div className="flex items-start justify-between gap-3 pr-5">
+                    <div>
+                      <p className="text-base font-semibold leading-5">{station.name}</p>
+                      <p className="mt-1 text-xs font-medium text-muted-foreground">{station.code}</p>
+                    </div>
+                    <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                      Mapped
                     </span>
                   </div>
-                  <p className="mt-2 text-xs leading-4 text-muted-foreground">
+                  <p className="mt-3 text-sm leading-5 text-muted-foreground">
                     {[station.location, station.ward, station.lga, station.state]
                       .filter(Boolean)
                       .join(", ") || "No address recorded"}
                   </p>
-                  <div className="mt-2 flex items-center justify-between gap-3 border-t border-border pt-2 text-xs text-muted-foreground">
-                    <span>
-                      {station.latitude?.toFixed(5)}, {station.longitude?.toFixed(5)}
-                    </span>
-                    <span>{station.tankCount} tanks</span>
+                  <div className="mt-4 grid grid-cols-2 gap-3 border-y border-border py-3">
+                    <div>
+                      <p className="text-[10px] font-medium uppercase text-muted-foreground">Storage</p>
+                      <p className="mt-1 text-sm font-semibold">{station.tankCount} tanks</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium uppercase text-muted-foreground">Coordinates</p>
+                      <p className="mt-1 text-xs font-medium">
+                        {station.latitude.toFixed(5)}, {station.longitude.toFixed(5)}
+                      </p>
+                    </div>
                   </div>
-                </MarkerTooltip>
+                  <Button asChild size="sm" className="mt-3 w-full">
+                    <Link href={`/admin/station/stations/${station.id}`}>Open station record</Link>
+                  </Button>
+                </MarkerPopup>
               </MapMarker>
             ))}
+            {userLocation && (
+              <MapMarker longitude={userLocation[0]} latitude={userLocation[1]} anchor="center">
+                <MarkerContent>
+                  <div className="grid size-5 place-items-center rounded-full border-2 border-white bg-sky-600 shadow-lg ring-4 ring-sky-500/25">
+                    <span className="size-1.5 rounded-full bg-white" />
+                  </div>
+                </MarkerContent>
+                <MarkerTooltip>Your current location</MarkerTooltip>
+              </MapMarker>
+            )}
           </Map>
+          <div className="absolute left-3 top-3 z-10">
+            <Button
+              type="button"
+              size="sm"
+              variant={is3d ? "default" : "outline"}
+              aria-pressed={is3d}
+              onClick={() => setIs3d((enabled) => !enabled)}
+              className="shadow-md"
+            >
+              <Box className="mr-2 size-4" />
+              {is3d ? "3D view" : "2D view"}
+            </Button>
+          </div>
           {locatedStations.length === 0 && (
             <div className="pointer-events-none absolute inset-0 z-[1000] flex items-center justify-center p-4">
               <div className="rounded-lg border border-border bg-card/95 px-5 py-4 text-center shadow-md">

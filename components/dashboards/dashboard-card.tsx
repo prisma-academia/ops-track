@@ -9,10 +9,10 @@ import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardDescription, CardTitle } from "@/components/ui/card"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ArrowDown01Icon, ArrowUp01Icon } from "@hugeicons/core-free-icons"
 import type { IconSvgElement } from "@hugeicons/react"
@@ -129,7 +129,7 @@ export function DashboardOverviewCardV3({
           {/* Top row: Icon box on Left, Trend/Action on Right */}
           <div className="flex items-center justify-between gap-3">
             {icon ? (
-              <div className="size-11 rounded-xl flex items-center justify-center bg-muted/80 text-foreground border border-border/40 shrink-0">
+              <div className="size-11 rounded-xl flex items-center justify-center bg-primary/10 text-primary shrink-0">
                 {Array.isArray(icon) ? (
                   <HugeiconsIcon icon={icon} size={22} strokeWidth={1.8} />
                 ) : (

@@ -4,18 +4,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function FleetOverviewLoading() {
   return (
     <section className="grid gap-3 md:grid-cols-2 space-y-3">
-      {/* 4 Sparkline Summary Cards */}
+      {/* 4 Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:col-span-full md:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <Card key={i} className="shadow-xs border-border/40">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-8 w-8 rounded-full" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-7 w-32 mb-2" />
-              <Skeleton className="h-10 w-full rounded-md" />
-            </CardContent>
+          <Card key={i} className="rounded-2xl border border-border/80 bg-card p-5 sm:p-6 flex flex-col justify-between shadow-2xs">
+            <div className="flex items-center justify-between">
+              <Skeleton className="size-11 rounded-xl" />
+              <Skeleton className="h-4 w-12 rounded-md" />
+            </div>
+            <div className="mt-5 space-y-2">
+              <Skeleton className="h-7 w-28" />
+              <Skeleton className="h-4 w-36" />
+            </div>
+            <div className="mt-5">
+              <Skeleton className="h-5 w-24 rounded-full" />
+            </div>
           </Card>
         ))}
       </div>

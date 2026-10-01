@@ -1,4 +1,5 @@
 import { Suspense } from "react"
+import { format } from "date-fns"
 import { prisma } from "@/lib/db/client"
 import { requireTenantPage } from "@/lib/auth/page-guards"
 import { resolveActiveOrgId } from "@/lib/auth/org-scope"
@@ -278,6 +279,9 @@ async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate
     if (log.productType === "LPG") productVolumeTotals.LPG += liters;
   });
 
+  const isApproxMonth = Math.abs(toDate.getTime() - fromDate.getTime() - 30 * 24 * 60 * 60 * 1000) < 3 * 24 * 60 * 60 * 1000;
+  const periodLabel = isApproxMonth ? "Last 30 days" : `${format(fromDate, "MMM d")} - ${format(toDate, "MMM d, yyyy")}`;
+
   return (
     <>
       {/* Main Interactive Dashboard Charts & Stats */}
@@ -285,6 +289,7 @@ async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate
         topStats={topStats}
         monthlyData={monthlyData}
         productVolumeTotals={productVolumeTotals}
+        period={periodLabel}
       />
 
       {/* Aggregated Tanks Storage */}

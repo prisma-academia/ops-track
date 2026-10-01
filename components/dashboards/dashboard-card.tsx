@@ -7,14 +7,16 @@ import type { ComponentProps, ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
 import { buttonVariants } from "@/components/ui/button"
-import { Card, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardDescription, CardTitle } from "@/components/ui/card"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { PercentageChangeBadge } from "./percentage-change-badge"
+import { ArrowDown01Icon, ArrowUp01Icon } from "@hugeicons/core-free-icons"
+import type { IconSvgElement } from "@hugeicons/react"
+import { HugeiconsIcon } from "@hugeicons/react"
 
 export const cardContentVariants = cva(
   "flex flex-col justify-between gap-y-6",
@@ -76,6 +78,16 @@ export function DashboardCard({
   )
 }
 
+export function formatTrendPercent(value: number): string {
+  const percent = Math.abs(value) * 100
+  const formatted =
+    percent >= 10 || percent === 0 || Number.isInteger(percent)
+      ? percent.toFixed(0)
+      : percent.toFixed(1)
+  const sign = value >= 0 ? "+" : "-"
+  return `${sign}${formatted}%`
+}
+
 interface DashboardOverviewCardV3Props extends ComponentProps<"div"> {
   data: {
     formattedValue: string
@@ -84,6 +96,8 @@ interface DashboardOverviewCardV3Props extends ComponentProps<"div"> {
     subtitleClassName?: string
   }
   title: string
+  icon?: IconSvgElement | React.ComponentType<{ className?: string }>
+  period?: string
   action?: ReactNode
   chart?: ReactNode
   contentClassName?: string
@@ -92,56 +106,107 @@ interface DashboardOverviewCardV3Props extends ComponentProps<"div"> {
 export function DashboardOverviewCardV3({
   data,
   title,
+  icon,
+  period,
   action,
   chart,
   contentClassName,
   className,
   ...props
 }: DashboardOverviewCardV3Props) {
+  const isPositive = (data.percentageChange ?? 0) >= 0
+
   return (
     <Card
       className={cn(
-        "[--card-spacing:0px] flex flex-col justify-between",
+        "[--card-spacing:0px] rounded-2xl bg-card text-card-foreground p-5 sm:p-6 flex flex-col justify-between shadow-2xs hover:border-border transition-colors",
         className
       )}
       {...props}
     >
-      <article className="flex flex-col h-full">
-        <div className="flex justify-between p-6 pb-3">
-          <div>
-            <CardTitle className="text-muted-foreground font-normal text-md">
-              {title}
-            </CardTitle>
-            <div className="inline-flex flex-wrap items-baseline gap-x-1 mt-1">
-              <p className="text-xl font-semibold break-all">
-                {data.formattedValue}
-              </p>
-              {data.percentageChange != null && !data.subtitle && (
-                <PercentageChangeBadge
-                  variant="ghost"
-                  value={data.percentageChange}
-                  className="p-0"
-                />
+      <article className="flex flex-col h-full justify-between">
+        <div>
+          {/* Top row: Icon box on Left, Trend/Action on Right */}
+          <div className="flex items-center justify-between gap-3">
+            {icon ? (
+              <div className="size-11 rounded-xl flex items-center justify-center bg-muted/80 text-foreground border border-border/40 shrink-0">
+                {Array.isArray(icon) ? (
+                  <HugeiconsIcon icon={icon} size={22} strokeWidth={1.8} />
+                ) : (
+                  (() => {
+                    const IconComp = icon as React.ComponentType<{ className?: string }>
+                    return <IconComp className="size-5" />
+                  })()
+                )}
+              </div>
+            ) : (
+              <CardTitle className="text-muted-foreground font-normal text-md">
+                {title}
+              </CardTitle>
+            )}
+
+            <div className="flex items-center gap-2 ms-auto">
+              {data.percentageChange != null && (
+                <div className="inline-flex items-center gap-1 text-xs font-semibold tracking-tight text-foreground/90">
+                  <span>{formatTrendPercent(data.percentageChange)}</span>
+                  <HugeiconsIcon
+                    icon={isPositive ? ArrowUp01Icon : ArrowDown01Icon}
+                    size={14}
+                    strokeWidth={2.5}
+                    className={cn(
+                      "shrink-0",
+                      isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
+                    )}
+                  />
+                </div>
               )}
+              {action}
             </div>
+          </div>
+
+          {/* Metric value & title */}
+          <div className="mt-5 sm:mt-6">
+            <p className="text-xl font-semibold tracking-tight text-foreground break-all">
+              {data.formattedValue}
+            </p>
+            {icon ? (
+              <p className="text-sm font-medium text-muted-foreground mt-1">
+                {title}
+              </p>
+            ) : null}
             {data.subtitle ? (
-              <p className={cn("text-sm font-medium mt-1", data.subtitleClassName)}>
+              <p
+                className={cn(
+                  "text-xs font-normal text-muted-foreground/80 mt-1",
+                  data.subtitleClassName
+                )}
+              >
                 {data.subtitle}
               </p>
             ) : null}
           </div>
-          {action}
         </div>
+
+        {/* Optional chart */}
         {chart && (
           <div
             className={cn(
-              "flex justify-center items-center mt-auto",
+              "flex justify-center items-center mt-4",
               contentClassName
             )}
           >
             {chart}
           </div>
         )}
+
+        {/* Bottom timeframe pill badge */}
+        {period ? (
+          <div className="mt-5 sm:mt-6">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-muted/70 text-muted-foreground border border-border/40">
+              {period}
+            </span>
+          </div>
+        ) : null}
       </article>
     </Card>
   )

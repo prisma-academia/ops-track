@@ -1,9 +1,6 @@
 import type { FleetOverviewData } from "../../types"
-
-import {
-  DashboardOverviewCardV3,
-  DashboardCardActionsDropdown,
-} from "@/components/dashboards/dashboard-card"
+import { DropletIcon } from "@hugeicons/core-free-icons"
+import { DashboardOverviewCardV3 } from "@/components/dashboards/dashboard-card"
 
 export function TotalTransports({ data }: { data: FleetOverviewData }) {
   return (
@@ -13,7 +10,8 @@ export function TotalTransports({ data }: { data: FleetOverviewData }) {
         percentageChange: data.kpi.totalLitresOrdered.percentageChange,
       }}
       title="Total Litres Ordered"
-      action={<DashboardCardActionsDropdown />}
+      icon={DropletIcon}
+      period={data.period || "Last 30 days"}
     />
   )
 }

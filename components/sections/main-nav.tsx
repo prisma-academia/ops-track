@@ -17,101 +17,76 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import {
-  ChevronRight,
-  PieChart,
-  Building2,
-  Building,
-  CircleUserRound,
-  Shield,
-  ClipboardList,
-  Activity,
-  Settings,
-  BookOpen,
-  MapPin,
-  Truck,
-  Coins,
-  Users,
-  TrendingUp,
-  Gauge,
-  AlertCircle,
-  ChartNoAxesCombined,
-  FileText,
-  Scale,
-  FileSpreadsheet,
-  LayoutDashboard,
-  ShoppingCart,
-  Route,
-  BadgeDollarSign,
-  Wallet,
-  CreditCard,
-  Banknote,
-  Landmark,
-  Ticket,
-  Network,
-  Inbox,
-} from "lucide-react";
-import {
-  IconLayoutDashboard,
-  IconBuilding,
-  IconUsers,
-  IconUsersGroup,
-  IconUser,
-  IconShield,
-  IconTruck,
-  IconShoppingCart,
-  IconGasStation,
-  IconMapPin,
-  IconReceiptDollar,
-  IconCreditCard,
-  IconBuildingBank,
-  IconReportAnalytics,
-  IconFileText,
-  IconWallet,
-  IconActivity,
-  IconSettings,
-  IconBuildingStore,
-  IconTicket,
-  IconTable,
-  IconAlertTriangle,
-  IconBell,
-} from "@tabler/icons-react";
-import { HugeiconsIcon } from "@hugeicons/react";
-import type { IconSvgElement } from "@hugeicons/react";
-import {
-  DashboardSquare01Icon,
-  ShoppingCart01Icon,
-  TankerTruckIcon,
-  ReceiptDollarIcon,
-  CreditCardIcon,
+  Activity01Icon,
+  Activity02Icon,
   Analytics01Icon,
   AnalyticsUpIcon,
-  FileTextIcon,
-  FileSpreadsheetIcon,
-  Store01Icon,
-  TruckDeliveryIcon,
-  TruckIcon,
-  Wallet01Icon,
-  Wallet02Icon,
   BankIcon,
   Building01Icon,
   Building02Icon,
+  CreditCardIcon,
+  DashboardSquare01Icon,
+  FileSpreadsheetIcon,
+  FileTextIcon,
   FuelStationIcon,
-  UserGroupIcon,
-  UserGroup02Icon,
-  UserAccountIcon,
-  SteeringIcon,
-  Settings01Icon,
-  Shield01Icon,
-  ShieldCheckIcon,
-  Activity01Icon,
-  Activity02Icon,
-  TableIcon,
-  Notification01Icon,
-  Ticket01Icon,
   Invoice01Icon,
   Invoice02Icon,
   MapPinIcon,
+  Notification01Icon,
+  ReceiptDollarIcon,
+  Settings01Icon,
+  Shield01Icon,
+  ShieldCheckIcon,
+  ShoppingCart01Icon,
+  SteeringIcon,
+  Store01Icon,
+  TableIcon,
+  TankerTruckIcon,
+  Ticket01Icon,
+  TruckDeliveryIcon,
+  TruckIcon,
+  UserAccountIcon,
+  UserGroup02Icon,
+  UserGroupIcon,
+  Wallet01Icon,
+  Wallet02Icon,
 } from "@hugeicons/core-free-icons";
+import type { IconSvgElement } from "@hugeicons/react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  Activity,
+  AlertCircle,
+  BadgeDollarSign,
+  Banknote,
+  BookOpen,
+  Building,
+  Building2,
+  ChartNoAxesCombined,
+  ChevronRight,
+  CircleUserRound,
+  ClipboardList,
+  Coins,
+  CreditCard,
+  FileSpreadsheet,
+  FileText,
+  Gauge,
+  Inbox,
+  Landmark,
+  LayoutDashboard,
+  MapPin,
+  Network,
+  PieChart,
+  Route,
+  Scale,
+  Settings,
+  Shield,
+  ShoppingCart,
+  Ticket,
+  TrendingUp,
+  Truck,
+  Users,
+  Wallet,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import * as React from "react";
@@ -438,7 +413,7 @@ function NavMainItem({
                     setIsOpen(!isOpen);
                   }}
                   className={cn(
-                    "rounded-md text-sm font-medium px-3 py-4 h-10 transition-colors cursor-pointer gap-2.5",
+                    "rounded-full text-sm font-medium px-2 py-4 h-10 transition-colors cursor-pointer gap-2.5",
                     isParentActive ? "bg-primary! text-primary-foreground!" : ""
                   )}
                 >
@@ -490,7 +465,7 @@ function NavMainItem({
                 setActiveChild(null);
               }}
               className={cn(
-                "rounded-md text-sm font-medium px-3 py-4 h-10 transition-colors cursor-pointer",
+                "rounded-full text-sm font-medium px-2 py-4 h-10 transition-colors cursor-pointer",
                 isParentActive ? "bg-primary! text-primary-foreground!" : ""
               )}
             >
@@ -535,7 +510,7 @@ function NavMainSubItem({
           <CollapsibleTrigger asChild>
             <SidebarMenuSubButton
               id={`nav-sub-trigger-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
-              className="rounded-md text-sm font-medium px-3 py-2 h-9 gap-2.5"
+              className="rounded-full text-sm font-medium px-3 py-2 h-9 gap-2.5"
             >
               <NavIconBadge icon={Icon} isActive={false} isSubItem />
               <span>{item.title}</span>
@@ -575,7 +550,7 @@ function NavMainSubItem({
           asChild
           id={`nav-sub-button-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
           className={cn(
-            "w-full rounded-md py-5 h-10 transition-colors",
+            "w-full rounded-full py-5 h-10 transition-colors",
             isSubActive ? "bg-muted! text-foreground!" : ""
           )}
           isActive={isSubActive}

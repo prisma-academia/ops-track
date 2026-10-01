@@ -2,8 +2,14 @@
 
 import {
   DashboardOverviewCardV3,
-  DashboardCardActionsDropdown,
 } from "@/components/dashboards/dashboard-card"
+import {
+  FuelStationIcon,
+  UserGroupIcon,
+  Invoice01Icon,
+  CreditCardPosIcon,
+  DeliveryTruck01Icon,
+} from "@hugeicons/core-free-icons"
 import { SalesOverviewChartCard, type SalesOverviewChartPoint } from "@/components/charts/sales-overview"
 import { SegmentBreakdownChartCard, type SegmentBreakdownPoint } from "@/components/charts/earn-report"
 
@@ -37,6 +43,7 @@ interface DashboardClientProps {
   topStats: TopStats;
   monthlyData: MonthlyData[];
   productVolumeTotals: ProductVolumeTotals;
+  period?: string;
 }
 
 function formatCurrency(value: number) {
@@ -49,13 +56,38 @@ function formatCurrency(value: number) {
   return '₦' + value.toLocaleString();
 }
 
-export function DashboardClient({ topStats, monthlyData, productVolumeTotals }: DashboardClientProps) {
+export function DashboardClient({ topStats, monthlyData, productVolumeTotals, period = "Last 30 days" }: DashboardClientProps) {
   const statsCardsData = [
-    { title: "Total Stations", formattedValue: topStats.totalStations.value.toLocaleString(), percentageChange: topStats.totalStations.percentageChange },
-    { title: "Total Users", formattedValue: topStats.totalUsers.value.toLocaleString(), percentageChange: topStats.totalUsers.percentageChange },
-    { title: "Total Expenses", formattedValue: formatCurrency(topStats.totalExpenses.value), percentageChange: topStats.totalExpenses.percentageChange },
-    { title: "Transactions", formattedValue: formatCurrency(topStats.totalRevenue.value), percentageChange: topStats.totalRevenue.percentageChange },
-    { title: "Active Deliveries", formattedValue: topStats.activeDeliveries.value.toLocaleString(), percentageChange: topStats.activeDeliveries.percentageChange },
+    {
+      title: "Total Stations",
+      icon: FuelStationIcon,
+      formattedValue: topStats.totalStations.value.toLocaleString(),
+      percentageChange: topStats.totalStations.percentageChange,
+    },
+    {
+      title: "Total Users",
+      icon: UserGroupIcon,
+      formattedValue: topStats.totalUsers.value.toLocaleString(),
+      percentageChange: topStats.totalUsers.percentageChange,
+    },
+    {
+      title: "Total Expenses",
+      icon: Invoice01Icon,
+      formattedValue: formatCurrency(topStats.totalExpenses.value),
+      percentageChange: topStats.totalExpenses.percentageChange,
+    },
+    {
+      title: "Transactions",
+      icon: CreditCardPosIcon,
+      formattedValue: formatCurrency(topStats.totalRevenue.value),
+      percentageChange: topStats.totalRevenue.percentageChange,
+    },
+    {
+      title: "Active Deliveries",
+      icon: DeliveryTruck01Icon,
+      formattedValue: topStats.activeDeliveries.value.toLocaleString(),
+      percentageChange: topStats.activeDeliveries.percentageChange,
+    },
   ]
 
   const salesChartData: SalesOverviewChartPoint[] = monthlyData.map((m) => ({
@@ -83,7 +115,8 @@ export function DashboardClient({ topStats, monthlyData, productVolumeTotals }: 
               percentageChange: item.percentageChange,
             }}
             title={item.title}
-            action={<DashboardCardActionsDropdown />}
+            icon={item.icon}
+            period={period}
           />
         ))}
       </div>

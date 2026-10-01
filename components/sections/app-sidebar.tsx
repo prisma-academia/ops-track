@@ -12,8 +12,13 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Badge } from "@/components/ui/badge";
-import { Building2, CheckCircle, ChevronsUpDown, Truck } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  Building01Icon,
+  CheckmarkCircle01Icon,
+  TruckDeliveryIcon,
+  ArrowUpDownIcon,
+} from "@hugeicons/core-free-icons";
 import { NavItem, NavMain } from "./main-nav";
 import Image from 'next/image';
 import Link from 'next/link';
@@ -101,14 +106,14 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                       </div>
                     ) : (
                       <div className="flex aspect-square size-8 items-center justify-center rounded-md border border-border/40 bg-primary/10 text-primary">
-                        <Building2 className="size-4" />
+                        <HugeiconsIcon icon={Building01Icon} size={16} strokeWidth={2} className="size-4" />
                       </div>
                     )}
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-bold">{title}</span>
                       <span className="truncate text-xs text-muted-foreground">{moduleName}</span>
                     </div>
-                    <ChevronsUpDown className="ml-auto size-4" />
+                    <HugeiconsIcon icon={ArrowUpDownIcon} size={16} strokeWidth={2} className="ml-auto size-4" />
                   </SidebarMenuButton>
 
                   <CommandDialog open={openCommand} onOpenChange={setOpenCommand} title="Switch Module" description="Select a module or organization">
@@ -125,7 +130,7 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                               {tenant?.logoUrl ? (
                                 <img src={tenant.logoUrl} alt="" className="h-8 w-8 object-contain" />
                               ) : (
-                                <Truck className="h-4 w-4 text-muted-foreground" />
+                                <HugeiconsIcon icon={TruckDeliveryIcon} size={16} strokeWidth={2} className="h-4 w-4 text-muted-foreground" />
                               )}
                               <div className="flex flex-col flex-1">
                                 <span className="font-extrabold">{tenant?.name ?? "Admin Fleet"}</span>
@@ -133,7 +138,7 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                                   <span className="text-sm text-muted-foreground">{tenant.slug}</span>
                                 )}
                               </div>
-                              {isFleet && <CheckCircle className="ml-auto h-4 w-4 text-primary" />}
+                              {isFleet && <HugeiconsIcon icon={CheckmarkCircle01Icon} size={16} strokeWidth={2} className="ml-auto h-4 w-4 text-primary" />}
                             </CommandItem>
                           </CommandGroup>
                         )}
@@ -156,7 +161,7 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                                   {org.logoUrl ? (
                                     <img src={org.logoUrl} alt="" className="h-8 w-8 object-contain" />
                                   ) : (
-                                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                                    <HugeiconsIcon icon={Building01Icon} size={16} strokeWidth={2} className="h-4 w-4 text-muted-foreground" />
                                   )}
                                   <div className="flex flex-col flex-1">
                                     <span className="font-extrabold">{org.name}</span>
@@ -164,7 +169,7 @@ export function AppSidebar({ items, title, logoUrl, roleLabel, userLabel, contex
                                       <span className="text-sm text-muted-foreground">{org.slug}</span>
                                     )}
                                   </div>
-                                  {isActiveOrg && <CheckCircle className="ml-auto h-4 w-4 text-primary" />}
+                                  {isActiveOrg && <HugeiconsIcon icon={CheckmarkCircle01Icon} size={16} strokeWidth={2} className="ml-auto h-4 w-4 text-primary" />}
                                 </CommandItem>
                               );
                             })}

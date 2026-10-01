@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
-import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Car, Users, Fuel } from "lucide-react";
+import { usePaginatedQuery } from "@/hooks/use-paginated-query";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Building2, Car, Fuel, Users } from "lucide-react";
+import { useEffect } from "react";
 
 export type ClientRow = {
   id: string;
@@ -34,11 +34,16 @@ const columns: ColumnDef<ClientRow>[] = [
       const c = row.original;
       return (
         <div className="flex flex-col">
-          <span className="font-semibold text-foreground flex items-center gap-1.5">
-            <Building2 className="size-3.5 text-primary shrink-0" />
-            {c.companyName || "Unnamed Organization"}
+          <span className="flex items-center gap-1.5 font-semibold text-foreground">
+            <Building2 className="size-3.5 shrink-0 text-primary" />
+            <span className="truncate">{c.companyName || "Unnamed Organization"}</span>
           </span>
-          <span className="text-xs text-muted-foreground">{c.email}</span>
+          <span className="mt-0.5 text-xs text-muted-foreground">{c.email}</span>
+          {(c.contactPerson || c.phone) && (
+            <span className="mt-1 text-xs text-muted-foreground">
+              {[c.contactPerson, c.phone].filter(Boolean).join(" · ")}
+            </span>
+          )}
         </div>
       );
     },
@@ -49,14 +54,7 @@ const columns: ColumnDef<ClientRow>[] = [
     cell: ({ row }) => {
       const model = row.original.billingModel;
       return (
-        <Badge
-          variant={model === "PREPAID" ? "default" : "secondary"}
-          className={
-            model === "PREPAID"
-              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
-              : "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20"
-          }
-        >
+        <Badge variant={model === "PREPAID" ? "default" : "secondary"}>
           {model}
         </Badge>
       );
@@ -70,7 +68,7 @@ const columns: ColumnDef<ClientRow>[] = [
       if (c.billingModel === "PREPAID") {
         return (
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
+            <span className="font-mono text-xs font-semibold text-primary">
               ₦{c.depositBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </span>
             <span className="text-[10px] text-muted-foreground">Prepaid Deposit</span>
@@ -79,7 +77,7 @@ const columns: ColumnDef<ClientRow>[] = [
       }
       return (
         <div className="flex flex-col">
-          <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 font-mono">
+          <span className="font-mono text-xs font-semibold text-destructive">
             Debt: ₦{c.outstandingDebt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </span>
           <span className="text-[10px] text-muted-foreground font-mono">
@@ -97,15 +95,15 @@ const columns: ColumnDef<ClientRow>[] = [
       return (
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1" title="Registered Vehicles">
-            <Car className="size-3 text-primary/70" />
+            <Car className="size-3 text-primary" />
             {c.vehiclesCount}
           </span>
           <span className="flex items-center gap-1" title="Authorized Drivers">
-            <Users className="size-3 text-primary/70" />
+            <Users className="size-3 text-primary" />
             {c.driversCount}
           </span>
           <span className="flex items-center gap-1" title="Fuel Orders">
-            <Fuel className="size-3 text-primary/70" />
+            <Fuel className="size-3 text-primary" />
             {c.ordersCount}
           </span>
         </div>
@@ -130,14 +128,7 @@ const columns: ColumnDef<ClientRow>[] = [
     cell: ({ row }) => {
       const status = row.original.status;
       return (
-        <Badge
-          variant="outline"
-          className={
-            status === "ACTIVE"
-              ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
-              : "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30"
-          }
-        >
+        <Badge variant={status === "ACTIVE" ? "default" : "secondary"}>
           {status}
         </Badge>
       );
@@ -150,7 +141,14 @@ export function ClientsTable({
   initialMeta,
 }: {
   initialData: ClientRow[];
-  initialMeta: any;
+  initialMeta: {
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
 }) {
   const { data, meta, isLoading, setPage, setPageSize, setInitialData } = usePaginatedQuery<ClientRow>({
     baseUrl: "/api/tenant/clients",

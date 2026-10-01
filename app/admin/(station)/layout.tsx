@@ -1,18 +1,18 @@
-import { redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
-import { prisma } from "@/lib/db/client";
-import { requireTenantPage } from "@/lib/auth/page-guards";
-import { parseTenantSettings, type ModuleKey } from "@/lib/tenant/settings";
 import { DashboardLayoutShell } from "@/components/dashboard-layout-shell";
-import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
-import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 import { UnauthorizedToast } from "@/components/unauthorized-toast";
+import { requireTenantPage } from "@/lib/auth/page-guards";
+import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
+import { prisma } from "@/lib/db/client";
 import {
   ORGANIZATION_BRAND_SELECT,
   printCompanyFromOrganization,
   type OrganizationBrand,
 } from "@/lib/print/org-branding";
+import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
+import { parseTenantSettings, type ModuleKey } from "@/lib/tenant/settings";
+import { getTranslations } from "next-intl/server";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 interface NavItemConfig {
   href?: string;
@@ -27,18 +27,18 @@ interface NavItemConfig {
 // `module: null` = always shown (Overview, Settings).
 const NAV: NavItemConfig[] = [
   { href: "/admin/station", key: "overview", title: "Overview", module: null, icon: "DashboardSquare01Icon", permission: null },
-  // {
-  //   key: "analytics",
-  //   title: "Analytics",
-  //   module: null,
-  //   icon: "IconFileText",
-  //   permission: null,
-  //   children: [
-  //     { href: "/admin/station/commercial", key: "commercial", title: "Commercial", module: null, icon: "IconReportAnalytics", permission: null },
-  //     { href: "/admin/station/inventory", key: "inventory", title: "Inventory", module: null, icon: "IconTruck", permission: null },
-  //     { href: "/admin/station/operations", key: "operations", title: "Operations", module: null, icon: "IconTruck", permission: null },
-  //   ],
-  // },
+  {
+    key: "analytics",
+    title: "Analytics",
+    module: null,
+    icon: "IconFileText",
+    permission: null,
+    children: [
+      { href: "/admin/station/commercial", key: "commercial", title: "Commercial", module: null, icon: "IconReportAnalytics", permission: null },
+      { href: "/admin/station/inventory", key: "inventory", title: "Inventory", module: null, icon: "IconTruck", permission: null },
+      { href: "/admin/station/operations", key: "operations", title: "Operations", module: null, icon: "IconTruck", permission: null },
+    ],
+  },
   { href: "/admin/station/stations", key: "stations", title: "Stations", module: "stations" as ModuleKey, icon: "FuelStationIcon", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/station/waybills", key: "waybills", title: "Waybills", module: "operations" as ModuleKey, icon: "TruckDeliveryIcon", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   { href: "/admin/station/expenses", key: "expenses", title: "Expenses", module: "operations" as ModuleKey, icon: "ReceiptDollarIcon", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },

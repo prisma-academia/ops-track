@@ -1,8 +1,10 @@
-import { prisma } from "@/lib/db/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { DataTableToolbar } from "@/components/data-table-toolbar";
-import { Fuel } from "lucide-react";
+import { prisma } from "@/lib/db/client";
+import { Building2, CreditCard, Fuel, Plus, Users } from "lucide-react";
+import Link from "next/link";
 import { ClientsTable, type ClientRow } from "./table";
 
 export default async function ClientsPage() {
@@ -11,8 +13,10 @@ export default async function ClientsPage() {
   const take = 25;
   const skip = 0;
 
-  const [totalCount, clients] = await Promise.all([
+  const [totalCount, activeCount, prepaidCount, clients] = await Promise.all([
     prisma.client.count({ where: { tenantId: actor.tenantId } }),
+    prisma.client.count({ where: { tenantId: actor.tenantId, status: "ACTIVE" } }),
+    prisma.client.count({ where: { tenantId: actor.tenantId, billingModel: "PREPAID" } }),
     prisma.client.findMany({
       where: { tenantId: actor.tenantId },
       orderBy: { createdAt: "desc" },
@@ -71,23 +75,52 @@ export default async function ClientsPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <DataTableToolbar
-          title="Corporate Clients"
-          createHref="/admin/station/clients/new"
-          createLabel="Register Client"
-        />
-        <div className="flex items-center gap-2">
-          <a
-            href="/admin/station/clients/dispense"
-            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-xs font-semibold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3 py-2 text-foreground"
-          >
-            <Fuel className="size-4 text-primary" />
-            Manager Dispense Terminal
-          </a>
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Corporate Clients</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage client accounts, billing, fleet access, and fuel orders.
+          </p>
         </div>
-      </div>
+        <div className="flex flex-col gap-2 min-[420px]:flex-row">
+          <Button variant="outline" asChild>
+            <Link href="/admin/station/clients/dispense">
+              <Fuel className="size-4" />
+              Dispense terminal
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/station/clients/new">
+              <Plus className="size-4" />
+              Register client
+            </Link>
+          </Button>
+        </div>
+      </header>
+
+      <section aria-label="Client overview" className="grid gap-3 sm:grid-cols-3">
+        {[
+          { label: "Total clients", value: totalCount, icon: Building2 },
+          { label: "Active clients", value: activeCount, icon: Users },
+          { label: "Prepaid accounts", value: prepaidCount, icon: CreditCard },
+        ].map(({ label, value, icon: Icon }) => (
+          <Card key={label}>
+            <CardContent className="flex items-center gap-3 p-4">
+              <span className="grid size-10 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+                <Icon className="size-5" />
+              </span>
+              <span>
+                <span className="block text-xs text-muted-foreground">{label}</span>
+                <span className="block text-lg font-semibold tabular-nums text-foreground">
+                  {value.toLocaleString()}
+                </span>
+              </span>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+
       <ClientsTable initialData={rows} initialMeta={initialMeta} />
     </div>
   );

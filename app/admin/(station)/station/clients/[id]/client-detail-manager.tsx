@@ -1,37 +1,69 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { apiPost, apiPatch, apiDelete, apiPut } from "@/lib/client/api";
+import { FormField, TextInput } from "@/components/form-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/shell";
-import { FormField, TextInput } from "@/components/form-field";
+import { Card } from "@/components/ui/card";
+import { apiDelete, apiPost, apiPut } from "@/lib/client/api";
 import {
-  Building2,
-  Car,
-  Users,
-  Fuel,
-  CreditCard,
-  MapPin,
-  Plus,
-  Trash2,
-  Check,
-  AlertCircle,
-  FileText,
-  Clock,
-  ShieldAlert,
+    Activity,
+    Building2,
+    Car,
+    Check,
+    CreditCard,
+    Fuel,
+    MapPin,
+    Plus,
+    Trash2,
+    Users
 } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface ClientDetailProps {
   client: any;
   allStations: Array<{ id: string; name: string; code: string; location: string | null; state: string | null }>;
 }
 
+type ClientDashboardOrder = {
+  id: string;
+  productType: string;
+  liters: number;
+  totalAmount: number;
+  createdAt: string;
+  status: string;
+  station?: { name: string } | null;
+};
+
+type ClientDashboardLedgerEntry = {
+  id: string;
+  description: string | null;
+  reference: string | null;
+  type: string;
+  amount: number;
+  createdAt: string;
+};
+
 export function ClientDetailManager({ client: initialClient, allStations }: ClientDetailProps) {
   const router = useRouter();
   const [client, setClient] = useState(initialClient);
   const [activeTab, setActiveTab] = useState<"overview" | "stations" | "vehicles" | "drivers" | "orders" | "ledger">("overview");
+  const balanceValue = client.billingModel === "PREPAID"
+    ? Number(client.depositBalance)
+    : Number(client.outstandingDebt);
+  const creditHeadroom = Math.max(0, Number(client.creditLimit) - Number(client.outstandingDebt));
+  const dashboardOrders = (client.fuelOrders || []) as ClientDashboardOrder[];
+  const recentOrders = dashboardOrders.slice(0, 5);
+  const recentLedgerEntries = (client.walletLedgers || []) as ClientDashboardLedgerEntry[];
+  const productVolumes = dashboardOrders.reduce((totals: Record<string, number>, order) => {
+    totals[order.productType] = (totals[order.productType] || 0) + Number(order.liters);
+    return totals;
+  }, {} as Record<string, number>);
+  const maxProductVolume = (Object.values(productVolumes) as number[]).reduce(
+    (max: number, volume) => Math.max(max, volume),
+    1
+  );
 
   // Vehicle Modal State
   const [showVehicleModal, setShowVehicleModal] = useState(false);
@@ -185,104 +217,188 @@ export function ClientDetailManager({ client: initialClient, allStations }: Clie
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & Financial Metrics Card */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Organization Info */}
-        <div className="md:col-span-2 p-5 rounded-xl border border-border bg-card shadow-sm space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Building2 className="size-5 text-primary" />
-              <h2 className="text-xl font-bold text-foreground">
-                {client.companyName || "Corporate Client"}
-              </h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge
-                variant={client.billingModel === "PREPAID" ? "default" : "secondary"}
-                className={
-                  client.billingModel === "PREPAID"
-                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
-                    : "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20"
-                }
-              >
-                {client.billingModel}
-              </Badge>
-              <Badge
-                variant="outline"
-                className={
-                  client.status === "ACTIVE"
-                    ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
-                    : "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30"
-                }
-              >
-                {client.status}
-              </Badge>
-            </div>
+      <section className="grid gap-3 xl:grid-cols-[1.1fr_1.2fr_1fr]">
+        <Card className="flex min-h-40 flex-col justify-between p-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground">
+              {client.billingModel === "PREPAID" ? "Available balance" : "Outstanding balance"}
+            </p>
+            <Badge variant={client.billingModel === "PREPAID" ? "default" : "secondary"}>
+              {client.billingModel}
+            </Badge>
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs pt-1">
-            <div>
-              <span className="text-muted-foreground block">Email</span>
-              <span className="font-medium text-foreground">{client.email}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground block">Contact Person</span>
-              <span className="font-medium text-foreground">{client.contactPerson || "—"}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground block">Phone</span>
-              <span className="font-medium text-foreground">{client.phone || "—"}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground block">RC Number</span>
-              <span className="font-medium text-foreground font-mono">{client.rcNumber || "—"}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground block">Approval Policy</span>
-              <span className="font-medium text-foreground">
-                {client.approvalRequirement === "MANAGER_ONLY"
-                  ? "Manager Verification"
-                  : "Client Admin Required"}
-              </span>
-            </div>
-            <div>
-              <span className="text-muted-foreground block">Permitted Branches</span>
-              <span className="font-medium text-foreground">
-                {client.allowedStations?.length || 0} Stations
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Financial Balance Card */}
-        <div className="p-5 rounded-xl border border-border bg-gradient-to-br from-card to-muted/20 shadow-sm flex flex-col justify-between">
           <div>
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {client.billingModel === "PREPAID" ? "Prepaid Deposit Balance" : "Outstanding Credit Debt"}
-            </span>
-            <div className="text-2xl font-bold font-mono text-foreground mt-1">
-              ₦
+            <p className="mt-3 text-2xl font-semibold tabular-nums text-foreground">
+              ₦{balanceValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
               {client.billingModel === "PREPAID"
-                ? Number(client.depositBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })
-                : Number(client.outstandingDebt).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                ? "Client wallet deposit"
+                : `Credit limit ₦${Number(client.creditLimit).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            </p>
+          </div>
+          {client.billingModel === "POSTPAID" && (
+            <div className="mt-3 border-t border-border pt-2 text-xs text-muted-foreground">
+              Available headroom <span className="font-semibold text-foreground">₦{creditHeadroom.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
-            {client.billingModel === "POSTPAID" && (
-              <div className="text-xs text-muted-foreground mt-1">
-                Credit Limit: ₦{Number(client.creditLimit).toLocaleString()}
-                <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
-                  Available Headroom: ₦
-                  {Math.max(0, Number(client.creditLimit) - Number(client.outstandingDebt)).toLocaleString()}
-                </div>
-              </div>
-            )}
-          </div>
+          )}
+        </Card>
 
-          <div className="text-xs text-muted-foreground pt-3 border-t border-border/50 flex items-center justify-between">
-            <span>Settlement: Paystack</span>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">No penalties / 0% interest</span>
+        <Card className="flex min-h-40 flex-col justify-between p-4">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <Building2 className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="truncate text-base font-semibold text-foreground">
+                  {client.companyName || "Corporate Client"}
+                </h2>
+                <Badge variant={client.status === "ACTIVE" ? "outline" : "destructive"}>
+                  {client.status}
+                </Badge>
+              </div>
+              <p className="mt-1 truncate text-xs text-muted-foreground">{client.email}</p>
+              <p className="mt-1 truncate text-xs text-muted-foreground">
+                {[client.contactPerson, client.phone].filter(Boolean).join(" · ") || "No contact person recorded"}
+              </p>
+            </div>
           </div>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
+            <span>Billing every {client.billingCycleDays || 30} days</span>
+            <span>{client.allowedStations?.length || 0} permitted stations</span>
+          </div>
+        </Card>
+
+        <Card className="flex min-h-40 flex-col justify-between p-4">
+          <p className="text-xs font-medium text-muted-foreground">Client footprint</p>
+          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
+            {[
+              { label: "Vehicles", value: client.vehicles?.length || 0, icon: Car },
+              { label: "Drivers", value: client.drivers?.length || 0, icon: Users },
+              { label: "Stations", value: client.allowedStations?.length || 0, icon: MapPin },
+              { label: "Recent orders", value: client.fuelOrders?.length || 0, icon: Fuel },
+            ].map(({ label, value, icon: Icon }) => (
+              <div key={label} className="flex items-center gap-2">
+                <Icon className="size-4 shrink-0 text-primary" />
+                <span className="text-xs text-muted-foreground">{label}</span>
+                <span className="ml-auto text-sm font-semibold tabular-nums text-foreground">{value}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="p-4">
+          <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Recent fuel orders</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">Latest client dispensing activity</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setActiveTab("orders")}>
+              View all
+            </Button>
+          </div>
+          {recentOrders.length > 0 ? (
+            <ul className="divide-y divide-border">
+              {recentOrders.map((order) => (
+                <li key={order.id} className="flex items-center gap-3 py-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-md bg-muted">
+                    <Image
+                      src="/assets/icons/fuel-station.png"
+                      alt=""
+                      width={32}
+                      height={32}
+                      className="size-6 object-contain"
+                    />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {order.station?.name || "Station dispense"}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {order.productType} · {Number(order.liters).toLocaleString()} L · {new Date(order.createdAt).toLocaleDateString()}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-sm font-semibold tabular-nums text-foreground">
+                      ₦{Number(order.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">{order.status}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-10 text-center text-sm text-muted-foreground">No fuel orders recorded yet.</p>
+          )}
+        </Card>
+
+        <div className="grid gap-4">
+          <Card className="p-4">
+            <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Product mix</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">Liters across the latest {client.fuelOrders?.length || 0} orders</p>
+              </div>
+              <Activity className="size-4 text-primary" />
+            </div>
+            <div className="mt-3 space-y-3">
+              {(["PMS", "AGO", "DPK", "LPG"] as const).map((product) => {
+                const volume = productVolumes[product] || 0
+                return (
+                  <div key={product} className="grid grid-cols-[2rem_1fr_auto] items-center gap-3">
+                    <span className="text-xs font-medium text-muted-foreground">{product}</span>
+                    <span className="h-2 overflow-hidden rounded-full bg-muted">
+                      <span
+                        className="block h-full rounded-full bg-primary"
+                        style={{ width: `${Math.max(volume > 0 ? 3 : 0, (volume / maxProductVolume) * 100)}%` }}
+                      />
+                    </span>
+                    <span className="min-w-16 text-right text-xs font-medium tabular-nums text-foreground">
+                      {volume.toLocaleString()} L
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Wallet activity</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">Latest account transactions</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setActiveTab("ledger")}>
+                View ledger
+              </Button>
+            </div>
+            {recentLedgerEntries.length > 0 ? (
+              <ul className="divide-y divide-border">
+                {recentLedgerEntries.slice(0, 3).map((entry) => (
+                  <li key={entry.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-medium text-foreground">
+                        {entry.description || entry.reference || entry.type}
+                      </span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        {new Date(entry.createdAt).toLocaleDateString()}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold tabular-nums text-foreground">
+                      ₦{Number(entry.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="py-5 text-center text-xs text-muted-foreground">No wallet activity recorded.</p>
+            )}
+          </Card>
         </div>
-      </div>
+      </section>
 
       {/* Navigation Tabs */}
       <div className="flex items-center gap-1 border-b border-border pb-1 overflow-x-auto text-sm">

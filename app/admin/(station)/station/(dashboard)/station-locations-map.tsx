@@ -2,7 +2,14 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import {
+    Combobox,
+    ComboboxContent,
+    ComboboxEmpty,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxList,
+} from "@/components/ui/combobox"
 import {
     Map,
     MapControls,
@@ -13,7 +20,7 @@ import {
     type MapRef,
     type MapViewport,
 } from "@/components/ui/map"
-import { Box, Search } from "lucide-react"
+import { Box } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
@@ -28,7 +35,14 @@ export interface StationMapStation {
   state: string | null
   latitude: number | null
   longitude: number | null
-  tankCount: number
+  tanks: { productType: string; currentLiters: number; capacity: number }[]
+  lastWaybill: {
+    number: string
+    productType: string
+    liters: number
+    dispatchedAt: string
+  } | null
+  ledgerBalance: number
 }
 
 function hasCoordinates(
@@ -70,8 +84,8 @@ export default function StationLocationsMap({
     : undefined
 
   const mapRef = useRef<MapRef>(null)
-  const [search, setSearch] = useState("")
-  const [selectedStationId, setSelectedStationId] = useState<string | null>(null)
+  const [selectedStation, setSelectedStation] = useState<StationMapStation | null>(stations[0] ?? null)
+  const selectedStationId = selectedStation?.id ?? null
   const [is3d, setIs3d] = useState(false)
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
   const [viewport, setViewport] = useState<MapViewport>({
@@ -82,7 +96,7 @@ export default function StationLocationsMap({
   })
 
   function focusStation(station: StationMapStation) {
-    setSelectedStationId(station.id)
+    setSelectedStation(station)
     if (hasCoordinates(station)) {
       setViewport((current) => ({
         ...current,
@@ -96,12 +110,15 @@ export default function StationLocationsMap({
     mapRef.current?.easeTo({ pitch: is3d ? 60 : 0, duration: 600 })
   }, [is3d])
 
-  const normalizedSearch = search.trim().toLocaleLowerCase()
-  const filteredStations = stations.filter((station) =>
-    [station.name, station.code, station.location, station.ward, station.lga, station.state]
-      .filter(Boolean)
-      .some((value) => value!.toLocaleLowerCase().includes(normalizedSearch))
-  )
+  const productStorage = selectedStation?.tanks.reduce<Record<string, { liters: number; capacity: number }>>(
+    (totals, tank) => {
+      totals[tank.productType] ??= { liters: 0, capacity: 0 }
+      totals[tank.productType].liters += tank.currentLiters
+      totals[tank.productType].capacity += tank.capacity
+      return totals
+    },
+    {}
+  ) ?? {}
 
   return (
     <Card className="w-full overflow-hidden py-0">
@@ -189,7 +206,7 @@ export default function StationLocationsMap({
                   <div className="mt-4 grid grid-cols-2 gap-3 border-y border-border py-3">
                     <div>
                       <p className="text-[10px] font-medium uppercase text-muted-foreground">Storage</p>
-                      <p className="mt-1 text-sm font-semibold">{station.tankCount} tanks</p>
+                      <p className="mt-1 text-sm font-semibold">{station.tanks.length} tanks</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-medium uppercase text-muted-foreground">Coordinates</p>
@@ -215,6 +232,38 @@ export default function StationLocationsMap({
               </MapMarker>
             )}
           </Map>
+          <div className="absolute left-1/2 top-3 z-10 w-[min(24rem,calc(100%-6rem))] -translate-x-1/2">
+            <Combobox
+              items={stations}
+              value={selectedStation}
+              onValueChange={(station) => {
+                if (station) focusStation(station)
+              }}
+              itemToStringValue={(station: StationMapStation) => station.name}
+            >
+              <ComboboxInput
+                placeholder="Search stations..."
+                aria-label="Search stations"
+                showTrigger={false}
+                className="h-11 border-border bg-background/95 shadow-lg backdrop-blur"
+              />
+              <ComboboxContent className="w-full">
+                <ComboboxEmpty>No stations found.</ComboboxEmpty>
+                <ComboboxList>
+                  {(station: StationMapStation) => (
+                    <ComboboxItem key={station.id} value={station}>
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{station.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {[station.code, station.lga, station.state].filter(Boolean).join(" · ")}
+                        </span>
+                      </span>
+                    </ComboboxItem>
+                  )}
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
+          </div>
           <div className="absolute left-3 top-3 z-10">
             <Button
               type="button"
@@ -240,58 +289,77 @@ export default function StationLocationsMap({
           )}
         </div>
         <aside className="flex min-h-[300px] flex-col border-t border-border lg:min-h-0 lg:border-l lg:border-t-0">
-          <div className="space-y-3 border-b border-border p-4">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search stations"
-                aria-label="Search stations"
-                className="pl-9"
-              />
+          {selectedStation ? (
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="flex items-center gap-3">
+                <div className="grid size-16 shrink-0 place-items-center rounded-lg bg-muted">
+                  <Image
+                    src="/assets/icons/gps.png"
+                    alt="Station placeholder"
+                    width={500}
+                    height={300}
+                    className="size-12 object-contain"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold">{selectedStation.name}</p>
+                  <p className="text-xs text-muted-foreground">{selectedStation.code}</p>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">
+                    {[selectedStation.location, selectedStation.ward, selectedStation.lga, selectedStation.state]
+                      .filter(Boolean)
+                      .join(", ") || "No address recorded"}
+                  </p>
+                </div>
+              </div>
+
+              <section className="mt-6">
+                <h3 className="text-xs font-semibold uppercase text-muted-foreground">Product volumes / storage</h3>
+                <div className="mt-2 divide-y divide-border rounded-md border border-border">
+                  {(["PMS", "AGO", "DPK", "LPG"] as const).map((product) => {
+                    const stock = productStorage[product] ?? { liters: 0, capacity: 0 }
+                    return (
+                      <div key={product} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                        <span className="text-sm font-medium">{product}</span>
+                        <span className="text-right text-xs text-muted-foreground">
+                          {stock.liters.toLocaleString()} / {stock.capacity.toLocaleString()} L
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+
+              <section className="mt-5">
+                <h3 className="text-xs font-semibold uppercase text-muted-foreground">Last waybill</h3>
+                {selectedStation.lastWaybill ? (
+                  <div className="mt-2 rounded-md border border-border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium">{selectedStation.lastWaybill.number}</span>
+                      <span className="text-xs text-muted-foreground">{selectedStation.lastWaybill.productType}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {selectedStation.lastWaybill.liters.toLocaleString()} L · {new Date(selectedStation.lastWaybill.dispatchedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-muted-foreground">No waybills recorded.</p>
+                )}
+              </section>
+
+              <section className="mt-5 rounded-md bg-muted/60 p-3">
+                <h3 className="text-xs font-semibold uppercase text-muted-foreground">Station ledger balance</h3>
+                <p className={`mt-1 text-lg font-semibold ${selectedStation.ledgerBalance < 0 ? "text-destructive" : "text-foreground"}`}>
+                  ₦{selectedStation.ledgerBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </section>
+
+              <Button asChild size="sm" className="mt-5 w-full">
+                <Link href={`/admin/station/stations/${selectedStation.id}`}>Open station record</Link>
+              </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {filteredStations.length} {filteredStations.length === 1 ? "station" : "stations"}
-            </p>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {filteredStations.length > 0 ? (
-              <ul className="divide-y divide-border">
-                {filteredStations.map((station) => {
-                  const isLocated = hasCoordinates(station)
-                  const isSelected = station.id === selectedStationId
-                  return (
-                    <li key={station.id}>
-                      <button
-                        type="button"
-                        onClick={() => focusStation(station)}
-                        aria-current={isSelected ? "true" : undefined}
-                        className={`w-full px-4 py-3 text-left transition-colors hover:bg-muted/60 ${isSelected ? "bg-muted" : ""}`}
-                      >
-                        <span className="flex items-start justify-between gap-3">
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-medium">{station.name}</span>
-                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                              {[station.code, station.lga, station.state].filter(Boolean).join(" · ")}
-                            </span>
-                          </span>
-                          <span className={`mt-1 size-2 shrink-0 rounded-full ${isLocated ? "bg-emerald-500" : "bg-muted-foreground/40"}`} />
-                        </span>
-                        <span className="mt-2 block truncate text-xs text-muted-foreground">
-                          {station.location || station.ward || (isLocated ? "Coordinates available" : "No location recorded")}
-                        </span>
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            ) : (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                No stations match “{search}”.
-              </p>
-            )}
-          </div>
+          ) : (
+            <p className="p-6 text-center text-sm text-muted-foreground">No stations available.</p>
+          )}
         </aside>
       </div>
     </Card>

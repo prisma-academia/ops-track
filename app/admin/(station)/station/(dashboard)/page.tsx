@@ -201,10 +201,53 @@ async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate
       state: true,
       latitude: true,
       longitude: true,
-      _count: { select: { tanks: true } },
+      tanks: {
+        select: { productType: true, currentLiters: true, capacity: true },
+      },
+      waybillAllocations: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          litersToDispense: true,
+          waybill: {
+            select: { number: true, productType: true, dispatchedAt: true },
+          },
+        },
+      },
     },
     orderBy: { name: "asc" },
   });
+
+  const stationLedgerLogs = stationLocations.length > 0
+    ? await prisma.salesLog.findMany({
+        where: {
+          stationId: { in: stationLocations.map((station) => station.id) },
+          status: { not: "REJECTED" },
+        },
+        select: {
+          stationId: true,
+          litersSold: true,
+          pricePerLiter: true,
+          amountPos: true,
+          amountTransfer: true,
+          payments: { select: { amount: true, status: true } },
+        },
+      })
+    : [];
+  const stationBalances = new Map<string, number>();
+  stationLedgerLogs.forEach((log) => {
+    const expected = Number(log.litersSold) * Number(log.pricePerLiter);
+    const collected = log.payments.length > 0
+      ? log.payments
+          .filter((payment) => payment.status !== "REJECTED")
+          .reduce((sum, payment) => sum + Number(payment.amount), 0)
+      : Number(log.amountPos) + Number(log.amountTransfer);
+    stationBalances.set(
+      log.stationId,
+      (stationBalances.get(log.stationId) ?? 0) + collected - expected
+    );
+  });
+
   const mapStations = stationLocations.map((station) => ({
     id: station.id,
     name: station.name,
@@ -215,7 +258,20 @@ async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate
     state: station.state,
     latitude: station.latitude === null ? null : Number(station.latitude),
     longitude: station.longitude === null ? null : Number(station.longitude),
-    tankCount: station._count.tanks,
+    tanks: station.tanks.map((tank) => ({
+      productType: tank.productType,
+      currentLiters: Number(tank.currentLiters),
+      capacity: Number(tank.capacity),
+    })),
+    lastWaybill: station.waybillAllocations[0]
+      ? {
+          number: station.waybillAllocations[0].waybill.number,
+          productType: station.waybillAllocations[0].waybill.productType,
+          liters: Number(station.waybillAllocations[0].litersToDispense),
+          dispatchedAt: station.waybillAllocations[0].waybill.dispatchedAt.toISOString(),
+        }
+      : null,
+    ledgerBalance: stationBalances.get(station.id) ?? 0,
   }));
 
   // 3. Fetch Monthly Data (Based on Date Picker Range)

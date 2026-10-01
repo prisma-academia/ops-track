@@ -1,8 +1,8 @@
-import { Suspense } from "react"
-import { format } from "date-fns"
-import { prisma } from "@/lib/db/client"
-import { requireTenantPage } from "@/lib/auth/page-guards"
 import { resolveActiveOrgId } from "@/lib/auth/org-scope"
+import { requireTenantPage } from "@/lib/auth/page-guards"
+import { prisma } from "@/lib/db/client"
+import { format } from "date-fns"
+import { Suspense } from "react"
 // import { PERMISSIONS } from "@/lib/auth/permissions"
 
 import {
@@ -11,12 +11,11 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card"
-import { DatePickerWithRange } from "@/components/date-range-picker"
-import { AssetTank } from "@/components/asset-tank"
 import { reconcileNegativeTanks } from "@/lib/inventory/tank-balance"
-import { DashboardClient, TopStats, MonthlyData, ProductVolumeTotals } from "../dashboard-client"
+import { DashboardClient, MonthlyData, ProductVolumeTotals, TopStats } from "../dashboard-client"
 import { DashboardContentSkeleton } from "../dashboard-content-skeleton"
 import { DashboardDatePicker } from "../dashboard-date-picker"
+import StationLocationsMap from "./station-locations-map-loader"
 
 function calcChange(curr: number, prev: number): number {
   if (prev === 0) return curr > 0 ? 1 : 0
@@ -190,27 +189,34 @@ async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate
     );
   }
 
-  const tanksData = await prisma.tank.groupBy({
-    by: ['productType'],
-    where: tankWhere,
-    _sum: { currentLiters: true, capacity: true }
+  const stationLocations = await prisma.station.findMany({
+    where: stationWhere,
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      location: true,
+      ward: true,
+      lga: true,
+      state: true,
+      latitude: true,
+      longitude: true,
+      _count: { select: { tanks: true } },
+    },
+    orderBy: { name: "asc" },
   });
-
-  const tanksByProduct = new Map(tanksData.map((tank) => [tank.productType, tank]));
-
-  // Always show a fixed set of 3 product cards (PMS, AGO, LPG) with total
-  // stock summed across all stations, regardless of which tanks exist.
-  const aggregatedTanks = (["PMS", "AGO", "LPG"] as const).map((productType) => {
-    const tank = tanksByProduct.get(productType);
-    return {
-      id: `tank-${productType}`,
-      label: `${productType} - Total Storage`,
-      currentLitres: Number(tank?._sum.currentLiters || 0),
-      maxCapacity: Number(tank?._sum.capacity || 0),
-      type: productType === "LPG" ? ("gas" as const) : ("fuel" as const),
-      productLabel: productType,
-    };
-  });
+  const mapStations = stationLocations.map((station) => ({
+    id: station.id,
+    name: station.name,
+    code: station.code,
+    location: station.location,
+    ward: station.ward,
+    lga: station.lga,
+    state: station.state,
+    latitude: station.latitude === null ? null : Number(station.latitude),
+    longitude: station.longitude === null ? null : Number(station.longitude),
+    tankCount: station._count.tanks,
+  }));
 
   // 3. Fetch Monthly Data (Based on Date Picker Range)
   const salesData = await prisma.salesLog.findMany({
@@ -292,21 +298,7 @@ async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate
         period={periodLabel}
       />
 
-      {/* Aggregated Tanks Storage */}
-      {aggregatedTanks.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {aggregatedTanks.map((tank) => (
-            <AssetTank
-              key={tank.id}
-              label={tank.label}
-              currentLitres={tank.currentLitres}
-              maxCapacity={tank.maxCapacity}
-              type={tank.type}
-              productLabel={tank.productLabel}
-            />
-          ))}
-        </div>
-      )}
+      <StationLocationsMap stations={mapStations} />
     </>
   )
 }

@@ -80,6 +80,7 @@ export default async function SalesPage({
         transport: {
           select: {
             id: true,
+            status: true,
             destination: true,
             productType: true,
             truck: { select: { id: true, name: true } }
@@ -108,6 +109,8 @@ export default async function SalesPage({
       transportDetails: delivery.transport ? `${delivery.transport.truck?.name || "Unknown"} to ${delivery.transport.destination}` : "None",
       litersDespatched,
       litersReceived,
+      litersReturned: Number(delivery.litersReturned || 0),
+      shortageDeducted: delivery.shortageDeducted ?? true,
       variance,
       amountPerLiter: Number(delivery.amountPerLiter),
       totalExpectedAmount: Number(delivery.totalExpectedAmount),
@@ -117,6 +120,8 @@ export default async function SalesPage({
       createdAt: delivery.createdAt.toISOString(),
       isExternalClient,
       volumeUnit,
+      transportId: delivery.transportId,
+      transportStatus: delivery.transport ? delivery.transport.status : null,
     };
   });
 

@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Truck, AlertTriangle, CheckCircle, CheckCircle2, Clock, Droplets, FileText, Link2, ChevronsUpDown, Printer, Check } from "lucide-react";
+import { ArrowLeft, Truck, AlertTriangle, CheckCircle, CheckCircle2, Clock, Droplets, FileText, Link2, ChevronsUpDown, Printer, Check, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
@@ -63,6 +63,45 @@ export function TransportDetailsManager({
   const [expensesIncurred, setExpensesIncurred] = useState("");
   const [lossComment, setLossComment] = useState("");
 
+  // Return to Truck state
+  const [returnTargetDelivery, setReturnTargetDelivery] = useState<any | null>(null);
+  const [returnAmount, setReturnAmount] = useState("");
+  const [isReturning, setIsReturning] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
+
+  const handleReturnToTruck = async () => {
+    if (!returnTargetDelivery) return;
+    const qty = Number(returnAmount);
+    if (isNaN(qty) || qty < 0) {
+      setReturnError("Please enter a valid volume (0 or greater).");
+      return;
+    }
+    const dispatched = Number(returnTargetDelivery.litersDespatched || returnTargetDelivery.litersSold || 0);
+    const received = returnTargetDelivery.litersReceived !== null ? Number(returnTargetDelivery.litersReceived) : 0;
+    if (qty + received > dispatched + 0.001) {
+      setReturnError(
+        `Returned volume (${qty.toLocaleString()} L) + received (${received.toLocaleString()} L) cannot exceed dispatched (${dispatched.toLocaleString()} L).`
+      );
+      return;
+    }
+
+    setIsReturning(true);
+    setReturnError(null);
+
+    const res = await apiPatch(`/api/tenant/fleet/deliveries/${returnTargetDelivery.id}`, {
+      litersReturned: qty,
+    });
+
+    setIsReturning(false);
+
+    if (res.error) {
+      setReturnError(res.error.message);
+    } else {
+      setReturnTargetDelivery(null);
+      router.refresh();
+    }
+  };
+
   const handleUpdateStatus = async () => {
     setIsSubmitting(true);
     setError(null);
@@ -100,8 +139,8 @@ export function TransportDetailsManager({
   const lossLogs = transport.lossLogs || [];
   const carriedVolume = Number(transport.litersCarried) || 0;
   const distributedVolume = (transport.deliveries || []).reduce(
-    (acc: number, sale: { litersDespatched?: number | string | null; litersSold?: number | string | null }) =>
-      acc + (Number(sale.litersDespatched || sale.litersSold) || 0),
+    (acc: number, sale: { litersDespatched?: number | string | null; litersSold?: number | string | null; litersReturned?: number | string | null }) =>
+      acc + Math.max(0, (Number(sale.litersDespatched || sale.litersSold) || 0) - (Number(sale.litersReturned) || 0)),
     0
   );
   const loggedLostVolume = lossLogs.reduce(
@@ -163,7 +202,6 @@ export function TransportDetailsManager({
         expensesIncurred: number;
         comment?: string;
       };
-      addLitersLost: number;
       addMaintenanceCost: number;
     } = {
       lossLog: {
@@ -172,7 +210,6 @@ export function TransportDetailsManager({
         expensesIncurred: expenses,
         comment: lossComment.trim() || undefined,
       },
-      addLitersLost: quantity,
       addMaintenanceCost: expenses,
     };
 
@@ -213,9 +250,11 @@ export function TransportDetailsManager({
     0
   );
 
-  // Shortage on individual confirmed drops (station or B2B client drops where received < dispatched)
+  // Shortage on individual confirmed drops (received < dispatched, minus volume returned to truck).
+  // Drops flagged "do not deduct from driver" are excluded from the chargeable shortage.
   const deliveryShortage = (transport.deliveries || []).reduce((sum: number, del: any) => {
-    const dispatched = Number(del.litersDespatched || del.litersSold || 0);
+    if (del.shortageDeducted === false) return sum;
+    const dispatched = Math.max(0, Number(del.litersDespatched || del.litersSold || 0) - Number(del.litersReturned || 0));
     if (del.litersReceived !== null && del.litersReceived !== undefined) {
       const received = Number(del.litersReceived);
       const diff = dispatched - received;
@@ -238,7 +277,8 @@ export function TransportDetailsManager({
 
   // Compute shortage deductions per drop according to that drop's selling price
   const deliveryDeduction = (transport.deliveries || []).reduce((sum: number, del: any) => {
-    const dispatched = Number(del.litersDespatched || del.litersSold || 0);
+    if (del.shortageDeducted === false) return sum;
+    const dispatched = Math.max(0, Number(del.litersDespatched || del.litersSold || 0) - Number(del.litersReturned || 0));
     if (del.litersReceived !== null && del.litersReceived !== undefined) {
       const received = Number(del.litersReceived);
       const diff = dispatched - received;
@@ -284,7 +324,6 @@ export function TransportDetailsManager({
         expensesIncurred: adjustment,
         comment: `Final shortage deduction upon transport completion. ${trueVariance.toLocaleString()} L @ ₦${sellingPrice.toLocaleString()}/L deducted from driver/transporter fees.`,
       };
-      payload.addLitersLost = trueVariance;
       payload.addMaintenanceCost = adjustment;
     }
 
@@ -595,9 +634,16 @@ export function TransportDetailsManager({
                                 <div className="flex flex-col items-end">
                                   <span className="font-medium text-emerald-600 dark:text-emerald-500">{Number(sale.litersReceived).toLocaleString()} L</span>
                                   {Number(sale.litersDespatched || sale.litersSold) !== Number(sale.litersReceived) && (
-                                    <span className="text-[10px] text-destructive font-medium uppercase mt-0.5">
-                                      Diff: {(Number(sale.litersDespatched || sale.litersSold) - Number(sale.litersReceived)).toLocaleString()} L
-                                    </span>
+                                    <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                                      <span className="text-[10px] text-destructive font-medium uppercase">
+                                        Shortfall: {(Number(sale.litersDespatched || sale.litersSold) - Number(sale.litersReceived)).toLocaleString()} L
+                                      </span>
+                                      {Number(sale.litersReturned || 0) > 0 && (
+                                        <span className="text-[10px] text-blue-600 font-medium uppercase">
+                                          ({Number(sale.litersReturned).toLocaleString()} L in Truck)
+                                        </span>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                               ) : (
@@ -611,11 +657,37 @@ export function TransportDetailsManager({
                               </Badge>
                             </td>
                             <td className="text-right py-3 px-4">
-                              <Button variant="outline" size="icon" title="Print Waybill" asChild>
-                                <Link href={`/admin/deliveries/${sale.id}/print?from=transport`} target="_blank">
-                                  <Printer className="w-4 h-4" />
-                                </Link>
-                              </Button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                {sale.litersReceived !== null &&
+                                  Number(sale.litersDespatched || sale.litersSold) > Number(sale.litersReceived) &&
+                                  transport.status !== "COMPLETED" &&
+                                  transport.status !== "CANCELLED" && (
+                                    <Button
+                                      variant={Number(sale.litersReturned || 0) > 0 ? "secondary" : "outline"}
+                                      size="sm"
+                                      className={cn(
+                                        "h-8 text-xs font-medium",
+                                        Number(sale.litersReturned || 0) > 0 && "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
+                                      )}
+                                      onClick={() => {
+                                        setReturnTargetDelivery(sale);
+                                        const unreceived = Math.max(0, Number(sale.litersDespatched || sale.litersSold || 0) - Number(sale.litersReceived || 0));
+                                        const curRet = Number(sale.litersReturned || 0);
+                                        setReturnAmount(curRet > 0 ? curRet.toString() : unreceived.toString());
+                                        setReturnError(null);
+                                      }}
+                                      title="Return unreceived volume to truck"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                                      {Number(sale.litersReturned || 0) > 0 ? `${Number(sale.litersReturned).toLocaleString()} L in Truck` : "Return to Truck"}
+                                    </Button>
+                                  )}
+                                <Button variant="outline" size="icon" title="Print Waybill" asChild>
+                                  <Link href={`/admin/deliveries/${sale.id}/print?from=transport`} target="_blank">
+                                    <Printer className="w-4 h-4" />
+                                  </Link>
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1344,6 +1416,109 @@ export function TransportDetailsManager({
             <Button variant="outline" onClick={() => setOpenLinkOrderDialog(false)}>Cancel</Button>
             <Button onClick={handleLinkOrder} disabled={isSubmitting || !selectedOrderId}>
               {isSubmitting ? <SpinnerEllipsis /> : "Link Order"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Return to Truck Dialog */}
+      <Dialog
+        open={Boolean(returnTargetDelivery)}
+        onOpenChange={(val) => {
+          if (!isReturning && !val) setReturnTargetDelivery(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="w-5 h-5 text-blue-600" />
+              Return Volume to Truck Tank
+            </DialogTitle>
+            <DialogDescription>
+              Assign unreceived volume from delivery to{" "}
+              <strong className="text-foreground">
+                {returnTargetDelivery?.customer?.name || returnTargetDelivery?.station?.name || "Recipient"}
+              </strong>{" "}
+              back into the truck tank.
+            </DialogDescription>
+          </DialogHeader>
+
+          {returnTargetDelivery && (() => {
+            const dispatched = Number(returnTargetDelivery.litersDespatched || returnTargetDelivery.litersSold || 0);
+            const received = returnTargetDelivery.litersReceived !== null ? Number(returnTargetDelivery.litersReceived) : 0;
+            const unreceived = Math.max(0, dispatched - received);
+
+            return (
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-3 gap-2 p-3 rounded-lg border bg-muted/30 text-xs">
+                  <div>
+                    <p className="text-muted-foreground uppercase text-[10px] font-semibold">Dispatched</p>
+                    <p className="text-sm font-semibold text-foreground mt-0.5">{dispatched.toLocaleString()} L</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground uppercase text-[10px] font-semibold">Received</p>
+                    <p className="text-sm font-semibold text-foreground mt-0.5">{received.toLocaleString()} L</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground uppercase text-[10px] font-semibold">Shortfall</p>
+                    <p className="text-sm font-semibold text-rose-600 mt-0.5">{unreceived.toLocaleString()} L</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="transportReturnAmount" className="text-sm font-medium">
+                      Volume to Return to Truck (L)
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[11px] text-primary hover:text-primary hover:bg-primary/10"
+                      onClick={() => {
+                        setReturnAmount(unreceived.toString());
+                        if (returnError) setReturnError(null);
+                      }}
+                    >
+                      Max ({unreceived.toLocaleString()} L)
+                    </Button>
+                  </div>
+
+                  <FormattedNumberInput
+                    id="transportReturnAmount"
+                    min="0"
+                    placeholder={`e.g. ${unreceived}`}
+                    value={returnAmount}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      setReturnAmount(e.target.value);
+                      if (returnError) setReturnError(null);
+                    }}
+                    prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
+                  />
+                  <p className="text-[11px] text-muted-foreground leading-normal">
+                    This volume remains physically on the truck (e.g. station tank was full). It becomes available for reassignment to another station or customer, and will <strong>not</strong> be deducted as a loss from the driver.
+                  </p>
+                </div>
+
+                {returnError && <p className="text-xs font-medium text-destructive">{returnError}</p>}
+              </div>
+            );
+          })()}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setReturnTargetDelivery(null)}
+              disabled={isReturning}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleReturnToTruck}
+              disabled={isReturning || returnAmount.trim() === ""}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isReturning ? <SpinnerEllipsis /> : "Confirm Return to Truck"}
             </Button>
           </DialogFooter>
         </DialogContent>

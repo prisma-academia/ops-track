@@ -1659,6 +1659,11 @@ model Delivery {
   totalExpectedAmount Decimal  @default(0.00) @db.Decimal(12, 2)
   paymentReceived     Decimal  @default(0.00) @db.Decimal(12, 2)
 
+  // Volume sent back to the truck (e.g. station tank full). Frees it for re-dispatch, no driver deduction.
+  litersReturned   Decimal @default(0.00) @db.Decimal(12, 2)
+  // Whether a received-short volume is charged to the driver/transporter.
+  shortageDeducted Boolean @default(true)
+
   transportRate        Decimal? @db.Decimal(10, 2) // ₦/L for sub-destination transport
   transportCost        Decimal  @default(0.00) @db.Decimal(12, 2) // Total transport cost for this allocation
   transportCostBorneBy String   @default("CLIENT") // "CLIENT" | "COMPANY"

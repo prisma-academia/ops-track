@@ -42,7 +42,9 @@ import {
   Lock,
   ChevronsUpDown,
   Check,
+  RotateCcw,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
@@ -98,6 +100,11 @@ export function SalesDetailsManager({
   const [editLitersReceived, setEditLitersReceived] = useState(delivery.litersReceived?.toString() || "");
   const [editAmountPerLiter, setEditAmountPerLiter] = useState(delivery.amountPerLiter?.toString() || "");
 
+  const [openReturnDialog, setOpenReturnDialog] = useState(false);
+  const [returnAmount, setReturnAmount] = useState(delivery.litersReturned ? Number(delivery.litersReturned).toString() : "");
+  const [isReturning, setIsReturning] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
+
   const isReceived = delivery.litersReceived !== null;
   const selectedStation =
     stations.find((s) => s.id === editStationId) ||
@@ -108,21 +115,30 @@ export function SalesDetailsManager({
   const outstanding = Math.max(0, totalExpected - paymentReceived);
 
   const carried = Number(delivery.transport?.litersCarried || 0);
+  const litersReturned = Number(delivery.litersReturned || 0);
+  const shortageDeducted = delivery.shortageDeducted ?? true;
+  const loggedLosses = (delivery.transport?.lossLogs || []).reduce(
+    (sum: number, l: { lostQuantity?: unknown }) => sum + Number(l.lostQuantity || 0),
+    0
+  );
   const otherDeliveries = (delivery.transport?.deliveries || []).filter(
     (d: { id: string; litersDespatched: unknown }) => d.id !== delivery.id
   );
   const otherDistributed = otherDeliveries.reduce(
-    (sum: number, d: { litersDespatched: unknown }) => sum + Number(d.litersDespatched || 0),
+    (sum: number, d: { litersDespatched: unknown; litersReturned?: unknown }) =>
+      sum + Math.max(0, Number(d.litersDespatched || 0) - Number(d.litersReturned || 0)),
     0
   );
-  const maxAvailableVolume = carried > 0 ? Math.max(0, carried - otherDistributed) : null;
+  const maxAvailableVolume = carried > 0 ? Math.max(0, carried - otherDistributed - loggedLosses) : null;
 
   const litersDespatched = Number(delivery.litersDespatched || 0);
   const litersReceived = delivery.litersReceived !== null ? Number(delivery.litersReceived) : null;
-  const variance = litersReceived !== null ? litersDespatched - litersReceived : null;
+  const unreceived = litersReceived !== null ? Math.max(0, litersDespatched - litersReceived) : 0;
+  const effectiveShortage = Math.max(0, unreceived - litersReturned);
   const amountPerLiter = Number(delivery.amountPerLiter || 0);
-  const totalDeductionAmount = variance !== null && variance > 0 ? variance * amountPerLiter : 0;
-  const hasShortage = variance !== null && variance > 0;
+  const totalDeductionAmount = effectiveShortage > 0 ? effectiveShortage * amountPerLiter : 0;
+  const hasShortage = effectiveShortage > 0;
+  const variance = litersReceived !== null ? litersDespatched - litersReceived : null;
 
   const hasDeduction = delivery.transport?.lossLogs?.some((l: { comment?: string | null }) => l.comment?.includes(delivery.id)) || false;
 
@@ -185,6 +201,43 @@ export function SalesDetailsManager({
     }
   };
 
+  const handleReturnToTruck = async () => {
+    const qty = Number(returnAmount);
+    if (isNaN(qty) || qty < 0) {
+      setReturnError("Please enter a valid volume (0 or greater).");
+      return;
+    }
+    const numReceived = litersReceived !== null ? litersReceived : 0;
+    if (qty + numReceived > litersDespatched + 0.001) {
+      setReturnError(
+        `Returned volume (${qty.toLocaleString()} ${volumeUnit}) + received (${numReceived.toLocaleString()} ${volumeUnit}) cannot exceed dispatched (${litersDespatched.toLocaleString()} ${volumeUnit}).`
+      );
+      return;
+    }
+
+    setIsReturning(true);
+    setReturnError(null);
+
+    const res = await apiPatch(`/api/tenant/fleet/deliveries/${delivery.id}`, {
+      litersReturned: qty,
+    });
+
+    setIsReturning(false);
+
+    if (res.error) {
+      setReturnError(res.error.message);
+      toast.error(res.error.message);
+    } else {
+      toast.success(
+        qty > 0
+          ? `${qty.toLocaleString()} ${volumeUnit} returned to truck tank. Available for re-assignment.`
+          : "Returned volume updated."
+      );
+      setOpenReturnDialog(false);
+      router.refresh();
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "CLEARED":
@@ -228,14 +281,22 @@ export function SalesDetailsManager({
     },
     {
       title: hasShortage ? "Shortage" : "Price / Litre",
-      value: hasShortage ? `${fmtQtyLocal(variance)} ${volumeUnit}` : fmtMoneyLocal(amountPerLiter),
+      value: hasShortage ? `${fmtQtyLocal(effectiveShortage)} ${volumeUnit}` : fmtMoneyLocal(amountPerLiter),
       fullValue: hasShortage
-        ? `${fmtQtyLocal(variance)} ${volumeUnit} × ${fmtMoneyLocal(amountPerLiter)}/${volumeUnit} = ${fmtMoneyLocal(totalDeductionAmount)}`
+        ? `${fmtQtyLocal(effectiveShortage)} ${volumeUnit} × ${fmtMoneyLocal(amountPerLiter)}/${volumeUnit} = ${fmtMoneyLocal(totalDeductionAmount)}${!shortageDeducted ? " (Driver deduction waived)" : ""}`
         : `${fmtMoneyLocal(amountPerLiter)} per ${volumeUnit.toLowerCase()}`,
       icon: hasShortage ? TrendingDown : Receipt,
       valueColor: hasShortage ? "text-rose-600" : "text-foreground",
       iconColor: hasShortage ? "text-rose-600" : "text-slate-600",
     },
+    ...(litersReturned > 0 ? [{
+      title: "In Truck Tank",
+      value: `${fmtQtyLocal(litersReturned)} ${volumeUnit}`,
+      fullValue: `${fmtQtyLocal(litersReturned)} ${volumeUnit} returned to truck tank (available for reassignment)`,
+      icon: RotateCcw,
+      valueColor: "text-blue-600",
+      iconColor: "text-blue-600",
+    }] : []),
   ];
 
   const volumeDisplay =
@@ -331,6 +392,24 @@ export function SalesDetailsManager({
                 Full P&amp;L report
                 <ArrowRight className="size-3.5 ml-1.5" />
               </Link>
+            </Button>
+          )}
+          {litersReceived !== null && (unreceived > 0 || litersReturned > 0) && delivery.transport?.status !== "COMPLETED" && delivery.transport?.status !== "CANCELLED" && (
+            <Button
+              variant={litersReturned > 0 ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setReturnAmount(litersReturned > 0 ? litersReturned.toString() : unreceived.toString());
+                setReturnError(null);
+                setOpenReturnDialog(true);
+              }}
+              className={cn(
+                "h-9 text-xs font-medium",
+                litersReturned > 0 && "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
+              )}
+            >
+              <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+              {litersReturned > 0 ? `${litersReturned.toLocaleString()} ${volumeUnit} in Truck` : "Return to Truck"}
             </Button>
           )}
           <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setOpenEditDialog(true)}>
@@ -834,6 +913,84 @@ export function SalesDetailsManager({
             </Button>
             <Button onClick={handleEditSale} disabled={isSubmitting}>
               {isSubmitting ? <SpinnerEllipsis /> : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openReturnDialog} onOpenChange={(val) => { if (!isReturning) setOpenReturnDialog(val); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="w-5 h-5 text-blue-600" />
+              Return Volume to Truck Tank
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-3 gap-2 p-3 rounded-lg border bg-muted/30 text-xs">
+              <div>
+                <p className="text-muted-foreground uppercase text-[10px] font-semibold">Dispatched</p>
+                <p className="text-sm font-semibold text-foreground mt-0.5">{litersDespatched.toLocaleString()} {volumeUnit}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground uppercase text-[10px] font-semibold">Received</p>
+                <p className="text-sm font-semibold text-foreground mt-0.5">{(litersReceived ?? 0).toLocaleString()} {volumeUnit}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground uppercase text-[10px] font-semibold">Shortfall</p>
+                <p className="text-sm font-semibold text-rose-600 mt-0.5">{unreceived.toLocaleString()} {volumeUnit}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="returnAmount" className="text-sm font-medium">
+                  Volume to Return to Truck ({volumeUnit})
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[11px] text-primary hover:text-primary hover:bg-primary/10"
+                  onClick={() => {
+                    setReturnAmount(unreceived.toString());
+                    if (returnError) setReturnError(null);
+                  }}
+                >
+                  Max ({unreceived.toLocaleString()} {volumeUnit})
+                </Button>
+              </div>
+
+              <FormattedNumberInput
+                id="returnAmount"
+                min="0"
+                placeholder={`e.g. ${unreceived}`}
+                value={returnAmount}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setReturnAmount(e.target.value);
+                  if (returnError) setReturnError(null);
+                }}
+                prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
+              />
+              <p className="text-[11px] text-muted-foreground leading-normal">
+                This volume remains physically on the truck (e.g. station tank was full). It becomes available for reassignment to another station or customer, and will <strong>not</strong> be deducted as a loss from the driver.
+              </p>
+            </div>
+
+            {returnError && <p className="text-xs font-medium text-destructive">{returnError}</p>}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setOpenReturnDialog(false)} disabled={isReturning}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleReturnToTruck}
+              disabled={isReturning || returnAmount.trim() === ""}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isReturning ? <SpinnerEllipsis /> : "Confirm Return to Truck"}
             </Button>
           </DialogFooter>
         </DialogContent>

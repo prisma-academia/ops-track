@@ -8,6 +8,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { reconcileTankCurrentLiters } from "@/lib/inventory/tank-balance";
+import { recomputeTransportLoss } from "@/lib/fleet/transport-volume";
 
 const UpdateWaybillDippingSchema = z.object({
   tankId: z.string().min(1).optional(),
@@ -161,27 +162,7 @@ export async function PATCH(
               where: { id: matchingSale.transportId },
             });
             if (transport) {
-              const allSales = await tx.delivery.findMany({
-                where: { transportId: transport.id },
-              });
-              const totalDelivered = allSales.reduce((sum, d) => {
-                if (d.id === matchingSale.id) return sum + totalReceived;
-                return sum + Number(d.litersReceived ?? 0);
-              }, 0);
-
-              const litersLost = Math.max(0, Number(transport.litersCarried) - totalDelivered);
-              const ratePerLiter = Number(transport.ratePerLiter);
-              const cashDeductionForLoss = litersLost * ratePerLiter;
-              const totalDeduction = Number(transport.maintenanceCost) + cashDeductionForLoss;
-              const netTransportFeePaid = Math.max(
-                0,
-                ratePerLiter * Number(transport.litersCarried) - totalDeduction
-              );
-
-              await tx.transport.update({
-                where: { id: transport.id },
-                data: { litersDelivered: totalDelivered, litersLost, totalDeduction, netTransportFeePaid },
-              });
+              await recomputeTransportLoss(tx, transport.id);
             }
           }
         }
@@ -347,27 +328,7 @@ export async function DELETE(
               where: { id: matchingSale.transportId },
             });
             if (transport) {
-              const allSales = await tx.delivery.findMany({
-                where: { transportId: transport.id },
-              });
-              const totalDelivered = allSales.reduce((sum, d) => {
-                if (d.id === matchingSale.id) return sum + totalReceived;
-                return sum + Number(d.litersReceived ?? 0);
-              }, 0);
-
-              const litersLost = Math.max(0, Number(transport.litersCarried) - totalDelivered);
-              const ratePerLiter = Number(transport.ratePerLiter);
-              const cashDeductionForLoss = litersLost * ratePerLiter;
-              const totalDeduction = Number(transport.maintenanceCost) + cashDeductionForLoss;
-              const netTransportFeePaid = Math.max(
-                0,
-                ratePerLiter * Number(transport.litersCarried) - totalDeduction
-              );
-
-              await tx.transport.update({
-                where: { id: transport.id },
-                data: { litersDelivered: totalDelivered, litersLost, totalDeduction, netTransportFeePaid },
-              });
+              await recomputeTransportLoss(tx, transport.id);
             }
           }
         }

@@ -40,6 +40,7 @@ const repaymentSelect = {
   appliedCredit: true,
   status: true,
   logDate: true,
+  createdAt: true,
   posReceiptUrl: true,
   transferReceiptUrl: true,
   recordedBy: userSelect,
@@ -67,6 +68,9 @@ export default async function SalesReportDetailsPage({
       station: {
         select: { id: true, name: true, code: true },
       },
+      dippingClosing: {
+        select: { id: true, recordedAt: true },
+      },
       recordedBy: userSelect,
       approvedBy: userSelect,
       posBankAccount: bankSelect,
@@ -79,6 +83,7 @@ export default async function SalesReportDetailsPage({
         select: {
           id: true,
           logDate: true,
+          createdAt: true,
           productType: true,
           litersSold: true,
           pricePerLiter: true,

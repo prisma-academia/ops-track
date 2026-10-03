@@ -18,7 +18,7 @@ const globalForPrisma = globalThis as unknown as {
   prisma?: ExtendedPrisma;
 };
 
-export const prisma: ExtendedPrisma = globalForPrisma.prisma ?? makeClient();
+export const prisma: ExtendedPrisma = makeClient();
 
 if (env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;

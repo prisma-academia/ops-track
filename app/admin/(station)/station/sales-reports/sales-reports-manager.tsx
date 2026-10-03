@@ -36,7 +36,7 @@ import {
   buildPctStats,
   type DataTableFilterField,
 } from "@/components/tables";
-import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { cn, formatHumanReadableDate, formatHumanReadableDateOnly, formatTimeOnly } from "@/lib/utils";
 
 interface SalesReportRow {
   id: string;
@@ -49,6 +49,7 @@ interface SalesReportRow {
   amountPos: number;
   amountTransfer: number;
   logDate: string | Date;
+  createdAt?: string | Date;
   status: "PENDING" | "APPROVED" | "REJECTED" | "PARTIAL";
   station: { id: string; name: string; code: string };
   stationManagerName?: string;
@@ -286,11 +287,21 @@ export function SalesReportsManager({
         meta: { label: "Date" },
         enableHiding: false,
         footer: () => "Total",
-        cell: ({ row }) => (
-          <span className="text-muted-foreground">
-            {formatHumanReadableDate(row.original.logDate)}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const time = row.original.createdAt ? formatTimeOnly(row.original.createdAt) : null;
+          return (
+            <div className="flex flex-col">
+              <span className="text-foreground">
+                {formatHumanReadableDateOnly(row.original.logDate)}
+              </span>
+              {time && (
+                <span className="text-[11px] text-muted-foreground">
+                  {time}
+                </span>
+              )}
+            </div>
+          );
+        },
       },
       {
         id: "station",

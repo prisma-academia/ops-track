@@ -917,6 +917,8 @@ model SalesLog {
   posReceiptUrl      String?
   transferReceiptUrl String?
   logDate            DateTime       @db.Date
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
   status             SalesLogStatus @default(PENDING)
   reason             String?        @db.Text
   approvedById       String?
@@ -942,6 +944,7 @@ model SalesLog {
   @@index([stationId])
   @@index([recordedById])
   @@index([approvedById])
+  @@index([createdAt])
   @@map("sales_logs")
 }
 

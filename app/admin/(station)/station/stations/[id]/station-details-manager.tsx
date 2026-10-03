@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { cn, formatHumanReadableDate, formatHumanReadableDateOnly } from "@/lib/utils";
 import { z } from "zod";
 import { apiGet, apiPost, apiPatch } from "@/lib/client/api";
 import { Badge } from "@/components/ui/badge";
@@ -705,7 +705,7 @@ export function StationDetailsManager({
                 {varianceList.length > 0 ? (
                   <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                     {varianceList.slice(0, 4).map((item: any) => {
-                      const formattedDate = formatHumanReadableDate(item.logDate).split(" ").slice(0, 3).join(" ");
+                      const formattedDate = formatHumanReadableDateOnly(item.logDate);
                       const isShortage = item.variance < 0;
                       return (
                         <div
@@ -789,7 +789,7 @@ export function StationDetailsManager({
                         <div className="flex items-center gap-2">
                           <Badge variant="secondary" className="text-[9px] font-mono">{sale.productType}</Badge>
                           <span className="text-[10px] text-muted-foreground truncate">
-                            {formatHumanReadableDate(sale.logDate).split(" ").slice(0, 3).join(" ")}
+                            {formatHumanReadableDateOnly(sale.logDate)}
                           </span>
                         </div>
                         <p className="text-xs font-mono text-muted-foreground mt-0.5">

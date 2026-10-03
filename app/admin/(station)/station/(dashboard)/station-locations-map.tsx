@@ -239,7 +239,11 @@ export default function StationLocationsMap({
               onValueChange={(station) => {
                 if (station) focusStation(station)
               }}
-              itemToStringValue={(station: StationMapStation) => station.name}
+              isItemEqualToValue={(a: StationMapStation, b: StationMapStation) => a?.id === b?.id}
+              itemToStringValue={(station: StationMapStation) => station?.id ?? ""}
+              itemToStringLabel={(station: StationMapStation) =>
+                station ? `${station.name} (${station.code})` : ""
+              }
             >
               <ComboboxInput
                 placeholder="Search stations..."

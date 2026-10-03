@@ -40,6 +40,51 @@ export function formatHumanReadableDate(dateInput: string | Date | null | undefi
   return `${month} ${day}${getOrdinalSuffix(day)} ${year} ${hours}:${minutesStr}${ampm}`;
 }
 
+export function formatHumanReadableDateOnly(dateInput: string | Date | null | undefined): string {
+  if (!dateInput) return "—";
+  let isoStr = "";
+  if (typeof dateInput === "string") {
+    isoStr = dateInput;
+  } else if (dateInput instanceof Date && !isNaN(dateInput.getTime())) {
+    isoStr = dateInput.toISOString();
+  } else {
+    return "—";
+  }
+
+  const parts = isoStr.slice(0, 10).split("-");
+  if (parts.length < 3) return "—";
+  const year = Number(parts[0]);
+  const monthIndex = Number(parts[1]) - 1;
+  const day = Number(parts[2]);
+
+  if (isNaN(year) || isNaN(monthIndex) || isNaN(day) || monthIndex < 0 || monthIndex > 11) {
+    return "—";
+  }
+
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ];
+
+  return `${months[monthIndex]} ${day}${getOrdinalSuffix(day)} ${year}`;
+}
+
+export function formatTimeOnly(dateInput: string | Date | null | undefined): string | null {
+  if (!dateInput) return null;
+  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  if (isNaN(date.getTime())) return null;
+  if (date.getUTCHours() === 0 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0) {
+    return null;
+  }
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  const ampm = hours >= 12 ? "pm" : "am";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const minutesStr = minutes < 10 ? "0" + minutes : minutes;
+  return `${hours}:${minutesStr}${ampm}`;
+}
+
 export function formatShortCurrency(num: number): string {
   if (num === null || num === undefined) return "₦0";
   return `₦${Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(num)}`;

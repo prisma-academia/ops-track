@@ -56,7 +56,7 @@ import { DataTable, DataTableColumnHeader } from "@/components/tables";
 import { FileViewerModal } from "@/components/file-viewer-modal";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { apiPatch, apiPost } from "@/lib/client/api";
-import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { cn, formatHumanReadableDate, formatHumanReadableDateOnly, formatTimeOnly } from "@/lib/utils";
 
 interface SalesReportUser {
   id: string;
@@ -90,6 +90,7 @@ interface SalesPaymentRow {
   status: ReviewStatus;
   reason?: string | null;
   bankAccount?: BankAccount | null;
+  createdAt?: string | Date;
   reviews?: PaymentReviewEvent[];
 }
 
@@ -100,6 +101,7 @@ interface PaymentEntry {
   appliedCredit?: number;
   status: ReviewStatus;
   logDate: string | Date;
+  createdAt?: string | Date;
   posReceiptUrl?: string | null;
   transferReceiptUrl?: string | null;
   recordedBy?: SalesReportUser | null;
@@ -129,6 +131,7 @@ interface SalesReportRow extends PaymentEntry {
     pricePerLiter: number;
     debtRepayments: PaymentEntry[];
   }) | null;
+  dippingClosing?: { id: string; recordedAt: string | Date } | null;
   debtRepayments?: PaymentEntry[];
 }
 
@@ -137,6 +140,7 @@ type PaymentLine = {
   sourceId: string;
   paymentId: string;
   logDate: string;
+  createdAt?: string | Date;
   sourceType: "INITIAL_SALE" | "DEBT_REPAYMENT";
   method: "POS" | "TRANSFER";
   label: string;
@@ -189,6 +193,7 @@ function buildPaymentLines(
       sourceId: entry.id,
       paymentId: payment.id,
       logDate: String(entry.logDate),
+      createdAt: (payment as any).createdAt || entry.createdAt,
       sourceType,
       method: payment.method,
       label: payment.method === "POS" ? "POS" : "Transfer",
@@ -216,6 +221,7 @@ function buildPaymentLines(
       sourceId: entry.id,
       paymentId: entry.id,
       logDate: String(entry.logDate),
+      createdAt: entry.createdAt,
       sourceType,
       method: "POS",
       label: "POS",
@@ -239,6 +245,7 @@ function buildPaymentLines(
       sourceId: entry.id,
       paymentId: entry.id,
       logDate: String(entry.logDate),
+      createdAt: entry.createdAt,
       sourceType,
       method: "TRANSFER",
       label: "Transfer",
@@ -467,14 +474,24 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     () => [
       {
         accessorKey: "logDate",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
-        meta: { label: "Date" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Date & Time" />,
+        meta: { label: "Date & Time" },
         enableHiding: false,
-        cell: ({ row }) => (
-          <span className="text-muted-foreground">
-            {format(new Date(row.original.logDate), "LLL dd, y")}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const time = row.original.createdAt ? formatTimeOnly(row.original.createdAt) : null;
+          return (
+            <div className="flex flex-col">
+              <span className="text-foreground">
+                {format(new Date(row.original.logDate), "LLL dd, y")}
+              </span>
+              {time && (
+                <span className="text-[11px] text-muted-foreground font-mono">
+                  {time}
+                </span>
+              )}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "sourceType",
@@ -680,6 +697,11 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     },
   ];
 
+  const effectiveReportTime =
+    formatTimeOnly(report.createdAt) ||
+    (report.dippingClosing?.recordedAt ? formatTimeOnly(report.dippingClosing.recordedAt) : null) ||
+    (report.payments?.[0]?.createdAt ? formatTimeOnly(report.payments[0].createdAt) : null);
+
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-4">
@@ -693,7 +715,8 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
           <p className="mt-1 text-sm text-muted-foreground">
             {report.station.name} ({report.station.code}) · {report.productType} ·{" "}
             {metrics.litersSold.toLocaleString()} L @ {fmtMoney(metrics.pricePerLiter)}/L ·{" "}
-            {formatHumanReadableDate(report.logDate)}
+            {formatHumanReadableDateOnly(report.logDate)}
+            {effectiveReportTime ? ` at ${effectiveReportTime}` : ""}
             {report.isDebtRepayment ? " · Debt repayment" : ""}
           </p>
         </div>
@@ -827,6 +850,7 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
                       {format(new Date(detailsRow.logDate), "LLL dd, y")}
+                      {detailsRow.createdAt && formatTimeOnly(detailsRow.createdAt) ? ` at ${formatTimeOnly(detailsRow.createdAt)}` : ""}
                     </p>
                   </div>
                 </div>

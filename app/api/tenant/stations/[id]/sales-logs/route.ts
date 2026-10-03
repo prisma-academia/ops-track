@@ -50,10 +50,11 @@ const CreateSalesLogSchema = z.object({
   parentSaleId: z.string().nullable().optional(),
 });
 
-function serializeSalesLog<T extends { parentdeliveryId?: string | null }>(log: T) {
+function serializeSalesLog<T extends { parentdeliveryId?: string | null; createdAt?: Date | string | null }>(log: T) {
   return {
     ...log,
     parentSaleId: log.parentdeliveryId ?? null,
+    createdAt: log.createdAt ? (log.createdAt instanceof Date ? log.createdAt.toISOString() : String(log.createdAt)) : undefined,
   };
 }
 

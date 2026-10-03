@@ -67,6 +67,7 @@ export async function PATCH(
 
     const existing = await prisma.transport.findFirst({
       where: { id, tenantId: actor.tenantId },
+      include: { deliveries: true },
     });
     if (!existing) throw new DomainError(404, "not_found", "Transport not found.");
 
@@ -92,7 +93,11 @@ export async function PATCH(
         _sum: { lostQuantity: true },
       });
       const lostSoFar = Number(loggedLost._sum.lostQuantity ?? 0);
-      const loadedVolume = Number(existing.litersCarried);
+      const totalDespatched = (existing.deliveries || []).reduce(
+        (sum, d) => sum + Number(d.litersDespatched || 0),
+        0
+      );
+      const loadedVolume = Math.max(Number(existing.litersCarried), totalDespatched);
       if (lostSoFar + body.lossLog.lostQuantity > loadedVolume + 0.001) {
         throw new DomainError(
           400,

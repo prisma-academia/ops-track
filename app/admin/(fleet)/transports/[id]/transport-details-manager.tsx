@@ -100,15 +100,17 @@ export function TransportDetailsManager({
   const lossLogs = transport.lossLogs || [];
   const carriedVolume = Number(transport.litersCarried) || 0;
   const distributedVolume = (transport.deliveries || []).reduce(
-    (acc: number, sale: { litersDespatched?: number | string | null }) => acc + (Number(sale.litersDespatched) || 0),
+    (acc: number, sale: { litersDespatched?: number | string | null; litersSold?: number | string | null }) =>
+      acc + (Number(sale.litersDespatched || sale.litersSold) || 0),
     0
   );
   const loggedLostVolume = lossLogs.reduce(
     (sum: number, log: { lostQuantity?: number | string | null }) => sum + Number(log.lostQuantity || 0),
     0
   );
-  const remainingVolume = Math.max(0, carriedVolume - distributedVolume - loggedLostVolume);
-  const maxLosableVolume = Math.max(0, carriedVolume - loggedLostVolume);
+  const effectiveLoadedVolume = Math.max(carriedVolume, distributedVolume);
+  const remainingVolume = Math.max(0, effectiveLoadedVolume - distributedVolume - loggedLostVolume);
+  const maxLosableVolume = Math.max(0, effectiveLoadedVolume - loggedLostVolume);
   const ratePerLiter = Number(transport.ratePerLiter) || 0;
   const selectedLossType = getProductLossType(lossType);
   const incidentQuantity = Number(lostQuantity || 0);
@@ -193,7 +195,17 @@ export function TransportDetailsManager({
   const pendingDeliveries = (transport.deliveries || []).filter(
     (del: any) => del.litersReceived === null || del.litersReceived === undefined
   );
-  const isAwaitingStationReception = pendingDeliveries.length > 0;
+  const isAwaitingReception = pendingDeliveries.length > 0;
+  const isAwaitingStationReception = isAwaitingReception;
+
+  // Deliveries that are awaiting reception OR have an issue like variance
+  const deliveriesWithIssues = (transport.deliveries || []).filter((del: any) => {
+    const isPending = del.litersReceived === null || del.litersReceived === undefined;
+    if (isPending) return true;
+    const assigned = Number(del.litersDespatched || del.litersSold || 0);
+    const received = Number(del.litersReceived);
+    return Math.abs(assigned - received) > 0.001;
+  });
 
   const totalReceivedVolume = (transport.deliveries || []).reduce(
     (sum: number, del: any) =>
@@ -201,24 +213,55 @@ export function TransportDetailsManager({
     0
   );
 
-  const trueVariance = Math.max(0, carriedVolume - (totalReceivedVolume + loggedLostVolume));
-  const hasActualShortage = !isAwaitingStationReception && trueVariance > 0.001;
+  // Shortage on individual confirmed drops (station or B2B client drops where received < dispatched)
+  const deliveryShortage = (transport.deliveries || []).reduce((sum: number, del: any) => {
+    const dispatched = Number(del.litersDespatched || del.litersSold || 0);
+    if (del.litersReceived !== null && del.litersReceived !== undefined) {
+      const received = Number(del.litersReceived);
+      const diff = dispatched - received;
+      return sum + (diff > 0 ? diff : 0);
+    }
+    return sum;
+  }, 0);
+
+  // Volume loaded on truck that was never dispatched to any recipient or logged lost
+  const unaccountedTruckShortage = Math.max(0, carriedVolume - distributedVolume - loggedLostVolume);
+
+  // Total physical shortage across drops and truck volume
+  const trueVariance = deliveryShortage + unaccountedTruckShortage;
+  const hasActualShortage = !isAwaitingReception && trueVariance > 0.001;
   const canFinalize = transport.status !== "COMPLETED" && transport.status !== "CANCELLED";
 
-  const sellingPrice = transport.deliveries?.length
+  const defaultSellingPrice = transport.deliveries?.length
     ? Math.max(...transport.deliveries.map((d: any) => Number(d.amountPerLiter) || 0))
     : Number(transport.order?.pricePerLiter) || 0;
-  const totalDeductionAmount = trueVariance * sellingPrice;
+
+  // Compute shortage deductions per drop according to that drop's selling price
+  const deliveryDeduction = (transport.deliveries || []).reduce((sum: number, del: any) => {
+    const dispatched = Number(del.litersDespatched || del.litersSold || 0);
+    if (del.litersReceived !== null && del.litersReceived !== undefined) {
+      const received = Number(del.litersReceived);
+      const diff = dispatched - received;
+      if (diff > 0) {
+        const price = Number(del.amountPerLiter) || defaultSellingPrice;
+        return sum + (diff * price);
+      }
+    }
+    return sum;
+  }, 0);
+
+  const totalDeductionAmount = deliveryDeduction + (unaccountedTruckShortage * defaultSellingPrice);
+  const sellingPrice = trueVariance > 0 ? Math.round(totalDeductionAmount / trueVariance) : defaultSellingPrice;
 
   const driverOrTransporterName = transport.isOneTime
     ? (transport.oneTimeDriverName || transport.oneTimeTransporterName || "Driver / Transporter")
     : (transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : transport.transporter?.name || "Driver / Transporter");
-  const driverBaseFee = carriedVolume * ratePerLiter;
+  const driverBaseFee = effectiveLoadedVolume * ratePerLiter;
   const driverNetFee = Math.max(0, driverBaseFee - totalDeductionAmount);
 
   const handleFinalizeWithShortage = async () => {
-    if (isAwaitingStationReception) {
-      setError("Cannot finalize trip while stations are still awaiting reception.");
+    if (isAwaitingReception) {
+      setError("Cannot finalize trip while deliveries are still awaiting reception.");
       return;
     }
 
@@ -289,7 +332,7 @@ export function TransportDetailsManager({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {pendingDeliveries.length} destination station{pendingDeliveries.length > 1 ? "s" : ""} pending receive confirmation.
+                    {pendingDeliveries.length} destination{pendingDeliveries.length > 1 ? "s" : ""} pending receive confirmation.
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -938,25 +981,25 @@ export function TransportDetailsManager({
               Finalize Transport
             </DialogTitle>
             <DialogDescription>
-              {isAwaitingStationReception
-                ? "This transport has deliveries awaiting station reception. All stations must confirm receipt before you can finalize and reconcile variance."
+              {isAwaitingReception
+                ? "This transport has deliveries awaiting reception. All destination stations and clients must confirm receipt before you can finalize and reconcile variance."
                 : "Review the delivery distribution before marking this transport as complete."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            {isAwaitingStationReception ? (
-              /* --- STATE 1: PENDING STATIONS GATE --- */
+            {isAwaitingReception ? (
+              /* --- STATE 1: PENDING DESTINATIONS GATE --- */
               <div className="space-y-4">
                 <div className="rounded-xl border border-amber-200 bg-amber-50/70 dark:border-amber-900/50 dark:bg-amber-950/30 p-4">
                   <div className="flex items-start gap-3">
                     <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                     <div className="space-y-1">
                       <h4 className="font-semibold text-amber-900 dark:text-amber-200 text-sm">
-                        Station Pending Receive ({pendingDeliveries.length})
+                        Destination Pending Receive ({pendingDeliveries.length})
                       </h4>
                       <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
-                        The destination station(s) below have not yet confirmed their received dip volume. You can only determine if there is a shortage after all stations have received their product.
+                        The destination station(s) or client(s) below have not yet confirmed their received volume. You can only determine if there is a shortage after all recipients have received their product.
                       </p>
                     </div>
                   </div>
@@ -966,57 +1009,103 @@ export function TransportDetailsManager({
                   <Table>
                     <TableHeader className="bg-muted/50">
                       <TableRow>
-                        <TableHead>Pending Station / Customer</TableHead>
+                        <TableHead>Delivery / Destination</TableHead>
                         <TableHead className="text-right">Dispatched Volume</TableHead>
                         <TableHead className="text-right">Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pendingDeliveries.map((del: any) => (
-                        <TableRow key={del.id}>
-                          <TableCell className="font-medium text-foreground">
-                            {del.station?.name || del.customer?.name || "Unknown Station"}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-medium">
-                            {Number(del.litersDespatched || 0).toLocaleString()} L
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Badge
-                              variant="outline"
-                              className="border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/50 text-xs"
-                            >
-                              Pending Receive
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {deliveriesWithIssues.map((del: any) => {
+                        const isPending = del.litersReceived === null || del.litersReceived === undefined;
+                        const assigned = Number(del.litersDespatched || del.litersSold || 0);
+                        const received = !isPending ? Number(del.litersReceived) : null;
+                        const diff = received !== null ? assigned - received : 0;
+                        return (
+                          <TableRow key={del.id}>
+                            <TableCell className="font-medium text-foreground">
+                              {del.customer ? (
+                                <div className="flex flex-col">
+                                  <span className="font-medium text-foreground">{del.customer.name}</span>
+                                  <span className="text-[10px] text-muted-foreground uppercase">External Client</span>
+                                </div>
+                              ) : del.station ? (
+                                <div className="flex flex-col">
+                                  <span className="font-medium text-foreground">{del.station.name}</span>
+                                  <span className="text-[10px] text-muted-foreground uppercase">Owned Station</span>
+                                </div>
+                              ) : (
+                                "Unknown Destination"
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono font-medium">
+                              {assigned.toLocaleString()} L
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {isPending ? (
+                                <Badge
+                                  variant="outline"
+                                  className="border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/50 text-xs"
+                                >
+                                  Pending Receive
+                                </Badge>
+                              ) : diff > 0 ? (
+                                <Badge
+                                  variant="outline"
+                                  className="border-rose-500 text-rose-600 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/50 text-xs"
+                                >
+                                  Shortage ({diff.toLocaleString()} L)
+                                </Badge>
+                              ) : diff < 0 ? (
+                                <Badge
+                                  variant="outline"
+                                  className="border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/50 text-xs"
+                                >
+                                  Surplus ({Math.abs(diff).toLocaleString()} L)
+                                </Badge>
+                              ) : null}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
               </div>
             ) : (
-              /* --- STATE 2: ALL STATIONS RECEIVED --- */
+              /* --- STATE 2: ALL RECIPIENTS RECEIVED --- */
               <div className="space-y-6">
                 <div className="rounded-xl border overflow-hidden">
                   <Table>
                     <TableHeader className="bg-muted/50">
                       <TableRow>
-                        <TableHead>Delivery / Station</TableHead>
+                        <TableHead>Delivery / Destination</TableHead>
                         <TableHead className="text-right">Assigned</TableHead>
                         <TableHead className="text-right">Received</TableHead>
                         <TableHead className="text-right">Variance</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {transport.deliveries?.length ? (
-                        transport.deliveries.map((del: any) => {
-                          const assigned = Number(del.litersDespatched || 0);
-                          const received = del.litersReceived !== null ? Number(del.litersReceived) : null;
+                      {deliveriesWithIssues.length ? (
+                        deliveriesWithIssues.map((del: any) => {
+                          const assigned = Number(del.litersDespatched || del.litersSold || 0);
+                          const received = del.litersReceived !== null && del.litersReceived !== undefined ? Number(del.litersReceived) : null;
                           const diff = received !== null ? assigned - received : 0;
                           return (
                             <TableRow key={del.id}>
                               <TableCell className="font-medium">
-                                {del.station?.name || del.customer?.name || "Unknown"}
+                                {del.customer ? (
+                                  <div className="flex flex-col">
+                                    <span className="font-medium text-foreground">{del.customer.name}</span>
+                                    <span className="text-[10px] text-muted-foreground uppercase">External Client</span>
+                                  </div>
+                                ) : del.station ? (
+                                  <div className="flex flex-col">
+                                    <span className="font-medium text-foreground">{del.station.name}</span>
+                                    <span className="text-[10px] text-muted-foreground uppercase">Owned Station</span>
+                                  </div>
+                                ) : (
+                                  "Unknown Destination"
+                                )}
                               </TableCell>
                               <TableCell className="text-right font-mono">{assigned.toLocaleString()} L</TableCell>
                               <TableCell className="text-right font-mono font-medium text-emerald-600 dark:text-emerald-500">
@@ -1036,7 +1125,7 @@ export function TransportDetailsManager({
                       ) : (
                         <TableRow>
                           <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
-                            No deliveries assigned yet.
+                            All destinations confirmed with zero variance.
                           </TableCell>
                         </TableRow>
                       )}
@@ -1065,10 +1154,10 @@ export function TransportDetailsManager({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 rounded-xl border bg-muted/20">
                     <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">
-                      Loaded Volume
+                      Loaded / Dispatched
                     </p>
                     <p className="text-xl font-bold font-mono">
-                      {carriedVolume.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">L</span>
+                      {effectiveLoadedVolume.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">L</span>
                     </p>
                   </div>
                   <div
@@ -1145,7 +1234,7 @@ export function TransportDetailsManager({
                     <div className="flex flex-col sm:flex-row items-center gap-3 pt-1">
                       <Button variant="outline" className="w-full sm:w-auto" asChild>
                         <Link href={`/admin/deliveries/new?transportId=${transport.id}`}>
-                          Assign to another station
+                          Assign to another destination
                         </Link>
                       </Button>
                       <Button
@@ -1166,7 +1255,7 @@ export function TransportDetailsManager({
                         Zero Shortage — 100% Volume Accounted For
                       </h4>
                       <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
-                        All loaded product has been fully received at the destination station(s). No shortage deductions will be applied to the driver&apos;s transport fees.
+                        All loaded product has been fully received at the destination(s). No shortage deductions will be applied to the driver&apos;s transport fees.
                       </p>
                     </div>
                   </div>

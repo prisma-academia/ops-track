@@ -43,6 +43,11 @@ interface StockReportRow {
   pnl: number | null;
   reconciledQty: number | null;
   deliveryQty: number;
+  soldQty: number;
+  remainingQty: number;
+  remainingPct: number;
+  remainingStockValue: number | null;
+  isFullySold: boolean;
 }
 
 interface Station {
@@ -74,26 +79,36 @@ export function StockReportManager({
     to: new Date(),
   });
   const [draftSelectedStationIds, setDraftSelectedStationIds] = React.useState<string[]>([]);
+  const [draftLevelFilter, setDraftLevelFilter] = React.useState<string>("ALL");
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>(draftDateRange);
   const [selectedStationIds, setSelectedStationIds] = React.useState<string[]>([]);
+  const [levelFilter, setLevelFilter] = React.useState<string>("ALL");
 
   const applyFilters = React.useCallback(() => {
     setDateRange(draftDateRange);
     setSelectedStationIds(draftSelectedStationIds);
+    setLevelFilter(draftLevelFilter);
     setIsOpen(false);
-  }, [draftDateRange, draftSelectedStationIds]);
+  }, [draftDateRange, draftSelectedStationIds, draftLevelFilter]);
 
   const clearFilters = React.useCallback(() => {
     setDraftDateRange(undefined);
     setDraftSelectedStationIds([]);
+    setDraftLevelFilter("ALL");
     setDateRange(undefined);
     setSelectedStationIds([]);
+    setLevelFilter("ALL");
     setIsOpen(false);
   }, []);
 
   const filteredRows = React.useMemo(() => {
     return initialRows.filter((row) => {
       if (selectedStationIds.length > 0 && !selectedStationIds.includes(row.stationId)) return false;
+      
+      if (levelFilter === "ACTIVE" && (row.remainingQty <= 0 || row.reconciledQty === null)) return false;
+      if (levelFilter === "DEPLETED" && (row.remainingQty > 0 || row.reconciledQty === null)) return false;
+      if (levelFilter === "PENDING" && row.reconciledQty !== null) return false;
+
       const d = new Date(row.deliveryDate);
       if (dateRange?.from) {
         const s = new Date(dateRange.from);
@@ -107,22 +122,34 @@ export function StockReportManager({
       }
       return true;
     });
-  }, [initialRows, selectedStationIds, dateRange]);
+  }, [initialRows, selectedStationIds, levelFilter, dateRange]);
 
   const metrics = React.useMemo(() => {
     let totalVolume = 0;
     let totalStockValue = 0;
     let totalReceived = 0;
     let totalDeposit = 0;
+    let totalSold = 0;
+    let totalRemaining = 0;
 
     filteredRows.forEach((r) => {
       totalVolume += r.deliveryQty;
       totalStockValue += r.stockValue;
       if (r.reconciledQty) totalReceived += r.reconciledQty;
       if (r.reconciledDeposit) totalDeposit += r.reconciledDeposit;
+      totalSold += r.soldQty || 0;
+      totalRemaining += r.remainingQty || 0;
     });
 
-    return { count: filteredRows.length, totalVolume, totalStockValue, totalReceived, totalDeposit };
+    return {
+      count: filteredRows.length,
+      totalVolume,
+      totalStockValue,
+      totalReceived,
+      totalDeposit,
+      totalSold,
+      totalRemaining,
+    };
   }, [filteredRows]);
 
   const insightStats = React.useMemo(
@@ -137,18 +164,32 @@ export function StockReportManager({
           format: (n) => `${fmtQty(n)} L`,
         },
         {
-          key: "stock",
-          label: "Stock Value",
-          value: metrics.totalStockValue,
-          color: "#6366f1",
-          format: (n) => fmtMoney(n),
-        },
-        {
           key: "received",
           label: "Volume Received",
           value: metrics.totalReceived,
           color: "#f97316",
           format: (n) => `${fmtQty(n)} L`,
+        },
+        {
+          key: "sold",
+          label: "Volume Sold",
+          value: metrics.totalSold,
+          color: "#8b5cf6",
+          format: (n) => `${fmtQty(n)} L`,
+        },
+        {
+          key: "remaining",
+          label: "Stock Level (Remaining)",
+          value: metrics.totalRemaining,
+          color: "#10b981",
+          format: (n) => `${fmtQty(n)} L`,
+        },
+        {
+          key: "stock",
+          label: "Stock Value",
+          value: metrics.totalStockValue,
+          color: "#6366f1",
+          format: (n) => fmtMoney(n),
         },
       ]),
     [metrics]
@@ -195,6 +236,76 @@ export function StockReportManager({
               .getFilteredRowModel()
               .rows.reduce((sum, row) => sum + (row.original.reconciledQty ?? 0), 0)
           ),
+      },
+      {
+        id: "remainingLevel",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Waybill Level" />,
+        meta: { label: "Waybill Level" },
+        accessorFn: (row) => row.remainingQty,
+        cell: ({ row }) => {
+          const r = row.original;
+          const remaining = r.remainingQty;
+          const total = r.reconciledQty ?? r.deliveryQty;
+          const pct = Math.max(0, Math.min(100, r.remainingPct));
+          const isDelivered = r.reconciledQty !== null;
+          const isDepleted = isDelivered && remaining <= 0;
+
+          return (
+            <div className="flex flex-col gap-1 min-w-[150px]">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-mono font-semibold tabular-nums text-foreground">
+                  {fmtQty(remaining)} L
+                </span>
+                <span
+                  className={cn(
+                    "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
+                    !isDelivered
+                      ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                      : isDepleted
+                      ? "bg-muted text-muted-foreground"
+                      : pct <= 20
+                      ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                      : pct <= 50
+                      ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                      : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                  )}
+                >
+                  {!isDelivered
+                    ? "In Transit"
+                    : isDepleted
+                    ? "Depleted"
+                    : `${pct.toFixed(0)}% Left`}
+                </span>
+              </div>
+              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-300",
+                    !isDelivered
+                      ? "bg-amber-400"
+                      : isDepleted
+                      ? "bg-muted-foreground/30"
+                      : pct <= 20
+                      ? "bg-red-500"
+                      : pct <= 50
+                      ? "bg-amber-500"
+                      : "bg-emerald-500"
+                  )}
+                  style={{ width: `${!isDelivered ? 100 : pct}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {fmtQty(r.soldQty)} L sold of {fmtQty(total)} L
+              </span>
+            </div>
+          );
+        },
+        footer: ({ table }) => {
+          const total = table
+            .getFilteredRowModel()
+            .rows.reduce((sum, row) => sum + (row.original.remainingQty ?? 0), 0);
+          return `${fmtQty(total)} L`;
+        },
       },
       {
         accessorKey: "stockValue",
@@ -352,6 +463,28 @@ export function StockReportManager({
                 </div>
               </PopoverContent>
             </Popover>
+          </div>
+          <div className="space-y-1.5 w-full">
+            <Label className="text-xs text-muted-foreground">Waybill Stock Level</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: "ALL", label: "All Waybills" },
+                { id: "ACTIVE", label: "Active (> 0 L)" },
+                { id: "DEPLETED", label: "Depleted (0 L)" },
+                { id: "PENDING", label: "In Transit" },
+              ].map((opt) => (
+                <Button
+                  key={opt.id}
+                  type="button"
+                  variant={draftLevelFilter === opt.id ? "default" : "outline"}
+                  size="sm"
+                  className="text-xs h-8 justify-center"
+                  onClick={() => setDraftLevelFilter(opt.id)}
+                >
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
           </div>
           <div className="space-y-3 w-full">
             <Label className="text-sm font-semibold">Date Range</Label>

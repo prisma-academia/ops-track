@@ -38,6 +38,10 @@ export async function GET(request: Request) {
 
     const activeOrgId = await resolveActiveOrgId(actor);
     const whereClause: any = { tenantId: actor.tenantId, ...(activeOrgId ? { organizationId: activeOrgId } : {}) };
+    const stationId = url.searchParams.get("stationId");
+    if (stationId && stationId !== "ALL") {
+      whereClause.id = stationId;
+    }
 
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);

@@ -97,10 +97,23 @@ const columns: ColumnDef<StationRow>[] = [
   },
 ];
 
-export function StationsTable({ initialData, initialMeta }: { initialData: StationRow[], initialMeta: any }) {
+import { StationsFilterDrawer } from "./stations-filter-drawer";
+import type { StationSimple } from "./stations-manager";
+
+export function StationsTable({ 
+  initialData, 
+  initialMeta,
+  stations = [],
+}: { 
+  initialData: StationRow[]; 
+  initialMeta: any;
+  stations?: StationSimple[];
+}) {
   const searchParams = useSearchParams();
   
   const appliedFilters: Record<string, string> = {};
+  const currentStationId = searchParams.get("stationId");
+  if (currentStationId && currentStationId !== "ALL") appliedFilters.stationId = currentStationId;
   if (searchParams.has("salesMin")) appliedFilters.salesMin = searchParams.get("salesMin")!;
   if (searchParams.has("salesMax")) appliedFilters.salesMax = searchParams.get("salesMax")!;
   if (searchParams.has("stockMin")) appliedFilters.stockMin = searchParams.get("stockMin")!;
@@ -128,24 +141,7 @@ export function StationsTable({ initialData, initialMeta }: { initialData: Stati
       rowHref={(s) => `/admin/station/stations/${s.id}`}
       filterColumnId="name"
       searchPlaceholder="Search by name…"
-      filterNode={
-        <DataTableFilterDrawer
-          filters={[
-            {
-              type: "number-range",
-              label: "Today Sales Range (₦)",
-              fromParam: "salesMin",
-              toParam: "salesMax",
-            },
-            {
-              type: "number-range",
-              label: "Last Closing Stock (L)",
-              fromParam: "stockMin",
-              toParam: "stockMax",
-            },
-          ]}
-        />
-      }
+      filterNode={<StationsFilterDrawer stations={stations} />}
     />
   );
 }

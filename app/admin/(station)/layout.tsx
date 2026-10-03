@@ -50,7 +50,8 @@ const NAV: NavItemConfig[] = [
     icon: "FileTextIcon",
     permission: null,
     children: [
-      { href: "/admin/station/sales-reports", key: "salesReports", title: "Sales Reports", module: "operations" as ModuleKey, icon: "Analytics01Icon", permission: PERMISSIONS.TENANT_SALES_REPORTS_READ.key },
+      { href: "/admin/station/sales-reports", key: "salesReports", title: "Sales Submissions", module: "operations" as ModuleKey, icon: "Invoice01Icon", permission: PERMISSIONS.TENANT_SALES_REPORTS_READ.key },
+      { href: "/admin/station/sales-pnl", key: "salesPnl", title: "Sales & Profit Report", module: "operations" as ModuleKey, icon: "Analytics01Icon", permission: PERMISSIONS.TENANT_SALES_REPORTS_READ.key },
       { href: "/admin/station/delivery-pnl", key: "deliveryPnl", title: "Delivery Reports", module: "operations" as ModuleKey, icon: "TruckDeliveryIcon", permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
       { href: "/admin/station/stock-report", key: "stockReport", title: "Stock Reports", module: "operations" as ModuleKey, icon: "FileSpreadsheetIcon", permission: PERMISSIONS.TENANT_STOCK_REPORTS_READ.key },
     ],

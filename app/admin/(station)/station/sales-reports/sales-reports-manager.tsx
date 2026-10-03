@@ -614,7 +614,10 @@ export function SalesReportsManager({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Sales Reports</h1>
+        <h1 className="text-xl font-semibold text-foreground">Sales Submissions</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Review, verify, and approve daily station sales logs, tank dippings, and payments.
+        </p>
       </div>
 
       <TableInsightCards stats={insightStats} />

@@ -16,6 +16,8 @@ const PRINT_TITLES: Record<string, string> = {
   "fleet-activity": "Activity Log",
   "fleet-bank-account-transactions": "Bank Account Transactions",
   "station-activity": "Activity Log",
+  "station-sales-reports": "Sales Submissions",
+  "station-sales-pnl": "Sales & Profit Report",
   "station-delivery-pnl": "Delivery Profit & Loss",
   "station-delivery-pnl-v2": "Delivery Profit & Loss",
 };
@@ -35,6 +37,7 @@ const DOCUMENT_TYPE_CODES: Record<string, string> = {
   "fleet-bank-account-transactions": "BACL",
   "station-activity": "ACTL",
   "station-sales-reports": "SLR",
+  "station-sales-pnl": "PNLR",
   "station-stock-report": "STKR",
   "station-delivery-pnl": "DLR",
   "station-delivery-pnl-v2": "DLR",

@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Truck, AlertTriangle, CheckCircle, Droplets, FileText, Link2, ChevronsUpDown, Printer, Check } from "lucide-react";
+import { ArrowLeft, Truck, AlertTriangle, CheckCircle, CheckCircle2, Clock, Droplets, FileText, Link2, ChevronsUpDown, Printer, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
@@ -190,13 +190,38 @@ export function TransportDetailsManager({
     }
   };
 
-  const hasUnresolvedVariance = remainingVolume > 0.001;
+  const pendingDeliveries = (transport.deliveries || []).filter(
+    (del: any) => del.litersReceived === null || del.litersReceived === undefined
+  );
+  const isAwaitingStationReception = pendingDeliveries.length > 0;
+
+  const totalReceivedVolume = (transport.deliveries || []).reduce(
+    (sum: number, del: any) =>
+      sum + (del.litersReceived !== null && del.litersReceived !== undefined ? Number(del.litersReceived) : 0),
+    0
+  );
+
+  const trueVariance = Math.max(0, carriedVolume - (totalReceivedVolume + loggedLostVolume));
+  const hasActualShortage = !isAwaitingStationReception && trueVariance > 0.001;
   const canFinalize = transport.status !== "COMPLETED" && transport.status !== "CANCELLED";
 
-  const sellingPrice = transport.deliveries?.length ? Math.max(...transport.deliveries.map((d: any) => Number(d.amountPerLiter) || 0)) : (Number(transport.order?.pricePerLiter) || 0);
-  const totalDeductionAmount = remainingVolume * sellingPrice;
+  const sellingPrice = transport.deliveries?.length
+    ? Math.max(...transport.deliveries.map((d: any) => Number(d.amountPerLiter) || 0))
+    : Number(transport.order?.pricePerLiter) || 0;
+  const totalDeductionAmount = trueVariance * sellingPrice;
+
+  const driverOrTransporterName = transport.isOneTime
+    ? (transport.oneTimeDriverName || transport.oneTimeTransporterName || "Driver / Transporter")
+    : (transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : transport.transporter?.name || "Driver / Transporter");
+  const driverBaseFee = carriedVolume * ratePerLiter;
+  const driverNetFee = Math.max(0, driverBaseFee - totalDeductionAmount);
 
   const handleFinalizeWithShortage = async () => {
+    if (isAwaitingStationReception) {
+      setError("Cannot finalize trip while stations are still awaiting reception.");
+      return;
+    }
+
     if (!window.confirm("Are you sure you want to finalize this transport? This action will mark the transport as COMPLETED and cannot be undone.")) return;
     
     setIsFinalizing(true);
@@ -206,17 +231,17 @@ export function TransportDetailsManager({
       status: "COMPLETED",
     };
 
-    if (hasUnresolvedVariance) {
-      const normalDeduction = remainingVolume * ratePerLiter;
+    if (hasActualShortage) {
+      const normalDeduction = trueVariance * ratePerLiter;
       const adjustment = Math.max(0, totalDeductionAmount - normalDeduction);
 
       payload.lossLog = {
         lossType: "SHORTAGE",
-        lostQuantity: remainingVolume,
+        lostQuantity: trueVariance,
         expensesIncurred: adjustment,
-        comment: `Final shortage confirmation upon transport completion. Calculated at selling price (₦${sellingPrice.toLocaleString()}/L).`,
+        comment: `Final shortage deduction upon transport completion. ${trueVariance.toLocaleString()} L @ ₦${sellingPrice.toLocaleString()}/L deducted from driver/transporter fees.`,
       };
-      payload.addLitersLost = remainingVolume;
+      payload.addLitersLost = trueVariance;
       payload.addMaintenanceCost = adjustment;
     }
 
@@ -254,17 +279,31 @@ export function TransportDetailsManager({
         </div>
         <div className="flex items-center gap-3">
           {canFinalize && (
-            hasUnresolvedVariance ? (
+            isAwaitingStationReception ? (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="outline" className="border-amber-500 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950" onClick={() => setOpenFinalizeDialog(true)}>
+                      <Clock className="h-4 w-4 mr-2" />
+                      Finalize Transport
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {pendingDeliveries.length} destination station{pendingDeliveries.length > 1 ? "s" : ""} pending receive confirmation.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : hasActualShortage ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" className="border-rose-500 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950" onClick={() => setOpenFinalizeDialog(true)}>
                       <AlertTriangle className="h-4 w-4 mr-2" />
                       Finalize Transport
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    There is an unresolved shortage. Finalizing will deduct the cost from the transporter.
+                    Unresolved shortage detected ({trueVariance.toLocaleString()} L). Will be deducted from driver fees.
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -593,7 +632,7 @@ export function TransportDetailsManager({
                 <div>
                   <h3 className="font-semibold text-lg">Loss Logs</h3>
                   <p className="text-sm text-muted-foreground">
-                    Product lost in transit — theft, accident, spill, leakage, shortage, or contamination. Truck repairs belong in Payments & Expenses.
+                    Product lost in transit — theft, accident, spill, leakage, or contamination. Truck repairs belong in Payments & Expenses.
                   </p>
                 </div>
                 <Button variant="destructive" onClick={() => { setError(null); setOpenIncidentDialog(true); }}>
@@ -816,7 +855,7 @@ export function TransportDetailsManager({
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {PRODUCT_LOSS_TYPES.map((type) => (
+                  {PRODUCT_LOSS_TYPES.filter((type) => type.value !== "SHORTAGE").map((type) => (
                     <SelectItem key={type.value} value={type.value} textValue={type.label}>
                       <span className="flex flex-col items-start gap-0.5 py-0.5">
                         <span>{type.label}</span>
@@ -899,115 +938,265 @@ export function TransportDetailsManager({
               Finalize Transport
             </DialogTitle>
             <DialogDescription>
-              Review the delivery distribution before marking this transport as complete.
+              {isAwaitingStationReception
+                ? "This transport has deliveries awaiting station reception. All stations must confirm receipt before you can finalize and reconcile variance."
+                : "Review the delivery distribution before marking this transport as complete."}
             </DialogDescription>
           </DialogHeader>
+
           <div className="space-y-6 py-4">
-            <div className="rounded-md border overflow-hidden">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead>Delivery / Station</TableHead>
-                    <TableHead className="text-right">Assigned</TableHead>
-                    <TableHead className="text-right">Received</TableHead>
-                    <TableHead className="text-right">Variance</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transport.deliveries?.length ? (
-                    transport.deliveries.map((del: any) => {
-                      const assigned = Number(del.litersDespatched || 0);
-                      const received = del.litersReceived !== null ? Number(del.litersReceived) : null;
-                      const diff = received !== null ? assigned - received : 0;
-                      return (
+            {isAwaitingStationReception ? (
+              /* --- STATE 1: PENDING STATIONS GATE --- */
+              <div className="space-y-4">
+                <div className="rounded-xl border border-amber-200 bg-amber-50/70 dark:border-amber-900/50 dark:bg-amber-950/30 p-4">
+                  <div className="flex items-start gap-3">
+                    <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <div className="space-y-1">
+                      <h4 className="font-semibold text-amber-900 dark:text-amber-200 text-sm">
+                        Station Pending Receive ({pendingDeliveries.length})
+                      </h4>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                        The destination station(s) below have not yet confirmed their received dip volume. You can only determine if there is a shortage after all stations have received their product.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Pending Station / Customer</TableHead>
+                        <TableHead className="text-right">Dispatched Volume</TableHead>
+                        <TableHead className="text-right">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pendingDeliveries.map((del: any) => (
                         <TableRow key={del.id}>
-                          <TableCell className="font-medium">{del.station?.name || del.customer?.name || "Unknown"}</TableCell>
-                          <TableCell className="text-right">{assigned.toLocaleString()} L</TableCell>
-                          <TableCell className="text-right">
-                            {received !== null ? (
-                              `${received.toLocaleString()} L`
-                            ) : (
-                              <span className="text-amber-600">Pending</span>
-                            )}
+                          <TableCell className="font-medium text-foreground">
+                            {del.station?.name || del.customer?.name || "Unknown Station"}
                           </TableCell>
-                          <TableCell className={`text-right font-mono ${diff > 0 ? "text-rose-600" : diff < 0 ? "text-emerald-600" : ""}`}>
-                            {received !== null ? `${diff > 0 ? "+" : ""}${diff.toLocaleString()} L` : "—"}
+                          <TableCell className="text-right font-mono font-medium">
+                            {Number(del.litersDespatched || 0).toLocaleString()} L
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Badge
+                              variant="outline"
+                              className="border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/50 text-xs"
+                            >
+                              Pending Receive
+                            </Badge>
                           </TableCell>
                         </TableRow>
-                      );
-                    })
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
-                        No deliveries assigned yet.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-                <tfoot className="bg-muted/50">
-                  <TableRow>
-                    <TableCell className="font-bold">Total Dispatched / Received</TableCell>
-                    <TableCell className="text-right font-bold">{distributedVolume.toLocaleString()} L</TableCell>
-                    <TableCell className="text-right font-bold">
-                      {((transport.deliveries || []).reduce(
-                        (sum: number, sale: any) => sum + (sale.litersReceived !== null && sale.litersReceived !== undefined ? Number(sale.litersReceived) : 0),
-                        0
-                      )).toLocaleString()} L
-                    </TableCell>
-                    <TableCell className="text-right font-bold"></TableCell>
-                  </TableRow>
-                </tfoot>
-              </Table>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 rounded-xl border bg-muted/20">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Loaded Volume</p>
-                <p className="text-xl font-bold font-mono">{carriedVolume.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">L</span></p>
-              </div>
-              <div className={`p-4 rounded-xl border ${hasUnresolvedVariance ? "bg-rose-50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/50" : "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/50"}`}>
-                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">
-                  Unresolved Variance
-                </p>
-                <p className={`text-xl font-bold font-mono ${hasUnresolvedVariance ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                  {remainingVolume.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">L</span>
-                </p>
-              </div>
-            </div>
-
-            {hasUnresolvedVariance && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
-                <h4 className="font-semibold text-amber-800 dark:text-amber-400 flex items-center gap-2 mb-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  Unresolved Variance Detected
-                </h4>
-                <p className="text-sm text-amber-700 dark:text-amber-500 mb-4">
-                  There is <strong>{remainingVolume.toLocaleString()} L</strong> of product unaccounted for. You can assign this volume to another station or confirm it as a shortage.
-                  <br /><br />
-                  <strong>Note:</strong> A shortage deduction of <strong>₦{totalDeductionAmount.toLocaleString()}</strong> (at ₦{sellingPrice.toLocaleString()}/L) will be applied to the transporter&apos;s net fee.
-                </p>
-                <div className="flex flex-col sm:flex-row items-center gap-3">
-                  <Button variant="outline" className="w-full sm:w-auto" asChild>
-                    <Link href={`/admin/deliveries/new?transportId=${transport.id}`}>
-                      Assign to another station
-                    </Link>
-                  </Button>
-                  <Button variant="destructive" className="w-full sm:w-auto" onClick={handleFinalizeWithShortage} disabled={isFinalizing}>
-                    {isFinalizing ? <SpinnerEllipsis /> : "Confirm Shortage & Complete"}
-                  </Button>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
+            ) : (
+              /* --- STATE 2: ALL STATIONS RECEIVED --- */
+              <div className="space-y-6">
+                <div className="rounded-xl border overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Delivery / Station</TableHead>
+                        <TableHead className="text-right">Assigned</TableHead>
+                        <TableHead className="text-right">Received</TableHead>
+                        <TableHead className="text-right">Variance</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {transport.deliveries?.length ? (
+                        transport.deliveries.map((del: any) => {
+                          const assigned = Number(del.litersDespatched || 0);
+                          const received = del.litersReceived !== null ? Number(del.litersReceived) : null;
+                          const diff = received !== null ? assigned - received : 0;
+                          return (
+                            <TableRow key={del.id}>
+                              <TableCell className="font-medium">
+                                {del.station?.name || del.customer?.name || "Unknown"}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">{assigned.toLocaleString()} L</TableCell>
+                              <TableCell className="text-right font-mono font-medium text-emerald-600 dark:text-emerald-500">
+                                {received !== null ? `${received.toLocaleString()} L` : "Pending"}
+                              </TableCell>
+                              <TableCell
+                                className={cn(
+                                  "text-right font-mono font-medium",
+                                  diff > 0 ? "text-rose-600" : diff < 0 ? "text-emerald-600" : "text-muted-foreground"
+                                )}
+                              >
+                                {received !== null ? `${diff > 0 ? "+" : ""}${diff.toLocaleString()} L` : "—"}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
+                            No deliveries assigned yet.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                    <tfoot className="bg-muted/50">
+                      <TableRow>
+                        <TableCell className="font-bold">Total Dispatched / Received</TableCell>
+                        <TableCell className="text-right font-bold font-mono">
+                          {distributedVolume.toLocaleString()} L
+                        </TableCell>
+                        <TableCell className="text-right font-bold font-mono text-emerald-600 dark:text-emerald-500">
+                          {totalReceivedVolume.toLocaleString()} L
+                        </TableCell>
+                        <TableCell className="text-right font-bold font-mono">
+                          {trueVariance > 0 ? (
+                            <span className="text-rose-600">-{trueVariance.toLocaleString()} L</span>
+                          ) : (
+                            <span className="text-emerald-600">0 L</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    </tfoot>
+                  </Table>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl border bg-muted/20">
+                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">
+                      Loaded Volume
+                    </p>
+                    <p className="text-xl font-bold font-mono">
+                      {carriedVolume.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">L</span>
+                    </p>
+                  </div>
+                  <div
+                    className={cn(
+                      "p-4 rounded-xl border",
+                      hasActualShortage
+                        ? "bg-rose-50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/50"
+                        : "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/50"
+                    )}
+                  >
+                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">
+                      {hasActualShortage ? "Shortage (Variance)" : "Delivery Status"}
+                    </p>
+                    <p
+                      className={cn(
+                        "text-xl font-bold font-mono",
+                        hasActualShortage ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
+                      )}
+                    >
+                      {hasActualShortage
+                        ? `${trueVariance.toLocaleString()} L`
+                        : "100% Received"}
+                    </p>
+                  </div>
+                </div>
+
+                {hasActualShortage ? (
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-destructive font-semibold text-sm">
+                      <AlertTriangle className="h-4 w-4" />
+                      <h4>Shortage Variance Detected</h4>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 p-3 rounded-lg bg-card border text-xs">
+                      <div>
+                        <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Shortage Volume</span>
+                        <span className="font-bold text-destructive text-sm font-mono">{trueVariance.toLocaleString()} L</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Amount Sold / L</span>
+                        <span className="font-bold text-foreground text-sm font-mono">₦{sellingPrice.toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Total Deduction</span>
+                        <span className="font-bold text-destructive text-sm font-mono">₦{totalDeductionAmount.toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    {/* Notice on Driver Fees */}
+                    <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs space-y-1.5">
+                      <p className="font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Driver Transport Fee Deduction Notice</span>
+                      </p>
+                      <p className="text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
+                        This shortage deduction of <strong>₦{totalDeductionAmount.toLocaleString()}</strong> will be deducted from the transport fees of <strong>{driverOrTransporterName}</strong>.
+                      </p>
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-amber-200 dark:border-amber-800/60 text-[11px]">
+                        <div>
+                          <span className="text-muted-foreground block text-[10px]">Gross Haulage Fee</span>
+                          <span className="font-mono font-medium">₦{driverBaseFee.toLocaleString()}</span>
+                        </div>
+                        <div>
+                          <span className="text-destructive block text-[10px]">Shortage Deduction</span>
+                          <span className="font-mono font-bold text-destructive">- ₦{totalDeductionAmount.toLocaleString()}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block text-[10px]">Net Payout to Driver</span>
+                          <span className="font-mono font-bold text-foreground">₦{driverNetFee.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-3 pt-1">
+                      <Button variant="outline" className="w-full sm:w-auto" asChild>
+                        <Link href={`/admin/deliveries/new?transportId=${transport.id}`}>
+                          Assign to another station
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        className="w-full sm:w-auto"
+                        onClick={handleFinalizeWithShortage}
+                        disabled={isFinalizing}
+                      >
+                        {isFinalizing ? <SpinnerEllipsis /> : "Confirm Shortage & Finalize"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30 flex items-start gap-3">
+                    <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+                    <div>
+                      <h4 className="font-semibold text-emerald-900 dark:text-emerald-200 text-sm">
+                        Zero Shortage — 100% Volume Accounted For
+                      </h4>
+                      <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
+                        All loaded product has been fully received at the destination station(s). No shortage deductions will be applied to the driver&apos;s transport fees.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
+
             {error && <p className="text-sm text-destructive font-medium">{error}</p>}
           </div>
-          {!hasUnresolvedVariance && (
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpenFinalizeDialog(false)} disabled={isFinalizing}>Cancel</Button>
-              <Button onClick={handleFinalizeWithShortage} disabled={isFinalizing}>
-                {isFinalizing ? <SpinnerEllipsis /> : "Complete Transport"}
+
+          <DialogFooter>
+            {isAwaitingStationReception ? (
+              <Button variant="outline" onClick={() => setOpenFinalizeDialog(false)}>
+                Close
               </Button>
-            </DialogFooter>
-          )}
+            ) : !hasActualShortage ? (
+              <>
+                <Button variant="outline" onClick={() => setOpenFinalizeDialog(false)} disabled={isFinalizing}>
+                  Cancel
+                </Button>
+                <Button onClick={handleFinalizeWithShortage} disabled={isFinalizing}>
+                  {isFinalizing ? <SpinnerEllipsis /> : "Complete Transport"}
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" onClick={() => setOpenFinalizeDialog(false)} disabled={isFinalizing}>
+                Cancel
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

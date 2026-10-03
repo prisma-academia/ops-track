@@ -60,6 +60,7 @@ export async function GET() {
             latitude: true,
             longitude: true,
             altitude: true,
+            imageUrl: true,
           },
           orderBy: { name: "asc" },
         },
@@ -84,6 +85,7 @@ export async function GET() {
             latitude: true,
             longitude: true,
             altitude: true,
+            imageUrl: true,
           },
           orderBy: { name: "asc" },
         })

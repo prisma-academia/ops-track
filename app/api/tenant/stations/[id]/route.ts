@@ -17,6 +17,7 @@ const UpdateStationSchema = z.object({
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
   altitude: z.number().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   staffUserIds: z.array(z.string()).optional(),
 });
 
@@ -130,6 +131,7 @@ export async function PATCH(
         latitude: body.latitude,
         longitude: body.longitude,
         altitude: body.altitude,
+        imageUrl: body.imageUrl,
         staff: staffData,
       },
       include: {

@@ -27,7 +27,8 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { ArrowLeft, Save, User, ShieldCheck, ChevronsUpDown, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Save, User, ShieldCheck, ChevronsUpDown, Mail, Phone, UploadCloud, Trash2 } from "lucide-react";
+import { uploadClientFile } from "@/lib/client-upload";
 import { Badge } from "@/components/ui/badge";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import nigerianLocations from "@/constant/nigerian-locations.json";
@@ -43,6 +44,7 @@ const Schema = z.object({
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
   altitude: z.number().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   managerId: z.string().optional().or(z.literal("")),
 });
 
@@ -79,9 +81,13 @@ export function CreateStationForm({
       latitude: null,
       longitude: null,
       altitude: null,
+      imageUrl: null,
       managerId: "",
     },
   });
+
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const selectedManagerId = watch("managerId");
   const selectedManager = users.find((u) => u.id === selectedManagerId);
@@ -482,6 +488,71 @@ export function CreateStationForm({
                   </div>
                 </div>
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Station Photo */}
+        <Card className="lg:col-span-1 border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+              Station Photo
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {imagePreview ? (
+              <div className="relative rounded-lg border border-border overflow-hidden bg-muted">
+                <img src={imagePreview} alt="Station preview" className="h-36 w-full object-cover" />
+                <div className="absolute top-2 right-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    className="h-7 text-xs px-2 shadow"
+                    onClick={() => {
+                      setImagePreview(null);
+                      setValue("imageUrl", null);
+                    }}
+                  >
+                    <Trash2 className="size-3.5 mr-1" /> Remove
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-stone-300 dark:border-stone-700 rounded-lg cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-900/50 transition-colors p-4">
+                {uploadingImage ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <SpinnerEllipsis />
+                    <span>Uploading photo...</span>
+                  </div>
+                ) : (
+                  <>
+                    <UploadCloud className="size-6 text-muted-foreground mb-1" />
+                    <span className="text-xs font-medium text-foreground">Upload station photo</span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5">PNG, JPG, WebP up to 10MB</span>
+                  </>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploadingImage}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      setUploadingImage(true);
+                      const url = await uploadClientFile(file);
+                      setImagePreview(url);
+                      setValue("imageUrl", url, { shouldValidate: true });
+                    } catch (err: any) {
+                      setError(err.message || "Failed to upload image.");
+                    } finally {
+                      setUploadingImage(false);
+                    }
+                  }}
+                />
+              </label>
             )}
           </CardContent>
         </Card>

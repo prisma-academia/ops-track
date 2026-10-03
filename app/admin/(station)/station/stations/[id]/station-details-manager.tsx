@@ -52,7 +52,11 @@ import {
   Lock,
   AlertCircle,
   Landmark,
+  UploadCloud,
+  Trash2,
+  Image as ImageIcon,
 } from "lucide-react";
+import { uploadClientFile } from "@/lib/client-upload";
 import { AssetTank } from "@/components/asset-tank";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import nigerianLocations from "@/constant/nigerian-locations.json";
@@ -113,6 +117,7 @@ const EditStationSchema = z.object({
   latitude: z.number().nullable().optional(),
   longitude: z.number().nullable().optional(),
   altitude: z.number().nullable().optional(),
+  imageUrl: z.string().optional().nullable(),
 });
 
 const PRODUCT_ICONS: Record<string, React.ReactNode> = {
@@ -216,8 +221,12 @@ export function StationDetailsManager({
       latitude: station.latitude != null ? Number(station.latitude) : null,
       longitude: station.longitude != null ? Number(station.longitude) : null,
       altitude: station.altitude != null ? Number(station.altitude) : null,
+      imageUrl: station.imageUrl || "",
     }
   });
+
+  const [stationImagePreview, setStationImagePreview] = useState<string | null>(station.imageUrl || null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const [openStateSelect, setOpenStateSelect] = useState(false);
   const [openLgaSelect, setOpenLgaSelect] = useState(false);
@@ -328,7 +337,9 @@ export function StationDetailsManager({
       latitude: station.latitude != null ? Number(station.latitude) : null,
       longitude: station.longitude != null ? Number(station.longitude) : null,
       altitude: station.altitude != null ? Number(station.altitude) : null,
+      imageUrl: station.imageUrl || "",
     });
+    setStationImagePreview(station.imageUrl || null);
     setActiveDialog("edit-station");
   };
 
@@ -499,14 +510,16 @@ export function StationDetailsManager({
       <div className="grid gap-6 md:grid-cols-2 items-stretch">
         {/* Station Information Card */}
         <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Store size={16} className="text-primary" />
-              Station Information
-            </CardTitle>
-            <CardDescription className="text-xs">Operational status, location and fuel pricing</CardDescription>
-          </CardHeader>
           <CardContent className="flex-1 flex flex-col justify-between">
+            {station.imageUrl && (
+              <div className="mb-4 relative h-40 w-full overflow-hidden rounded-lg border border-stone-200 dark:border-stone-800 bg-muted">
+                <img
+                  src={station.imageUrl}
+                  alt={station.name}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               {/* Left Column: Station Manager, State, Ward / LGA, Station Code */}
               <div className="space-y-3">
@@ -1244,6 +1257,93 @@ export function StationDetailsManager({
                         </Command>
                       </PopoverContent>
                     </Popover>
+                  </div>
+
+                  {/* Station Photo Upload */}
+                  <div className="space-y-2 pt-2">
+                    <label className="text-sm font-medium">Station Photo</label>
+                    {stationImagePreview ? (
+                      <div className="relative rounded-lg border border-border overflow-hidden bg-muted">
+                        <img
+                          src={stationImagePreview}
+                          alt="Station preview"
+                          className="h-32 w-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <label className="cursor-pointer bg-white text-stone-900 text-xs font-medium px-2.5 py-1.5 rounded-md hover:bg-stone-100 flex items-center gap-1 shadow">
+                            <UploadCloud className="size-3.5" />
+                            <span>Change</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              disabled={uploadingImage}
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  setUploadingImage(true);
+                                  const url = await uploadClientFile(file);
+                                  setStationImagePreview(url);
+                                  editStationForm.setValue("imageUrl", url, { shouldValidate: true });
+                                } catch (err: any) {
+                                  setApiError(err.message || "Failed to upload image.");
+                                } finally {
+                                  setUploadingImage(false);
+                                }
+                              }}
+                            />
+                          </label>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            className="h-7 text-xs px-2"
+                            onClick={() => {
+                              setStationImagePreview(null);
+                              editStationForm.setValue("imageUrl", null, { shouldValidate: true });
+                            }}
+                          >
+                            <Trash2 className="size-3.5 mr-1" /> Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-stone-300 dark:border-stone-700 rounded-lg cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-900/50 transition-colors p-4">
+                        {uploadingImage ? (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <SpinnerEllipsis />
+                            <span>Uploading photo...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <UploadCloud className="size-6 text-muted-foreground mb-1" />
+                            <span className="text-xs font-medium text-foreground">Upload station photo</span>
+                            <span className="text-[10px] text-muted-foreground mt-0.5">PNG, JPG, WebP up to 10MB</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={uploadingImage}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              setUploadingImage(true);
+                              const url = await uploadClientFile(file);
+                              setStationImagePreview(url);
+                              editStationForm.setValue("imageUrl", url, { shouldValidate: true });
+                            } catch (err: any) {
+                              setApiError(err.message || "Failed to upload image.");
+                            } finally {
+                              setUploadingImage(false);
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
                   </div>
                 </div>
 

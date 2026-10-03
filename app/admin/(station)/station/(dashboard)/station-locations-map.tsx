@@ -15,7 +15,6 @@ import {
     MapControls,
     MapMarker,
     MarkerContent,
-    MarkerPopup,
     MarkerTooltip,
     type MapRef,
     type MapViewport,
@@ -35,6 +34,7 @@ export interface StationMapStation {
   state: string | null
   latitude: number | null
   longitude: number | null
+  imageUrl?: string | null
   tanks: { productType: string; currentLiters: number; capacity: number }[]
   lastWaybill: {
     number: string
@@ -122,8 +122,8 @@ export default function StationLocationsMap({
 
   return (
     <Card className="w-full overflow-hidden py-0">
-      <div className="grid min-h-[720px] grid-cols-1 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="relative h-[420px] min-w-0 sm:h-[480px] lg:h-[520px]">
+      <div className="grid min-h-[640px] grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] items-stretch">
+        <div className="relative min-h-[460px] sm:min-h-[520px] lg:min-h-full h-full min-w-0 w-full">
           <Map
             ref={mapRef}
             viewport={viewport}
@@ -134,7 +134,7 @@ export default function StationLocationsMap({
               light: "https://tiles.openfreemap.org/styles/liberty",
               dark: "https://tiles.openfreemap.org/styles/liberty",
             } : undefined}
-            className="h-full w-full"
+            className="h-full w-full min-h-full"
           >
             <MapControls
               position="top-right"
@@ -171,54 +171,37 @@ export default function StationLocationsMap({
                 </MarkerContent>
                 <MarkerTooltip
                   offset={20}
-                  className="w-56 rounded-lg border border-border bg-card p-3 text-card-foreground shadow-lg"
+                  className="w-64 rounded-xl border border-border bg-card p-3 text-card-foreground shadow-xl"
                 >
-                  <div className="mb-2 grid h-20 place-items-center rounded-md bg-muted">
-                    <Image
-                      src="/assets/icons/gps.png"
-                      alt="Station location placeholder"
-                      width={500}
-                      height={300}
-                      className="h-16 w-16 object-contain"
-                    />
+                  <div className="mb-2.5 grid h-28 place-items-center rounded-lg bg-muted overflow-hidden border border-border">
+                    {station.imageUrl ? (
+                      <img
+                        src={station.imageUrl}
+                        alt={station.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Image
+                        src="/assets/icons/gps.png"
+                        alt="Station location placeholder"
+                        width={500}
+                        height={300}
+                        className="h-16 w-16 object-contain"
+                      />
+                    )}
                   </div>
                   <p className="text-sm font-semibold">{station.name}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{station.code}</p>
-                </MarkerTooltip>
-                <MarkerPopup
-                  closeButton
-                  className="w-72 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-xl"
-                >
-                  <div className="flex items-start justify-between gap-3 pr-5">
-                    <div>
-                      <p className="text-base font-semibold leading-5">{station.name}</p>
-                      <p className="mt-1 text-xs font-medium text-muted-foreground">{station.code}</p>
-                    </div>
-                    <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                      Mapped
+                  {station.location && (
+                    <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">{station.location}</p>
+                  )}
+                  <div className="mt-2.5 flex items-center justify-between border-t border-border pt-2 text-[10px] text-muted-foreground">
+                    <span>{station.tanks.length} tanks</span>
+                    <span className="font-mono">
+                      {station.latitude.toFixed(4)}, {station.longitude.toFixed(4)}
                     </span>
                   </div>
-                  <p className="mt-3 text-sm leading-5 text-muted-foreground">
-                    {[station.location, station.ward, station.lga, station.state]
-                      .filter(Boolean)
-                      .join(", ") || "No address recorded"}
-                  </p>
-                  <div className="mt-4 grid grid-cols-2 gap-3 border-y border-border py-3">
-                    <div>
-                      <p className="text-[10px] font-medium uppercase text-muted-foreground">Storage</p>
-                      <p className="mt-1 text-sm font-semibold">{station.tanks.length} tanks</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-medium uppercase text-muted-foreground">Coordinates</p>
-                      <p className="mt-1 text-xs font-medium">
-                        {station.latitude.toFixed(5)}, {station.longitude.toFixed(5)}
-                      </p>
-                    </div>
-                  </div>
-                  <Button asChild size="sm" className="mt-3 w-full">
-                    <Link href={`/admin/station/stations/${station.id}`}>Open station record</Link>
-                  </Button>
-                </MarkerPopup>
+                </MarkerTooltip>
               </MapMarker>
             ))}
             {userLocation && (
@@ -295,17 +278,50 @@ export default function StationLocationsMap({
         <aside className="flex min-h-[300px] flex-col border-t border-border lg:min-h-0 lg:border-l lg:border-t-0">
           {selectedStation ? (
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              <div className="flex items-center gap-3">
-                <div className="grid size-16 shrink-0 place-items-center rounded-lg bg-muted">
-                  <Image
-                    src="/assets/icons/gps.png"
-                    alt="Station placeholder"
-                    width={500}
-                    height={300}
-                    className="size-12 object-contain"
+              {/* Station Image Banner in Details Section */}
+              <div className="relative mb-4 h-40 w-full overflow-hidden rounded-xl border border-border bg-muted">
+                {selectedStation.imageUrl ? (
+                  <img
+                    src={selectedStation.imageUrl}
+                    alt={selectedStation.name}
+                    className="h-full w-full object-cover"
                   />
+                ) : (
+                  <div className="grid h-full w-full place-items-center bg-muted/60">
+                    <Image
+                      src="/assets/icons/gps.png"
+                      alt="Station placeholder"
+                      width={500}
+                      height={300}
+                      className="size-14 object-contain opacity-60"
+                    />
+                    <p className="text-[11px] text-muted-foreground font-medium -mt-2">No station photo</p>
+                  </div>
+                )}
+                <div className="absolute bottom-2 left-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+                  {selectedStation.code}
                 </div>
-                <div className="min-w-0">
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted border border-border">
+                  {selectedStation.imageUrl ? (
+                    <img
+                      src={selectedStation.imageUrl}
+                      alt={selectedStation.name}
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <Image
+                      src="/assets/icons/gps.png"
+                      alt="Station placeholder"
+                      width={500}
+                      height={300}
+                      className="size-8 object-contain"
+                    />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-base font-semibold">{selectedStation.name}</p>
                   <p className="text-xs text-muted-foreground">{selectedStation.code}</p>
                   <p className="mt-1 truncate text-xs text-muted-foreground">

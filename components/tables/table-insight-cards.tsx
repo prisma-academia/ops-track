@@ -10,25 +10,32 @@ import type { TableInsightStat } from "./table-insight-utils";
 export type { TableInsightStat, TableInsightTrendPoint } from "./table-insight-utils";
 
 export interface TableInsightCardsProps {
-  stats: TableInsightStat[];
+  stats?: TableInsightStat[];
+  leftStats?: TableInsightStat[];
+  chartStats?: TableInsightStat[];
   /** Heading on the radial breakdown card — defaults to current month. */
   breakdownTitle?: string;
 }
 
 export function TableInsightCards({
-  stats,
+  stats = [],
+  leftStats,
+  chartStats,
   breakdownTitle = format(new Date(), "MMMM"),
 }: TableInsightCardsProps) {
+  const resolvedLeftStats = leftStats ?? stats;
+  const resolvedChartStats = chartStats ?? stats;
+
   const radialData = React.useMemo(
-    () => stats.map((item) => ({ ...item, fill: item.color })),
-    [stats]
+    () => resolvedChartStats.map((item) => ({ ...item, fill: item.color })),
+    [resolvedChartStats]
   );
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <Card className="border-border/40 p-0 shadow-xs">
         <CardContent className="grid grid-cols-2 gap-x-6 gap-y-3 p-4">
-          {stats.map((item) => (
+          {resolvedLeftStats.map((item) => (
             <div key={item.key} className="flex min-w-0 items-center gap-2">
               <span
                 className="h-6 w-1.5 shrink-0 rounded-full"
@@ -66,16 +73,18 @@ export function TableInsightCards({
               ) : null}
             </div>
             <div className="grid flex-1 gap-1.5">
-              {stats.map((item) => (
+              {resolvedChartStats.map((item) => (
                 <div key={item.key} className="flex items-center justify-between gap-3 text-xs">
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <span className="flex items-center gap-1.5 text-muted-foreground truncate">
                     <span
                       className="size-2 shrink-0 rounded-full"
                       style={{ backgroundColor: item.color }}
                     />
-                    {item.label}
+                    <span className="truncate">{item.label}</span>
                   </span>
-                  <span className="font-mono font-medium text-card-foreground">{item.pct}%</span>
+                  <span className="font-mono font-medium text-card-foreground shrink-0 text-right">
+                    {item.value ? `${item.value} (${item.pct}%)` : `${item.pct}%`}
+                  </span>
                 </div>
               ))}
             </div>

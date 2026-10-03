@@ -107,26 +107,43 @@ export default async function DeliveryPnlPage() {
       const cycleEnd = i < group.length - 1 ? group[i + 1].deliveredAt! : new Date();
       const productType = a.waybill.productType;
 
-      const dispatchedQty = Number(a.litersToDispense);
-      const receivedQty = a.litersReceived != null ? Number(a.litersReceived) : null;
-      const purchaseQty = receivedQty ?? dispatchedQty;
+      const receivedQty = a.litersReceived != null ? Number(a.litersReceived) : Number(a.litersToDispense);
+      const purchaseQty = receivedQty;
       const costPerLiter = Number(a.costPerLiter || 0);
       const transportTotal = Number(a.transportationCost || 0);
-      const deliveryRate = dispatchedQty > 0 ? transportTotal / dispatchedQty : 0;
+      const deliveryRate = purchaseQty > 0 ? transportTotal / purchaseQty : 0;
       const deliveryCost = purchaseQty * costPerLiter;
 
       const cycleStartDay = startOfDay(cycleStart);
       const cycleEndDay = startOfDay(cycleEnd);
 
       let cycleRevenue = 0;
+      let cycleSoldQty = 0;
+      let totalLitersWithPrice = 0;
+      let totalPriceSum = 0;
+
       for (const log of salesLogs) {
         if (log.stationId !== a.stationId) continue;
         if (log.productType !== productType) continue;
         const logDay = startOfDay(log.logDate);
         if (logDay < cycleStartDay) continue;
         if (i < group.length - 1 ? logDay >= cycleEndDay : logDay > cycleEndDay) continue;
-        cycleRevenue += Number(log.litersSold) * Number(log.pricePerLiter);
+        const liters = Number(log.litersSold);
+        const price = Number(log.pricePerLiter);
+        cycleRevenue += liters * price;
+        cycleSoldQty += liters;
+        if (price > 0) {
+          totalLitersWithPrice += liters;
+          totalPriceSum += liters * price;
+        }
       }
+
+      const soldQty = cycleSoldQty;
+      const remainingQty = Math.max(0, purchaseQty - soldQty);
+      const avgSellingPrice = totalLitersWithPrice > 0 
+        ? totalPriceSum / totalLitersWithPrice 
+        : (costPerLiter * 1.15);
+      const expectedRevenueIfSold = purchaseQty * avgSellingPrice;
 
       let cycleExpenses = 0;
       for (const e of expenses) {
@@ -136,7 +153,8 @@ export default async function DeliveryPnlPage() {
         cycleExpenses += Number(e.amount);
       }
 
-      const netProfit = cycleRevenue - deliveryCost - transportTotal - cycleExpenses;
+      const totalOrderCost = deliveryCost + transportTotal;
+      const netProfit = cycleRevenue - totalOrderCost - cycleExpenses;
       const margin = cycleRevenue > 0 ? (netProfit / cycleRevenue) * 100 : 0;
 
       rows.push({
@@ -151,12 +169,15 @@ export default async function DeliveryPnlPage() {
               ? a.waybill.truckPlate
               : (a.delivery?.transport?.truck?.plateNumber || a.delivery?.transport?.truck?.name || a.waybill.truckPlate)),
         productType,
-        dispatchedQty,
         receivedQty,
+        soldQty,
+        remainingQty,
+        expectedRevenueIfSold,
         purchasePrice: costPerLiter,
         deliveryCost,
         deliveryRate,
         transportTotal,
+        totalOrderCost,
         cycleRevenue,
         cycleExpenses,
         netProfit,

@@ -221,6 +221,7 @@ export function SalesReportsManager({
     let approved = 0;
     let pending = 0;
     let rejected = 0;
+    let settled = 0;
 
     groupedSales.forEach((g) => {
       totalLiters += Number(g.litersSold);
@@ -228,6 +229,7 @@ export function SalesReportsManager({
       totalReceived += g.totalReceived;
       if (g.overallBalance > 0) overpayment += g.overallBalance;
       if (g.overallBalance < 0) underpayment += Math.abs(g.overallBalance);
+      if (g.overallBalance === 0) settled += 1;
       if (g.status === "APPROVED") approved += 1;
       if (g.status === "PENDING" || g.status === "PARTIAL") pending += 1;
       if (g.status === "REJECTED") rejected += 1;
@@ -242,27 +244,49 @@ export function SalesReportsManager({
       approved,
       pending,
       rejected,
+      settled,
       count: groupedSales.length,
     };
   }, [groupedSales]);
 
-  const insightStats = React.useMemo(
+  const leftStats = React.useMemo(
     () =>
       buildPctStats([
         {
-          key: "volume",
-          label: "Volume Sold",
-          value: metrics.totalLiters,
+          key: "expected",
+          label: "Expected Amount",
+          value: metrics.expectedRevenue,
           color: "#3b82f6",
-          format: (n) => `${n.toLocaleString()} L`,
-        },
-        {
-          key: "revenue",
-          label: "Digital Revenue",
-          value: metrics.totalReceived,
-          color: "#6366f1",
           format: (n) => fmtMoney(n),
         },
+        {
+          key: "received",
+          label: "Received Amount",
+          value: metrics.totalReceived,
+          color: "#10b981",
+          format: (n) => fmtMoney(n),
+        },
+        {
+          key: "overpayment",
+          label: "Overpayment",
+          value: metrics.overpayment,
+          color: "#06b6d4",
+          format: (n) => fmtMoney(n),
+        },
+        {
+          key: "underpayment",
+          label: "Underpayment",
+          value: metrics.underpayment,
+          color: "#f43f5e",
+          format: (n) => fmtMoney(n),
+        },
+      ]),
+    [metrics]
+  );
+
+  const chartStats = React.useMemo(
+    () =>
+      buildPctStats([
         {
           key: "approved",
           label: "Approved",
@@ -273,7 +297,19 @@ export function SalesReportsManager({
           key: "pending",
           label: "Pending",
           value: metrics.pending,
-          color: "#d97706",
+          color: "#f59e0b",
+        },
+        {
+          key: "rejected",
+          label: "Rejected",
+          value: metrics.rejected,
+          color: "#ef4444",
+        },
+        {
+          key: "settled",
+          label: "Settled",
+          value: metrics.settled,
+          color: "#6366f1",
         },
       ]),
     [metrics]
@@ -620,7 +656,7 @@ export function SalesReportsManager({
         </p>
       </div>
 
-      <TableInsightCards stats={insightStats} />
+      <TableInsightCards leftStats={leftStats} chartStats={chartStats} breakdownTitle="Status Breakdown" />
 
       <DataTable
         columns={columns}

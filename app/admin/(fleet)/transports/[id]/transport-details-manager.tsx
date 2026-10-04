@@ -285,19 +285,7 @@ export function TransportDetailsManager({
   const driverBaseFee = effectiveLoadedVolume * ratePerLiter;
   const driverNetFee = Math.max(0, driverBaseFee - totalDeductionAmount);
 
-  // Dynamic reconciliation state per delivery: "SHORTAGE" | "IN_TRUCK"
-  const [reconciliations, setReconciliations] = useState<Record<string, "SHORTAGE" | "IN_TRUCK">>({});
-
   const handleOpenFinalizeDialog = () => {
-    const init: Record<string, "SHORTAGE" | "IN_TRUCK"> = {};
-    (transport.deliveries || []).forEach((del: any) => {
-      if (Number(del.litersReturned || 0) > 0 || del.shortageDeducted === false) {
-        init[del.id] = "IN_TRUCK";
-      } else {
-        init[del.id] = "SHORTAGE";
-      }
-    });
-    setReconciliations(init);
     setError(null);
     setOpenFinalizeDialog(true);
   };
@@ -314,7 +302,7 @@ export function TransportDetailsManager({
   // Calculate volume unaccounted on truck (never dispatched to any drop, and not logged as loss)
   const unassignedTruckVolume = Math.max(0, carriedVolume - distributedVolume - loggedLostVolume);
 
-  // Compute live breakdown based on current reconciliations in the modal
+  // Compute live breakdown based on deliveries' logged status
   let modalReturnedToTruck = 0;
   let modalTransitShortage = 0;
   let modalShortageDeductionAmount = 0;
@@ -323,19 +311,16 @@ export function TransportDetailsManager({
     if (del.litersReceived === null || del.litersReceived === undefined) return;
     const assigned = Number(del.litersDespatched || del.litersSold || 0);
     const received = Number(del.litersReceived);
-    const diff = assigned - received;
+    const diff = Math.max(0, assigned - received);
     if (diff > 0.001) {
-      const mode =
-        reconciliations[del.id] ??
-        (Number(del.litersReturned || 0) > 0 || del.shortageDeducted === false
-          ? "IN_TRUCK"
-          : "SHORTAGE");
-      if (mode === "IN_TRUCK") {
-        modalReturnedToTruck += diff;
+      const returned = Number(del.litersReturned || 0);
+      if (returned > 0 || del.shortageDeducted === false) {
+        modalReturnedToTruck += (returned > 0 ? returned : diff);
       } else {
-        modalTransitShortage += diff;
+        const shortage = Math.max(0, diff - returned);
+        modalTransitShortage += shortage;
         const price = Number(del.amountPerLiter) || defaultSellingPrice;
-        modalShortageDeductionAmount += diff * price;
+        modalShortageDeductionAmount += shortage * price;
       }
     }
   });
@@ -366,38 +351,7 @@ export function TransportDetailsManager({
     setError(null);
 
     try {
-      // 1. Persist any delivery reconciliation changes
-      for (const del of (transport.deliveries || [])) {
-        if (del.litersReceived === null || del.litersReceived === undefined) continue;
-        const assigned = Number(del.litersDespatched || del.litersSold || 0);
-        const received = Number(del.litersReceived);
-        const diff = assigned - received;
-        if (diff > 0.001) {
-          const mode =
-            reconciliations[del.id] ??
-            (Number(del.litersReturned || 0) > 0 || del.shortageDeducted === false
-              ? "IN_TRUCK"
-              : "SHORTAGE");
-          const targetReturned = mode === "IN_TRUCK" ? diff : 0;
-          const targetDeducted = mode === "SHORTAGE";
-          const currentReturned = Number(del.litersReturned || 0);
-          const currentDeducted = del.shortageDeducted ?? true;
-
-          if (Math.abs(currentReturned - targetReturned) > 0.001 || currentDeducted !== targetDeducted) {
-            const patchRes = await apiPatch(`/api/tenant/fleet/deliveries/${del.id}`, {
-              litersReturned: targetReturned,
-              shortageDeducted: targetDeducted,
-            });
-            if (patchRes.error) {
-              setError(`Failed to update delivery reconciliation: ${patchRes.error.message}`);
-              setIsFinalizing(false);
-              return;
-            }
-          }
-        }
-      }
-
-      // 2. Finalize transport
+      // Finalize transport directly
       const payload: Record<string, any> = {
         status: "COMPLETED",
       };
@@ -1131,7 +1085,7 @@ export function TransportDetailsManager({
 
       {/* Finalize Transport Dialog */}
       <Dialog open={openFinalizeDialog} onOpenChange={setOpenFinalizeDialog}>
-        <DialogContent className="sm:max-w-[850px] lg:max-w-[950px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[650px] lg:max-w-[650px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-emerald-600" />
@@ -1186,7 +1140,7 @@ export function TransportDetailsManager({
                       <TableHead className="text-right">Dispatched</TableHead>
                       <TableHead className="text-right">Received</TableHead>
                       <TableHead className="text-right">Shortage</TableHead>
-                      <TableHead className="text-center w-[300px]">Reconciliation</TableHead>
+                      <TableHead className="text-center w-[180px]">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1195,11 +1149,7 @@ export function TransportDetailsManager({
                       const assigned = Number(del.litersDespatched || del.litersSold || 0);
                       const received = !isPending ? Number(del.litersReceived) : null;
                       const diff = received !== null ? Math.max(0, assigned - received) : 0;
-                      const currentMode =
-                        reconciliations[del.id] ??
-                        (Number(del.litersReturned || 0) > 0 || del.shortageDeducted === false
-                          ? "IN_TRUCK"
-                          : "SHORTAGE");
+                      const returned = Number(del.litersReturned || 0);
 
                       return (
                         <TableRow key={del.id}>
@@ -1237,35 +1187,35 @@ export function TransportDetailsManager({
                               <span className="text-emerald-600">0 L</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-center flex items-center justify-end">
+                          <TableCell className="text-center">
                             {isPending ? (
                               <Badge
                                 variant="outline"
                                 className="border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/50 text-[11px]"
                               >
-                                Awaiting Receive
+                                Awaiting Received
+                              </Badge>
+                            ) : returned > 0 ? (
+                              <Badge
+                                variant="outline"
+                                className="border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/50 text-[11px]"
+                              >
+                                In Truck ({returned.toLocaleString()} L)
                               </Badge>
                             ) : diff > 0 ? (
-                              <Select
-                                value={currentMode}
-                                onValueChange={(val: "SHORTAGE" | "IN_TRUCK") => {
-                                  setReconciliations((prev) => ({ ...prev, [del.id]: val }));
-                                }}
+                              <Badge
+                                variant="outline"
+                                className="border-rose-500 text-rose-600 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/50 text-[11px]"
                               >
-                                <SelectTrigger className="h-8 text-xs w-[190px] bg-background">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent position="popper">
-                                  <SelectItem value="SHORTAGE" className="text-xs">
-                                    Transit Shortage (Deduct Driver)
-                                  </SelectItem>
-                                  <SelectItem value="IN_TRUCK" className="text-xs">
-                                    Remains in Truck (Return)
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
+                                Waiting Reconciled
+                              </Badge>
                             ) : (
-                              <span className="text-xs text-muted-foreground">Completed</span>
+                              <Badge
+                                variant="outline"
+                                className="border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/50 text-[11px]"
+                              >
+                                Completed
+                              </Badge>
                             )}
                           </TableCell>
                         </TableRow>

@@ -36,6 +36,15 @@ function resolveDeliveryPaymentReceived(delivery: OrderPnlDelivery): number {
   return Math.max(fromField, fromTransactions);
 }
 
+export type OrderPnlLossLog = {
+  id: string;
+  lossType: string;
+  lostQuantity: Numeric;
+  expensesIncurred: Numeric;
+  comment?: string | null;
+  createdAt?: Date | string;
+};
+
 export type OrderPnlTransport = {
   id: string;
   ratePerLiter: Numeric;
@@ -46,6 +55,7 @@ export type OrderPnlTransport = {
   transporter?: { name: string | null } | null;
   truck?: { name: string | null; plateNumber: string | null; id?: string } | null;
   deliveries: OrderPnlDelivery[];
+  lossLogs?: OrderPnlLossLog[];
 };
 
 export type OrderPnlOrder = {
@@ -93,6 +103,9 @@ export type OrderPnlTransportRow = {
   litersCarried: number;
   fleetExpenses: number;
   lossDeduction: number;
+  incidentLossLiters: number;
+  incidentLossAmount: number;
+  incidentLossLogs?: OrderPnlLossLog[];
   transportTotalQty: number;
   transportTotalRev: number;
   transportTotalPaid: number;
@@ -270,22 +283,48 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
       };
     });
 
-    let lossDeduction = transportStationLossAmount;
+    const transportIncidentLogs = (transport.lossLogs ?? []).filter((log) => {
+      if (log.lossType !== "SHORTAGE") return true;
+      return transportStationLossAmount === 0;
+    });
 
-    const transportLitersLost = toNum(transport.litersLost);
-    if (lossDeduction === 0 && transport.deliveries.length === 0 && transportLitersLost > 0) {
-      lossDeduction = transportLitersLost * pricePerLitre;
-    }
+    const incidentLossLiters = transportIncidentLogs.reduce(
+      (sum, log) => sum + toNum(log.lostQuantity),
+      0
+    );
+    const incidentLossExpenses = transportIncidentLogs.reduce(
+      (sum, log) => sum + toNum(log.expensesIncurred),
+      0
+    );
+
+    const fallbackLitersLost =
+      transportIncidentLogs.length === 0
+        ? Math.max(
+            0,
+            toNum(transport.litersLost) -
+              transport.deliveries.reduce((s, d) => {
+                const sq = toNum(d.litersDespatched);
+                const rq =
+                  d.litersReceived !== null && d.litersReceived !== undefined
+                    ? toNum(d.litersReceived)
+                    : sq;
+                return s + Math.max(0, sq - rq);
+              }, 0)
+          )
+        : 0;
+
+    const totalIncidentLiters = incidentLossLiters + fallbackLitersLost;
+    const totalIncidentAmount = totalIncidentLiters * pricePerLitre + incidentLossExpenses;
+
+    const lossDeduction = transportStationLossAmount + totalIncidentAmount;
 
     const transportDepotToPrimaryCost = depotToPrimaryCost;
     const transportTotalCost = depotToPrimaryCost + allocatedDeliveryTransport;
 
-    totalFleetExpenses += fleetExpenses;
+    totalFleetExpenses += fleetExpenses + incidentLossExpenses;
     totalLossDeduction += lossDeduction;
-
-    if (transportLitersLost > 0 && transport.deliveries.length === 0) {
-      totalOrderLossLiters += transportLitersLost;
-    }
+    totalOrderLossLiters += totalIncidentLiters;
+    totalOrderLossAmount += totalIncidentAmount;
 
     totalDepotToPrimaryCost += transportDepotToPrimaryCost;
     totalDeliveryTransportCost += allocatedDeliveryTransport;
@@ -293,6 +332,15 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
     totalAmountSoldQty += transportTotalQty;
     amountSoldRev += transportTotalRev;
     amountPaid += transportTotalPaid;
+
+    const sanitizedIncidentLogs: OrderPnlLossLog[] = transportIncidentLogs.map((log) => ({
+      id: log.id,
+      lossType: log.lossType,
+      lostQuantity: toNum(log.lostQuantity),
+      expensesIncurred: toNum(log.expensesIncurred),
+      comment: log.comment ?? null,
+      createdAt: log.createdAt ? new Date(log.createdAt).toISOString() : undefined,
+    }));
 
     return {
       id: transport.id,
@@ -303,6 +351,9 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
       litersCarried,
       fleetExpenses,
       lossDeduction,
+      incidentLossLiters: totalIncidentLiters,
+      incidentLossAmount: totalIncidentAmount,
+      incidentLossLogs: sanitizedIncidentLogs,
       transportTotalQty,
       transportTotalRev,
       transportTotalPaid,

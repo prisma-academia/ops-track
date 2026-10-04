@@ -4,6 +4,7 @@ import type {
   OrderPnlSummary,
   OrderPnlTransportRow,
 } from "@/lib/fleet/order-pnl-summary";
+import { getLossTypeLabel } from "@/lib/fleet/loss-types";
 
 type SummaryContext = Pick<
   OrderPnlSummary,
@@ -59,7 +60,87 @@ export function buildFleetPnlDetailRows(
       transport.truckNo && transport.truckNo !== "Unknown" ? [transport.truckNo] : [];
     const truckIds = transport.truckId ? [transport.truckId] : [];
 
+    const deliveryRows = transport.deliveries.map((delivery) =>
+      toFleetPnlDetailRow(delivery, summary, transport)
+    );
+
+    const lossRows: FleetPnlTableRow[] = (transport.incidentLossLogs ?? []).map((log) => {
+      const qty = Number(log.lostQuantity) || 0;
+      const expenses = Number(log.expensesIncurred) || 0;
+      const pCost = qty * summary.priceBought;
+      const lCost = qty * summary.loadingCostPerLitre;
+      const tCost = pCost + lCost + expenses;
+      const lossTypeLabel = getLossTypeLabel(log.lossType);
+
+      return {
+        id: `loss-${log.id}`,
+        orderDate: log.createdAt ? new Date(log.createdAt).toISOString() : summary.orderDate,
+        orderReference: `Loss: ${lossTypeLabel}${log.comment ? ` (${log.comment})` : ""}`,
+        depot: summary.depot,
+        productType: summary.productType,
+        litersOrdered: qty,
+        litersDespatched: qty,
+        litersReceived: 0,
+        purchaseCost: pCost,
+        purchasePricePerLitre: summary.priceBought,
+        loadingCost: lCost,
+        loadingCostPerLitre: summary.loadingCostPerLitre,
+        sellingPrice: 0,
+        orderCost: pCost + lCost,
+        depotToPrimaryCost: 0,
+        deliveryTransportCost: 0,
+        totalTransportCost: 0,
+        totalFleetExpenses: expenses,
+        totalLossDeduction: pCost + expenses,
+        totalCost: tCost,
+        totalAmountSoldQty: 0,
+        amountSoldRev: 0,
+        amountPaid: 0,
+        debtRemaining: 0,
+        pnl: -tCost,
+        truckIds,
+        truckLabels,
+      };
+    });
+
+    if (lossRows.length === 0 && (transport.incidentLossLiters ?? 0) > 0) {
+      const qty = transport.incidentLossLiters;
+      const pCost = qty * summary.priceBought;
+      const lCost = qty * summary.loadingCostPerLitre;
+      const tCost = pCost + lCost;
+      lossRows.push({
+        id: `loss-transport-${transport.id}`,
+        orderDate: summary.orderDate,
+        orderReference: `Transit Loss (${transport.transporterName || transport.truckNo})`,
+        depot: summary.depot,
+        productType: summary.productType,
+        litersOrdered: qty,
+        litersDespatched: qty,
+        litersReceived: 0,
+        purchaseCost: pCost,
+        purchasePricePerLitre: summary.priceBought,
+        loadingCost: lCost,
+        loadingCostPerLitre: summary.loadingCostPerLitre,
+        sellingPrice: 0,
+        orderCost: pCost + lCost,
+        depotToPrimaryCost: 0,
+        deliveryTransportCost: 0,
+        totalTransportCost: 0,
+        totalFleetExpenses: 0,
+        totalLossDeduction: transport.incidentLossAmount || pCost,
+        totalCost: tCost,
+        totalAmountSoldQty: 0,
+        amountSoldRev: 0,
+        amountPaid: 0,
+        debtRemaining: 0,
+        pnl: -tCost,
+        truckIds,
+        truckLabels,
+      });
+    }
+
     if (transport.deliveries.length === 0) {
+      if (lossRows.length > 0) return lossRows;
       const totalCost =
         transport.depotToPrimaryCost +
         transport.deliveryTransportCost +
@@ -97,8 +178,6 @@ export function buildFleetPnlDetailRows(
       ];
     }
 
-    return transport.deliveries.map((delivery) =>
-      toFleetPnlDetailRow(delivery, summary, transport)
-    );
+    return [...deliveryRows, ...lossRows];
   });
 }

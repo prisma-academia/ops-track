@@ -21,6 +21,7 @@ export default async function OrderPnlDetailsPage(props: {
         include: {
           transporter: { select: { name: true } },
           truck: { select: { id: true, name: true, plateNumber: true } },
+          lossLogs: true,
           deliveries: {
             include: {
               customer: { select: { name: true } },
@@ -44,10 +45,13 @@ export default async function OrderPnlDetailsPage(props: {
 
   const { summary, transports } = calculateOrderPnlSummary(order);
 
+  const serializedSummary = JSON.parse(JSON.stringify(summary));
+  const serializedTransports = JSON.parse(JSON.stringify(transports));
+
   return (
     <OrderPnlDetailsManager
-      summary={summary}
-      transports={transports}
+      summary={serializedSummary}
+      transports={serializedTransports}
     />
   );
 }

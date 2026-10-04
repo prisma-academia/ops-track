@@ -194,7 +194,7 @@ export async function PATCH(
               lossType: body.lossLog.lossType,
               lostQuantity: body.lossLog.lostQuantity,
               expensesIncurred: body.lossLog.expensesIncurred,
-              comment: body.lossLog.comment,
+              comment: body.lossLog.comment ? body.lossLog.comment.replace(/[\u20A6]/g, "NGN ") : null,
             }
           }
         })

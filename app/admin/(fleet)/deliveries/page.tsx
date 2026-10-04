@@ -5,7 +5,7 @@ import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { SalesTable } from "./table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Banknote, Droplets, ReceiptText, Landmark } from "lucide-react";
-import { cn, formatShortCurrency } from "@/lib/utils";
+import { cn, formatShortCurrency, formatDestination, formatTruckLabel } from "@/lib/utils";
 import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 
 export default async function SalesPage({
@@ -83,7 +83,12 @@ export default async function SalesPage({
             status: true,
             destination: true,
             productType: true,
-            truck: { select: { id: true, name: true } }
+            ratePerLiter: true,
+            isOneTime: true,
+            oneTimeTruckPlate: true,
+            oneTimeTransporterName: true,
+            transporter: { select: { id: true, name: true } },
+            truck: { select: { id: true, name: true, plateNumber: true, truckNumber: true } }
           }
         },
         _count: {
@@ -102,11 +107,14 @@ export default async function SalesPage({
     const isExternalClient = Boolean(delivery.customer || !delivery.station);
     const productType = delivery.transport?.productType || "PMS";
     const volumeUnit = productType === "LPG" ? "KG" : "L";
+    const transportRate = delivery.transport ? Number(delivery.transport.ratePerLiter || 0) : 0;
 
     return {
       id: delivery.id,
       customerName: delivery.customer ? delivery.customer.name : (delivery.station ? delivery.station.name : "Unknown"),
-      transportDetails: delivery.transport ? `${delivery.transport.truck?.name || "Unknown"} to ${delivery.transport.destination}` : "None",
+      transportDetails: delivery.transport
+        ? `${formatTruckLabel(delivery.transport)} to ${formatDestination(delivery.transport.destination)}`
+        : "None",
       litersDespatched,
       litersReceived,
       litersReturned: Number(delivery.litersReturned || 0),
@@ -122,6 +130,7 @@ export default async function SalesPage({
       volumeUnit,
       transportId: delivery.transportId,
       transportStatus: delivery.transport ? delivery.transport.status : null,
+      transportRate,
     };
   });
 

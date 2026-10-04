@@ -123,6 +123,10 @@ export default async function DeliveryWaybillPage({
           id: delivery.transport.id,
           destination: delivery.transport.destination,
           productType: delivery.transport.productType,
+          isOneTime: delivery.transport.isOneTime,
+          oneTimeTruckPlate: delivery.transport.oneTimeTruckPlate,
+          oneTimeTransporterName: delivery.transport.oneTimeTransporterName,
+          oneTimeDriverName: delivery.transport.oneTimeDriverName,
           transporter: delivery.transport.transporter ? { name: delivery.transport.transporter.name } : null,
           truck: delivery.transport.truck
             ? {

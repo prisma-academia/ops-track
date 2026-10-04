@@ -16,6 +16,10 @@ export type TransportsLedgerRow = {
   transporter?: { name: string };
   driver?: { firstName: string; lastName: string };
   truck?: { name: string; plateNumber?: string | null };
+  isOneTime?: boolean | null;
+  oneTimeTransporterName?: string | null;
+  oneTimeTruckPlate?: string | null;
+  oneTimeDriverName?: string | null;
   orderId: string;
   order?: { reference?: string | null };
   ratePerLiter: number;
@@ -42,26 +46,26 @@ export const transportsColumns: ColumnDef<TransportsLedgerRow>[] = [
     id: "transporter",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Transporter" />,
     meta: { label: "Transporter" },
-    accessorFn: (row) => row.transporter?.name || "-",
-    cell: ({ row }) => <span className="font-medium">{row.original.transporter?.name || "-"}</span>,
+    accessorFn: (row) => row.transporter?.name || row.oneTimeTransporterName || "-",
+    cell: ({ row }) => <span className="font-medium">{row.original.transporter?.name || row.original.oneTimeTransporterName || "-"}</span>,
   },
   {
     id: "truck",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Truck" />,
     meta: { label: "Truck" },
-    accessorFn: (row) => row.truck?.plateNumber || row.truck?.name || "-",
-    cell: ({ row }) => row.original.truck?.plateNumber || row.original.truck?.name || "-",
+    accessorFn: (row) => row.truck?.plateNumber || row.truck?.name || row.oneTimeTruckPlate || "-",
+    cell: ({ row }) => row.original.truck?.plateNumber || row.original.truck?.name || row.original.oneTimeTruckPlate || "-",
   },
   {
     id: "driver",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Driver" />,
     meta: { label: "Driver" },
     accessorFn: (row) =>
-      row.driver ? `${row.driver.firstName} ${row.driver.lastName}` : "-",
+      row.driver ? `${row.driver.firstName || ""} ${row.driver.lastName || ""}`.trim() : row.oneTimeDriverName || "-",
     cell: ({ row }) =>
       row.original.driver
-        ? `${row.original.driver.firstName} ${row.original.driver.lastName}`
-        : "-",
+        ? `${row.original.driver.firstName || ""} ${row.original.driver.lastName || ""}`.trim()
+        : row.original.oneTimeDriverName || "-",
   },
   {
     id: "orderRef",

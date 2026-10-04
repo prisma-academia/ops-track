@@ -14,6 +14,7 @@ export default async function TransportReportPage() {
       truck: {
         select: {
           plateNumber: true,
+          name: true,
         },
       },
       driver: {

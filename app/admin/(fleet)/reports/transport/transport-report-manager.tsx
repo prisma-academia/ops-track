@@ -205,11 +205,11 @@ export function TransportReportManager({
       },
       {
         id: "transporter",
-        accessorFn: (row) => row.transporter?.name ?? "—",
+        accessorFn: (row) => row.transporter?.name || row.oneTimeTransporterName || "—",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Transporter" />,
         meta: { label: "Transporter" },
         cell: ({ row }) => (
-          <span className="truncate max-w-[150px] inline-block">{row.original.transporter?.name || "—"}</span>
+          <span className="truncate max-w-[150px] inline-block">{row.original.transporter?.name || row.original.oneTimeTransporterName || "—"}</span>
         ),
         filterFn: (row, id, value) => {
           if (!Array.isArray(value) || value.length === 0) return true;
@@ -218,23 +218,23 @@ export function TransportReportManager({
       },
       {
         id: "truckPlate",
-        accessorFn: (row) => row.truck?.plateNumber ?? "—",
+        accessorFn: (row) => row.truck?.plateNumber || row.truck?.name || row.oneTimeTruckPlate || "—",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Truck" />,
         meta: { label: "Truck" },
         cell: ({ row }) => (
-          <span className="font-semibold uppercase">{row.original.truck?.plateNumber || "—"}</span>
+          <span className="font-semibold uppercase">{row.original.truck?.plateNumber || row.original.truck?.name || row.original.oneTimeTruckPlate || "—"}</span>
         ),
       },
       {
         id: "driver",
         accessorFn: (row) =>
-          row.driver ? `${row.driver.firstName} ${row.driver.lastName}` : "—",
+          row.driver ? `${row.driver.firstName || ""} ${row.driver.lastName || ""}`.trim() : row.oneTimeDriverName || "—",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Driver" />,
         meta: { label: "Driver" },
         cell: ({ row }) =>
           row.original.driver
-            ? `${row.original.driver.firstName} ${row.original.driver.lastName}`
-            : "—",
+            ? `${row.original.driver.firstName || ""} ${row.original.driver.lastName || ""}`.trim()
+            : row.original.oneTimeDriverName || "—",
       },
       {
         accessorKey: "litersCarried",

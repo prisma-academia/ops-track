@@ -2,7 +2,7 @@
 
 import { Printer, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { cn, formatHumanReadableDate, formatDestination } from "@/lib/utils";
 import { printDeliveryInvoice } from "@/lib/print/print-delivery-invoice";
 import Link from "next/link";
 
@@ -61,10 +61,10 @@ export function DeliveryWaybillView({
 
   const driverName = delivery.transport?.driver
     ? `${delivery.transport.driver.firstName} ${delivery.transport.driver.lastName}`.trim()
-    : delivery.driverName || "Assigned Driver";
+    : delivery.transport?.oneTimeDriverName || delivery.driverName || "Assigned Driver";
   const driverPhone = delivery.transport?.driver?.phone || delivery.driverPhone || "N/A";
-  const truckPlate = delivery.transport?.truck?.plateNumber || delivery.truckPlate || delivery.transport?.truck?.name || "N/A";
-  const transporterName = delivery.transport?.transporter?.name || delivery.transporterName || "Fleet Carrier";
+  const truckPlate = delivery.transport?.truck?.plateNumber || delivery.transport?.oneTimeTruckPlate || delivery.truckPlate || delivery.transport?.truck?.name || "N/A";
+  const transporterName = delivery.transport?.transporter?.name || delivery.transport?.oneTimeTransporterName || delivery.transporterName || "Fleet Carrier";
 
   const isDelivered = litersReceived !== null;
 
@@ -215,7 +215,7 @@ export function DeliveryWaybillView({
                     <p className="font-bold text-gray-900 text-sm">{productType} Fuel Dispatch</p>
                     <p className="text-[11px] text-gray-500 mt-0.5">
                       Delivery Reference: {delivery.id.substring(0, 8).toUpperCase()}
-                      {delivery.transport?.destination && ` • Route: ${delivery.transport.destination}`}
+                      {delivery.transport?.destination && ` • Route: ${formatDestination(delivery.transport.destination)}`}
                     </p>
                   </td>
                   <td className="py-3.5 text-right font-mono font-bold text-sm text-gray-900">

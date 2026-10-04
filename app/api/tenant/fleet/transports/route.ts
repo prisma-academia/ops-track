@@ -20,7 +20,7 @@ const CreateTransportSchema = z.object({
     oneTimeTruckPlate: z.string().optional().nullable(),
     oneTimeDriverName: z.string().optional().nullable(),
     destination: z.string().min(1),
-    ratePerLiter: z.number().positive(),
+    ratePerLiter: z.number().min(0),
     litersCarried: z.number().positive(),
   })).min(1, "At least one truck assignment is required").superRefine((data, ctx) => {
     data.forEach((assignment, index) => {

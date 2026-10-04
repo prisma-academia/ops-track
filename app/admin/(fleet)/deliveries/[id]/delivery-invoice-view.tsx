@@ -2,7 +2,7 @@
 
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { cn, formatHumanReadableDate, formatDestination, formatTruckLabel } from "@/lib/utils";
 import { printDeliveryInvoice } from "@/lib/print/print-delivery-invoice";
 
 function formatNaira(n: number | null | undefined) {
@@ -248,22 +248,26 @@ export function DeliveryInvoiceView({ delivery }: { delivery: any }) {
                   <p className="font-medium text-gray-700">{formatQty(Number(delivery.litersReceived))} L</p>
                 </div>
               )}
-              {delivery.transport?.transporter?.name && (
+              {(delivery.transport?.transporter?.name || delivery.transport?.oneTimeTransporterName) && (
                 <div>
                   <span className="text-gray-400">Transporter</span>
-                  <p className="font-medium text-gray-700">{delivery.transport.transporter.name}</p>
+                  <p className="font-medium text-gray-700">{delivery.transport.transporter?.name || delivery.transport.oneTimeTransporterName}</p>
                 </div>
               )}
-              {delivery.transport?.truck && (
+              {delivery.transport && (
                 <div>
                   <span className="text-gray-400">Truck</span>
-                  <p className="font-medium text-gray-700">{delivery.transport.truck.plateNumber || delivery.transport.truck.name}</p>
+                  <p className="font-medium text-gray-700">{formatTruckLabel(delivery.transport)}</p>
                 </div>
               )}
-              {delivery.transport?.driver && (
+              {(delivery.transport?.driver || delivery.transport?.oneTimeDriverName) && (
                 <div>
                   <span className="text-gray-400">Driver</span>
-                  <p className="font-medium text-gray-700">{`${delivery.transport.driver.firstName} ${delivery.transport.driver.lastName}`.trim()}</p>
+                  <p className="font-medium text-gray-700">
+                    {delivery.transport.driver
+                      ? `${delivery.transport.driver.firstName} ${delivery.transport.driver.lastName}`.trim()
+                      : delivery.transport.oneTimeDriverName}
+                  </p>
                 </div>
               )}
               {delivery.transport?.order?.sourceDepot && (
@@ -275,7 +279,7 @@ export function DeliveryInvoiceView({ delivery }: { delivery: any }) {
               {delivery.transport?.destination && (
                 <div>
                   <span className="text-gray-400">Destination</span>
-                  <p className="font-medium text-gray-700">{delivery.transport.destination}</p>
+                  <p className="font-medium text-gray-700">{formatDestination(delivery.transport.destination)}</p>
                 </div>
               )}
             </div>

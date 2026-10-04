@@ -110,3 +110,42 @@ export function parseFormattedNumber(value: string): string {
   }
   return cleaned;
 }
+
+export function formatDestination(dest?: string | null): string {
+  if (!dest) return "Destination";
+  const cleaned = dest.replace(/\s*\(\s*primary\s+destination\s*\)/gi, "").trim();
+  if (!cleaned) return dest;
+  return cleaned
+    .split(/\s+/)
+    .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+export function formatTruckLabel(transport?: {
+  isOneTime?: boolean | null;
+  oneTimeTruckPlate?: string | null;
+  oneTimeTransporterName?: string | null;
+  truck?: { name?: string | null; plateNumber?: string | null; truckNumber?: string | null } | null;
+  transporter?: { name?: string | null } | null;
+} | null): string {
+  if (!transport) return "Unassigned Truck";
+  if (transport.isOneTime && transport.oneTimeTruckPlate?.trim()) {
+    return transport.oneTimeTruckPlate.trim();
+  }
+  const plate = transport.truck?.plateNumber?.trim();
+  const name = transport.truck?.name?.trim();
+  const truckNum = transport.truck?.truckNumber?.trim();
+  const oneTimePlate = transport.oneTimeTruckPlate?.trim();
+
+  const primary = plate || name || truckNum || oneTimePlate;
+  if (primary && primary.toLowerCase() !== "unknown") {
+    return primary;
+  }
+
+  const transporter = transport.transporter?.name?.trim() || transport.oneTimeTransporterName?.trim();
+  if (transporter && transporter.toLowerCase() !== "unknown") {
+    return `Truck (${transporter})`;
+  }
+
+  return "Unassigned Truck";
+}

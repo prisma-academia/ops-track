@@ -8,6 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -43,10 +50,12 @@ import {
   ChevronsUpDown,
   Check,
   RotateCcw,
+  AlertTriangle,
+  CheckCircle2,
   FileText,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { cn, formatHumanReadableDate, formatDestination, formatTruckLabel } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -100,6 +109,13 @@ export function SalesDetailsManager({
   const [editStationId, setEditStationId] = useState(delivery.stationId || delivery.station?.id || "");
   const [editLitersReceived, setEditLitersReceived] = useState(delivery.litersReceived?.toString() || "");
   const [editAmountPerLiter, setEditAmountPerLiter] = useState(delivery.amountPerLiter?.toString() || "");
+  const [editShortageMode, setEditShortageMode] = useState<"IN_TRUCK" | "SHORTAGE_DEDUCT" | "SHORTAGE_WAIVE">(
+    Number(delivery.litersReturned || 0) > 0
+      ? "IN_TRUCK"
+      : delivery.shortageDeducted === false
+      ? "SHORTAGE_WAIVE"
+      : "SHORTAGE_DEDUCT"
+  );
 
   const [openReturnDialog, setOpenReturnDialog] = useState(false);
   const [returnAmount, setReturnAmount] = useState(delivery.litersReturned ? Number(delivery.litersReturned).toString() : "");
@@ -146,12 +162,24 @@ export function SalesDetailsManager({
   const productType = delivery.transport?.productType || delivery.transport?.order?.productType || "PMS";
   const volumeUnit = productType === "LPG" ? "KG" : "L";
   const recipientName = delivery.customer ? delivery.customer.name : delivery.station ? delivery.station.name : "Unknown Recipient";
+  const transporterName =
+    delivery.transport?.transporter?.name ||
+    delivery.transport?.oneTimeTransporterName ||
+    (pnlBreakdownRow?.orderReference && pnlBreakdownRow.orderReference !== recipientName ? pnlBreakdownRow.orderReference : null) ||
+    "N/A";
+  const truckPlate =
+    (delivery.transport && formatTruckLabel(delivery.transport) !== "Unassigned Truck" ? formatTruckLabel(delivery.transport) : null) ||
+    delivery.transport?.truck?.plateNumber ||
+    delivery.transport?.truck?.name ||
+    delivery.transport?.oneTimeTruckPlate ||
+    pnlBreakdownRow?.truckLabels?.[0] ||
+    "N/A";
   const driverName = delivery.transport?.driver
-    ? `${delivery.transport.driver.firstName} ${delivery.transport.driver.lastName}`.trim()
-    : "N/A";
+    ? `${delivery.transport.driver.firstName || ""} ${delivery.transport.driver.lastName || ""}`.trim() || delivery.transport.driver.phone || "N/A"
+    : delivery.transport?.oneTimeDriverName || "N/A";
   const depotName =
     delivery.transport?.order?.sourceDepot || pnlBreakdownRow?.depot || "Depot";
-  const primaryDestination = delivery.transport?.destination || "Primary";
+  const primaryDestination = formatDestination(delivery.transport?.destination);
   const depotToPrimaryRate = Number(delivery.transport?.ratePerLiter || 0);
   const deliveryTransportRateValue = Number(delivery.transportRate);
   const deliveryTransportRate =
@@ -188,7 +216,17 @@ export function SalesDetailsManager({
     }
 
     if (!delivery.station && editLitersReceived) {
-      payload.litersReceived = Number(editLitersReceived);
+      const numReceived = Number(editLitersReceived);
+      payload.litersReceived = numReceived;
+      const numDespatched = payload.litersDespatched ?? Number(delivery.litersDespatched);
+      if (numReceived < numDespatched) {
+        const diff = numDespatched - numReceived;
+        payload.litersReturned = editShortageMode === "IN_TRUCK" ? diff : 0;
+        payload.shortageDeducted = editShortageMode === "SHORTAGE_DEDUCT";
+      } else {
+        payload.litersReturned = 0;
+        payload.shortageDeducted = true;
+      }
     }
 
     const res = await apiPatch(`/api/tenant/fleet/deliveries/${delivery.id}`, payload);
@@ -375,7 +413,7 @@ export function SalesDetailsManager({
               {delivery.transport?.destination && (
                 <span className="flex items-center gap-1">
                   <MapPin className="size-3.5" />
-                  {delivery.transport.destination}
+                  {formatDestination(delivery.transport.destination)}
                 </span>
               )}
               {orderReference && (
@@ -635,20 +673,20 @@ export function SalesDetailsManager({
               </p>
             </div>
 
-            {delivery.transport && (
+            {(delivery.transport || transporterName !== "N/A" || truckPlate !== "N/A" || driverName !== "N/A") && (
               <div className="pt-2 border-t border-border/40 space-y-3">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                   <Truck className="size-3.5" />
-                  Transport
+                  Transport Logistics
                 </p>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Transporter</p>
-                    <p className="font-medium text-foreground">{delivery.transport.transporter?.name || "N/A"}</p>
+                    <p className="font-medium text-foreground">{transporterName}</p>
                   </div>
                   <div>
                     <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Truck</p>
-                    <p className="font-medium text-foreground">{delivery.transport.truck?.name || "N/A"}</p>
+                    <p className="font-medium text-foreground font-mono">{truckPlate}</p>
                   </div>
                   <div>
                     <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Driver</p>
@@ -759,6 +797,13 @@ export function SalesDetailsManager({
               setEditStationId(delivery.stationId || delivery.station?.id || "");
               setEditLitersReceived(delivery.litersReceived?.toString() || "");
               setEditAmountPerLiter(delivery.amountPerLiter?.toString() || "");
+              setEditShortageMode(
+                Number(delivery.litersReturned || 0) > 0
+                  ? "IN_TRUCK"
+                  : delivery.shortageDeducted === false
+                  ? "SHORTAGE_WAIVE"
+                  : "SHORTAGE_DEDUCT"
+              );
               setError(null);
             }
           }
@@ -888,15 +933,92 @@ export function SalesDetailsManager({
                 </div>
               </div>
             ) : (
-              <div className="space-y-2">
-                <Label htmlFor="litersReceived">Liters Received</Label>
-                <FormattedNumberInput
-                  id="litersReceived"
-                  min="0"
-                  value={editLitersReceived}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditLitersReceived(e.target.value)}
-                  prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
-                />
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="litersReceived">Liters Received</Label>
+                  <FormattedNumberInput
+                    id="litersReceived"
+                    min="0"
+                    value={editLitersReceived}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditLitersReceived(e.target.value)}
+                    prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
+                  />
+                </div>
+
+                {(() => {
+                  const numDespatched = Number(editLitersDespatched) || Number(delivery.litersDespatched) || 0;
+                  const numRec = editLitersReceived.trim() !== "" ? Number(editLitersReceived) : null;
+                  if (numRec === null || isNaN(numRec)) return null;
+                  const diff = numDespatched - numRec;
+                  if (diff <= 0) return null;
+
+                  const price = Number(editAmountPerLiter) || Number(delivery.amountPerLiter) || 0;
+
+                  return (
+                    <div className="space-y-2.5 p-3 rounded-lg border bg-muted/20 text-xs">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="editShortageMode" className="text-xs font-semibold">
+                          Shortage Reconciliation ({diff.toLocaleString()} {volumeUnit})
+                        </Label>
+                        <Select
+                          value={editShortageMode}
+                          onValueChange={(val: "IN_TRUCK" | "SHORTAGE_DEDUCT" | "SHORTAGE_WAIVE") => setEditShortageMode(val)}
+                        >
+                          <SelectTrigger id="editShortageMode" className="w-full text-xs h-9 bg-card">
+                            <SelectValue placeholder="Select how to reconcile shortage" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="IN_TRUCK" className="text-xs">
+                              Remains in Truck Tank (Returned to Truck)
+                            </SelectItem>
+                            <SelectItem value="SHORTAGE_DEDUCT" className="text-xs">
+                              Transit Shortage (Deduct from Driver Fee)
+                            </SelectItem>
+                            <SelectItem value="SHORTAGE_WAIVE" className="text-xs">
+                              Transit Shortage (Waive Driver Deduction)
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {editShortageMode === "IN_TRUCK" && (
+                        <div className="p-2.5 rounded-md border border-blue-500/20 bg-blue-500/10 text-[11px] space-y-1 text-blue-950 dark:text-blue-200">
+                          <div className="flex items-center gap-1.5 font-semibold text-blue-700 dark:text-blue-300">
+                            <Truck className="w-3.5 h-3.5 shrink-0" />
+                            <span>Outcome: Volume Restored to Truck Tank</span>
+                          </div>
+                          <p className="text-muted-foreground leading-normal">
+                            The unreceived {diff.toLocaleString()} {volumeUnit} remains physically inside the truck tank and becomes available for another delivery. No penalty is deducted from the driver.
+                          </p>
+                        </div>
+                      )}
+
+                      {editShortageMode === "SHORTAGE_DEDUCT" && (
+                        <div className="p-2.5 rounded-md border border-rose-500/20 bg-rose-500/10 text-[11px] space-y-1 text-rose-950 dark:text-rose-200">
+                          <div className="flex items-center gap-1.5 font-semibold text-rose-700 dark:text-rose-400">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                            <span>Outcome: Deducted from Driver / Transporter</span>
+                          </div>
+                          <p className="text-muted-foreground leading-normal">
+                            The {diff.toLocaleString()} {volumeUnit} is recorded as a transit shortage. ₦{(diff * price).toLocaleString()} will be deducted from the transporter&apos;s payout.
+                          </p>
+                        </div>
+                      )}
+
+                      {editShortageMode === "SHORTAGE_WAIVE" && (
+                        <div className="p-2.5 rounded-md border border-amber-500/20 bg-amber-500/10 text-[11px] space-y-1 text-amber-950 dark:text-amber-200">
+                          <div className="flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300">
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>Outcome: Transit Loss Absorbed by Company</span>
+                          </div>
+                          <p className="text-muted-foreground leading-normal">
+                            The {diff.toLocaleString()} {volumeUnit} is recorded as unreceived product loss, but the driver deduction is waived by the company.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

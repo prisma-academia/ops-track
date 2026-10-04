@@ -21,7 +21,7 @@ export default async function TransportReportDetailsPage({
     where: { id, tenantId: actor.tenantId },
     include: {
       truck: {
-        select: { plateNumber: true },
+        select: { plateNumber: true, name: true },
       },
       driver: {
         select: { firstName: true, lastName: true },

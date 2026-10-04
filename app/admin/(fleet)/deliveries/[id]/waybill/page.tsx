@@ -4,13 +4,13 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, FileText } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import QRCode from "qrcode";
-import { DeliveryInvoiceView } from "../delivery-invoice-view";
+import { DeliveryWaybillView } from "../delivery-waybill-view";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 
-export default async function PrintDeliveryInvoicePage({
+export default async function DeliveryWaybillPage({
   params,
   searchParams,
 }: {
@@ -21,39 +21,35 @@ export default async function PrintDeliveryInvoicePage({
   const { id } = await params;
   const { from, customerId, orgId } = await searchParams;
 
-  const delivery = await prisma.delivery.findFirst({
-    where: { id, tenantId: actor.tenantId },
-    include: {
-      tenant: true,
-      customer: true,
-      station: true,
-      organization: true,
-      transport: {
-        include: {
-          transporter: true,
-          truck: true,
-          driver: true,
-          order: true,
+  const [delivery, waybillAllocation] = await Promise.all([
+    prisma.delivery.findFirst({
+      where: { id, tenantId: actor.tenantId },
+      include: {
+        tenant: true,
+        customer: true,
+        station: true,
+        organization: true,
+        transport: {
+          include: {
+            transporter: true,
+            truck: true,
+            driver: true,
+            order: true,
+          },
         },
       },
-      transactions: {
-        select: {
-          id: true,
-          type: true,
-          category: true,
-          amount: true,
-          paymentMethod: true,
-          reference: true,
-          createdAt: true,
-        },
-        orderBy: { createdAt: "asc" as const },
+    }),
+    prisma.waybillAllocation.findFirst({
+      where: { deliveryId: id, tenantId: actor.tenantId },
+      include: {
+        waybill: true,
       },
-    },
-  });
+    }),
+  ]);
 
   if (!delivery) notFound();
 
-  let logoUrl = null;
+  let logoUrl: string | null = null;
   if (delivery.tenant?.settingsJson) {
     const settings = delivery.tenant.settingsJson as { logoKey?: string };
     if (settings.logoKey) {
@@ -68,7 +64,7 @@ export default async function PrintDeliveryInvoicePage({
   const headersList = await headers();
   const host = headersList.get("host");
   const protocol = headersList.get("x-forwarded-proto") || (host?.startsWith("localhost") ? "http" : "https");
-  const verifyUrl = host ? `${protocol}://${host}/admin/deliveries/${delivery.id}/print` : null;
+  const verifyUrl = host ? `${protocol}://${host}/admin/deliveries/${delivery.id}/waybill` : null;
 
   const qrCodeDataUrl = verifyUrl
     ? await QRCode.toDataURL(verifyUrl, { margin: 1, width: 200, color: { dark: "#111827", light: "#ffffff" } })
@@ -80,9 +76,17 @@ export default async function PrintDeliveryInvoicePage({
       ? delivery.station.name
       : "Unknown Recipient";
 
+  const orderRef = delivery.transport?.order?.reference;
+  const fallbackWbNumber = orderRef
+    ? `WB-${orderRef}-${delivery.id.substring(0, 6).toUpperCase()}`
+    : `WB-${delivery.id.substring(0, 8).toUpperCase()}`;
+
+  const waybillNumber = waybillAllocation?.waybill?.number || fallbackWbNumber;
+
   const safeDelivery = {
     id: delivery.id,
     createdAt: delivery.createdAt,
+    waybillNumber,
     litersDespatched: Number(delivery.litersDespatched),
     litersReceived: delivery.litersReceived !== null ? Number(delivery.litersReceived) : null,
     litersReturned: Number(delivery.litersReturned || 0),
@@ -93,7 +97,6 @@ export default async function PrintDeliveryInvoicePage({
     transportCostBorneBy: delivery.transportCostBorneBy,
     paymentReceived: delivery.paymentReceived !== null ? Number(delivery.paymentReceived) : null,
     status: delivery.status,
-    transactions: delivery.transactions || [],
     customer: delivery.customer
       ? {
           name: delivery.customer.name,
@@ -168,34 +171,25 @@ export default async function PrintDeliveryInvoicePage({
           ? `/admin/transports/${delivery.transport.id}?tab=distribution`
           : `/admin/deliveries/${delivery.id}`;
 
-  const waybillHref = `/admin/deliveries/${delivery.id}/waybill${from ? `?from=${from}` : ""}`;
+  const invoiceHref = `/admin/deliveries/${delivery.id}/print${from ? `?from=${from}` : ""}`;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 print:hidden">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" asChild>
-            <Link href={backHref}>
-              <ChevronLeft className="h-4 w-4" />
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Delivery Invoice</h1>
-            <p className="text-muted-foreground mt-1">
-              Delivery to {recipientName} • Ref: {delivery.transport?.order?.reference || delivery.id.substring(0, 8).toUpperCase()}
-            </p>
-          </div>
-        </div>
-
-        <Button variant="outline" size="sm" asChild>
-          <Link href={waybillHref}>
-            <FileText className="w-4 h-4 mr-2" />
-            View Driver Waybill
+      <div className="flex items-center gap-4 print:hidden">
+        <Button variant="outline" size="icon" asChild>
+          <Link href={backHref}>
+            <ChevronLeft className="h-4 w-4" />
           </Link>
         </Button>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Driver Waybill</h1>
+          <p className="text-muted-foreground mt-1">
+            Waybill to {recipientName} • Waybill No: {waybillNumber}
+          </p>
+        </div>
       </div>
 
-      <DeliveryInvoiceView delivery={safeDelivery} />
+      <DeliveryWaybillView delivery={safeDelivery} invoiceHref={invoiceHref} />
     </div>
   );
 }

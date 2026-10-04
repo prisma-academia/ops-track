@@ -3,7 +3,7 @@
  * Inlines full typography, layout, borders, and flexbox styles so the printed output
  * matches the on-screen preview with 100% fidelity across all browsers.
  */
-export function printDeliveryInvoice(elementId = "delivery-note") {
+export function printDeliveryInvoice(elementId = "delivery-note", documentTitle?: string) {
   if (typeof window === "undefined") return;
 
   const el = document.getElementById(elementId);
@@ -46,13 +46,15 @@ export function printDeliveryInvoice(elementId = "delivery-note") {
     // Fallback if security restrictions block styleSheets access
   }
 
+  const title = documentTitle || (elementId.includes("waybill") ? "Driver Waybill" : "Delivery Invoice");
+
   doc.open();
   doc.write(`<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
 <base href="${window.location.origin}/" />
-<title>Delivery Invoice</title>
+<title>${title}</title>
 <style>
   ${externalCss}
 </style>

@@ -683,7 +683,7 @@ export function TransportDetailsManager({
                                     </Button>
                                   )}
                                 <Button variant="outline" size="icon" title="Print Waybill" asChild>
-                                  <Link href={`/admin/deliveries/${sale.id}/print?from=transport`} target="_blank">
+                                  <Link href={`/admin/deliveries/${sale.id}/waybill?from=transport`} target="_blank">
                                     <Printer className="w-4 h-4" />
                                   </Link>
                                 </Button>

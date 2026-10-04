@@ -43,6 +43,7 @@ import {
   ChevronsUpDown,
   Check,
   RotateCcw,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
@@ -416,9 +417,15 @@ export function SalesDetailsManager({
             <Pencil className="size-4" />
           </Button>
           <Button variant="outline" size="sm" asChild>
-            <Link href={`/admin/deliveries/${delivery.id}/print`}>
+            <Link href={`/admin/deliveries/${delivery.id}/waybill`}>
               <Printer className="w-4 h-4 mr-2" />
               Print Waybill
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/admin/deliveries/${delivery.id}/print`}>
+              <FileText className="w-4 h-4 mr-2" />
+              Print Invoice
             </Link>
           </Button>
         </div>

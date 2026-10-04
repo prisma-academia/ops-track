@@ -2,7 +2,7 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
-import { BadgeDollarSign, Droplet, MoreHorizontal, PackageCheck, Pencil, Printer, RotateCcw } from "lucide-react";
+import { BadgeDollarSign, Droplet, FileText, MoreHorizontal, PackageCheck, Pencil, Printer, RotateCcw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -213,9 +213,16 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
           {(row.isExternalClient || canReturn) && <DropdownMenuSeparator />}
 
           <DropdownMenuItem asChild>
-            <Link href={`/admin/deliveries/${row.id}/print`}>
+            <Link href={`/admin/deliveries/${row.id}/waybill`}>
               <Printer className="w-4 h-4 mr-2 text-muted-foreground" />
               <span>Print Waybill</span>
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem asChild>
+            <Link href={`/admin/deliveries/${row.id}/print`}>
+              <FileText className="w-4 h-4 mr-2 text-muted-foreground" />
+              <span>Print Invoice</span>
             </Link>
           </DropdownMenuItem>
         </DropdownMenuContent>

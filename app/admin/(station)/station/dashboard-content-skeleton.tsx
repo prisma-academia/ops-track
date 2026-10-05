@@ -5,8 +5,8 @@ export function DashboardContentSkeleton() {
   return (
     <>
       {/* Top Stats Row Skeleton */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
           <Card key={i} className="rounded-2xl border border-border/80 bg-card p-5 sm:p-6 flex flex-col justify-between shadow-2xs">
             <div className="flex items-center justify-between">
               <Skeleton className="size-11 rounded-xl" />

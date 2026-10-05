@@ -165,7 +165,7 @@ export function DashboardOverviewCardV3({
           </div>
 
           {/* Metric value & title */}
-          <div className="mt-5 sm:mt-6">
+          <div className="mt-3">
             <p className="text-xl font-semibold tracking-tight text-foreground break-all">
               {data.formattedValue}
             </p>
@@ -201,7 +201,7 @@ export function DashboardOverviewCardV3({
 
         {/* Bottom timeframe pill badge */}
         {period ? (
-          <div className="mt-5 sm:mt-6">
+          <div className="mt-3">
             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-muted/70 text-muted-foreground border border-border/40">
               {period}
             </span>

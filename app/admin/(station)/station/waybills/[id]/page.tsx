@@ -79,7 +79,14 @@ export default async function WaybillDetailsPage({
     actor.permissions.has(PERMISSIONS.TENANT_WAYBILLS_WRITE.key);
 
   const serializedAllocations = waybill.allocations.map((a) => ({
-    ...a,
+    id: a.id,
+    waybillId: a.waybillId,
+    stationId: a.stationId,
+    status: a.status,
+    truckNumberVerified: a.truckNumberVerified,
+    driverVerified: a.driverVerified,
+    waybillVerified: a.waybillVerified,
+    arrivalPictures: Array.isArray(a.arrivalPictures) ? (a.arrivalPictures as string[]) : [],
     litersToDispense: Number(a.litersToDispense),
     litersReceived: a.litersReceived ? Number(a.litersReceived) : null,
     costPerLiter: Number(a.costPerLiter),
@@ -92,7 +99,9 @@ export default async function WaybillDetailsPage({
     updatedAt: a.updatedAt.toISOString(),
     productType: waybill.productType,
     station: {
-      ...a.station,
+      id: a.station.id,
+      name: a.station.name,
+      code: a.station.code,
       latitude: a.station.latitude ? Number(a.station.latitude) : null,
       longitude: a.station.longitude ? Number(a.station.longitude) : null,
       altitude: a.station.altitude ? Number(a.station.altitude) : null,

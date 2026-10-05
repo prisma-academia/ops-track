@@ -133,48 +133,287 @@ async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate
   const prevStationWhere: any = { ...stationWhere, createdAt: { lte: prevToDate } };
   const prevUserWhere: any = { ...userWhere, createdAt: { lte: prevToDate } };
 
+  const outflowWhere: any = {
+    tenantId,
+    type: "OUTFLOW",
+    createdAt: { gte: fromDate, lte: toDate },
+  };
+  const prevOutflowWhere: any = {
+    tenantId,
+    type: "OUTFLOW",
+    createdAt: { gte: prevFromDate, lte: prevToDate },
+  };
+
+  const deliveryWhereAll: any = {
+    tenantId,
+    createdAt: { gte: fromDate, lte: toDate },
+  };
+  const prevDeliveryWhereAll: any = {
+    tenantId,
+    createdAt: { gte: prevFromDate, lte: prevToDate },
+  };
+
+  const transportWhere: any = {
+    tenantId,
+    createdAt: { gte: fromDate, lte: toDate },
+  };
+  const prevTransportWhere: any = {
+    tenantId,
+    createdAt: { gte: prevFromDate, lte: prevToDate },
+  };
+
+  const lossLogWhere: any = {
+    tenantId,
+    createdAt: { gte: fromDate, lte: toDate },
+  };
+  const prevLossLogWhere: any = {
+    tenantId,
+    createdAt: { gte: prevFromDate, lte: prevToDate },
+  };
+
+  const allocationWhere: any = {
+    tenantId,
+    deliveredAt: { not: null },
+  };
+  if (organizationId) {
+    allocationWhere.station = { organizationId };
+  }
+
   // 1. Fetch Top Stats (+ previous-period equivalents for trend badges)
   const [
     totalStations,
     prevTotalStations,
     totalUsers,
     prevTotalUsers,
-    expensesAgg,
-    prevExpensesAgg,
-    revenueAgg,
-    prevRevenueAgg,
     activeDeliveries,
     currentPeriodDispatches,
     prevPeriodDispatches,
+    salesData,
+    prevSalesData,
+    expensesDataList,
+    prevExpensesDataList,
+    outflowTransactions,
+    prevOutflowTransactions,
+    deliveriesList,
+    prevDeliveriesList,
+    transportsList,
+    prevTransportsList,
+    lossLogsList,
+    prevLossLogsList,
+    waybillAllocations,
   ] = await Promise.all([
     prisma.station.count({ where: stationWhere }),
     prisma.station.count({ where: prevStationWhere }),
     prisma.tenantUser.count({ where: userWhere }),
-    prisma.tenantUser.count({ where: prevUserWhere }),
-    prisma.expense.aggregate({ where: expenseWhere, _sum: { amount: true } }),
-    prisma.expense.aggregate({ where: prevExpenseWhere, _sum: { amount: true } }),
-    prisma.salesLog.aggregate({ where: salesWhere, _sum: { amountPos: true, amountTransfer: true } }),
-    prisma.salesLog.aggregate({ where: prevSalesWhere, _sum: { amountPos: true, amountTransfer: true } }),
+    prisma.tenantUser.count({ where: userWhere }),
     prisma.waybillAllocation.count({ where: deliveryWhere }),
     prisma.waybillAllocation.count({ where: currentDeliveryPeriodWhere }),
     prisma.waybillAllocation.count({ where: prevDeliveryPeriodWhere }),
+    prisma.salesLog.findMany({
+      where: salesWhere,
+      select: {
+        stationId: true,
+        productType: true,
+        litersSold: true,
+        pricePerLiter: true,
+        amountPos: true,
+        amountTransfer: true,
+        logDate: true,
+      },
+    }),
+    prisma.salesLog.findMany({
+      where: prevSalesWhere,
+      select: {
+        stationId: true,
+        productType: true,
+        litersSold: true,
+        pricePerLiter: true,
+        amountPos: true,
+        amountTransfer: true,
+        logDate: true,
+      },
+    }),
+    prisma.expense.findMany({
+      where: expenseWhere,
+      select: { createdAt: true, amount: true },
+    }),
+    prisma.expense.findMany({
+      where: prevExpenseWhere,
+      select: { createdAt: true, amount: true },
+    }),
+    prisma.transaction.findMany({
+      where: outflowWhere,
+      select: { createdAt: true, amount: true },
+    }),
+    prisma.transaction.findMany({
+      where: prevOutflowWhere,
+      select: { createdAt: true, amount: true },
+    }),
+    prisma.delivery.findMany({
+      where: deliveryWhereAll,
+      select: {
+        createdAt: true,
+        litersDespatched: true,
+        litersReceived: true,
+        amountPerLiter: true,
+        transportCost: true,
+        transportCostBorneBy: true,
+      },
+    }),
+    prisma.delivery.findMany({
+      where: prevDeliveryWhereAll,
+      select: {
+        createdAt: true,
+        litersDespatched: true,
+        litersReceived: true,
+        amountPerLiter: true,
+        transportCost: true,
+        transportCostBorneBy: true,
+      },
+    }),
+    prisma.transport.findMany({
+      where: transportWhere,
+      select: { createdAt: true, maintenanceCost: true },
+    }),
+    prisma.transport.findMany({
+      where: prevTransportWhere,
+      select: { createdAt: true, maintenanceCost: true },
+    }),
+    prisma.transportLossLog.findMany({
+      where: lossLogWhere,
+      select: {
+        createdAt: true,
+        lostQuantity: true,
+        lossType: true,
+        expensesIncurred: true,
+        transport: { select: { ratePerLiter: true } },
+      },
+    }),
+    prisma.transportLossLog.findMany({
+      where: prevLossLogWhere,
+      select: {
+        createdAt: true,
+        lostQuantity: true,
+        lossType: true,
+        expensesIncurred: true,
+        transport: { select: { ratePerLiter: true } },
+      },
+    }),
+    prisma.waybillAllocation.findMany({
+      where: allocationWhere,
+      orderBy: { deliveredAt: "desc" },
+      select: {
+        createdAt: true,
+        stationId: true,
+        costPerLiter: true,
+        litersToDispense: true,
+        litersReceived: true,
+        transportationCost: true,
+        deliveredAt: true,
+        waybill: {
+          select: {
+            productType: true,
+          },
+        },
+      },
+    }),
   ]);
 
-  const totalExpenses = Number(expensesAgg._sum.amount || 0);
-  const prevTotalExpenses = Number(prevExpensesAgg._sum.amount || 0);
+  // Calculate current period financial metrics
+  let totalRevenue = 0;
+  const productVolumeTotals: ProductVolumeTotals = { PMS: 0, AGO: 0, DPK: 0, LPG: 0 };
 
-  const totalRevenue =
-    Number(revenueAgg._sum.amountPos || 0) +
-    Number(revenueAgg._sum.amountTransfer || 0);
-  const prevTotalRevenue =
-    Number(prevRevenueAgg._sum.amountPos || 0) +
-    Number(prevRevenueAgg._sum.amountTransfer || 0);
+  salesData.forEach((sale) => {
+    const vol = Number(sale.litersSold || 0);
+    const price = Number(sale.pricePerLiter || 0);
+    const posTransfer = Number(sale.amountPos || 0) + Number(sale.amountTransfer || 0);
+    const rev = posTransfer > 0 ? posTransfer : vol * price;
+    totalRevenue += rev;
+
+    if (sale.productType === "PMS") productVolumeTotals.PMS += vol;
+    if (sale.productType === "AGO") productVolumeTotals.AGO += vol;
+    if (sale.productType === "DPK") productVolumeTotals.DPK += vol;
+    if (sale.productType === "LPG") productVolumeTotals.LPG += vol;
+  });
+
+  // Accurate Operational Expenses (outflows, expenses, company transport, maintenance)
+  const directExpenses = expensesDataList.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const outflowExpenses = outflowTransactions.reduce((s, t) => s + Number(t.amount || 0), 0);
+  const companyTransportExpenses = deliveriesList
+    .filter((d) => d.transportCostBorneBy === "COMPANY")
+    .reduce((s, d) => s + Number(d.transportCost || 0), 0);
+  const maintenanceExpenses = transportsList.reduce((s, t) => s + Number(t.maintenanceCost || 0), 0);
+  const lossIncurredExpenses = lossLogsList.reduce((s, l) => s + Number(l.expensesIncurred || 0), 0);
+  const totalExpenses =
+    directExpenses +
+    outflowExpenses +
+    companyTransportExpenses +
+    maintenanceExpenses +
+    lossIncurredExpenses;
+
+  // Accurate Operational Losses (delivery shortages, transport spills/thefts/accidents)
+  const deliveryShortageLoss = deliveriesList.reduce((s, d) => {
+    const desp = Number(d.litersDespatched || 0);
+    const rec = d.litersReceived != null ? Number(d.litersReceived) : desp;
+    const short = desp > rec ? desp - rec : 0;
+    return s + short * Number(d.amountPerLiter || 0);
+  }, 0);
+
+  const transportLoss = lossLogsList.reduce((s, l) => {
+    if (l.lossType === "SHORTAGE") return s;
+    const rate = Number(l.transport?.ratePerLiter || 0) > 0 ? Number(l.transport?.ratePerLiter) : 200;
+    return s + Number(l.lostQuantity || 0) * rate;
+  }, 0);
+
+  const totalLoss = deliveryShortageLoss + transportLoss;
+  const netProfit = totalRevenue - totalExpenses - totalLoss;
+
+  // Calculate previous period financial metrics for percentage change
+  let prevTotalRevenue = 0;
+  prevSalesData.forEach((sale) => {
+    const vol = Number(sale.litersSold || 0);
+    const price = Number(sale.pricePerLiter || 0);
+    const posTransfer = Number(sale.amountPos || 0) + Number(sale.amountTransfer || 0);
+    prevTotalRevenue += posTransfer > 0 ? posTransfer : vol * price;
+  });
+
+  const prevDirectExpenses = prevExpensesDataList.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const prevOutflowExpenses = prevOutflowTransactions.reduce((s, t) => s + Number(t.amount || 0), 0);
+  const prevCompanyTransportExpenses = prevDeliveriesList
+    .filter((d) => d.transportCostBorneBy === "COMPANY")
+    .reduce((s, d) => s + Number(d.transportCost || 0), 0);
+  const prevMaintenanceExpenses = prevTransportsList.reduce((s, t) => s + Number(t.maintenanceCost || 0), 0);
+  const prevLossIncurredExpenses = prevLossLogsList.reduce((s, l) => s + Number(l.expensesIncurred || 0), 0);
+  const prevTotalExpenses =
+    prevDirectExpenses +
+    prevOutflowExpenses +
+    prevCompanyTransportExpenses +
+    prevMaintenanceExpenses +
+    prevLossIncurredExpenses;
+
+  const prevDeliveryShortageLoss = prevDeliveriesList.reduce((s, d) => {
+    const desp = Number(d.litersDespatched || 0);
+    const rec = d.litersReceived != null ? Number(d.litersReceived) : desp;
+    const short = desp > rec ? desp - rec : 0;
+    return s + short * Number(d.amountPerLiter || 0);
+  }, 0);
+
+  const prevTransportLoss = prevLossLogsList.reduce((s, l) => {
+    if (l.lossType === "SHORTAGE") return s;
+    const rate = Number(l.transport?.ratePerLiter || 0) > 0 ? Number(l.transport?.ratePerLiter) : 200;
+    return s + Number(l.lostQuantity || 0) * rate;
+  }, 0);
+
+  const prevTotalLoss = prevDeliveryShortageLoss + prevTransportLoss;
+  const prevNetProfit = prevTotalRevenue - prevTotalExpenses - prevTotalLoss;
 
   const topStats: TopStats = {
     totalStations: { value: totalStations, percentageChange: calcChange(totalStations, prevTotalStations) },
     totalUsers: { value: totalUsers, percentageChange: calcChange(totalUsers, prevTotalUsers) },
-    totalExpenses: { value: totalExpenses, percentageChange: calcChange(totalExpenses, prevTotalExpenses) },
     totalRevenue: { value: totalRevenue, percentageChange: calcChange(totalRevenue, prevTotalRevenue) },
+    totalExpenses: { value: totalExpenses, percentageChange: calcChange(totalExpenses, prevTotalExpenses) },
+    totalLoss: { value: totalLoss, percentageChange: calcChange(totalLoss, prevTotalLoss) },
+    netProfit: { value: netProfit, percentageChange: calcChange(netProfit, prevNetProfit) },
     activeDeliveries: { value: activeDeliveries, percentageChange: calcChange(currentPeriodDispatches, prevPeriodDispatches) },
   };
 
@@ -276,18 +515,7 @@ async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate
     ledgerBalance: stationBalances.get(station.id) ?? 0,
   }));
 
-  // 3. Fetch Monthly Data (Based on Date Picker Range)
-  const salesData = await prisma.salesLog.findMany({
-    where: salesWhere,
-    select: { logDate: true, amountPos: true, amountTransfer: true }
-  });
-
-
-  const expensesDataList = await prisma.expense.findMany({
-    where: expenseWhere,
-    select: { createdAt: true, amount: true }
-  });
-
+  // 3. Process Monthly Data (Based on Date Picker Range)
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const monthlyDataMap = new Map<string, MonthlyData>();
 
@@ -302,46 +530,81 @@ async function DashboardDataContent({ tenantId, organizationId, fromDate, toDate
   while (mCurr <= mEnd) {
     const key = `${mCurr.getUTCFullYear()}-${mCurr.getUTCMonth()}`;
     const label = `${monthNames[mCurr.getUTCMonth()]} ${mCurr.getUTCFullYear()}`;
-    monthlyDataMap.set(key, { month: label, revenue: 0, expenses: 0 });
+    monthlyDataMap.set(key, { month: label, revenue: 0, expenses: 0, loss: 0 });
     mCurr.setUTCMonth(mCurr.getUTCMonth() + 1);
   }
 
-  salesData.forEach(sale => {
+  salesData.forEach((sale) => {
     const d = sale.logDate;
     const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+    const vol = Number(sale.litersSold || 0);
+    const price = Number(sale.pricePerLiter || 0);
+    const posTransfer = Number(sale.amountPos || 0) + Number(sale.amountTransfer || 0);
+    const totalSale = posTransfer > 0 ? posTransfer : vol * price;
+
     if (monthlyDataMap.has(key)) {
-      const current = monthlyDataMap.get(key)!;
-      const totalSale = Number(sale.amountPos) + Number(sale.amountTransfer);
-      current.revenue += totalSale;
+      monthlyDataMap.get(key)!.revenue += totalSale;
     }
   });
 
-  expensesDataList.forEach(expense => {
+  expensesDataList.forEach((expense) => {
     const d = expense.createdAt;
     const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
     if (monthlyDataMap.has(key)) {
-      const current = monthlyDataMap.get(key)!;
-      current.expenses += Number(expense.amount);
+      monthlyDataMap.get(key)!.expenses += Number(expense.amount || 0);
+    }
+  });
+
+  outflowTransactions.forEach((tx) => {
+    const d = tx.createdAt;
+    const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+    if (monthlyDataMap.has(key)) {
+      monthlyDataMap.get(key)!.expenses += Number(tx.amount || 0);
+    }
+  });
+
+  deliveriesList
+    .filter((d) => d.transportCostBorneBy === "COMPANY")
+    .forEach((d) => {
+      const key = `${d.createdAt.getUTCFullYear()}-${d.createdAt.getUTCMonth()}`;
+      if (monthlyDataMap.has(key)) {
+        monthlyDataMap.get(key)!.expenses += Number(d.transportCost || 0);
+      }
+    });
+
+  transportsList.forEach((t) => {
+    const key = `${t.createdAt.getUTCFullYear()}-${t.createdAt.getUTCMonth()}`;
+    if (monthlyDataMap.has(key)) {
+      monthlyDataMap.get(key)!.expenses += Number(t.maintenanceCost || 0);
+    }
+  });
+
+  lossLogsList.forEach((l) => {
+    const key = `${l.createdAt.getUTCFullYear()}-${l.createdAt.getUTCMonth()}`;
+    if (monthlyDataMap.has(key)) {
+      if (Number(l.expensesIncurred || 0) > 0) {
+        monthlyDataMap.get(key)!.expenses += Number(l.expensesIncurred || 0);
+      }
+      if (l.lossType !== "SHORTAGE") {
+        const rate = Number(l.transport?.ratePerLiter || 0) > 0 ? Number(l.transport?.ratePerLiter) : 200;
+        monthlyDataMap.get(key)!.loss = (monthlyDataMap.get(key)!.loss ?? 0) + Number(l.lostQuantity || 0) * rate;
+      }
+    }
+  });
+
+  deliveriesList.forEach((d) => {
+    const desp = Number(d.litersDespatched || 0);
+    const rec = d.litersReceived != null ? Number(d.litersReceived) : desp;
+    const short = desp > rec ? desp - rec : 0;
+    if (short > 0) {
+      const key = `${d.createdAt.getUTCFullYear()}-${d.createdAt.getUTCMonth()}`;
+      if (monthlyDataMap.has(key)) {
+        monthlyDataMap.get(key)!.loss = (monthlyDataMap.get(key)!.loss ?? 0) + short * Number(d.amountPerLiter || 0);
+      }
     }
   });
 
   const monthlyData = Array.from(monthlyDataMap.values());
- 
-
-  // 4. Fetch Volume-by-Product Totals (Based on Date Picker Range)
-  const volumeDataList = await prisma.salesLog.findMany({
-    where: { tenantId, status: "APPROVED", logDate: { gte: fromDate, lte: toDate } },
-    select: { productType: true, litersSold: true }
-  });
-
-  const productVolumeTotals: ProductVolumeTotals = { PMS: 0, AGO: 0, DPK: 0, LPG: 0 };
-  volumeDataList.forEach(log => {
-    const liters = Number(log.litersSold);
-    if (log.productType === "PMS") productVolumeTotals.PMS += liters;
-    if (log.productType === "AGO") productVolumeTotals.AGO += liters;
-    if (log.productType === "DPK") productVolumeTotals.DPK += liters;
-    if (log.productType === "LPG") productVolumeTotals.LPG += liters;
-  });
 
   const isApproxMonth = Math.abs(toDate.getTime() - fromDate.getTime() - 30 * 24 * 60 * 60 * 1000) < 3 * 24 * 60 * 60 * 1000;
   const periodLabel = isApproxMonth ? "Last 30 days" : `${format(fromDate, "MMM d")} - ${format(toDate, "MMM d, yyyy")}`;

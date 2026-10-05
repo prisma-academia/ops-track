@@ -122,8 +122,8 @@ export default function StationLocationsMap({
 
   return (
     <Card className="w-full overflow-hidden py-0">
-      <div className="grid min-h-[640px] grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] items-stretch">
-        <div className="relative min-h-[460px] sm:min-h-[520px] lg:min-h-full h-full min-w-0 w-full">
+      <div className="grid min-h-[400px] grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] items-stretch">
+        <div className="relative min-h-[300px] sm:min-h-[300px] lg:min-h-full h-full min-w-0 w-full">
           <Map
             ref={mapRef}
             viewport={viewport}
@@ -303,7 +303,7 @@ export default function StationLocationsMap({
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              {/* <div className="flex items-center gap-3">
                 <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted border border-border">
                   {selectedStation.imageUrl ? (
                     <img
@@ -330,7 +330,7 @@ export default function StationLocationsMap({
                       .join(", ") || "No address recorded"}
                   </p>
                 </div>
-              </div>
+              </div> */}
 
               <section className="mt-6">
                 <h3 className="text-xs font-semibold uppercase text-muted-foreground">Product volumes / storage</h3>
@@ -349,7 +349,7 @@ export default function StationLocationsMap({
                 </div>
               </section>
 
-              <section className="mt-5">
+              {/* <section className="mt-5">
                 <h3 className="text-xs font-semibold uppercase text-muted-foreground">Last waybill</h3>
                 {selectedStation.lastWaybill ? (
                   <div className="mt-2 rounded-md border border-border p-3">
@@ -364,7 +364,7 @@ export default function StationLocationsMap({
                 ) : (
                   <p className="mt-2 text-sm text-muted-foreground">No waybills recorded.</p>
                 )}
-              </section>
+              </section> */}
 
               <section className="mt-5 rounded-md bg-muted/60 p-3">
                 <h3 className="text-xs font-semibold uppercase text-muted-foreground">Station ledger balance</h3>

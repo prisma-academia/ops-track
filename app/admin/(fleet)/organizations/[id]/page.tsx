@@ -17,6 +17,7 @@ import {
 import { Building2, Landmark, Banknote, Droplet, Clock, Pencil, ReceiptText } from "lucide-react";
 import { cn, formatShortCurrency } from "@/lib/utils";
 import { AssignedStationsTable, type AssignedStationRow } from "./assigned-stations-table";
+import { CustomerDeliveriesTable, type CustomerDeliveryRow } from "@/app/admin/(fleet)/customers/[id]/customer-deliveries-table";
 
 function formatNaira(value: number) {
   return `₦${value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -56,13 +57,59 @@ export default async function OrganizationDetailPage({
         tenantId: actor.tenantId,
         OR: [{ organizationId: org.id }, { station: { organizationId: org.id } }],
       },
-      select: {
-        stationId: true,
-        litersReceived: true,
-        totalExpectedAmount: true,
-        paymentReceived: true,
-        createdAt: true,
-        updatedAt: true,
+      orderBy: { createdAt: "desc" },
+      include: {
+        station: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            location: true,
+            lga: true,
+            state: true,
+          },
+        },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        transport: {
+          include: {
+            transporter: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            truck: {
+              select: {
+                id: true,
+                name: true,
+                plateNumber: true,
+                truckType: true,
+                truckBrand: true,
+              },
+            },
+            driver: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+              },
+            },
+            order: {
+              select: {
+                id: true,
+                reference: true,
+                productType: true,
+                sourceDepot: true,
+              },
+            },
+          },
+        },
       },
     }),
   ]);
@@ -116,6 +163,33 @@ export default async function OrganizationDetailPage({
       litersCollected: agg?.litersCollected ?? 0,
       lastCollectedAt: agg?.lastCollectedAt?.toISOString() ?? null,
       deliveryCount: agg?.deliveryCount ?? 0,
+    };
+  });
+
+  const deliveryRows: CustomerDeliveryRow[] = deliveries.map((d) => {
+    const expected = Number(d.totalExpectedAmount);
+    const paid = Number(d.paymentReceived);
+    const truck = d.transport?.truck;
+    const driver = d.transport?.driver;
+    const productType = d.transport?.productType || d.transport?.order?.productType || "PMS";
+
+    return {
+      id: d.id,
+      truckId: truck?.id || null,
+      truckName: truck?.name || (d.station ? d.station.name : "Direct Delivery"),
+      truckPlate: truck?.plateNumber || "—",
+      truckBrand: truck?.truckBrand || truck?.truckType || null,
+      driverName: driver ? `${driver.firstName} ${driver.lastName}` : null,
+      stationName: d.station?.name || org.name,
+      stationCode: d.station?.code || "—",
+      productType,
+      litersDespatched: Number(d.litersDespatched || 0),
+      litersReceived: d.litersReceived !== null ? Number(d.litersReceived) : null,
+      totalExpectedAmount: expected,
+      paymentReceived: paid,
+      balance: Math.max(0, expected - paid),
+      status: d.status,
+      createdAt: d.createdAt.toISOString(),
     };
   });
 
@@ -321,14 +395,26 @@ export default async function OrganizationDetailPage({
         </CardContent>
       </Card>
 
+      {stations.length > 0 && (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Assigned Stations</h2>
+            <p className="text-sm text-muted-foreground">
+              Fuel stations under {org.name} ({stations.length})
+            </p>
+          </div>
+          <AssignedStationsTable data={stationRows} />
+        </div>
+      )}
+
       <div className="space-y-3">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Assigned Stations</h2>
+          <h2 className="text-lg font-semibold text-foreground">Recent Deliveries</h2>
           <p className="text-sm text-muted-foreground">
-            Fuel stations under {org.name} ({stations.length})
+            Fuel deliveries recorded for {org.name} ({deliveries.length})
           </p>
         </div>
-        <AssignedStationsTable data={stationRows} />
+        <CustomerDeliveriesTable data={deliveryRows} organizationId={org.id} />
       </div>
     </div>
   );

@@ -19,7 +19,13 @@ type OrganizationRow = {
   createdAt: string;
   stationsCount: number;
   usersCount: number;
+  outstandingBalance?: number;
+  depositBalance?: number;
 };
+
+function formatNaira(value: number) {
+  return `₦${value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 export function OrganizationsTable({
   initialData,
@@ -107,6 +113,30 @@ export function OrganizationsTable({
             </div>
           </div>
         ),
+      },
+      {
+        accessorKey: "outstandingBalance",
+        header: "Outstanding Balance",
+        cell: ({ row }) => {
+          const bal = Number(row.original.outstandingBalance || 0);
+          return (
+            <span className={bal > 0 ? "text-sm font-medium text-rose-600" : "text-sm text-muted-foreground"}>
+              {formatNaira(bal)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "depositBalance",
+        header: "Deposit Balance",
+        cell: ({ row }) => {
+          const bal = Number(row.original.depositBalance || 0);
+          return (
+            <span className={bal > 0 ? "text-sm font-medium text-emerald-600" : "text-sm text-muted-foreground"}>
+              {formatNaira(bal)}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "isActive",

@@ -51,10 +51,12 @@ const filterFields: DataTableFilterField<CustomerDeliveryRow>[] = [
 export function CustomerDeliveriesTable({
   data,
   customerId,
+  organizationId,
   rowHref,
 }: {
   data: CustomerDeliveryRow[];
   customerId?: string;
+  organizationId?: string;
   rowHref?: (row: CustomerDeliveryRow) => string | null | undefined;
 }) {
   const columns = useMemo<ColumnDef<CustomerDeliveryRow>[]>(
@@ -224,7 +226,9 @@ export function CustomerDeliveriesTable({
         cell: ({ row }) => {
           const invoiceHref = customerId
             ? `/admin/customers/${customerId}/invoice/${row.original.id}`
-            : `/admin/deliveries/${row.original.id}/print`;
+            : organizationId
+              ? `/admin/organizations/${organizationId}/invoice/${row.original.id}`
+              : `/admin/deliveries/${row.original.id}/print`;
           return (
             <div className="flex items-center justify-end gap-1.5 pr-1" onClick={(e) => e.stopPropagation()}>
               <Button
@@ -244,17 +248,21 @@ export function CustomerDeliveriesTable({
         },
       },
     ],
-    [customerId]
+    [customerId, organizationId]
   );
 
   return (
     <DataTable
       columns={columns}
       data={data}
-      tableId="customer-recent-deliveries"
+      tableId={organizationId ? "organization-recent-deliveries" : "customer-recent-deliveries"}
       searchPlaceholder="Search deliveries..."
       filterFields={filterFields}
-      emptyMessage="No deliveries recorded for this customer yet."
+      emptyMessage={
+        organizationId
+          ? "No deliveries recorded for this managed station yet."
+          : "No deliveries recorded for this customer yet."
+      }
       pageSize={10}
       hideDateFilter
       rowHref={rowHref || ((row) => `/admin/deliveries/${row.id}`)}

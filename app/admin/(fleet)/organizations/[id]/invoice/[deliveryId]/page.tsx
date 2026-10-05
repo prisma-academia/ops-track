@@ -11,25 +11,29 @@ import { DeliveryInvoiceView } from "@/app/admin/(fleet)/deliveries/[id]/deliver
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 import { PrintInvoiceButton } from "@/app/admin/(fleet)/_components/print-invoice-button";
 
-export default async function CustomerDeliveryInvoicePage({
+export default async function OrganizationDeliveryInvoicePage({
   params,
 }: {
   params: Promise<{ id: string; deliveryId: string }>;
 }) {
-  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_CUSTOMERS_READ.key);
-  const { id: customerId, deliveryId } = await params;
+  const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_ORGANIZATIONS_READ.key);
+  const { id: orgId, deliveryId } = await params;
 
-  // Verify the customer exists and belongs to this tenant
-  const customer = await prisma.customer.findFirst({
-    where: { id: customerId, tenantId: actor.tenantId },
+  // Verify the organization exists and belongs to this tenant
+  const org = await prisma.organization.findFirst({
+    where: { id: orgId, tenantId: actor.tenantId },
     select: { id: true, name: true },
   });
 
-  if (!customer) notFound();
+  if (!org) notFound();
 
-  // Fetch the delivery ensuring it belongs to this customer and tenant
+  // Fetch the delivery ensuring it belongs to this organization or station and tenant
   const delivery = await prisma.delivery.findFirst({
-    where: { id: deliveryId, customerId, tenantId: actor.tenantId },
+    where: {
+      id: deliveryId,
+      tenantId: actor.tenantId,
+      OR: [{ organizationId: orgId }, { station: { organizationId: orgId } }],
+    },
     include: {
       tenant: true,
       customer: true,
@@ -83,17 +87,19 @@ export default async function CustomerDeliveryInvoicePage({
   const headersList = await headers();
   const host = headersList.get("host");
   const protocol = headersList.get("x-forwarded-proto") || (host?.startsWith("localhost") ? "http" : "https");
-  const verifyUrl = host ? `${protocol}://${host}/admin/customers/${customerId}/invoice/${delivery.id}` : null;
+  const verifyUrl = host ? `${protocol}://${host}/admin/organizations/${orgId}/invoice/${delivery.id}` : null;
 
   const qrCodeDataUrl = verifyUrl
     ? await QRCode.toDataURL(verifyUrl, { margin: 1, width: 200, color: { dark: "#111827", light: "#ffffff" } })
     : null;
 
-  const recipientName = delivery.customer
-    ? delivery.customer.name
-    : delivery.station
-      ? delivery.station.name
-      : "Unknown Recipient";
+  const recipientName = delivery.station
+    ? delivery.station.name
+    : delivery.organization
+      ? delivery.organization.name
+      : delivery.customer
+        ? delivery.customer.name
+        : org.name;
 
   const safeDelivery = {
     id: delivery.id,
@@ -135,7 +141,7 @@ export default async function CustomerDeliveryInvoicePage({
           state: delivery.station.state,
         }
       : null,
-    organization: delivery.organization ? { name: delivery.organization.name } : null,
+    organization: delivery.organization ? { name: delivery.organization.name } : { name: org.name },
     transport: delivery.transport
       ? {
           id: delivery.transport.id,
@@ -183,7 +189,7 @@ export default async function CustomerDeliveryInvoicePage({
     qrCodeDataUrl,
   };
 
-  const backHref = `/admin/customers/${customerId}`;
+  const backHref = `/admin/organizations/${orgId}`;
 
   return (
     <div className="space-y-6">

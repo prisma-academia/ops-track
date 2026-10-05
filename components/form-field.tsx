@@ -3,12 +3,14 @@ import type { InputHTMLAttributes, ReactNode } from "react";
 export function FormField({
   label,
   htmlFor,
+  description,
   error,
   required,
   children,
 }: {
   label: ReactNode;
   htmlFor: string;
+  description?: string;
   error?: string;
   required?: boolean;
   children: ReactNode;
@@ -19,6 +21,7 @@ export function FormField({
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
       </span>
+      {description && <span className="text-xs text-muted-foreground">{description}</span>}
       {children}
       {error ? <span className="text-xs text-red-600">{error}</span> : null}
     </label>

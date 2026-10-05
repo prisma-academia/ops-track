@@ -31,7 +31,7 @@ export default async function NewSalePage(
   });
   
   const transports = await prisma.transport.findMany({
-    where: { tenantId: actor.tenantId, status: { in: ["IN_TRANSIT", "COMPLETED"] } },
+    where: { tenantId: actor.tenantId, status: "IN_TRANSIT" },
     select: { 
       id: true, 
       destination: true, 
@@ -40,7 +40,8 @@ export default async function NewSalePage(
       status: true,
       createdAt: true,
       order: { select: { reference: true, productType: true, litersOrdered: true, supplier: true, sourceDepot: true, status: true } },
-      deliveries: { select: { litersDespatched: true } },
+      deliveries: { select: { litersDespatched: true, litersReturned: true } },
+      lossLogs: { select: { lostQuantity: true } },
       truck: { select: { name: true, plateNumber: true, capacityLiters: true } },
       transporter: { select: { name: true } },
       isOneTime: true,

@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from "react"
 import ProfileDropdown from "@/components/sections/dropdown-profile"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { Moon, Sun, Bell, Info, Check, Search } from "lucide-react"
-import { useTheme } from "next-themes"
 import { apiGet, apiPost } from "@/lib/client/api"
+import { Bell, Check, Info, Moon, Search, Sun } from "lucide-react"
+import { useTheme } from "next-themes"
+import { useEffect, useState } from "react"
 
 import {
   Sheet,
@@ -94,7 +94,7 @@ export default function HeaderV2({
 
   return (
     <header className="bg-card/95 backdrop-blur sticky top-0 z-50 w-full">
-      <div className="flex h-18 items-center justify-between border-b gap-4 px-4 sm:px-8">
+      <div className="relative flex h-18 items-center justify-between border-b gap-4 px-4 sm:px-8">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <SidebarTrigger className="cursor-pointer shrink-0"/>
           {onSearchClick && (
@@ -102,7 +102,7 @@ export default function HeaderV2({
               type="button"
               onClick={onSearchClick}
               aria-label="Search pages"
-              className="flex h-9 w-full max-w-md min-w-0 items-center gap-2 rounded-md border border-border bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+              className="absolute left-1/2 flex h-9 w-88 -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground sm:w-86"
             >
               <Search className="size-4 shrink-0" />
               <span className="flex-1 truncate text-left">Search pages...</span>

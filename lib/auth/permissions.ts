@@ -67,6 +67,7 @@ export const PERMISSIONS = {
   MOBILE_TENANT_WAYBILLS_READ: { key: "mobile.tenant.waybills:read", module: "mobile.tenant.waybills", description: "Mobile app: View waybills" },
   MOBILE_TENANT_WAYBILLS_WRITE: { key: "mobile.tenant.waybills:write", module: "mobile.tenant.waybills", description: "Mobile app: Manage waybills" },
   MOBILE_TENANT_NOTIFICATIONS_READ: { key: "mobile.tenant.notifications:read", module: "mobile.tenant.notifications", description: "Mobile app: View in-app notifications" },
+  MOBILE_TENANT_STATION_INFO_UPDATE: { key: "mobile.tenant.station-info:update", module: "mobile.tenant.station-info", description: "Mobile app: Update station photo and GPS coordinates" },
   // Missing Station Modules
   TENANT_BANK_ACCOUNTS_READ: { key: "tenant.bank-accounts:read", module: "tenant.bank-accounts", description: "View bank accounts" },
   TENANT_BANK_ACCOUNTS_WRITE: { key: "tenant.bank-accounts:write", module: "tenant.bank-accounts", description: "Manage bank accounts" },
@@ -143,6 +144,8 @@ export const MOBILE_EQUIVALENT_PERMISSIONS: Partial<Record<PermissionKey, readon
   ],
   [PERMISSIONS.TENANT_TICKETS_WRITE.key]: [PERMISSIONS.MOBILE_TENANT_TICKETS_WRITE.key],
   [PERMISSIONS.TENANT_NOTIFICATIONS_READ.key]: [PERMISSIONS.MOBILE_TENANT_NOTIFICATIONS_READ.key],
+  [PERMISSIONS.TENANT_CLIENTS_READ.key]: ALL_MOBILE_PERMISSION_KEYS,
+  [PERMISSIONS.TENANT_CLIENTS_WRITE.key]: ALL_MOBILE_PERMISSION_KEYS,
 };
 
 export function isFleetPermissionKey(key: string): boolean {

@@ -19,6 +19,7 @@ const CreateStationSchema = z.object({
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
   altitude: z.number().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   organizationId: z.string().min(1),
   staffUserIds: z.array(z.string()).optional(),
 });
@@ -37,6 +38,10 @@ export async function GET(request: Request) {
 
     const activeOrgId = await resolveActiveOrgId(actor);
     const whereClause: any = { tenantId: actor.tenantId, ...(activeOrgId ? { organizationId: activeOrgId } : {}) };
+    const stationId = url.searchParams.get("stationId");
+    if (stationId && stationId !== "ALL") {
+      whereClause.id = stationId;
+    }
 
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
@@ -171,6 +176,7 @@ export async function POST(request: Request) {
         latitude: body.latitude ?? null,
         longitude: body.longitude ?? null,
         altitude: body.altitude ?? null,
+        imageUrl: body.imageUrl ?? null,
         staff: {
           connect: staffConnect,
         },

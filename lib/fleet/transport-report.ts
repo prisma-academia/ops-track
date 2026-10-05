@@ -165,7 +165,7 @@ export type TransportReportRow = {
   depotToPrimaryFee: number;
   fleetExpense: number;
   tripExpense: number;
-  truck?: { plateNumber: string | null };
+  truck?: { plateNumber?: string | null; name?: string | null };
   transporter?: { id: string; name: string };
   driver?: { firstName: string; lastName: string };
   isOneTime?: boolean | null;
@@ -225,7 +225,7 @@ export function mapTransportReportRow(transport: {
   ratePerLiter: unknown;
   maintenanceCost: unknown;
   totalDeduction: unknown;
-  truck: { plateNumber: string | null } | null;
+  truck: { plateNumber?: string | null; name?: string | null } | null;
   driver: { firstName: string; lastName: string } | null;
   transporter: { id: string; name: string } | null;
   isOneTime?: boolean | null;
@@ -245,7 +245,7 @@ export function mapTransportReportRow(transport: {
     destination: transport.destination,
     litersCarried: toNum(transport.litersCarried),
     ratePerLiter: toNum(transport.ratePerLiter),
-    truck: transport.truck ? { plateNumber: transport.truck.plateNumber } : undefined,
+    truck: transport.truck ? { plateNumber: transport.truck.plateNumber, name: transport.truck.name } : undefined,
     driver: transport.driver
       ? { firstName: transport.driver.firstName, lastName: transport.driver.lastName }
       : undefined,

@@ -1,11 +1,10 @@
 "use client";
 
+import { PoweredBy } from "@/components/brand/powered-by";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { COMPANY_EMAIL, COMPANY_NAME, COMPANY_PHONE, COMPANY_PHONE_TEL } from "@/lib/branding";
-import { PoweredBy } from "@/components/brand/powered-by";
-import { StoreButtons } from "@/components/landing-page/store-buttons";
 
 export default function Footer() {
   const footerLinks = [
@@ -68,7 +67,7 @@ export default function Footer() {
                 <Button asChild className="py-3.5 px-6 rounded-full bg-teal-400 hover:bg-teal-400/80 h-auto">
                   <a href="/auth/register">Get started</a>
                 </Button>
-                <StoreButtons href="#" />
+                {/* <StoreButtons href="#" /> */}
               </div>
             </div>
             <div className="md:col-span-1" />

@@ -5,7 +5,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { formatShortCurrency, formatHumanReadableDate } from "@/lib/utils";
+import { formatShortCurrency, formatHumanReadableDate, formatDestination } from "@/lib/utils";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
@@ -54,7 +54,8 @@ type CreateSaleFormProps = {
       sourceDepot: string | null;
       status: string;
     } | null;
-    deliveries?: { litersDespatched: any }[];
+    deliveries?: { litersDespatched: any; litersReturned?: any }[];
+    lossLogs?: { lostQuantity: any }[];
     truck?: { name: string; plateNumber: string | null; capacityLiters: any } | null;
     transporter?: { name: string } | null;
     isOneTime?: boolean | null;
@@ -70,11 +71,15 @@ type TransportOption = CreateSaleFormProps["transports"][number];
 function getTransportVolumes(transport: TransportOption) {
   const carried = Number(transport.litersCarried || 0);
   const distributed = (transport.deliveries || []).reduce(
-    (acc, sale) => acc + Number(sale.litersDespatched || 0),
+    (acc, sale) => acc + Math.max(0, (Number(sale.litersDespatched) || 0) - (Number(sale.litersReturned) || 0)),
     0
   );
-  const available = Math.max(0, carried - distributed);
-  return { carried, distributed, available };
+  const loggedLost = (transport.lossLogs || []).reduce(
+    (acc, log) => acc + (Number(log.lostQuantity) || 0),
+    0
+  );
+  const available = Math.max(0, carried - distributed - loggedLost);
+  return { carried, distributed, loggedLost, available };
 }
 
 function TripSummaryRow({ label, value }: { label: string; value: ReactNode }) {
@@ -109,12 +114,13 @@ function TripSummaryCard({
     );
   }
 
-  const { carried, distributed, available } = getTransportVolumes(transport);
+  const { carried, distributed, loggedLost, available } = getTransportVolumes(transport);
   const dispatching = Math.max(0, dispatchVolume || 0);
   const remainingAfter = Math.max(0, available - dispatching);
-  const utilization = carried > 0 ? Math.min(100, Math.round((distributed / carried) * 100)) : 0;
+  const totalAccounted = distributed + loggedLost;
+  const utilization = carried > 0 ? Math.min(100, Math.round((totalAccounted / carried) * 100)) : 0;
   const afterDispatchUtilization =
-    carried > 0 ? Math.min(100, Math.round(((distributed + dispatching) / carried) * 100)) : 0;
+    carried > 0 ? Math.min(100, Math.round(((totalAccounted + dispatching) / carried) * 100)) : 0;
   const truckLabel = (transport.truck?.plateNumber || transport.oneTimeTruckPlate) || (transport.truck?.name || "One-Time Truck");
 
   return (
@@ -157,7 +163,7 @@ function TripSummaryCard({
             <Truck className="size-4 text-muted-foreground" />
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transport</span>
           </div>
-          <TripSummaryRow label="Destination" value={transport.destination} />
+          <TripSummaryRow label="Destination" value={formatDestination(transport.destination)} />
           <TripSummaryRow label="Transporter" value={transport.transporter?.name || transport.oneTimeTransporterName || "Unknown"} />
           <TripSummaryRow label="Truck" value={truckLabel} />
           <TripSummaryRow
@@ -173,7 +179,7 @@ function TripSummaryCard({
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
             <span>Volume on trip</span>
-            <span>{utilization}% allocated</span>
+            <span>{utilization}% accounted</span>
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full border border-border/50 bg-muted/40">
             <div
@@ -184,9 +190,17 @@ function TripSummaryCard({
 
           <div className="grid grid-cols-1 gap-2">
             <div className="flex items-center justify-between rounded-md border border-border/50 bg-background/80 px-3 py-2.5">
-              <span className="text-xs text-muted-foreground">Carried</span>
+              <span className="text-xs text-muted-foreground">Carried (Loaded)</span>
               <span className="font-mono text-sm font-semibold">{carried.toLocaleString()} L</span>
             </div>
+            {loggedLost > 0 ? (
+              <div className="flex items-center justify-between rounded-md border border-rose-200/70 bg-rose-50/50 px-3 py-2.5 dark:border-rose-900/40 dark:bg-rose-950/20">
+                <span className="text-xs text-muted-foreground">Loss deducted</span>
+                <span className="font-mono text-sm font-semibold text-rose-700 dark:text-rose-400">
+                  -{loggedLost.toLocaleString()} L
+                </span>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between rounded-md border border-amber-200/70 bg-amber-50/50 px-3 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/20">
               <span className="text-xs text-muted-foreground">Already distributed</span>
               <span className="font-mono text-sm font-semibold text-amber-700 dark:text-amber-400">
@@ -252,9 +266,7 @@ export function CreateSaleForm({
     if (data.transportId) {
       const transport = transports.find((t) => t.id === data.transportId);
       if (transport) {
-        const carried = Number(transport.litersCarried || 0);
-        const distributed = (transport.deliveries || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0);
-        const available = Math.max(0, carried - distributed);
+        const { available } = getTransportVolumes(transport);
         if (data.litersDespatched > available) {
           ctx.addIssue({ 
             code: z.ZodIssueCode.custom, 
@@ -532,7 +544,7 @@ export function CreateSaleForm({
                     >
                       <span className="truncate">
                         {selectedTransport ? (
-                          `${selectedTransport.order?.reference || 'No Ref'}${selectedTransport.order?.sourceDepot ? ` • ${selectedTransport.order.sourceDepot}` : ''} → ${selectedTransport.destination}${selectedTransport.createdAt ? ` (${formatHumanReadableDate(selectedTransport.createdAt)})` : ''}`
+                          `${selectedTransport.order?.reference || 'No Ref'}${selectedTransport.order?.sourceDepot ? ` • ${selectedTransport.order.sourceDepot}` : ''} → ${formatDestination(selectedTransport.destination)}${selectedTransport.createdAt ? ` (${formatHumanReadableDate(selectedTransport.createdAt)})` : ''}`
                         ) : "Select transport..."}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -545,9 +557,7 @@ export function CreateSaleForm({
                         <CommandEmpty>No transport found.</CommandEmpty>
                         <CommandGroup>
                           {transports.map((t) => {
-                            const carried = Number(t.litersCarried || 0);
-                            const distributed = (t.deliveries || []).reduce((acc: number, s: any) => acc + Number(s.litersDespatched || 0), 0);
-                            const available = Math.max(0, carried - distributed);
+                            const { available, loggedLost } = getTransportVolumes(t);
                             return (
                               <CommandItem
                                 key={t.id}
@@ -564,11 +574,18 @@ export function CreateSaleForm({
                                     <span className="font-semibold text-sm truncate">
                                       {t.order?.reference ? `${t.order.reference} • ` : ""}
                                       {t.order?.sourceDepot ? `${t.order.sourceDepot} → ` : ""}
-                                      {t.destination}
+                                      {formatDestination(t.destination)}
                                     </span>
-                                    <span className="text-[11px] font-mono font-medium text-emerald-600 dark:text-emerald-400 shrink-0">
-                                      {available.toLocaleString()} L avail.
-                                    </span>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <span className="text-[11px] font-mono font-medium text-emerald-600 dark:text-emerald-400">
+                                        {available.toLocaleString()} L avail.
+                                      </span>
+                                      {loggedLost > 0 && (
+                                        <span className="text-[10px] font-mono text-rose-600 dark:text-rose-400">
+                                          (-{loggedLost.toLocaleString()} L loss)
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                                     <span className="truncate">
@@ -594,7 +611,23 @@ export function CreateSaleForm({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="litersDespatched" className={formState.errors.litersDespatched ? "text-destructive" : ""}>Volume Despatched (L)*</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="litersDespatched" className={formState.errors.litersDespatched ? "text-destructive" : ""}>
+                      Volume Despatched (L)*
+                    </Label>
+                    {selectedTransport && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const { available } = getTransportVolumes(selectedTransport);
+                          setValue("litersDespatched", available, { shouldValidate: true });
+                        }}
+                        className="text-xs text-primary hover:underline font-medium"
+                      >
+                        Max: {getTransportVolumes(selectedTransport).available.toLocaleString()} L
+                      </button>
+                    )}
+                  </div>
                   <Controller
                     control={control}
                     name="litersDespatched"

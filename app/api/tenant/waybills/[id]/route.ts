@@ -7,6 +7,7 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { checkAndCreateVarianceTicket } from "@/lib/variance";
 import { resolveWaybillTransportInfo } from "@/lib/waybill-transport";
+import { recomputeTransportLoss } from "@/lib/fleet/transport-volume";
 
 const DeliverWaybillSchema = z.object({
   litersReceived: z.coerce.number().positive().optional().nullable(),
@@ -261,37 +262,9 @@ export async function PATCH(
         }
       });
 
-      // Recalculate transport loss if Delivery belongs to a transport
+      // Recalculate transport loss (open transports only; never overwrites logged losses)
       if (matchingSale.transportId) {
-        const transport = await prisma.transport.findUnique({ where: { id: matchingSale.transportId } });
-        if (transport) {
-          const allSales = await prisma.delivery.findMany({ 
-            where: { transportId: transport.id },
-            include: { station: true }
-          });
-          let totalReceived = allSales.reduce((sum, d) => {
-            if (d.id === matchingSale.id) return sum + Number(body.litersReceived || 0);
-            return sum + Number(d.litersReceived ?? 0);
-          }, 0);
-          
-          // Deprecated: Add volume from custom distributions in transportTripLegs
-          // const transportTripLegs = Array.isArray(transport.transportTripLegs) ? transport.transportTripLegs : [];
-          // const salesStationNames = allSales.map((d) => d.station?.name).filter(Boolean);
-          // const customDistributions = transportTripLegs.filter((loc: any) => loc.isCustom || loc.productPrice !== undefined || (!loc.deliveryId && !salesStationNames.includes(loc.location)));
-          // const locsVol = customDistributions.reduce((acc: number, loc: any) => acc + (Number(loc.litersDelivered) || 0), 0);
-          // totalReceived += locsVol;
-
-          const litersLost = Math.max(0, Number(transport.litersCarried) - totalReceived);
-          const ratePerLiter = Number(transport.ratePerLiter);
-          const cashDeductionForLoss = litersLost * ratePerLiter;
-          const totalDeduction = Number(transport.maintenanceCost) + cashDeductionForLoss;
-          const netTransportFeePaid = Math.max(0, (ratePerLiter * Number(transport.litersCarried)) - totalDeduction);
-
-          await prisma.transport.update({
-            where: { id: transport.id },
-            data: { litersLost, totalDeduction, netTransportFeePaid }
-          });
-        }
+        await recomputeTransportLoss(prisma, matchingSale.transportId);
       }
     }
 

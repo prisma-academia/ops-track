@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, FileText } from "lucide-react";
 import Link from "next/link";
 import QRCode from "qrcode";
 import { DeliveryInvoiceView } from "../delivery-invoice-view";
@@ -35,6 +35,18 @@ export default async function PrintDeliveryInvoicePage({
           driver: true,
           order: true,
         },
+      },
+      transactions: {
+        select: {
+          id: true,
+          type: true,
+          category: true,
+          amount: true,
+          paymentMethod: true,
+          reference: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" as const },
       },
     },
   });
@@ -73,6 +85,15 @@ export default async function PrintDeliveryInvoicePage({
     createdAt: delivery.createdAt,
     litersDespatched: Number(delivery.litersDespatched),
     litersReceived: delivery.litersReceived !== null ? Number(delivery.litersReceived) : null,
+    litersReturned: Number(delivery.litersReturned || 0),
+    amountPerLiter: delivery.amountPerLiter !== null ? Number(delivery.amountPerLiter) : null,
+    totalExpectedAmount: delivery.totalExpectedAmount !== null ? Number(delivery.totalExpectedAmount) : null,
+    transportCost: delivery.transportCost !== null ? Number(delivery.transportCost) : null,
+    transportRate: delivery.transportRate !== null ? Number(delivery.transportRate) : null,
+    transportCostBorneBy: delivery.transportCostBorneBy,
+    paymentReceived: delivery.paymentReceived !== null ? Number(delivery.paymentReceived) : null,
+    status: delivery.status,
+    transactions: delivery.transactions || [],
     customer: delivery.customer
       ? {
           name: delivery.customer.name,
@@ -99,6 +120,10 @@ export default async function PrintDeliveryInvoicePage({
           id: delivery.transport.id,
           destination: delivery.transport.destination,
           productType: delivery.transport.productType,
+          isOneTime: delivery.transport.isOneTime,
+          oneTimeTruckPlate: delivery.transport.oneTimeTruckPlate,
+          oneTimeTransporterName: delivery.transport.oneTimeTransporterName,
+          oneTimeDriverName: delivery.transport.oneTimeDriverName,
           transporter: delivery.transport.transporter ? { name: delivery.transport.transporter.name } : null,
           truck: delivery.transport.truck
             ? {
@@ -147,20 +172,31 @@ export default async function PrintDeliveryInvoicePage({
           ? `/admin/transports/${delivery.transport.id}?tab=distribution`
           : `/admin/deliveries/${delivery.id}`;
 
+  const waybillHref = `/admin/deliveries/${delivery.id}/waybill${from ? `?from=${from}` : ""}`;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4 print:hidden">
-        <Button variant="outline" size="icon" asChild>
-          <Link href={backHref}>
-            <ChevronLeft className="h-4 w-4" />
+      <div className="flex items-center justify-between gap-4 print:hidden">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" asChild>
+            <Link href={backHref}>
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Delivery Invoice</h1>
+            <p className="text-muted-foreground mt-1">
+              Delivery to {recipientName} • Ref: {delivery.transport?.order?.reference || delivery.id.substring(0, 8).toUpperCase()}
+            </p>
+          </div>
+        </div>
+
+        <Button variant="outline" size="sm" asChild>
+          <Link href={waybillHref}>
+            <FileText className="w-4 h-4 mr-2" />
+            View Driver Waybill
           </Link>
         </Button>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Delivery Invoice</h1>
-          <p className="text-muted-foreground mt-1">
-            Delivery to {recipientName} • Ref: {delivery.transport?.order?.reference || delivery.id.substring(0, 8).toUpperCase()}
-          </p>
-        </div>
       </div>
 
       <DeliveryInvoiceView delivery={safeDelivery} />

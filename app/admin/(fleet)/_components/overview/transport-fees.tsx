@@ -1,9 +1,6 @@
 import type { FleetOverviewData } from "../../types"
-
-import {
-  DashboardOverviewCardV3,
-  DashboardCardActionsDropdown,
-} from "@/components/dashboards/dashboard-card"
+import { Coins01Icon } from "@hugeicons/core-free-icons"
+import { DashboardOverviewCardV3 } from "@/components/dashboards/dashboard-card"
 
 export function TransportFees({ data }: { data: FleetOverviewData }) {
   return (
@@ -13,7 +10,8 @@ export function TransportFees({ data }: { data: FleetOverviewData }) {
         percentageChange: data.kpi.transportFees.percentageChange,
       }}
       title="Transport Fees Paid"
-      action={<DashboardCardActionsDropdown />}
+      icon={Coins01Icon}
+      period={data.period || "Last 30 days"}
     />
   )
 }

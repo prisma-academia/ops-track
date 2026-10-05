@@ -17,67 +17,96 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import {
-  ChevronRight,
-  PieChart,
-  Building2,
-  Building,
-  CircleUserRound,
-  Shield,
-  ClipboardList,
-  Activity,
-  Settings,
-  BookOpen,
-  MapPin,
-  Truck,
-  Coins,
-  Users,
-  TrendingUp,
-  Gauge,
-  AlertCircle,
-  ChartNoAxesCombined,
-  FileText,
-  Scale,
-  FileSpreadsheet,
-  LayoutDashboard,
-  ShoppingCart,
-  Route,
-  BadgeDollarSign,
-  Wallet,
-  CreditCard,
-  Banknote,
-  Landmark,
-  Ticket,
-  Network,
-  Inbox,
-} from "lucide-react";
+  Activity01Icon,
+  Activity02Icon,
+  Analytics01Icon,
+  AnalyticsUpIcon,
+  BankIcon,
+  Building01Icon,
+  Building02Icon,
+  CreditCardIcon,
+  DashboardSquare01Icon,
+  FileSpreadsheetIcon,
+  FileTextIcon,
+  FuelStationIcon,
+  Invoice01Icon,
+  Invoice02Icon,
+  MapPinIcon,
+  Notification01Icon,
+  ReceiptDollarIcon,
+  Settings01Icon,
+  Shield01Icon,
+  ShieldCheckIcon,
+  ShoppingCart01Icon,
+  SteeringIcon,
+  Store01Icon,
+  TableIcon,
+  TankerTruckIcon,
+  Ticket01Icon,
+  TruckDeliveryIcon,
+  TruckIcon,
+  UserAccountIcon,
+  UserGroup02Icon,
+  UserGroupIcon,
+  Wallet01Icon,
+  Wallet02Icon,
+} from "@hugeicons/core-free-icons";
+import type { IconSvgElement } from "@hugeicons/react";
+import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  IconLayoutDashboard,
-  IconBuilding,
-  IconUsers,
-  IconUser,
-  IconShield,
-  IconTruck,
-  IconShoppingCart,
-  IconMapPin,
-  IconReceiptDollar,
-  IconCreditCard,
-  IconBuildingBank,
-  IconReportAnalytics,
-  IconFileText,
-  IconWallet,
-  IconActivity,
-  IconSettings,
-  IconUsersGroup,
-  IconBuildingStore,
-  IconGasStation,
-  IconTicket,
-  IconTable,
-  IconAlertTriangle,
-  IconBell,
-} from "@tabler/icons-react";
+  Activity,
+  AlertCircle,
+  BadgeDollarSign,
+  Banknote,
+  BookOpen,
+  Building,
+  Building2,
+  ChartNoAxesCombined,
+  ChevronRight,
+  CircleUserRound,
+  ClipboardList,
+  Coins,
+  CreditCard,
+  FileSpreadsheet,
+  FileText,
+  Gauge,
+  Inbox,
+  Landmark,
+  LayoutDashboard,
+  MapPin,
+  Network,
+  PieChart,
+  Route,
+  Scale,
+  Settings,
+  Shield,
+  ShoppingCart,
+  Ticket,
+  TrendingUp,
+  Truck,
+  Users,
+  Wallet,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import * as React from "react";
+
+export function createHugeIcon(icon: IconSvgElement) {
+  const Component = React.forwardRef<
+    SVGSVGElement,
+    { size?: number | string; className?: string; strokeWidth?: number }
+  >((props, ref) => (
+    <HugeiconsIcon
+      ref={ref}
+      icon={icon}
+      size={props.size ?? 20}
+      strokeWidth={props.strokeWidth ?? 2}
+      className={cn("shrink-0", props.className)}
+    />
+  ));
+  Component.displayName = "HugeIcon";
+  return Component;
+}
 
 function hrefMatchesNav(
   href: string | undefined,
@@ -100,6 +129,7 @@ function hrefMatchesNav(
 }
 
 export const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+  // Lucide icons
   PieChart,
   Building2,
   Building,
@@ -132,30 +162,65 @@ export const iconMap: Record<string, React.ComponentType<{ size?: number; classN
   Network,
   Inbox,
 
-  // Tabler Outline icons
-  IconLayoutDashboard,
-  IconBuilding,
-  IconUsers,
-  IconUsersGroup,
-  IconUser,
-  IconShield,
-  IconTruck,
-  IconShoppingCart,
-  IconGasStation,
-  IconMapPin,
-  IconReceiptDollar,
-  IconCreditCard,
-  IconBuildingBank,
-  IconReportAnalytics,
-  IconFileText,
-  IconWallet,
-  IconActivity,
-  IconSettings,
-  IconBuildingStore,
-  IconTicket,
-  IconTable,
-  IconAlertTriangle,
-  IconBell,
+  // Hugeicons Free Icons
+  DashboardSquare01Icon: createHugeIcon(DashboardSquare01Icon),
+  ShoppingCart01Icon: createHugeIcon(ShoppingCart01Icon),
+  TankerTruckIcon: createHugeIcon(TankerTruckIcon),
+  ReceiptDollarIcon: createHugeIcon(ReceiptDollarIcon),
+  CreditCardIcon: createHugeIcon(CreditCardIcon),
+  Analytics01Icon: createHugeIcon(Analytics01Icon),
+  AnalyticsUpIcon: createHugeIcon(AnalyticsUpIcon),
+  FileTextIcon: createHugeIcon(FileTextIcon),
+  FileSpreadsheetIcon: createHugeIcon(FileSpreadsheetIcon),
+  Store01Icon: createHugeIcon(Store01Icon),
+  TruckDeliveryIcon: createHugeIcon(TruckDeliveryIcon),
+  TruckIcon: createHugeIcon(TruckIcon),
+  Wallet01Icon: createHugeIcon(Wallet01Icon),
+  Wallet02Icon: createHugeIcon(Wallet02Icon),
+  BankIcon: createHugeIcon(BankIcon),
+  Building01Icon: createHugeIcon(Building01Icon),
+  Building02Icon: createHugeIcon(Building02Icon),
+  FuelStationIcon: createHugeIcon(FuelStationIcon),
+  UserGroupIcon: createHugeIcon(UserGroupIcon),
+  UserGroup02Icon: createHugeIcon(UserGroup02Icon),
+  UserAccountIcon: createHugeIcon(UserAccountIcon),
+  SteeringIcon: createHugeIcon(SteeringIcon),
+  Settings01Icon: createHugeIcon(Settings01Icon),
+  Shield01Icon: createHugeIcon(Shield01Icon),
+  ShieldCheckIcon: createHugeIcon(ShieldCheckIcon),
+  Activity01Icon: createHugeIcon(Activity01Icon),
+  Activity02Icon: createHugeIcon(Activity02Icon),
+  TableIcon: createHugeIcon(TableIcon),
+  Notification01Icon: createHugeIcon(Notification01Icon),
+  Ticket01Icon: createHugeIcon(Ticket01Icon),
+  Invoice01Icon: createHugeIcon(Invoice01Icon),
+  Invoice02Icon: createHugeIcon(Invoice02Icon),
+  MapPinIcon: createHugeIcon(MapPinIcon),
+
+  // Tabler Aliases mapped to Hugeicons free equivalents for complete compatibility
+  IconLayoutDashboard: createHugeIcon(DashboardSquare01Icon),
+  IconBuilding: createHugeIcon(Building01Icon),
+  IconUsers: createHugeIcon(UserGroupIcon),
+  IconUsersGroup: createHugeIcon(UserGroupIcon),
+  IconUser: createHugeIcon(UserAccountIcon),
+  IconShield: createHugeIcon(Shield01Icon),
+  IconTruck: createHugeIcon(TruckDeliveryIcon),
+  IconShoppingCart: createHugeIcon(ShoppingCart01Icon),
+  IconGasStation: createHugeIcon(FuelStationIcon),
+  IconMapPin: createHugeIcon(MapPinIcon),
+  IconReceiptDollar: createHugeIcon(ReceiptDollarIcon),
+  IconCreditCard: createHugeIcon(CreditCardIcon),
+  IconBuildingBank: createHugeIcon(BankIcon),
+  IconReportAnalytics: createHugeIcon(Analytics01Icon),
+  IconFileText: createHugeIcon(FileTextIcon),
+  IconWallet: createHugeIcon(Wallet01Icon),
+  IconActivity: createHugeIcon(Activity01Icon),
+  IconSettings: createHugeIcon(Settings01Icon),
+  IconBuildingStore: createHugeIcon(Store01Icon),
+  IconTicket: createHugeIcon(Ticket01Icon),
+  IconTable: createHugeIcon(TableIcon),
+  IconAlertTriangle: createHugeIcon(Shield01Icon),
+  IconBell: createHugeIcon(Notification01Icon),
 };
 
 export type NavItem = {
@@ -254,6 +319,45 @@ export function NavMain({ items }: { items: NavItem[] }) {
   );
 }
 
+function NavIconBadge({
+  icon: Icon,
+  isActive = false,
+  isSubItem = false,
+  className,
+}: {
+  icon?: React.ComponentType<{ size?: number; className?: string }>;
+  isActive?: boolean;
+  isSubItem?: boolean;
+  className?: string;
+}) {
+  if (!Icon) return null;
+
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-lg transition-all duration-200",
+        isSubItem ? "size-6" : "size-7",
+        isActive
+          ? isSubItem
+            ? "bg-primary text-primary-foreground shadow-xs border border-primary/40"
+            : "bg-primary-foreground/20 text-primary-foreground border border-primary-foreground/20 shadow-xs"
+          : isSubItem
+            ? "bg-sidebar-accent/50 text-sidebar-foreground/60 border border-sidebar-border/40 group-hover:bg-sidebar-accent group-hover:text-sidebar-foreground"
+            : "bg-sidebar-accent/80 text-sidebar-foreground/70 border border-sidebar-border/60 group-hover/menu-button:bg-sidebar-accent group-hover/menu-button:text-sidebar-foreground group-hover/menu-button:border-sidebar-border",
+        className
+      )}
+    >
+      <Icon
+        size={isSubItem ? 14 : 17}
+        className={cn(
+          "shrink-0 text-current",
+          isSubItem ? "size-3.5" : "size-[17px]"
+        )}
+      />
+    </span>
+  );
+}
+
 function NavMainItem({
   item,
   activeParent,
@@ -309,11 +413,11 @@ function NavMainItem({
                     setIsOpen(!isOpen);
                   }}
                   className={cn(
-                    "rounded-md text-sm font-medium px-3 py-4 h-10 transition-colors cursor-pointer",
+                    "rounded-full text-sm font-medium px-2 py-4 h-10 transition-colors cursor-pointer gap-2.5",
                     isParentActive ? "bg-primary! text-primary-foreground!" : ""
                   )}
                 >
-                  {Icon && <Icon size={20} className="size-[20px] shrink-0 text-current" />}
+                  <NavIconBadge icon={Icon} isActive={isParentActive} />
                   <span>{item.title}</span>
                   <ChevronRight
                     className={cn(
@@ -361,12 +465,12 @@ function NavMainItem({
                 setActiveChild(null);
               }}
               className={cn(
-                "rounded-md text-sm font-medium px-3 py-4 h-10 transition-colors cursor-pointer",
+                "rounded-full text-sm font-medium px-2 py-4 h-10 transition-colors cursor-pointer",
                 isParentActive ? "bg-primary! text-primary-foreground!" : ""
               )}
             >
-              <Link href={item.href || "#"} className="flex items-center gap-3">
-                {Icon && <Icon size={20} className="size-[20px] shrink-0 text-current" />}
+              <Link href={item.href || "#"} className="flex items-center gap-2.5">
+                <NavIconBadge icon={Icon} isActive={isParentActive} />
                 <span>{item.title}</span>
               </Link>
             </SidebarMenuButton>
@@ -406,9 +510,9 @@ function NavMainSubItem({
           <CollapsibleTrigger asChild>
             <SidebarMenuSubButton
               id={`nav-sub-trigger-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
-              className="rounded-md text-sm font-medium px-3 py-2 h-9"
+              className="rounded-full text-sm font-medium px-3 py-2 h-9 gap-2.5"
             >
-              {Icon && <Icon size={18} className="size-[18px] shrink-0 text-current" />}
+              <NavIconBadge icon={Icon} isActive={false} isSubItem />
               <span>{item.title}</span>
               <ChevronRight
                 className={cn(
@@ -439,23 +543,24 @@ function NavMainSubItem({
   }
 
   if (item.title) {
+    const isSubActive = activeChild === item.title;
     return (
       <SidebarMenuSubItem className="w-full">
         <SidebarMenuSubButton
           asChild
           id={`nav-sub-button-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
           className={cn(
-            "w-full rounded-md py-5 h-10 transition-colors",
-            activeChild === item.title ? "bg-muted! text-foreground!" : ""
+            "w-full rounded-full py-5 h-10 transition-colors",
+            isSubActive ? "bg-muted! text-foreground!" : ""
           )}
-          isActive={activeChild === item.title}
+          isActive={isSubActive}
           onClick={() => {
             setActiveParent(parentTitle || "");
             setActiveChild(item.title!);
           }}
         >
-          <Link href={item.href || "#"} className="flex items-center w-full px-2 gap-2">
-            {Icon && <Icon size={18} className="size-[18px] shrink-0 text-current" />}
+          <Link href={item.href || "#"} className="flex items-center w-full px-2 gap-2.5">
+            <NavIconBadge icon={Icon} isActive={isSubActive} isSubItem />
             <span>{item.title}</span>
           </Link>
         </SidebarMenuSubButton>

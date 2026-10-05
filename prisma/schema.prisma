@@ -28,6 +28,38 @@ enum ClientStatus {
   SUSPENDED
 }
 
+enum ClientBillingModel {
+  PREPAID
+  POSTPAID
+}
+
+enum ClientApprovalRequirement {
+  MANAGER_ONLY
+  CLIENT_ADMIN_ALWAYS
+  OVER_THRESHOLD_ONLY
+}
+
+enum ClientFuelOrderStatus {
+  PENDING_APPROVAL
+  APPROVED
+  DISPENSED
+  CANCELLED
+}
+
+enum ClientWalletLedgerType {
+  PAYSTACK_DEPOSIT
+  FUEL_DISPENSE
+  INVOICE_PAYMENT
+  REFUND
+  MANUAL_ADJUSTMENT
+}
+
+enum ClientInvoiceStatus {
+  UNPAID
+  PAID
+  CANCELLED
+}
+
 enum RoleScope {
   PLATFORM
   TENANT
@@ -122,6 +154,12 @@ model Tenant {
 
   users                      TenantUser[]
   clients                    Client[]
+  clientStationAccesses      ClientStationAccess[]
+  clientVehicles             ClientVehicle[]
+  clientDrivers              ClientDriver[]
+  clientFuelOrders           ClientFuelOrder[]
+  clientWalletLedgers        ClientWalletLedger[]
+  clientInvoices             ClientInvoice[]
   pendingClientRegistrations PendingClientRegistration[]
   roleTemplates              RoleTemplate[]
   templates                  Template[]
@@ -293,6 +331,7 @@ model TenantUser {
   recordedWaybillDippings WaybillDipping[]
   stockMovements          StockMovement[]
   createdNotifications    NotificationMessage[]
+  managedClientFuelOrders ClientFuelOrder[] @relation("FuelOrderManager")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -316,8 +355,174 @@ model Client {
   failedLoginAttempts Int          @default(0)
   lockedUntil         DateTime?
 
+  // Corporate Profile
+  companyName         String?
+  rcNumber            String?
+  address             String?
+  contactPerson       String?
+
+  // Financial & Billing (No penalty or interest)
+  billingModel        ClientBillingModel        @default(PREPAID)
+  creditLimit         Decimal                   @default(0.00) @db.Decimal(12, 2)
+  depositBalance      Decimal                   @default(0.00) @db.Decimal(12, 2)
+  outstandingDebt     Decimal                   @default(0.00) @db.Decimal(12, 2)
+  billingCycleDays    Int                       @default(30)
+
+  // Authorization Policy
+  approvalRequirement     ClientApprovalRequirement @default(MANAGER_ONLY)
+  approvalThresholdLiters Decimal?                  @db.Decimal(10, 2)
+  dailyMaxLiters          Decimal?                  @db.Decimal(12, 2)
+
+  // Relations
+  allowedStations     ClientStationAccess[]
+  vehicles            ClientVehicle[]
+  drivers             ClientDriver[]
+  fuelOrders          ClientFuelOrder[]
+  walletLedgers       ClientWalletLedger[]
+  invoices            ClientInvoice[]
+
   @@unique([tenantId, email])
   @@index([tenantId])
+}
+
+model ClientStationAccess {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  stationId String
+  station   Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([clientId, stationId])
+  @@index([tenantId])
+  @@index([stationId])
+  @@map("client_station_access")
+}
+
+model ClientVehicle {
+  id               String            @id @default(cuid())
+  tenantId         String
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId         String
+  client           Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  plateNumber      String
+  makeModel        String?
+  fuelType         ProductType       // PMS, AGO, DPK, LPG
+  tankCapacity     Decimal           @db.Decimal(10, 2) // Max liters tank can hold
+  dailyLimitLiters Decimal?          @db.Decimal(10, 2)
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  orders           ClientFuelOrder[]
+
+  @@unique([tenantId, clientId, plateNumber])
+  @@index([tenantId])
+  @@index([clientId])
+  @@map("client_vehicles")
+}
+
+model ClientDriver {
+  id             String            @id @default(cuid())
+  tenantId       String
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId       String
+  client         Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fullName       String
+  phone          String
+  licenseNumber  String?
+  idCardPhotoUrl String?
+  driverPhotoUrl String?
+  pinCodeHash    String?
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  orders         ClientFuelOrder[]
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@map("client_drivers")
+}
+
+model ClientFuelOrder {
+  id              String                @id @default(cuid())
+  tenantId        String
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stationId       String
+  station         Station               @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  clientId        String
+  client          Client                @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicleId       String
+  vehicle         ClientVehicle         @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driverId        String
+  driver          ClientDriver          @relation(fields: [driverId], references: [id], onDelete: Restrict)
+
+  productType     ProductType
+  liters          Decimal               @db.Decimal(12, 2)
+  pricePerLiter   Decimal               @db.Decimal(10, 2)
+  totalAmount     Decimal               @db.Decimal(12, 2)
+  platformFee     Decimal               @default(0.00) @db.Decimal(10, 2)
+
+  managerId       String
+  manager         TenantUser            @relation("FuelOrderManager", fields: [managerId], references: [id], onDelete: Restrict)
+  status          ClientFuelOrderStatus @default(DISPENSED)
+  odometerReading Decimal?              @db.Decimal(10, 2)
+  driverPhotoUrl  String?
+  notes           String?               @db.Text
+
+  createdAt       DateTime              @default(now())
+
+  @@index([tenantId])
+  @@index([stationId])
+  @@index([clientId])
+  @@index([vehicleId])
+  @@index([driverId])
+  @@index([managerId])
+  @@map("client_fuel_orders")
+}
+
+model ClientWalletLedger {
+  id            String                 @id @default(cuid())
+  tenantId      String
+  tenant        Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId      String
+  client        Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  type          ClientWalletLedgerType
+  amount        Decimal                @db.Decimal(12, 2)
+  balanceBefore Decimal                @db.Decimal(12, 2)
+  balanceAfter  Decimal                @db.Decimal(12, 2)
+  reference     String?
+  description   String?
+  createdAt     DateTime               @default(now())
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@map("client_wallet_ledgers")
+}
+
+model ClientInvoice {
+  id            String              @id @default(cuid())
+  tenantId      String
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId      String
+  client        Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  invoiceNumber String              @unique
+  periodStart   DateTime
+  periodEnd     DateTime
+  totalAmount   Decimal             @db.Decimal(12, 2)
+  status        ClientInvoiceStatus @default(UNPAID)
+  paystackRef   String?
+  paidAt        DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@map("client_invoices")
 }
 
 model PasswordResetToken {
@@ -622,6 +827,7 @@ model Station {
   latitude       Decimal?     @db.Decimal(9, 6)
   longitude      Decimal?     @db.Decimal(9, 6)
   altitude       Decimal?     @db.Decimal(9, 6)
+  imageUrl       String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -637,6 +843,8 @@ model Station {
   pumps              Pump[]
   expenses           Expense[]
   stockMovements     StockMovement[]
+  clientAccesses     ClientStationAccess[]
+  clientFuelOrders   ClientFuelOrder[]
 
   deliveries      Delivery[]       @relation("StationSales")
   transactions    Transaction[]
@@ -710,6 +918,8 @@ model SalesLog {
   posReceiptUrl      String?
   transferReceiptUrl String?
   logDate            DateTime       @db.Date
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @default(now()) @updatedAt
   status             SalesLogStatus @default(PENDING)
   reason             String?        @db.Text
   approvedById       String?
@@ -735,6 +945,7 @@ model SalesLog {
   @@index([stationId])
   @@index([recordedById])
   @@index([approvedById])
+  @@index([createdAt])
   @@map("sales_logs")
 }
 
@@ -1447,6 +1658,11 @@ model Delivery {
   amountPerLiter      Decimal  @db.Decimal(10, 2)
   totalExpectedAmount Decimal  @default(0.00) @db.Decimal(12, 2)
   paymentReceived     Decimal  @default(0.00) @db.Decimal(12, 2)
+
+  // Volume sent back to the truck (e.g. station tank full). Frees it for re-dispatch, no driver deduction.
+  litersReturned   Decimal @default(0.00) @db.Decimal(12, 2)
+  // Whether a received-short volume is charged to the driver/transporter.
+  shortageDeducted Boolean @default(true)
 
   transportRate        Decimal? @db.Decimal(10, 2) // ₦/L for sub-destination transport
   transportCost        Decimal  @default(0.00) @db.Decimal(12, 2) // Total transport cost for this allocation

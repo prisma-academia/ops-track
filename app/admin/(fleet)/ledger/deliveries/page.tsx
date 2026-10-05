@@ -74,7 +74,17 @@ export default async function SalesLedgerPage(props: {
       take: pageSize,
       include: {
         delivery: {
-          include: { customer: true, station: true },
+          include: {
+            customer: true,
+            station: true,
+            transport: {
+              include: {
+                transporter: true,
+                truck: true,
+                driver: true,
+              },
+            },
+          },
         },
       },
     }),

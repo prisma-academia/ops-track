@@ -51,6 +51,7 @@ export default async function SaleDetailsPage({ params }: { params: Promise<{ id
           include: {
             transporter: { select: { name: true } },
             truck: { select: { id: true, name: true, plateNumber: true } },
+            lossLogs: true,
             deliveries: {
               include: {
                 customer: { select: { name: true } },

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable, DataTableColumnHeader } from "@/components/tables";
 import { getLossTypeLabel } from "@/lib/fleet/loss-types";
+import { formatDestination } from "@/lib/utils";
 import type {
   TransportReportDelivery,
   TransportReportDetails,
@@ -66,10 +67,10 @@ export function TransportReportDetailsManager({
   transport: TransportReportDetails;
 }) {
   const driverName = transport.driver
-    ? `${transport.driver.firstName} ${transport.driver.lastName}`
-    : "—";
+    ? `${transport.driver.firstName || ""} ${transport.driver.lastName || ""}`.trim()
+    : transport.oneTimeDriverName || "—";
   const depot = transport.order?.sourceDepot || "Depot";
-  const primary = transport.destination || "Primary";
+  const primary = formatDestination(transport.destination) || "Primary";
 
   const expectedTotal =
     transport.depotToPrimaryFee +
@@ -322,8 +323,8 @@ export function TransportReportDetailsManager({
       <Card className="shadow-xs">
         <CardContent className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
           <Meta label="Order" value={transport.order?.reference || "—"} />
-          <Meta label="Transporter" value={transport.transporter?.name || "—"} />
-          <Meta label="Truck" value={transport.truck?.plateNumber || "—"} />
+          <Meta label="Transporter" value={transport.transporter?.name || transport.oneTimeTransporterName || "—"} />
+          <Meta label="Truck" value={transport.truck?.plateNumber || transport.truck?.name || transport.oneTimeTruckPlate || "—"} />
           <Meta label="Driver" value={driverName} />
           <Meta label="Depot" value={depot} />
           <Meta label="Primary destination" value={primary} />

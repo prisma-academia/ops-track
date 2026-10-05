@@ -39,6 +39,12 @@ export const STRICT_SCOPED: ReadonlySet<string> = new Set([
   "NotificationChannelSetting",
   "NotificationMessage",
   "NotificationDelivery",
+  "ClientStationAccess",
+  "ClientVehicle",
+  "ClientDriver",
+  "ClientFuelOrder",
+  "ClientWalletLedger",
+  "ClientInvoice",
 ]);
 
 export const NULLABLE_SCOPED: ReadonlySet<string> = new Set([

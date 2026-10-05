@@ -2,20 +2,22 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPatch, apiPost } from "@/lib/client/api";
+import { apiPatch, apiPost, apiDelete } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Truck, AlertTriangle, CheckCircle, Droplets, FileText, Link2, ChevronsUpDown, Printer, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowLeft, Truck, AlertTriangle, CheckCircle, CheckCircle2, Clock, Droplets, FileText, Link2, ChevronsUpDown, Printer, Check, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { cn, formatDestination } from "@/lib/utils";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import Link from "next/link";
 import { AssetTank } from "@/components/asset-tank";
@@ -63,6 +65,29 @@ export function TransportDetailsManager({
   const [expensesIncurred, setExpensesIncurred] = useState("");
   const [lossComment, setLossComment] = useState("");
 
+  // Delete Loss Log state
+  const [deleteLossTarget, setDeleteLossTarget] = useState<any | null>(null);
+  const [isDeletingLoss, setIsDeletingLoss] = useState(false);
+
+  const handleDeleteLossLog = async () => {
+    if (!deleteLossTarget) return;
+    setIsDeletingLoss(true);
+    try {
+      const res = await apiDelete(`/api/tenant/fleet/transports/${transport.id}/losses/${deleteLossTarget.id}`);
+      if (res.error) {
+        toast.error(res.error.message || "Failed to delete loss incident log.");
+      } else {
+        toast.success("Loss incident log deleted. Tank volume and deductions updated.");
+        setDeleteLossTarget(null);
+        router.refresh();
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "An unexpected error occurred.");
+    } finally {
+      setIsDeletingLoss(false);
+    }
+  };
+
   const handleUpdateStatus = async () => {
     setIsSubmitting(true);
     setError(null);
@@ -100,15 +125,17 @@ export function TransportDetailsManager({
   const lossLogs = transport.lossLogs || [];
   const carriedVolume = Number(transport.litersCarried) || 0;
   const distributedVolume = (transport.deliveries || []).reduce(
-    (acc: number, sale: { litersDespatched?: number | string | null }) => acc + (Number(sale.litersDespatched) || 0),
+    (acc: number, sale: { litersDespatched?: number | string | null; litersSold?: number | string | null; litersReturned?: number | string | null }) =>
+      acc + Math.max(0, (Number(sale.litersDespatched || sale.litersSold) || 0) - (Number(sale.litersReturned) || 0)),
     0
   );
   const loggedLostVolume = lossLogs.reduce(
     (sum: number, log: { lostQuantity?: number | string | null }) => sum + Number(log.lostQuantity || 0),
     0
   );
-  const remainingVolume = Math.max(0, carriedVolume - distributedVolume - loggedLostVolume);
-  const maxLosableVolume = Math.max(0, carriedVolume - loggedLostVolume);
+  const effectiveLoadedVolume = Math.max(carriedVolume, distributedVolume);
+  const remainingVolume = Math.max(0, effectiveLoadedVolume - distributedVolume - loggedLostVolume);
+  const maxLosableVolume = Math.max(0, effectiveLoadedVolume - loggedLostVolume);
   const ratePerLiter = Number(transport.ratePerLiter) || 0;
   const selectedLossType = getProductLossType(lossType);
   const incidentQuantity = Number(lostQuantity || 0);
@@ -161,7 +188,6 @@ export function TransportDetailsManager({
         expensesIncurred: number;
         comment?: string;
       };
-      addLitersLost: number;
       addMaintenanceCost: number;
     } = {
       lossLog: {
@@ -170,7 +196,6 @@ export function TransportDetailsManager({
         expensesIncurred: expenses,
         comment: lossComment.trim() || undefined,
       },
-      addLitersLost: quantity,
       addMaintenanceCost: expenses,
     };
 
@@ -190,44 +215,170 @@ export function TransportDetailsManager({
     }
   };
 
-  const hasUnresolvedVariance = remainingVolume > 0.001;
+  const pendingDeliveries = (transport.deliveries || []).filter(
+    (del: any) => del.litersReceived === null || del.litersReceived === undefined
+  );
+  const isAwaitingReception = pendingDeliveries.length > 0;
+  const isAwaitingStationReception = isAwaitingReception;
+
+  // Deliveries that are awaiting reception OR have an issue like variance
+  const deliveriesWithIssues = (transport.deliveries || []).filter((del: any) => {
+    const isPending = del.litersReceived === null || del.litersReceived === undefined;
+    if (isPending) return true;
+    const assigned = Number(del.litersDespatched || del.litersSold || 0);
+    const received = Number(del.litersReceived);
+    return Math.abs(assigned - received) > 0.001;
+  });
+
+  const totalReceivedVolume = (transport.deliveries || []).reduce(
+    (sum: number, del: any) =>
+      sum + (del.litersReceived !== null && del.litersReceived !== undefined ? Number(del.litersReceived) : 0),
+    0
+  );
+
+  // Shortage on individual confirmed drops (received < dispatched, minus volume returned to truck).
+  // Drops flagged "do not deduct from driver" are excluded from the chargeable shortage.
+  const deliveryShortage = (transport.deliveries || []).reduce((sum: number, del: any) => {
+    if (del.shortageDeducted === false) return sum;
+    const dispatched = Math.max(0, Number(del.litersDespatched || del.litersSold || 0) - Number(del.litersReturned || 0));
+    if (del.litersReceived !== null && del.litersReceived !== undefined) {
+      const received = Number(del.litersReceived);
+      const diff = dispatched - received;
+      return sum + (diff > 0 ? diff : 0);
+    }
+    return sum;
+  }, 0);
+
+  // Volume loaded on truck that was never dispatched to any recipient or logged lost
+  const unaccountedTruckShortage = Math.max(0, carriedVolume - distributedVolume - loggedLostVolume);
+
+  // Total physical shortage across drops and truck volume
+  const trueVariance = deliveryShortage + unaccountedTruckShortage;
+  const hasActualShortage = !isAwaitingReception && trueVariance > 0.001;
   const canFinalize = transport.status !== "COMPLETED" && transport.status !== "CANCELLED";
 
-  const sellingPrice = transport.deliveries?.length ? Math.max(...transport.deliveries.map((d: any) => Number(d.amountPerLiter) || 0)) : (Number(transport.order?.pricePerLiter) || 0);
-  const totalDeductionAmount = remainingVolume * sellingPrice;
+  const defaultSellingPrice = transport.deliveries?.length
+    ? Math.max(...transport.deliveries.map((d: any) => Number(d.amountPerLiter) || 0))
+    : Number(transport.order?.pricePerLiter) || 0;
+
+  // Compute shortage deductions per drop according to that drop's selling price
+  const deliveryDeduction = (transport.deliveries || []).reduce((sum: number, del: any) => {
+    if (del.shortageDeducted === false) return sum;
+    const dispatched = Math.max(0, Number(del.litersDespatched || del.litersSold || 0) - Number(del.litersReturned || 0));
+    if (del.litersReceived !== null && del.litersReceived !== undefined) {
+      const received = Number(del.litersReceived);
+      const diff = dispatched - received;
+      if (diff > 0) {
+        const price = Number(del.amountPerLiter) || defaultSellingPrice;
+        return sum + (diff * price);
+      }
+    }
+    return sum;
+  }, 0);
+
+  const totalDeductionAmount = deliveryDeduction + (unaccountedTruckShortage * defaultSellingPrice);
+  const sellingPrice = trueVariance > 0 ? Math.round(totalDeductionAmount / trueVariance) : defaultSellingPrice;
+
+  const driverOrTransporterName = transport.isOneTime
+    ? (transport.oneTimeDriverName || transport.oneTimeTransporterName || "Driver / Transporter")
+    : (transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : transport.transporter?.name || "Driver / Transporter");
+  const driverBaseFee = effectiveLoadedVolume * ratePerLiter;
+  const driverNetFee = Math.max(0, driverBaseFee - totalDeductionAmount);
+
+  const handleOpenFinalizeDialog = () => {
+    setError(null);
+    setOpenFinalizeDialog(true);
+  };
+
+  // Only deliveries awaiting reception OR having a shortage
+  const awaitingOrShortageDeliveries = (transport.deliveries || []).filter((del: any) => {
+    const isPending = del.litersReceived === null || del.litersReceived === undefined;
+    if (isPending) return true;
+    const assigned = Number(del.litersDespatched || del.litersSold || 0);
+    const received = Number(del.litersReceived);
+    return (assigned - received) > 0.001;
+  });
+
+  // Calculate volume unaccounted on truck (never dispatched to any drop, and not logged as loss)
+  const unassignedTruckVolume = Math.max(0, carriedVolume - distributedVolume - loggedLostVolume);
+
+  // Compute live breakdown based on deliveries' logged status
+  let modalReturnedToTruck = 0;
+  let modalTransitShortage = 0;
+  let modalShortageDeductionAmount = 0;
+
+  (transport.deliveries || []).forEach((del: any) => {
+    if (del.litersReceived === null || del.litersReceived === undefined) return;
+    const assigned = Number(del.litersDespatched || del.litersSold || 0);
+    const received = Number(del.litersReceived);
+    const diff = Math.max(0, assigned - received);
+    if (diff > 0.001) {
+      const returned = Number(del.litersReturned || 0);
+      if (returned > 0 || del.shortageDeducted === false) {
+        modalReturnedToTruck += (returned > 0 ? returned : diff);
+      } else {
+        const shortage = Math.max(0, diff - returned);
+        modalTransitShortage += shortage;
+        const price = Number(del.amountPerLiter) || defaultSellingPrice;
+        modalShortageDeductionAmount += shortage * price;
+      }
+    }
+  });
+
+  const modalRemainingInTruck = unassignedTruckVolume + modalReturnedToTruck;
+  const modalSellingPrice =
+    modalTransitShortage > 0
+      ? Math.round(modalShortageDeductionAmount / modalTransitShortage)
+      : defaultSellingPrice;
+
+  const hasRemainingFuel = modalRemainingInTruck > 0.001;
+  const canFinalizeNow = !isAwaitingReception && !hasRemainingFuel;
 
   const handleFinalizeWithShortage = async () => {
+    if (isAwaitingReception) {
+      setError("Cannot finalize trip while deliveries are still awaiting reception.");
+      return;
+    }
+
+    if (modalRemainingInTruck > 0.001) {
+      setError(`Cannot finalize transport while fuel remains in truck (${modalRemainingInTruck.toLocaleString()} L). Assign remaining volume to a destination or log as an incident loss first.`);
+      return;
+    }
+
     if (!window.confirm("Are you sure you want to finalize this transport? This action will mark the transport as COMPLETED and cannot be undone.")) return;
     
     setIsFinalizing(true);
     setError(null);
 
-    const payload: Record<string, any> = {
-      status: "COMPLETED",
-    };
-
-    if (hasUnresolvedVariance) {
-      const normalDeduction = remainingVolume * ratePerLiter;
-      const adjustment = Math.max(0, totalDeductionAmount - normalDeduction);
-
-      payload.lossLog = {
-        lossType: "SHORTAGE",
-        lostQuantity: remainingVolume,
-        expensesIncurred: adjustment,
-        comment: `Final shortage confirmation upon transport completion. Calculated at selling price (₦${sellingPrice.toLocaleString()}/L).`,
+    try {
+      // Finalize transport directly
+      const payload: Record<string, any> = {
+        status: "COMPLETED",
       };
-      payload.addLitersLost = remainingVolume;
-      payload.addMaintenanceCost = adjustment;
-    }
 
-    const res = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, payload);
-    setIsFinalizing(false);
+      if (modalTransitShortage > 0.001) {
+        const driverDeduction = modalTransitShortage * ratePerLiter;
+        payload.lossLog = {
+          lossType: "SHORTAGE",
+          lostQuantity: modalTransitShortage,
+          expensesIncurred: 0,
+          comment: `Final shortage deduction upon transport completion. ${modalTransitShortage.toLocaleString()} L recorded. Driver fee deduction: NGN ${driverDeduction.toLocaleString()}.`,
+        };
+      }
 
-    if (res.error) {
-      setError(res.error.message);
-    } else {
-      setOpenFinalizeDialog(false);
-      router.refresh();
+      const res = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, payload);
+      setIsFinalizing(false);
+
+      if (res.error) {
+        setError(res.error.message);
+      } else {
+        setOpenFinalizeDialog(false);
+        toast.success("Transport finalized and marked as completed.");
+        router.refresh();
+      }
+    } catch (err: any) {
+      setIsFinalizing(false);
+      setError(err?.message || "An unexpected error occurred while finalizing.");
     }
   };
 
@@ -242,34 +393,48 @@ export function TransportDetailsManager({
           </Button>
           <div>
             <h2 className="text-xl font-bold uppercase tracking-widest flex items-center gap-2 text-foreground">
-              Trip to {transport.destination}
+              Trip to {formatDestination(transport.destination)}
               <Badge variant={transport.status === "COMPLETED" ? "default" : transport.status === "LOSS" ? "destructive" : transport.status === "CANCELLED" ? "secondary" : "outline"}>
                 {transport.status}
               </Badge>
             </h2>
             <p className="text-xs text-muted-foreground mt-1">
-              {transport.isOneTime ? transport.oneTimeTransporterName : transport.transporter?.name} • {transport.isOneTime ? transport.oneTimeTruckPlate : (transport.truck?.name || "No truck")} • {transport.productType || "—"}
+              {transport.isOneTime ? transport.oneTimeTransporterName : transport.transporter?.name} • {transport.isOneTime ? transport.oneTimeTruckPlate : (transport.truck?.plateNumber || transport.truck?.name || "No truck")} • {transport.productType || "—"}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           {canFinalize && (
-            hasUnresolvedVariance ? (
+            isAwaitingStationReception ? (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" className="border-amber-500 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950" onClick={() => setOpenFinalizeDialog(true)}>
+                    <Button variant="outline" className="border-amber-500 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950" onClick={handleOpenFinalizeDialog}>
+                      <Clock className="h-4 w-4 mr-2" />
+                      Finalize Transport
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {pendingDeliveries.length} destination{pendingDeliveries.length > 1 ? "s" : ""} pending receive confirmation.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : hasActualShortage ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" className="border-rose-500 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950" onClick={handleOpenFinalizeDialog}>
                       <AlertTriangle className="h-4 w-4 mr-2" />
                       Finalize Transport
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    There is an unresolved shortage. Finalizing will deduct the cost from the transporter.
+                    Unresolved shortage detected ({trueVariance.toLocaleString()} L). Will be deducted from driver fees.
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             ) : (
-              <Button onClick={() => setOpenFinalizeDialog(true)}>
+              <Button onClick={handleOpenFinalizeDialog}>
                 <Check className="h-4 w-4 mr-2" />
                 Finalize Transport
               </Button>
@@ -513,9 +678,16 @@ export function TransportDetailsManager({
                                 <div className="flex flex-col items-end">
                                   <span className="font-medium text-emerald-600 dark:text-emerald-500">{Number(sale.litersReceived).toLocaleString()} L</span>
                                   {Number(sale.litersDespatched || sale.litersSold) !== Number(sale.litersReceived) && (
-                                    <span className="text-[10px] text-destructive font-medium uppercase mt-0.5">
-                                      Diff: {(Number(sale.litersDespatched || sale.litersSold) - Number(sale.litersReceived)).toLocaleString()} L
-                                    </span>
+                                    <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                                      <span className="text-[10px] text-destructive font-medium uppercase">
+                                        Shortfall: {(Number(sale.litersDespatched || sale.litersSold) - Number(sale.litersReceived)).toLocaleString()} L
+                                      </span>
+                                      {Number(sale.litersReturned || 0) > 0 && (
+                                        <span className="text-[10px] text-blue-600 font-medium uppercase">
+                                          ({Number(sale.litersReturned).toLocaleString()} L in Truck)
+                                        </span>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                               ) : (
@@ -529,11 +701,13 @@ export function TransportDetailsManager({
                               </Badge>
                             </td>
                             <td className="text-right py-3 px-4">
-                              <Button variant="outline" size="icon" title="Print Waybill" asChild>
-                                <Link href={`/admin/deliveries/${sale.id}/print?from=transport`} target="_blank">
-                                  <Printer className="w-4 h-4" />
-                                </Link>
-                              </Button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button variant="outline" size="icon" title="Print Waybill" asChild>
+                                  <Link href={`/admin/deliveries/${sale.id}/waybill?from=transport`} target="_blank">
+                                    <Printer className="w-4 h-4" />
+                                  </Link>
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -593,13 +767,15 @@ export function TransportDetailsManager({
                 <div>
                   <h3 className="font-semibold text-lg">Loss Logs</h3>
                   <p className="text-sm text-muted-foreground">
-                    Product lost in transit — theft, accident, spill, leakage, shortage, or contamination. Truck repairs belong in Payments & Expenses.
+                    Product lost in transit — theft, accident, spill, leakage, or contamination. Truck repairs belong in Payments & Expenses.
                   </p>
                 </div>
-                <Button variant="destructive" onClick={() => { setError(null); setOpenIncidentDialog(true); }}>
-                  <AlertTriangle className="h-4 w-4 mr-2" />
-                  Log Incident or Loss
-                </Button>
+                {canFinalize && (
+                  <Button variant="destructive" onClick={() => { setError(null); setOpenIncidentDialog(true); }}>
+                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    Log Incident or Loss
+                  </Button>
+                )}
               </div>
               {lossLogs.length === 0 ? (
                 <div className="text-center py-12 border rounded-2xl bg-card">
@@ -616,6 +792,9 @@ export function TransportDetailsManager({
                         <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Notes</th>
                         <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Lost (L)</th>
                         <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Expenses (₦)</th>
+                        {canFinalize && (
+                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground w-16">Action</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -641,6 +820,19 @@ export function TransportDetailsManager({
                           <td className="text-right py-3 px-4 text-foreground/90 font-medium font-mono text-destructive">
                             {Number(log.expensesIncurred || 0).toLocaleString()}
                           </td>
+                          {canFinalize && (
+                            <td className="text-right py-3 px-4">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => setDeleteLossTarget(log)}
+                                title="Delete loss log"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -659,6 +851,7 @@ export function TransportDetailsManager({
                             return `₦${totalExpenses.toLocaleString()}`;
                           })()}
                         </td>
+                        {canFinalize && <td className="py-3 px-4" />}
                       </tr>
                     </tfoot>
                   </table>
@@ -815,8 +1008,8 @@ export function TransportDetailsManager({
                     {selectedLossType?.label ?? "Select what happened"}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent>
-                  {PRODUCT_LOSS_TYPES.map((type) => (
+                <SelectContent position="popper">
+                  {PRODUCT_LOSS_TYPES.filter((type) => type.value !== "SHORTAGE").map((type) => (
                     <SelectItem key={type.value} value={type.value} textValue={type.label}>
                       <span className="flex flex-col items-start gap-0.5 py-0.5">
                         <span>{type.label}</span>
@@ -828,11 +1021,11 @@ export function TransportDetailsManager({
                   ))}
                 </SelectContent>
               </Select>
-              {selectedLossType && (
+              {/* {selectedLossType && (
                 <p className="text-xs text-muted-foreground leading-relaxed rounded-md border bg-muted/40 p-3">
                   {selectedLossType.guidance}
                 </p>
-              )}
+              )} */}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -892,122 +1085,241 @@ export function TransportDetailsManager({
 
       {/* Finalize Transport Dialog */}
       <Dialog open={openFinalizeDialog} onOpenChange={setOpenFinalizeDialog}>
-        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[650px] lg:max-w-[650px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-emerald-600" />
               Finalize Transport
             </DialogTitle>
             <DialogDescription>
-              Review the delivery distribution before marking this transport as complete.
+              {isAwaitingReception
+                ? "This transport has deliveries awaiting reception. All destination stations and clients must confirm receipt before you can finalize and reconcile variance."
+                : "Review and reconcile the delivery volume before marking this transport as complete."}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-6 py-4">
-            <div className="rounded-md border overflow-hidden">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead>Delivery / Station</TableHead>
-                    <TableHead className="text-right">Assigned</TableHead>
-                    <TableHead className="text-right">Received</TableHead>
-                    <TableHead className="text-right">Variance</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transport.deliveries?.length ? (
-                    transport.deliveries.map((del: any) => {
-                      const assigned = Number(del.litersDespatched || 0);
-                      const received = del.litersReceived !== null ? Number(del.litersReceived) : null;
-                      const diff = received !== null ? assigned - received : 0;
+
+          <div className="space-y-5 py-2">
+            {/* Top Status Alert with Title Only (No Description) */}
+            {isAwaitingReception ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 px-3.5 py-2.5 flex items-center gap-2.5">
+                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <h4 className="font-semibold text-amber-900 dark:text-amber-200 text-sm">
+                  Destinations Pending Reception ({pendingDeliveries.length})
+                </h4>
+              </div>
+            ) : modalRemainingInTruck > 0.001 ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 px-3.5 py-2.5 flex items-center gap-2.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <h4 className="font-semibold text-amber-900 dark:text-amber-200 text-sm">
+                  Truck Has Remaining Volume ({modalRemainingInTruck.toLocaleString()} L) — Cannot Finalize
+                </h4>
+              </div>
+            ) : modalTransitShortage > 0.001 ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 flex items-center gap-2.5">
+                <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                <h4 className="font-semibold text-destructive text-sm">
+                  Shortage Variance Detected ({modalTransitShortage.toLocaleString()} L)
+                </h4>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30 px-3.5 py-2.5 flex items-center gap-2.5">
+                <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <h4 className="font-semibold text-emerald-900 dark:text-emerald-200 text-sm">
+                  Zero Shortage — 100% Volume Accounted For
+                </h4>
+              </div>
+            )}
+
+            {/* Table of Awaiting and Shortage Deliveries Only */}
+            {awaitingOrShortageDeliveries.length > 0 ? (
+              <div className="rounded-xl border overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow>
+                      <TableHead>Delivery / Destination</TableHead>
+                      <TableHead className="text-right">Dispatched</TableHead>
+                      <TableHead className="text-right">Received</TableHead>
+                      <TableHead className="text-right">Shortage</TableHead>
+                      <TableHead className="text-center w-[180px]">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {awaitingOrShortageDeliveries.map((del: any) => {
+                      const isPending = del.litersReceived === null || del.litersReceived === undefined;
+                      const assigned = Number(del.litersDespatched || del.litersSold || 0);
+                      const received = !isPending ? Number(del.litersReceived) : null;
+                      const diff = received !== null ? Math.max(0, assigned - received) : 0;
+                      const returned = Number(del.litersReturned || 0);
+
                       return (
                         <TableRow key={del.id}>
-                          <TableCell className="font-medium">{del.station?.name || del.customer?.name || "Unknown"}</TableCell>
-                          <TableCell className="text-right">{assigned.toLocaleString()} L</TableCell>
-                          <TableCell className="text-right">
-                            {received !== null ? (
-                              `${received.toLocaleString()} L`
+                          <TableCell className="font-medium text-foreground">
+                            {del.customer ? (
+                              <div className="flex flex-col">
+                                <span className="font-medium text-foreground">{del.customer.name}</span>
+                                <span className="text-[10px] text-muted-foreground uppercase">External Client</span>
+                              </div>
+                            ) : del.station ? (
+                              <div className="flex flex-col">
+                                <span className="font-medium text-foreground">{del.station.name}</span>
+                                <span className="text-[10px] text-muted-foreground uppercase">Owned Station</span>
+                              </div>
                             ) : (
-                              <span className="text-amber-600">Pending</span>
+                              "Unknown Destination"
                             )}
                           </TableCell>
-                          <TableCell className={`text-right font-mono ${diff > 0 ? "text-rose-600" : diff < 0 ? "text-emerald-600" : ""}`}>
-                            {received !== null ? `${diff > 0 ? "+" : ""}${diff.toLocaleString()} L` : "—"}
+                          <TableCell className="text-right font-mono font-medium">
+                            {assigned.toLocaleString()} L
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-medium">
+                            {isPending ? (
+                              <span className="text-amber-600 italic text-xs">Pending</span>
+                            ) : (
+                              <span className="text-foreground">{received?.toLocaleString()} L</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-medium">
+                            {isPending ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : diff > 0 ? (
+                              <span className="text-destructive font-bold">-{diff.toLocaleString()} L</span>
+                            ) : (
+                              <span className="text-emerald-600">0 L</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {isPending ? (
+                              <Badge
+                                variant="outline"
+                                className="border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/50 text-[11px]"
+                              >
+                                Awaiting Received
+                              </Badge>
+                            ) : returned > 0 ? (
+                              <Badge
+                                variant="outline"
+                                className="border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/50 text-[11px]"
+                              >
+                                In Truck ({returned.toLocaleString()} L)
+                              </Badge>
+                            ) : diff > 0 ? (
+                              <Badge
+                                variant="outline"
+                                className="border-rose-500 text-rose-600 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/50 text-[11px]"
+                              >
+                                Waiting Reconciled
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/50 text-[11px]"
+                              >
+                                Completed
+                              </Badge>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
-                    })
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
-                        No deliveries assigned yet.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-                <tfoot className="bg-muted/50">
-                  <TableRow>
-                    <TableCell className="font-bold">Total Dispatched / Received</TableCell>
-                    <TableCell className="text-right font-bold">{distributedVolume.toLocaleString()} L</TableCell>
-                    <TableCell className="text-right font-bold">
-                      {((transport.deliveries || []).reduce(
-                        (sum: number, sale: any) => sum + (sale.litersReceived !== null && sale.litersReceived !== undefined ? Number(sale.litersReceived) : 0),
-                        0
-                      )).toLocaleString()} L
-                    </TableCell>
-                    <TableCell className="text-right font-bold"></TableCell>
-                  </TableRow>
-                </tfoot>
-              </Table>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 rounded-xl border bg-muted/20">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Loaded Volume</p>
-                <p className="text-xl font-bold font-mono">{carriedVolume.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">L</span></p>
+                    })}
+                  </TableBody>
+                </Table>
               </div>
-              <div className={`p-4 rounded-xl border ${hasUnresolvedVariance ? "bg-rose-50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/50" : "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/50"}`}>
-                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">
-                  Unresolved Variance
-                </p>
-                <p className={`text-xl font-bold font-mono ${hasUnresolvedVariance ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                  {remainingVolume.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">L</span>
-                </p>
-              </div>
-            </div>
-
-            {hasUnresolvedVariance && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
-                <h4 className="font-semibold text-amber-800 dark:text-amber-400 flex items-center gap-2 mb-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  Unresolved Variance Detected
-                </h4>
-                <p className="text-sm text-amber-700 dark:text-amber-500 mb-4">
-                  There is <strong>{remainingVolume.toLocaleString()} L</strong> of product unaccounted for. You can assign this volume to another station or confirm it as a shortage.
-                  <br /><br />
-                  <strong>Note:</strong> A shortage deduction of <strong>₦{totalDeductionAmount.toLocaleString()}</strong> (at ₦{sellingPrice.toLocaleString()}/L) will be applied to the transporter&apos;s net fee.
-                </p>
-                <div className="flex flex-col sm:flex-row items-center gap-3">
-                  <Button variant="outline" className="w-full sm:w-auto" asChild>
-                    <Link href={`/admin/deliveries/new?transportId=${transport.id}`}>
-                      Assign to another station
-                    </Link>
-                  </Button>
-                  <Button variant="destructive" className="w-full sm:w-auto" onClick={handleFinalizeWithShortage} disabled={isFinalizing}>
-                    {isFinalizing ? <SpinnerEllipsis /> : "Confirm Shortage & Complete"}
-                  </Button>
-                </div>
+            ) : (
+              <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground bg-muted/10">
+                All destination stations and clients have confirmed full reception with zero shortage.
               </div>
             )}
+
+            {/* The Two Summary Cards adjusting dynamically based on result */}
+            <div className="grid grid-cols-2 gap-4">
+              <div
+                className={cn(
+                  "p-4 rounded-xl border transition-colors",
+                  modalRemainingInTruck > 0.001
+                    ? "bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/50"
+                    : "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/50"
+                )}
+              >
+                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">
+                  Remaining in Truck
+                </p>
+                <p
+                  className={cn(
+                    "text-xl font-bold font-mono",
+                    modalRemainingInTruck > 0.001 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                  )}
+                >
+                  {modalRemainingInTruck.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">L</span>
+                </p>
+                <p className="text-[11px] mt-1 font-medium">
+                  {modalRemainingInTruck > 0.001 ? (
+                    <span className="text-amber-700 dark:text-amber-400">Cannot finalize — fuel remains in truck</span>
+                  ) : (
+                    <span className="text-emerald-700 dark:text-emerald-400">0 L — Tank Empty &amp; Accounted</span>
+                  )}
+                </p>
+              </div>
+
+              <div
+                className={cn(
+                  "p-4 rounded-xl border transition-colors",
+                  modalTransitShortage > 0.001
+                    ? "bg-rose-50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/50"
+                    : "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/50"
+                )}
+              >
+                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">
+                  Transit Shortage (Deduction)
+                </p>
+                <p
+                  className={cn(
+                    "text-xl font-bold font-mono",
+                    modalTransitShortage > 0.001 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
+                  )}
+                >
+                  {modalTransitShortage.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">L</span>
+                </p>
+                <p className="text-[11px] mt-1 font-medium">
+                  {modalTransitShortage > 0.001 ? (
+                    ratePerLiter > 0 ? (
+                      <span className="text-rose-700 dark:text-rose-400 font-mono">
+                        ₦{(modalTransitShortage * ratePerLiter).toLocaleString()} deducted from driver
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        ₦0 (No driver transport fee to deduct)
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-emerald-700 dark:text-emerald-400">No driver deduction</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
             {error && <p className="text-sm text-destructive font-medium">{error}</p>}
           </div>
-          {!hasUnresolvedVariance && (
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpenFinalizeDialog(false)} disabled={isFinalizing}>Cancel</Button>
-              <Button onClick={handleFinalizeWithShortage} disabled={isFinalizing}>
-                {isFinalizing ? <SpinnerEllipsis /> : "Complete Transport"}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setOpenFinalizeDialog(false)} disabled={isFinalizing}>
+              {isAwaitingReception ? "Close" : "Cancel"}
+            </Button>
+            {!isAwaitingReception && (
+              <Button
+                onClick={handleFinalizeWithShortage}
+                disabled={!canFinalizeNow || isFinalizing}
+                className={modalTransitShortage > 0 ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              >
+                {isFinalizing ? (
+                  <SpinnerEllipsis />
+                ) : modalTransitShortage > 0 ? (
+                  "Confirm Shortage & Finalize"
+                ) : (
+                  "Complete Transport"
+                )}
               </Button>
-            </DialogFooter>
-          )}
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1070,6 +1382,62 @@ export function TransportDetailsManager({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+
+
+      {/* Delete Loss Incident Confirmation Dialog */}
+      <AlertDialog open={!!deleteLossTarget} onOpenChange={(open) => !open && setDeleteLossTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Loss Incident Log
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-foreground/80">
+                <p>
+                  Are you sure you want to delete this <strong>{deleteLossTarget ? getLossTypeLabel(deleteLossTarget.lossType) : "loss"}</strong> incident log?
+                </p>
+                {deleteLossTarget && (
+                  <div className="p-3 rounded-lg border bg-muted/40 text-xs space-y-1.5 my-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Volume Lost:</span>
+                      <span className="font-semibold text-destructive">{Number(deleteLossTarget.lostQuantity || 0).toLocaleString()} L</span>
+                    </div>
+                    {Number(deleteLossTarget.expensesIncurred || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Expenses Incurred:</span>
+                        <span className="font-semibold font-mono text-destructive">₦{Number(deleteLossTarget.expensesIncurred || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {deleteLossTarget.comment && (
+                      <div className="pt-1.5 text-muted-foreground border-t border-border/50 italic">
+                        &quot;{deleteLossTarget.comment}&quot;
+                      </div>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Deleting this log will restore <strong>{Number(deleteLossTarget?.lostQuantity || 0).toLocaleString()} L</strong> back to the truck&apos;s available capacity and reverse associated financial deductions.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingLoss}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteLossLog();
+              }}
+              disabled={isDeletingLoss}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              {isDeletingLoss ? <SpinnerEllipsis /> : "Delete Incident"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { getAvailableVolume, recomputeTransportLoss } from "@/lib/fleet/transport-volume";
 
 const UpdateSaleSchema = z.object({
   litersReceived: z.number().min(0).optional().nullable(),
@@ -14,6 +15,8 @@ const UpdateSaleSchema = z.object({
   status: z.enum(["UNPAID", "PART_PAID", "CLEARED"]).optional(),
   transportRate: z.number().min(0).optional(),
   transportCost: z.number().min(0).optional(),
+  litersReturned: z.number().min(0).optional(),
+  shortageDeducted: z.boolean().optional(),
 });
 
 export async function GET(
@@ -59,8 +62,33 @@ export async function PATCH(
 
     const existing = await prisma.delivery.findFirst({
       where: { id, tenantId: actor.tenantId },
+      include: {
+        transport: {
+          select: { id: true, status: true },
+        },
+      },
     });
     if (!existing) throw new DomainError(404, "not_found", "Delivery not found.");
+
+    const parentTransport =
+      existing.transport ??
+      (existing.transportId
+        ? await prisma.transport.findUnique({
+            where: { id: existing.transportId },
+            select: { id: true, status: true },
+          })
+        : null);
+
+    if (
+      parentTransport?.status === "COMPLETED" ||
+      parentTransport?.status === "CANCELLED"
+    ) {
+      throw new DomainError(
+        400,
+        "invalid_state",
+        "Cannot edit sales delivery because the transport is finalized and marked as completed."
+      );
+    }
 
     const isAlreadyReceived = existing.litersReceived !== null;
     const isDispatchVolumeChanged =
@@ -86,28 +114,35 @@ export async function PATCH(
       newOrganizationId = station.organizationId ?? null;
     }
 
+    // Returned volume only makes sense for a received delivery and cannot exceed the shortfall.
+    const checkReceived =
+      body.litersReceived !== undefined
+        ? body.litersReceived
+        : existing.litersReceived !== null
+          ? Number(existing.litersReceived)
+          : null;
+    const checkReturned = body.litersReturned ?? Number(existing.litersReturned);
+    if (checkReturned > 0) {
+      if (checkReceived === null) {
+        throw new DomainError(400, "invalid_action", "Confirm the received volume before returning volume to the truck.");
+      }
+      if (checkReceived + checkReturned > Number(existing.litersDespatched) + 0.001) {
+        throw new DomainError(
+          400,
+          "invalid_volume",
+          `Received + returned cannot exceed the ${Number(existing.litersDespatched).toLocaleString()} L despatched.`
+        );
+      }
+    }
+
     if (isDispatchVolumeChanged && existing.transportId) {
-      const transport = await prisma.transport.findUnique({
-        where: { id: existing.transportId },
-        include: { deliveries: { select: { id: true, litersDespatched: true } } },
-      });
-      if (transport) {
-        const carried = Number(transport.litersCarried || 0);
-        const otherDeliveries = (transport.deliveries || []).filter(
-          (d: { id: string; litersDespatched: unknown }) => d.id !== existing.id
+      const available = await getAvailableVolume(prisma, existing.transportId, existing.id);
+      if (body.litersDespatched! - Number(existing.litersReturned) > available) {
+        throw new DomainError(
+          400,
+          "invalid_volume",
+          `Dispatch volume exceeds transport's available quantity (${available.toLocaleString()} L)`
         );
-        const distributed = otherDeliveries.reduce(
-          (acc: number, s: { litersDespatched: unknown }) => acc + Number(s.litersDespatched || 0),
-          0
-        );
-        const available = Math.max(0, carried - distributed);
-        if (body.litersDespatched! > available) {
-          throw new DomainError(
-            400,
-            "invalid_volume",
-            `Dispatch volume exceeds transport's available quantity (${available.toLocaleString()} L)`
-          );
-        }
       }
     }
 
@@ -136,6 +171,8 @@ export async function PATCH(
         ...(body.litersReceived !== undefined && { litersReceived: body.litersReceived }),
         ...(body.amountPerLiter !== undefined && { amountPerLiter: body.amountPerLiter }),
         ...(body.litersDespatched !== undefined && { litersDespatched: body.litersDespatched }),
+        ...(body.litersReturned !== undefined && { litersReturned: body.litersReturned }),
+        ...(body.shortageDeducted !== undefined && { shortageDeducted: body.shortageDeducted }),
         ...(body.stationId !== undefined && {
           stationId: body.stationId,
           organizationId: newOrganizationId,
@@ -148,33 +185,9 @@ export async function PATCH(
       },
     });
 
-    // Cross-model reconciliation: if linked to a transport, recalculate loss
+    // Cross-model reconciliation: recompute derived loss for open transports only.
     if (Delivery.transportId) {
-      const transport = await prisma.transport.findUnique({ where: { id: Delivery.transportId } });
-      if (transport) {
-        const allSales = await prisma.delivery.findMany({
-          where: { transportId: transport.id },
-          include: { station: true },
-        });
-
-        const totalReceived = allSales.reduce(
-          (sum: number, d: { litersReceived: unknown }) => sum + Number(d.litersReceived ?? 0),
-          0
-        );
-
-        const litersLost = Math.max(0, Number(transport.litersCarried) - totalReceived);
-        const ratePerLiter = Number(transport.ratePerLiter);
-        const cashDeductionForLoss = litersLost * ratePerLiter;
-        const existingMaintenance = Number(transport.maintenanceCost);
-        const totalDeduction = existingMaintenance + cashDeductionForLoss;
-        const baseRate = ratePerLiter * Number(transport.litersCarried);
-        const netTransportFeePaid = Math.max(0, baseRate - totalDeduction);
-
-        await prisma.transport.update({
-          where: { id: transport.id },
-          data: { litersDelivered: totalReceived, litersLost, totalDeduction, netTransportFeePaid },
-        });
-      }
+      await recomputeTransportLoss(prisma, Delivery.transportId);
     }
 
     // Sync with WaybillAllocation if it's a station delivery

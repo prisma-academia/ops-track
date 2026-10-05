@@ -2,8 +2,16 @@
 
 import {
   DashboardOverviewCardV3,
-  DashboardCardActionsDropdown,
 } from "@/components/dashboards/dashboard-card"
+import {
+  FuelStationIcon,
+  UserGroupIcon,
+  Invoice01Icon,
+  CreditCardPosIcon,
+  DeliveryTruck01Icon,
+  Analytics01Icon,
+  AlertCircleIcon,
+} from "@hugeicons/core-free-icons"
 import { SalesOverviewChartCard, type SalesOverviewChartPoint } from "@/components/charts/sales-overview"
 import { SegmentBreakdownChartCard, type SegmentBreakdownPoint } from "@/components/charts/earn-report"
 
@@ -15,8 +23,10 @@ export type TopStatMetric = {
 export type TopStats = {
   totalStations: TopStatMetric;
   totalUsers: TopStatMetric;
-  totalExpenses: TopStatMetric;
   totalRevenue: TopStatMetric;
+  totalExpenses: TopStatMetric;
+  totalLoss: TopStatMetric;
+  netProfit: TopStatMetric;
   activeDeliveries: TopStatMetric;
 };
 
@@ -24,6 +34,7 @@ export type MonthlyData = {
   month: string;
   revenue: number;
   expenses: number;
+  loss?: number;
 };
 
 export type ProductVolumeTotals = {
@@ -37,6 +48,7 @@ interface DashboardClientProps {
   topStats: TopStats;
   monthlyData: MonthlyData[];
   productVolumeTotals: ProductVolumeTotals;
+  period?: string;
 }
 
 function formatCurrency(value: number) {
@@ -49,19 +61,51 @@ function formatCurrency(value: number) {
   return '₦' + value.toLocaleString();
 }
 
-export function DashboardClient({ topStats, monthlyData, productVolumeTotals }: DashboardClientProps) {
+export function DashboardClient({ topStats, monthlyData, productVolumeTotals, period = "Last 30 days" }: DashboardClientProps) {
   const statsCardsData = [
-    { title: "Total Stations", formattedValue: topStats.totalStations.value.toLocaleString(), percentageChange: topStats.totalStations.percentageChange },
-    { title: "Total Users", formattedValue: topStats.totalUsers.value.toLocaleString(), percentageChange: topStats.totalUsers.percentageChange },
-    { title: "Total Expenses", formattedValue: formatCurrency(topStats.totalExpenses.value), percentageChange: topStats.totalExpenses.percentageChange },
-    { title: "Transactions", formattedValue: formatCurrency(topStats.totalRevenue.value), percentageChange: topStats.totalRevenue.percentageChange },
-    { title: "Active Deliveries", formattedValue: topStats.activeDeliveries.value.toLocaleString(), percentageChange: topStats.activeDeliveries.percentageChange },
+    {
+      title: "Total Stations",
+      icon: FuelStationIcon,
+      formattedValue: topStats.totalStations.value.toLocaleString(),
+      percentageChange: topStats.totalStations.percentageChange,
+    },
+    {
+      title: "Total Users",
+      icon: UserGroupIcon,
+      formattedValue: topStats.totalUsers.value.toLocaleString(),
+      percentageChange: topStats.totalUsers.percentageChange,
+    },
+    {
+      title: "Total Revenue",
+      icon: CreditCardPosIcon,
+      formattedValue: formatCurrency(topStats.totalRevenue.value),
+      percentageChange: topStats.totalRevenue.percentageChange,
+    },
+    {
+      title: "Total Expenses",
+      icon: Invoice01Icon,
+      formattedValue: formatCurrency(topStats.totalExpenses.value),
+      percentageChange: topStats.totalExpenses.percentageChange,
+    },
+    {
+      title: "Total Loss",
+      icon: AlertCircleIcon,
+      formattedValue: formatCurrency(topStats.totalLoss.value),
+      percentageChange: topStats.totalLoss.percentageChange,
+    },
+    {
+      title: "Net Profit",
+      icon: Analytics01Icon,
+      formattedValue: formatCurrency(topStats.netProfit.value),
+      percentageChange: topStats.netProfit.percentageChange,
+    },
   ]
 
   const salesChartData: SalesOverviewChartPoint[] = monthlyData.map((m) => ({
     name: m.month,
     earning: m.revenue,
     expense: m.expenses,
+    loss: m.loss ?? 0,
   }))
 
   const volumeSegments: SegmentBreakdownPoint[] = [
@@ -74,7 +118,7 @@ export function DashboardClient({ topStats, monthlyData, productVolumeTotals }: 
   return (
     <div className="space-y-6">
       {/* Top Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {statsCardsData.map((item, index) => (
           <DashboardOverviewCardV3
             key={index}
@@ -83,7 +127,8 @@ export function DashboardClient({ topStats, monthlyData, productVolumeTotals }: 
               percentageChange: item.percentageChange,
             }}
             title={item.title}
-            action={<DashboardCardActionsDropdown />}
+            icon={item.icon}
+            period={period}
           />
         ))}
       </div>
@@ -94,8 +139,10 @@ export function DashboardClient({ topStats, monthlyData, productVolumeTotals }: 
           <SalesOverviewChartCard
             title="Sales Overview"
             chartData={salesChartData}
-            revenueValue={formatCurrency(topStats.totalRevenue.value)}
-            expenseValue={formatCurrency(topStats.totalExpenses.value)}
+            revenue={topStats.totalRevenue.value}
+            expense={topStats.totalExpenses.value}
+            loss={topStats.totalLoss.value}
+            profit={topStats.netProfit.value}
           />
         </div>
         <div>

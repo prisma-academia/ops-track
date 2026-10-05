@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { subDays, format } from "date-fns";
+import { subDays, format, startOfMonth, endOfMonth } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
@@ -73,11 +73,22 @@ export function DateRangeFilter({
     setDate({ from: date?.from, to: newDate });
   };
 
-  const applyPreset = (preset: "7days" | "30days" | "90days" | "lastYear" | "allTime") => {
+  const applyPreset = (preset: "today" | "yesterday" | "7days" | "30days" | "thisMonth" | "90days" | "lastYear" | "allTime") => {
     const today = new Date();
     switch (preset) {
+      case "today":
+        setDate({ from: today, to: today });
+        break;
+      case "yesterday": {
+        const y = subDays(today, 1);
+        setDate({ from: y, to: y });
+        break;
+      }
       case "7days":
         setDate({ from: subDays(today, 7), to: today });
+        break;
+      case "thisMonth":
+        setDate({ from: startOfMonth(today), to: endOfMonth(today) });
         break;
       case "30days":
         setDate({ from: subDays(today, 30), to: today });
@@ -168,9 +179,30 @@ export function DateRangeFilter({
               <Button
                 variant="ghost"
                 className="justify-start font-normal px-2 h-8"
+                onClick={() => applyPreset("today")}
+              >
+                Today
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start font-normal px-2 h-8"
+                onClick={() => applyPreset("yesterday")}
+              >
+                Yesterday
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start font-normal px-2 h-8"
                 onClick={() => applyPreset("7days")}
               >
                 Last 7 days
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start font-normal px-2 h-8"
+                onClick={() => applyPreset("thisMonth")}
+              >
+                This month
               </Button>
               <Button
                 variant="ghost"

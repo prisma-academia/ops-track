@@ -15,6 +15,7 @@ export default async function FleetPnlReportPage() {
         include: {
           transporter: { select: { name: true } },
           truck: { select: { id: true, name: true, plateNumber: true } },
+          lossLogs: true,
           deliveries: {
             include: {
               customer: { select: { name: true } },

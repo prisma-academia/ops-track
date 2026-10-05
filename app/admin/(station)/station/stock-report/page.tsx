@@ -75,8 +75,8 @@ export default async function StockReportPage() {
       const sellingPrice = a.delivery ? Number(a.delivery.amountPerLiter) : null;
       const salesRevenue = a.delivery ? Number(a.delivery.totalExpectedAmount) : null;
 
-      const remainingLiters = (reconciledQty ?? deliveryQty) - (approvedSalesLiters ?? 0);
-      const remainingStockValue = sellingPrice !== null ? remainingLiters * sellingPrice : null;
+      let soldQty = 0;
+      let isFullySold = false;
 
       // New logic for calculating Reconciled Date, Deposit, Total Expense, and PNL
       if (a.deliveredAt && reconciledQty !== null && reconciledQty > 0) {
@@ -96,7 +96,6 @@ export default async function StockReportPage() {
         let accumulatedLiters = 0;
         let depositSum = 0;
         let finalSalesDate: Date | null = null;
-        let isFullySold = false;
 
         for (const log of salesLogs) {
           const liters = Number(log.litersSold);
@@ -117,6 +116,7 @@ export default async function StockReportPage() {
           }
         }
 
+        soldQty = accumulatedLiters;
         reconciledDeposit = depositSum;
 
         if (isFullySold && finalSalesDate) {
@@ -148,6 +148,11 @@ export default async function StockReportPage() {
         pnl = reconciledDeposit - stockValue - totalExpense;
       }
 
+      const effectiveQty = reconciledQty ?? deliveryQty;
+      const remainingQty = Math.max(0, effectiveQty - soldQty);
+      const remainingPct = effectiveQty > 0 ? (remainingQty / effectiveQty) * 100 : 0;
+      const remainingStockValue = productPrice ? remainingQty * productPrice : null;
+
       return {
         id: a.id,
         sn: index + 1,
@@ -172,8 +177,11 @@ export default async function StockReportPage() {
         approvedSalesLiters,
         sellingPrice,
         salesRevenue,
-        remainingLiters,
+        soldQty,
+        remainingQty,
+        remainingPct,
         remainingStockValue,
+        isFullySold,
       };
     })
   );

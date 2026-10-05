@@ -5,7 +5,7 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { computeStationOverpayment } from "@/lib/sales/payments";
+import { computeStationLedger, computeStationOverpayment } from "@/lib/sales/payments";
 
 const UpdateStationSchema = z.object({
   code: z.string().min(2).max(50).optional(),
@@ -17,6 +17,7 @@ const UpdateStationSchema = z.object({
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
   altitude: z.number().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   staffUserIds: z.array(z.string()).optional(),
 });
 
@@ -56,9 +57,12 @@ export async function GET(
       throw new DomainError(404, "not_found", "Station not found.");
     }
 
-    const derivedBalance = await computeStationOverpayment(id, actor.tenantId);
+    const [derivedBalance, ledgerSummary] = await Promise.all([
+      computeStationOverpayment(id, actor.tenantId),
+      computeStationLedger(id, actor.tenantId),
+    ]);
 
-    return ok({ ...station, derivedBalance });
+    return ok({ ...station, derivedBalance, ledgerSummary });
   } catch (e) {
     return handleError(e);
   }
@@ -127,6 +131,7 @@ export async function PATCH(
         latitude: body.latitude,
         longitude: body.longitude,
         altitude: body.altitude,
+        imageUrl: body.imageUrl,
         staff: staffData,
       },
       include: {

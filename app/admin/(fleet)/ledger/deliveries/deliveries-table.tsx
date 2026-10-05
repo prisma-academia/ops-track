@@ -20,6 +20,16 @@ export type SalesLedgerRow = {
     id: string;
     customer?: { name: string };
     station?: { name: string };
+    transport?: {
+      id?: string;
+      isOneTime?: boolean | null;
+      oneTimeTransporterName?: string | null;
+      oneTimeTruckPlate?: string | null;
+      oneTimeDriverName?: string | null;
+      transporter?: { name: string } | null;
+      truck?: { name?: string | null; plateNumber?: string | null } | null;
+      driver?: { firstName?: string | null; lastName?: string | null } | null;
+    } | null;
   };
 };
 
@@ -36,6 +46,60 @@ export const salesColumns: ColumnDef<SalesLedgerRow>[] = [
       const name =
         row.original.delivery?.customer?.name || row.original.delivery?.station?.name || "-";
       return <span className="font-medium">{name}</span>;
+    },
+  },
+  {
+    id: "transporter",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Transporter" />,
+    meta: { label: "Transporter" },
+    accessorFn: (row) =>
+      row.delivery?.transport?.transporter?.name ||
+      row.delivery?.transport?.oneTimeTransporterName ||
+      "-",
+    cell: ({ row }) => (
+      <span className="truncate max-w-[130px] inline-block font-medium">
+        {row.original.delivery?.transport?.transporter?.name ||
+          row.original.delivery?.transport?.oneTimeTransporterName ||
+          "-"}
+      </span>
+    ),
+  },
+  {
+    id: "truck",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Truck" />,
+    meta: { label: "Truck" },
+    accessorFn: (row) =>
+      row.delivery?.transport?.truck?.plateNumber ||
+      row.delivery?.transport?.truck?.name ||
+      row.delivery?.transport?.oneTimeTruckPlate ||
+      "-",
+    cell: ({ row }) => {
+      const truck =
+        row.original.delivery?.transport?.truck?.plateNumber ||
+        row.original.delivery?.transport?.truck?.name ||
+        row.original.delivery?.transport?.oneTimeTruckPlate ||
+        "-";
+      return <span className="font-mono text-xs uppercase">{truck}</span>;
+    },
+  },
+  {
+    id: "driver",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Driver" />,
+    meta: { label: "Driver" },
+    accessorFn: (row) => {
+      const d = row.delivery?.transport?.driver;
+      if (d) {
+        const full = `${d.firstName || ""} ${d.lastName || ""}`.trim();
+        if (full) return full;
+      }
+      return row.delivery?.transport?.oneTimeDriverName || "-";
+    },
+    cell: ({ row }) => {
+      const d = row.original.delivery?.transport?.driver;
+      const name = d
+        ? `${d.firstName || ""} ${d.lastName || ""}`.trim()
+        : row.original.delivery?.transport?.oneTimeDriverName || "-";
+      return <span className="text-muted-foreground">{name || "-"}</span>;
     },
   },
   {

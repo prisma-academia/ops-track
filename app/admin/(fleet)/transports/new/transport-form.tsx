@@ -31,7 +31,12 @@ const Schema = z.object({
     oneTimeTruckPlate: z.string().optional().nullable(),
     oneTimeDriverName: z.string().optional().nullable(),
     destination: z.string().min(1, "Destination is required"),
-    ratePerLiter: z.coerce.number().min(1, "Rate is required"),
+    ratePerLiter: z.preprocess(
+      (val) => (val === "" || val === null || val === undefined ? undefined : val),
+      z.coerce
+        .number({ message: "Rate is required" })
+        .min(0, "Rate must be 0 or greater")
+    ),
     litersCarried: z.coerce.number().min(1, "Volume is required"),
   })).min(1, "At least one truck assignment is required").superRefine((data, ctx) => {
     data.forEach((assignment, index) => {
@@ -582,7 +587,7 @@ export function CreateTransportForm({
                       name={`assignments.${index}.ratePerLiter`}
                       render={({ field }) => (
                         <FormattedNumberInput 
-                          placeholder="15" 
+                          placeholder="0" 
                           {...field}
                           className={fieldErrors?.ratePerLiter ? "border-destructive" : ""} 
                           prefixText="₦"

@@ -5,8 +5,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { PlusIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PlusIcon } from "lucide-react";
 import Image from "next/image";
 
 const FAQ_DATA = [
@@ -30,16 +30,6 @@ const FAQ_DATA = [
     answer:
       "Absolutely. OpsTrack natively supports multi-tenant and multi-station hierarchies. Station owners and headquarters executives can switch between stations, track consolidated sales and live ledger balances, monitor stock across tanks, and manage role-based permissions from any web browser.",
   },
-  {
-    question: "How does delivery and waybill verification work?",
-    answer:
-      "When a fuel tanker arrives at a station, attendants log the delivery, capture the physical supply waybill manifest with the device camera, record physical dipping and temperature measurements, and log GPS coordinates. This ensures an unbroken chain of custody from depot dispatch to station tank.",
-  },
-  {
-    question: "How do I get started or onboard my team with OpsTrack?",
-    answer:
-      "You can register online or schedule a 30-minute demonstration with our product specialists. We assist with initial station setup, tank and pump configurations, staff role assignment, and mobile app deployment so your team is up and running in days.",
-  },
 ];
 
 export default function Faq() {
@@ -60,9 +50,9 @@ export default function Faq() {
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-16 items-start">
           <div className="col-span-1 flex justify-center items-center">
-            <div className="relative w-48 h-48 md:w-64 md:h-64">
+            <div className="relative w-68 h-68 md:w-88 md:h-88">
               <Image 
-                src="/assets/images/opstrack-icon.png" 
+                src="/assets/images/opstrack-service.png" 
                 alt="App Icon" 
                 fill 
                 className="object-contain p-6 bg-background"

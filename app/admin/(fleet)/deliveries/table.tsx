@@ -2,9 +2,23 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
-import { BadgeDollarSign, Droplet, PackageCheck, Pencil, Printer } from "lucide-react";
+import { BadgeDollarSign, Droplet, FileText, MoreHorizontal, PackageCheck, Pencil, Printer, Truck, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +34,8 @@ import { apiPatch } from "@/lib/client/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -31,6 +47,8 @@ export type SaleRow = {
   transportDetails: string;
   litersDespatched: number;
   litersReceived: number | null;
+  litersReturned: number;
+  shortageDeducted: boolean;
   variance: number | null;
   amountPerLiter: number;
   totalExpectedAmount: number;
@@ -40,52 +58,86 @@ export type SaleRow = {
   createdAt: string;
   isExternalClient: boolean;
   volumeUnit: string;
+  transportId?: string | null;
+  transportStatus?: string | null;
+  transportRate?: number;
 };
 
-function ReceiveDeliveryAction({ row }: { row: SaleRow }) {
-  const [open, setOpen] = useState(false);
-  const [litersReceived, setLitersReceived] = useState(row.litersReceived?.toString() || "");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+type ShortageReconciliationMode = "IN_TRUCK" | "SHORTAGE_DEDUCT";
+
+function DeliveryRowActions({ row }: { row: SaleRow }) {
   const router = useRouter();
 
+  const isTransportFinalized =
+    row.transportStatus === "COMPLETED" || row.transportStatus === "CANCELLED";
+
+  // Dialog open state
+  const [openReceive, setOpenReceive] = useState(false);
+
+  // Receive Dialog State
+  const [litersReceived, setLitersReceived] = useState(row.litersReceived?.toString() || "");
+  const [shortageMode, setShortageMode] = useState<ShortageReconciliationMode>(
+    row.litersReturned > 0 ? "IN_TRUCK" : "SHORTAGE_DEDUCT"
+  );
+  const [isReceiving, setIsReceiving] = useState(false);
+  const [receiveError, setReceiveError] = useState<string | null>(null);
+
+  const unit = row.volumeUnit || "L";
   const isAlreadyReceived = row.litersReceived !== null;
   const numReceived = litersReceived.trim() !== "" ? Number(litersReceived) : null;
-  const variance =
-    numReceived !== null && !isNaN(numReceived)
-      ? row.litersDespatched - numReceived
-      : null;
-  const unit = row.volumeUnit || "L";
+  const hasReceivedInput = numReceived !== null && !isNaN(numReceived);
+  const variance = hasReceivedInput ? row.litersDespatched - numReceived : null;
+  const isSuccess = hasReceivedInput && variance === 0;
+  const isShortage = hasReceivedInput && variance !== null && variance > 0;
+  const remainingVolume = hasReceivedInput
+    ? Math.max(0, variance ?? 0)
+    : row.litersDespatched;
 
-  const handleOpen = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleOpenReceive = () => {
+    if (isTransportFinalized) {
+      toast.error("Cannot edit delivery because the transport is finalized and marked as completed.");
+      return;
+    }
     setLitersReceived(row.litersReceived?.toString() || "");
-    setError(null);
-    setOpen(true);
+    const initialMode: ShortageReconciliationMode =
+      row.litersReturned > 0 ? "IN_TRUCK" : "SHORTAGE_DEDUCT";
+    setShortageMode(initialMode);
+    setReceiveError(null);
+    setOpenReceive(true);
   };
 
   const handleReceive = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isTransportFinalized) {
+      setReceiveError("Cannot edit delivery because the transport is finalized and marked as completed.");
+      return;
+    }
     if (
       litersReceived.trim() === "" ||
       isNaN(Number(litersReceived)) ||
       Number(litersReceived) < 0
     ) {
-      setError("Please enter a valid received volume (0 or greater).");
+      setReceiveError("Please enter a valid received volume (0 or greater).");
       return;
     }
 
-    setIsSubmitting(true);
-    setError(null);
+    setIsReceiving(true);
+    setReceiveError(null);
+
+    const isShort = variance !== null && variance > 0;
+    const finalLitersReturned = isShort && shortageMode === "IN_TRUCK" ? variance : 0;
+    const finalShortageDeducted = isShort ? shortageMode === "SHORTAGE_DEDUCT" : true;
 
     const res = await apiPatch(`/api/tenant/fleet/deliveries/${row.id}`, {
       litersReceived: Number(litersReceived),
+      litersReturned: finalLitersReturned,
+      shortageDeducted: finalShortageDeducted,
     });
 
-    setIsSubmitting(false);
+    setIsReceiving(false);
 
     if (res.error) {
-      setError(res.error.message);
+      setReceiveError(res.error.message);
       toast.error(res.error.message);
     } else {
       toast.success(
@@ -93,46 +145,73 @@ function ReceiveDeliveryAction({ row }: { row: SaleRow }) {
           ? "Delivery received volume updated successfully."
           : "Delivery confirmed and received successfully."
       );
-      setOpen(false);
+      setOpenReceive(false);
       router.refresh();
     }
   };
 
   return (
     <>
-      {isAlreadyReceived ? (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
-          onClick={handleOpen}
-          title="Update Received Volume"
-        >
-          <Pencil className="w-3.5 h-3.5 mr-1" />
-          <span>Edit Receipt</span>
-        </Button>
-      ) : (
-        <Button
-          variant="default"
-          size="sm"
-          className="h-8 px-2.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
-          onClick={handleOpen}
-          title="Receive Sales Delivery"
-        >
-          <PackageCheck className="w-3.5 h-3.5 mr-1" />
-          <span>Receive</span>
-        </Button>
-      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={(e) => e.stopPropagation()}
+            title="Actions"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+            <span className="sr-only">Open actions</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
+          {row.isExternalClient && (
+            <DropdownMenuItem
+              onClick={handleOpenReceive}
+              disabled={isTransportFinalized}
+              className={isTransportFinalized ? "opacity-50 cursor-not-allowed" : ""}
+            >
+              {isAlreadyReceived ? (
+                <Pencil className="w-4 h-4 mr-2 text-muted-foreground" />
+              ) : (
+                <PackageCheck className="w-4 h-4 mr-2 text-emerald-600" />
+              )}
+              <span>{isAlreadyReceived ? "Edit Receipt" : "Receive Delivery"}</span>
+              {isTransportFinalized && (
+                <span className="ml-auto text-[10px] text-muted-foreground font-medium">Locked</span>
+              )}
+            </DropdownMenuItem>
+          )}
 
+          {row.isExternalClient && <DropdownMenuSeparator />}
+
+          <DropdownMenuItem asChild>
+            <Link href={`/admin/deliveries/${row.id}/waybill`}>
+              <Printer className="w-4 h-4 mr-2 text-muted-foreground" />
+              <span>Print Waybill</span>
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem asChild>
+            <Link href={`/admin/deliveries/${row.id}/print`}>
+              <FileText className="w-4 h-4 mr-2 text-muted-foreground" />
+              <span>Print Invoice</span>
+            </Link>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Receive / Edit Sales Delivery Dialog */}
       <Dialog
-        open={open}
+        open={openReceive && !isTransportFinalized}
         onOpenChange={(val) => {
-          if (!isSubmitting) setOpen(val);
+          if (!isReceiving && !isTransportFinalized) setOpenReceive(val);
         }}
       >
         <DialogContent
           onClick={(e) => e.stopPropagation()}
-          className="sm:max-w-md"
+          className="sm:max-w-lg lg:max-w-[540px]"
         >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -146,37 +225,58 @@ function ReceiveDeliveryAction({ row }: { row: SaleRow }) {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Info Summary */}
-            <div className="grid grid-cols-2 gap-3 p-3 rounded-lg border bg-muted/30 text-xs">
-              <div>
-                <p className="text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">
-                  Dispatched
-                </p>
-                <p className="text-sm font-semibold text-foreground mt-0.5">
-                  {row.litersDespatched.toLocaleString()} {unit}
-                </p>
+            {/* Two inputs on the same row: Dispatched Volume & Remaining to be Received */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Dispatched Volume
+                </Label>
+                <div className="relative">
+                  <Input
+                    readOnly
+                    disabled
+                    value={`${row.litersDespatched.toLocaleString()} ${unit}`}
+                    className="h-9 bg-muted/50 cursor-not-allowed font-medium text-foreground text-xs"
+                  />
+                </div>
               </div>
-              <div>
-                <p className="text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">
-                  Unit Price
-                </p>
-                <p className="text-sm font-semibold text-foreground mt-0.5">
-                  ₦{row.amountPerLiter.toLocaleString()} / {unit}
-                </p>
-              </div>
-              <div className="col-span-2 pt-1.5 border-t border-border/50 flex items-center justify-between">
-                <span className="text-muted-foreground text-[11px]">Transport / Truck:</span>
-                <span className="font-medium text-foreground text-[11px] truncate max-w-[240px]">
-                  {row.transportDetails}
-                </span>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Remaining to Receive
+                </Label>
+                <div className="relative">
+                  <Input
+                    readOnly
+                    disabled
+                    value={`${remainingVolume.toLocaleString()} ${unit}`}
+                    className={cn(
+                      "h-9 cursor-not-allowed font-medium pr-8 text-xs",
+                      isSuccess
+                        ? "bg-emerald-50/60 text-emerald-950 border-emerald-300 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-800"
+                        : isShortage
+                        ? "bg-amber-50/60 text-amber-950 border-amber-300 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-800"
+                        : "bg-muted/50 text-foreground"
+                    )}
+                  />
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                    {isSuccess ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    ) : isShortage ? (
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    ) : (
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Input field */}
-            <div className="space-y-2">
+            {/* Received Volume input below */}
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor={`received-${row.id}`} className="text-sm font-medium">
-                  Volume Received ({unit})
+                <Label htmlFor={`received-${row.id}`} className="text-xs font-semibold">
+                  Received Volume ({unit})
                 </Label>
                 <Button
                   type="button"
@@ -185,7 +285,7 @@ function ReceiveDeliveryAction({ row }: { row: SaleRow }) {
                   className="h-6 px-2 text-[11px] text-primary hover:text-primary hover:bg-primary/10"
                   onClick={() => {
                     setLitersReceived(row.litersDespatched.toString());
-                    if (error) setError(null);
+                    if (receiveError) setReceiveError(null);
                   }}
                 >
                   Match Dispatched ({row.litersDespatched.toLocaleString()} {unit})
@@ -199,65 +299,114 @@ function ReceiveDeliveryAction({ row }: { row: SaleRow }) {
                 value={litersReceived}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                   setLitersReceived(e.target.value);
-                  if (error) setError(null);
+                  if (receiveError) setReceiveError(null);
                 }}
                 prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
               />
-              <p className="text-[11px] text-muted-foreground">
-                Enter the verified physical quantity received at the client destination.
-              </p>
             </div>
 
-            {/* Live Calculation preview */}
-            {variance !== null && numReceived !== null && (
-              <div
-                className={cn(
-                  "p-3 rounded-lg border text-xs space-y-1.5 transition-colors",
-                  variance === 0
-                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-300"
-                    : variance > 0
-                    ? "bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-300"
-                    : "bg-blue-500/10 border-blue-500/20 text-blue-800 dark:text-blue-300"
+            {/* Single alert if completed or variance shortage/overage */}
+            {hasReceivedInput && (
+              <>
+                {isSuccess ? (
+                  <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900 py-2.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <AlertTitle className="text-xs font-semibold mb-0">
+                      Delivery Fully Received (Zero Variance)
+                    </AlertTitle>
+                  </Alert>
+                ) : isShortage ? (
+                  <Alert className="border-amber-200 bg-amber-50 text-amber-900 py-2.5">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <AlertTitle className="text-xs font-semibold mb-0">
+                      Shortage of {variance!.toLocaleString()} {unit} Detected
+                    </AlertTitle>
+                  </Alert>
+                ) : variance !== null && variance < 0 ? (
+                  <Alert className="border-blue-200 bg-blue-50 text-blue-900 py-2.5">
+                    <CheckCircle2 className="h-4 w-4 text-blue-600 shrink-0" />
+                    <AlertTitle className="text-xs font-semibold mb-0">
+                      Overage: +{Math.abs(variance).toLocaleString()} {unit} Received
+                    </AlertTitle>
+                  </Alert>
+                ) : null}
+              </>
+            )}
+
+            {/* If shortage, show reconciliation option (on truck vs mark as shortage) */}
+            {isShortage && variance !== null && (
+              <div className="space-y-3 pt-1">
+                <div className="space-y-1.5">
+                  <Label htmlFor={`shortage-mode-${row.id}`} className="text-xs font-semibold">
+                    Shortage Reconciliation
+                  </Label>
+                  <Select
+                    value={shortageMode}
+                    onValueChange={(val: "IN_TRUCK" | "SHORTAGE_DEDUCT") => setShortageMode(val)}
+                  >
+                    <SelectTrigger id={`shortage-mode-${row.id}`} className="w-full bg-card">
+                      <SelectValue placeholder="Select reconciliation method" />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      <SelectItem value="IN_TRUCK">
+                        Remains in Truck Tank
+                      </SelectItem>
+                      <SelectItem value="SHORTAGE_DEDUCT">
+                        Mark as Shortage
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {shortageMode === "SHORTAGE_DEDUCT" ? (
+                  <div className="p-3 rounded-lg border border-rose-500/20 bg-rose-500/10 text-xs flex items-center justify-between text-rose-950 dark:text-rose-200">
+                    <div className="flex items-center gap-2 font-medium">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>Driver Transport Deduction:</span>
+                    </div>
+                    {(row.transportRate || 0) > 0 ? (
+                      <span className="font-mono font-bold text-rose-700 dark:text-rose-400 text-sm">
+                        -₦{((variance || 0) * (row.transportRate || 0)).toLocaleString()}
+                      </span>
+                    ) : (
+                      <span className="font-medium text-muted-foreground text-xs">
+                        ₦0 (No driver transport fee)
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg border border-blue-500/20 bg-blue-500/10 text-xs flex items-center justify-between text-blue-950 dark:text-blue-200">
+                    <div className="flex items-center gap-2 font-medium text-blue-800 dark:text-blue-300">
+                      <Truck className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>Volume Remaining in Truck:</span>
+                    </div>
+                    <span className="font-mono font-bold text-blue-700 dark:text-blue-300 text-sm">
+                      {variance.toLocaleString()} {unit}
+                    </span>
+                  </div>
                 )}
-              >
-                <div className="flex items-center justify-between font-semibold">
-                  <span>Variance:</span>
-                  <span>
-                    {variance === 0
-                      ? `0 ${unit} (Exact match)`
-                      : variance > 0
-                      ? `-${variance.toLocaleString()} ${unit} (Shortage)`
-                      : `+${Math.abs(variance).toLocaleString()} ${unit} (Overage)`}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[11px] opacity-90 border-t border-current/10 pt-1">
-                  <span>Effective Expected Revenue:</span>
-                  <span className="font-mono font-medium">
-                    ₦{(numReceived * row.amountPerLiter).toLocaleString()}
-                  </span>
-                </div>
               </div>
             )}
 
-            {error && (
-              <p className="text-xs font-medium text-destructive">{error}</p>
+            {receiveError && (
+              <p className="text-xs font-medium text-destructive">{receiveError}</p>
             )}
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={isSubmitting}
+              onClick={() => setOpenReceive(false)}
+              disabled={isReceiving}
             >
               Cancel
             </Button>
             <Button
               onClick={handleReceive}
-              disabled={isSubmitting || litersReceived.trim() === ""}
+              disabled={isReceiving || litersReceived.trim() === ""}
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              {isSubmitting ? (
+              {isReceiving ? (
                 <SpinnerEllipsis />
               ) : isAlreadyReceived ? (
                 "Save Changes"
@@ -371,30 +520,11 @@ const columns: ColumnDef<SaleRow>[] = [
   {
     id: "actions",
     header: () => <span className="text-right block pr-2">Actions</span>,
-    cell: ({ row }) => {
-      const sale = row.original;
-      return (
-        <div
-          className="flex items-center justify-end gap-1.5"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {sale.isExternalClient && (
-            <ReceiveDeliveryAction row={sale} />
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            asChild
-            title="Print Waybill"
-          >
-            <Link href={`/admin/deliveries/${sale.id}/print`}>
-              <Printer className="w-4 h-4" />
-            </Link>
-          </Button>
-        </div>
-      );
-    }
+    cell: ({ row }) => (
+      <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+        <DeliveryRowActions row={row.original} />
+      </div>
+    ),
   }
 ];
 

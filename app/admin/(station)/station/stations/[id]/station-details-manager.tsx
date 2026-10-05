@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { cn, formatHumanReadableDate, formatHumanReadableDateOnly } from "@/lib/utils";
 import { z } from "zod";
 import { apiGet, apiPost, apiPatch } from "@/lib/client/api";
 import { Badge } from "@/components/ui/badge";
@@ -52,8 +52,11 @@ import {
   Lock,
   AlertCircle,
   Landmark,
-  Users,
+  UploadCloud,
+  Trash2,
+  Image as ImageIcon,
 } from "lucide-react";
+import { uploadClientFile } from "@/lib/client-upload";
 import { AssetTank } from "@/components/asset-tank";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import nigerianLocations from "@/constant/nigerian-locations.json";
@@ -115,6 +118,7 @@ const EditStationSchema = z.object({
   latitude: z.number().nullable().optional(),
   longitude: z.number().nullable().optional(),
   altitude: z.number().nullable().optional(),
+  imageUrl: z.string().optional().nullable(),
 });
 
 const PRODUCT_ICONS: Record<string, React.ReactNode> = {
@@ -217,8 +221,12 @@ export function StationDetailsManager({
       latitude: station.latitude != null ? Number(station.latitude) : null,
       longitude: station.longitude != null ? Number(station.longitude) : null,
       altitude: station.altitude != null ? Number(station.altitude) : null,
+      imageUrl: station.imageUrl || "",
     }
   });
+
+  const [stationImagePreview, setStationImagePreview] = useState<string | null>(station.imageUrl || null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const [openStateSelect, setOpenStateSelect] = useState(false);
   const [openLgaSelect, setOpenLgaSelect] = useState(false);
@@ -329,7 +337,9 @@ export function StationDetailsManager({
       latitude: station.latitude != null ? Number(station.latitude) : null,
       longitude: station.longitude != null ? Number(station.longitude) : null,
       altitude: station.altitude != null ? Number(station.altitude) : null,
+      imageUrl: station.imageUrl || "",
     });
+    setStationImagePreview(station.imageUrl || null);
     setActiveDialog("edit-station");
   };
 
@@ -502,28 +512,26 @@ export function StationDetailsManager({
       <div className="grid gap-6 md:grid-cols-2 items-stretch">
         {/* Station Information Card */}
         <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Store size={16} className="text-primary" />
-              Station Information
-            </CardTitle>
-            <CardDescription className="text-xs">Operational status, location and fuel pricing</CardDescription>
-          </CardHeader>
           <CardContent className="flex-1 flex flex-col justify-between">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 text-sm">
+            {station.imageUrl && (
+              <div className="mb-4 relative h-40 w-full overflow-hidden rounded-lg border border-stone-200 dark:border-stone-800 bg-muted">
+                <img
+                  src={station.imageUrl}
+                  alt={station.name}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               {/* Left Column: Station Manager, State, Ward / LGA, Station Code */}
               <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-0.5">
-                    {managers.length > 1 ? <Users size={16} /> : <User size={16} />}
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <User size={16} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                      {managers.length > 1 ? `Station Managers (${managers.length})` : "Station Manager"}
-                    </p>
-                    <p className="font-semibold text-foreground truncate text-xs leading-snug" title={managerNames}>
-                      {managerNames}
-                    </p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Station Manager</p>
+                    <p className="font-semibold text-foreground truncate">{managerName}</p>
                   </div>
                 </div>
 
@@ -712,7 +720,7 @@ export function StationDetailsManager({
                 {varianceList.length > 0 ? (
                   <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                     {varianceList.slice(0, 4).map((item: any) => {
-                      const formattedDate = formatHumanReadableDate(item.logDate).split(" ").slice(0, 3).join(" ");
+                      const formattedDate = formatHumanReadableDateOnly(item.logDate);
                       const isShortage = item.variance < 0;
                       return (
                         <div
@@ -796,7 +804,7 @@ export function StationDetailsManager({
                         <div className="flex items-center gap-2">
                           <Badge variant="secondary" className="text-[9px] font-mono">{sale.productType}</Badge>
                           <span className="text-[10px] text-muted-foreground truncate">
-                            {formatHumanReadableDate(sale.logDate).split(" ").slice(0, 3).join(" ")}
+                            {formatHumanReadableDateOnly(sale.logDate)}
                           </span>
                         </div>
                         <p className="text-xs font-mono text-muted-foreground mt-0.5">
@@ -1176,12 +1184,157 @@ export function StationDetailsManager({
                 {/* Right Column: Manager Assignment */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-semibold border-b pb-2 mb-4">Management</h3>
-                  <StationManagersSelector
-                    users={users}
-                    value={selectedManagerIds}
-                    onChange={setSelectedManagerIds}
-                    compactCards={true}
-                  />
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Select Manager</label>
+                    <Popover open={openManagerSelect} onOpenChange={setOpenManagerSelect}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-between font-normal bg-background text-foreground"
+                        >
+                          <span className="truncate">
+                            {selectedManagerId === "" ? "Unassigned" : (
+                              users.find(u => u.id === selectedManagerId)
+                                ? (() => {
+                                    const u = users.find(u => u.id === selectedManagerId)!;
+                                    return u.firstName || u.lastName
+                                      ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                                      : u.email;
+                                  })()
+                                : "Select..."
+                            )}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search users..." />
+                          <CommandList>
+                            <CommandEmpty>No user found.</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value="unassigned"
+                                onSelect={() => {
+                                  setSelectedManagerId("");
+                                  setOpenManagerSelect(false);
+                                }}
+                              >
+                                Unassigned
+                                {selectedManagerId === "" && <Check className="ml-auto h-4 w-4" />}
+                              </CommandItem>
+                              {users.map((u) => {
+                                const label = u.firstName || u.lastName
+                                  ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                                  : u.email;
+                                return (
+                                  <CommandItem
+                                    key={u.id}
+                                    value={`${label} ${u.email}`.toLowerCase()}
+                                    onSelect={() => {
+                                      setSelectedManagerId(u.id);
+                                      setOpenManagerSelect(false);
+                                    }}
+                                  >
+                                    {label} ({u.email})
+                                    {selectedManagerId === u.id && <Check className="ml-auto h-4 w-4" />}
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* Station Photo Upload */}
+                  <div className="space-y-2 pt-2">
+                    <label className="text-sm font-medium">Station Photo</label>
+                    {stationImagePreview ? (
+                      <div className="relative rounded-lg border border-border overflow-hidden bg-muted">
+                        <img
+                          src={stationImagePreview}
+                          alt="Station preview"
+                          className="h-32 w-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <label className="cursor-pointer bg-white text-stone-900 text-xs font-medium px-2.5 py-1.5 rounded-md hover:bg-stone-100 flex items-center gap-1 shadow">
+                            <UploadCloud className="size-3.5" />
+                            <span>Change</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              disabled={uploadingImage}
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  setUploadingImage(true);
+                                  const url = await uploadClientFile(file);
+                                  setStationImagePreview(url);
+                                  editStationForm.setValue("imageUrl", url, { shouldValidate: true });
+                                } catch (err: any) {
+                                  setApiError(err.message || "Failed to upload image.");
+                                } finally {
+                                  setUploadingImage(false);
+                                }
+                              }}
+                            />
+                          </label>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            className="h-7 text-xs px-2"
+                            onClick={() => {
+                              setStationImagePreview(null);
+                              editStationForm.setValue("imageUrl", null, { shouldValidate: true });
+                            }}
+                          >
+                            <Trash2 className="size-3.5 mr-1" /> Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-stone-300 dark:border-stone-700 rounded-lg cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-900/50 transition-colors p-4">
+                        {uploadingImage ? (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <SpinnerEllipsis />
+                            <span>Uploading photo...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <UploadCloud className="size-6 text-muted-foreground mb-1" />
+                            <span className="text-xs font-medium text-foreground">Upload station photo</span>
+                            <span className="text-[10px] text-muted-foreground mt-0.5">PNG, JPG, WebP up to 10MB</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={uploadingImage}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              setUploadingImage(true);
+                              const url = await uploadClientFile(file);
+                              setStationImagePreview(url);
+                              editStationForm.setValue("imageUrl", url, { shouldValidate: true });
+                            } catch (err: any) {
+                              setApiError(err.message || "Failed to upload image.");
+                            } finally {
+                              setUploadingImage(false);
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
 
               </div>

@@ -8,6 +8,7 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { assertOrderLinkCapacity, asOrderLookupClient } from "@/lib/fleet/transport-order";
 import { PRODUCT_LOSS_TYPE_VALUES, isNotesRequiredForLossType } from "@/lib/fleet/loss-types";
+import { deliveryShortfall } from "@/lib/fleet/transport-volume";
 
 const UpdateTransportSchema = z.object({
   orderId: z.string().nullable().optional(),
@@ -67,6 +68,7 @@ export async function PATCH(
 
     const existing = await prisma.transport.findFirst({
       where: { id, tenantId: actor.tenantId },
+      include: { deliveries: true },
     });
     if (!existing) throw new DomainError(404, "not_found", "Transport not found.");
 
@@ -92,7 +94,11 @@ export async function PATCH(
         _sum: { lostQuantity: true },
       });
       const lostSoFar = Number(loggedLost._sum.lostQuantity ?? 0);
-      const loadedVolume = Number(existing.litersCarried);
+      const totalDespatched = (existing.deliveries || []).reduce(
+        (sum, d) => sum + Number(d.litersDespatched || 0),
+        0
+      );
+      const loadedVolume = Math.max(Number(existing.litersCarried), totalDespatched);
       if (lostSoFar + body.lossLog.lostQuantity > loadedVolume + 0.001) {
         throw new DomainError(
           400,
@@ -134,21 +140,42 @@ export async function PATCH(
       }
     }
 
-    // Calculate financials
+    // Calculate financials (loss is derived from logs + delivery shortfalls, never from client-sent totals)
     const ratePerLiter = Number(existing.ratePerLiter);
     const litersCarried = Number(existing.litersCarried);
+    const baseRate = ratePerLiter * litersCarried;
 
-    // Base earnings
-    let baseRate = ratePerLiter * litersCarried;
-
-    // Deductions
     const currentMaintenance = Number(existing.maintenanceCost) + (body.addMaintenanceCost ?? 0);
-    const currentLitersLost = Number(existing.litersLost) + (body.addLitersLost ?? 0);
-    const deductionFromLitersLost = currentLitersLost * ratePerLiter;
-    const totalDeduction = deductionFromLitersLost + currentMaintenance;
 
-    // Net payout
-    const netTransportFeePaid = Math.max(0, baseRate - totalDeduction);
+    const loggedBefore = await prisma.transportLossLog.aggregate({
+      where: { transportId: existing.id, tenantId: actor.tenantId },
+      _sum: { lostQuantity: true },
+    });
+    const loggedLostTotal = Number(loggedBefore._sum.lostQuantity ?? 0) + (body.lossLog?.lostQuantity ?? 0);
+
+    const finalStatus = body.status ?? existing.status;
+    const isFinal = finalStatus === "COMPLETED" || finalStatus === "CANCELLED";
+
+    // Open trips: pending deliveries are not losses. Final trips: the finalize log already covers shortfalls.
+    const shortfallAll = isFinal
+      ? 0
+      : existing.deliveries.reduce((s, d) => s + deliveryShortfall(d), 0);
+    const shortfallCharged = isFinal
+      ? 0
+      : existing.deliveries.reduce((s, d) => s + (d.shortageDeducted === false ? 0 : deliveryShortfall(d)), 0);
+
+    const keepStored =
+      (existing.status === "COMPLETED" || existing.status === "CANCELLED") &&
+      !body.lossLog &&
+      body.addMaintenanceCost === undefined;
+
+    const currentLitersLost = keepStored ? Number(existing.litersLost) : loggedLostTotal + shortfallAll;
+    const totalDeduction = keepStored
+      ? Number(existing.totalDeduction)
+      : (loggedLostTotal + shortfallCharged) * ratePerLiter + currentMaintenance;
+    const netTransportFeePaid = keepStored
+      ? Number(existing.netTransportFeePaid)
+      : Math.max(0, baseRate - totalDeduction);
 
     const transport = await prisma.transport.update({
       where: { id },
@@ -167,7 +194,7 @@ export async function PATCH(
               lossType: body.lossLog.lossType,
               lostQuantity: body.lossLog.lostQuantity,
               expensesIncurred: body.lossLog.expensesIncurred,
-              comment: body.lossLog.comment,
+              comment: body.lossLog.comment ? body.lossLog.comment.replace(/[\u20A6]/g, "NGN ") : null,
             }
           }
         })

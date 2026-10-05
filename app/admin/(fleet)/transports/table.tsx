@@ -7,6 +7,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
+import { formatDestination } from "@/lib/utils";
 
 export type TransportRow = {
   id: string;
@@ -29,7 +30,7 @@ const columns: ColumnDef<TransportRow>[] = [
     accessorKey: "destination", 
     header: "Destination",
     cell: ({ row }) => {
-      const dest = row.original.destination;
+      const dest = formatDestination(row.original.destination);
       const source = row.original.sourceDepot || "Depot";
       return (
         <div className="flex items-center gap-3 py-1">

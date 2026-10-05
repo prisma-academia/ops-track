@@ -115,9 +115,9 @@ export function RoleEditor({
             {/* Rows */}
             {list.map((mod, index) => {
               const readPerm = mod.perms.find(p => p.key.endsWith(':read'));
-              const writePerm = mod.perms.find(p => p.key.endsWith(':write'));
+              const writePerm = mod.perms.find(p => p.key.endsWith(':write') || p.key.endsWith(':update'));
               const approvePerm = mod.perms.find(p => p.key.endsWith(':approve'));
-              const otherPerms = mod.perms.filter(p => !p.key.endsWith(':read') && !p.key.endsWith(':write') && !p.key.endsWith(':approve'));
+              const otherPerms = mod.perms.filter(p => !p.key.endsWith(':read') && !p.key.endsWith(':write') && !p.key.endsWith(':update') && !p.key.endsWith(':approve'));
 
               const desc = [readPerm?.description, writePerm?.description, approvePerm?.description].filter(Boolean).join(" • ");
 

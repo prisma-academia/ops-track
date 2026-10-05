@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { TenantUsersTable } from "@/app/admin/(fleet)/users/table";
 import { resolveActiveOrgId } from "@/lib/auth/org-scope";
+import { resolveUserRole } from "@/lib/auth/role-resolver";
 
 export default async function StationUsersPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_STATION_USERS_READ.key, "STATION");
@@ -25,7 +26,7 @@ export default async function StationUsersPage() {
       : {}),
   };
 
-  const [totalCount, users] = await Promise.all([
+  const [totalCount, users, roleTemplates] = await Promise.all([
     prisma.tenantUser.count({ where }),
     prisma.tenantUser.findMany({
       where,
@@ -40,13 +41,33 @@ export default async function StationUsersPage() {
         isOwner: true,
         status: true,
         lastLoginAt: true,
+        stationPermissions: true,
+        fleetPermissions: true,
       },
+    }),
+    prisma.roleTemplate.findMany({
+      where: {
+        scope: "TENANT",
+        tenantId: actor.tenantId,
+        module: "STATION",
+        OR: [
+          ...(orgId ? [{ organizationId: orgId }] : []),
+          { organizationId: null },
+        ],
+      },
+      select: { name: true, permissions: true, module: true },
     }),
   ]);
 
   const rows = users.map((u) => ({
-    ...u,
+    id: u.id,
+    email: u.email,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    isOwner: u.isOwner,
+    status: u.status,
     lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
+    role: resolveUserRole(u, roleTemplates, "STATION"),
   }));
 
   const totalPages = Math.ceil(totalCount / take);

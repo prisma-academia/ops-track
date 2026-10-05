@@ -75,7 +75,14 @@ export async function PATCH(
   try {
     await requireCsrf(request);
     const { id } = await params;
-    const actor = await requireTenantActor(PERMISSIONS.TENANT_STATIONS_WRITE.key, "STATION");
+    const actor = await requireTenantActor(undefined, "STATION");
+    const canWrite =
+      actor.isOwner ||
+      actor.permissions.has(PERMISSIONS.TENANT_STATIONS_WRITE.key) ||
+      actor.permissions.has("mobile.tenant.station-info:update");
+    if (!canWrite) {
+      throw new DomainError(403, "forbidden", "You do not have permission to update station information.");
+    }
     const body = UpdateStationSchema.parse(await request.json());
     const meta = requestMeta(request);
 

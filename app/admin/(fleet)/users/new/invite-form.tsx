@@ -173,7 +173,7 @@ export function InviteTenantUserForm({
                 {/* Rows */}
                 {list.map((mod, index) => {
                   const readPerm = mod.perms.find((p) => p.key.endsWith(":read"));
-                  const writePerm = mod.perms.find((p) => p.key.endsWith(":write"));
+                  const writePerm = mod.perms.find((p) => p.key.endsWith(":write") || p.key.endsWith(":update"));
                   const approvePerm = mod.perms.find((p) => p.key.endsWith(":approve"));
 
                   return (

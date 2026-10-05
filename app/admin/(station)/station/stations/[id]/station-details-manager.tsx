@@ -49,6 +49,7 @@ import {
   ChevronsUpDown,
   Check,
   ArrowLeft,
+  ArrowRight,
   Lock,
   AlertCircle,
   Landmark,
@@ -187,7 +188,7 @@ export function StationDetailsManager({
   const [isAssigningManager, setIsAssigningManager] = useState(false);
 
   const [recentSales, setRecentSales] = useState<any[]>([]);
-  const [todayExpenses, setTodayExpenses] = useState<any[]>([]);
+  const [recentExpenses, setRecentExpenses] = useState<any[]>([]);
   const [recentWaybills, setRecentWaybills] = useState<any[]>([]);
   const [stationLedger, setStationLedger] = useState(initialLedger || null);
   const [overviewLoading, setOverviewLoading] = useState(true);
@@ -431,7 +432,7 @@ export function StationDetailsManager({
       const base = `/api/tenant/stations/${station.id}`;
       const [salesRes, expensesRes, waybillRes, stationRes] = await Promise.all([
         apiGet<any[]>(`${base}/sales-logs?page=1&take=3&status=APPROVED`),
-        apiGet<any[]>(`${base}/expenses?page=1&take=50&status=APPROVED`),
+        apiGet<any[]>(`${base}/expenses?page=1&take=3`),
         apiGet<any[]>(`${base}/waybills?page=1&take=3`),
         apiGet<any>(`${base}`),
       ]);
@@ -439,8 +440,8 @@ export function StationDetailsManager({
       if (cancelled) return;
 
       setRecentSales(Array.isArray(salesRes.data) ? salesRes.data.slice(0, 3) : []);
-      const expenses = Array.isArray(expensesRes.data) ? expensesRes.data : [];
-      setTodayExpenses(expenses.filter((e) => isToday(e.createdAt)));
+      const expenses = Array.isArray(expensesRes.data) ? expensesRes.data.slice(0, 3) : [];
+      setRecentExpenses(expenses);
       const waybills = Array.isArray(waybillRes.data) ? waybillRes.data.slice(0, 3) : [];
       setRecentWaybills(waybills);
       if (stationRes.data?.ledgerSummary) {
@@ -471,17 +472,11 @@ export function StationDetailsManager({
     });
   }
 
-  const todayExpensesTotal = todayExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-
   const isUnderpayment = (stationLedger?.balance ?? 0) < 0;
   const isOverpayment = (stationLedger?.balance ?? 0) > 0;
   const isSettled = (stationLedger?.balance ?? 0) === 0;
 
-  const varianceList = (stationLedger?.varianceItems || []).filter((item: any) => {
-    if (isUnderpayment) return item.variance < 0;
-    if (isOverpayment) return item.variance > 0;
-    return item.variance !== 0;
-  });
+  const shortageList = (stationLedger?.varianceItems || []).filter((item: any) => item.variance < 0);
 
   return (
     <div className="space-y-6">
@@ -513,13 +508,23 @@ export function StationDetailsManager({
         {/* Station Information Card */}
         <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
           <CardContent className="flex-1 flex flex-col justify-between">
-            {station.imageUrl && (
+            {station.imageUrl ? (
               <div className="mb-4 relative h-40 w-full overflow-hidden rounded-lg border border-stone-200 dark:border-stone-800 bg-muted">
                 <img
                   src={station.imageUrl}
                   alt={station.name}
                   className="h-full w-full object-cover"
                 />
+              </div>
+            ) : (
+              <div className="mb-4 relative h-40 w-full rounded-lg border border-dashed border-stone-300 dark:border-stone-700 bg-muted/20 flex flex-col items-center justify-center text-muted-foreground gap-2 p-4 text-center">
+                <div className="size-11 rounded-full bg-muted/80 border border-border/50 flex items-center justify-center text-muted-foreground/70">
+                  <ImageIcon size={22} />
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-xs font-semibold text-foreground/80">No station image available</p>
+                  <p className="text-[11px] text-muted-foreground">Upload a photo via Edit Station</p>
+                </div>
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
@@ -699,79 +704,6 @@ export function StationDetailsManager({
               </div>
             </div>
 
-            {/* Below: Reason for Over or Under / Related Sales */}
-            <div className="flex-1 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 p-3.5 flex flex-col justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center justify-between">
-                  <span>
-                    {isUnderpayment
-                      ? "Reason for Underpayment"
-                      : isOverpayment
-                      ? "Reason for Overpayment"
-                      : "Settlement Status"}
-                  </span>
-                  {varianceList.length > 0 && (
-                    <span className="text-[9px] font-mono text-muted-foreground">
-                      {varianceList.length} sales with variance
-                    </span>
-                  )}
-                </p>
-
-                {varianceList.length > 0 ? (
-                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                    {varianceList.slice(0, 4).map((item: any) => {
-                      const formattedDate = formatHumanReadableDateOnly(item.logDate);
-                      const isShortage = item.variance < 0;
-                      return (
-                        <div
-                          key={item.id}
-                          className="p-2.5 rounded-lg bg-background border border-stone-200/80 dark:border-stone-800/80 text-xs space-y-1"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5">
-                              <Badge variant="secondary" className="text-[9px] font-mono px-1.5 py-0">
-                                {item.productType}
-                              </Badge>
-                              <span className="text-[10px] text-muted-foreground">{formattedDate}</span>
-                            </div>
-                            <span className={cn(
-                              "font-mono font-bold text-[11px]",
-                              isShortage ? "text-rose-600" : "text-emerald-600"
-                            )}>
-                              {isShortage ? "-₦" : "+₦"}{Math.abs(item.variance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          {item.reason ? (
-                            <p className="text-[11px] text-foreground font-medium italic">
-                              &ldquo;{item.reason}&rdquo;
-                            </p>
-                          ) : (
-                            <p className="text-[10px] text-muted-foreground">
-                              Expected ₦{Number(item.expectedRevenue).toLocaleString()} · Received ₦{Number(item.totalReceived).toLocaleString()}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : isUnderpayment ? (
-                  <p className="text-xs text-muted-foreground py-2">
-                    Underpayment of ₦{Math.abs(stationLedger?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} across station sales logs.
-                  </p>
-                ) : isOverpayment ? (
-                  <p className="text-xs text-muted-foreground py-2">
-                    Surplus remittance of ₦{Math.abs(stationLedger?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} recorded on station sales logs.
-                  </p>
-                ) : (
-                  <div className="flex items-center gap-2.5 py-3 text-xs text-emerald-600 dark:text-emerald-400">
-                    <div className="size-7 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-                      <Check size={14} className="text-emerald-600" />
-                    </div>
-                    <span className="font-medium">All recorded sales are settled and balanced. No debt or surplus exists.</span>
-                  </div>
-                )}
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -779,148 +711,211 @@ export function StationDetailsManager({
       {/* ---------------- ACTIVITY SNAPSHOT ---------------- */}
       <div className="grid gap-6 md:grid-cols-3">
         {/* Recent Sales */}
-        <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <TrendingUp size={15} className="text-emerald-500" />
-              Recent Sales
-            </CardTitle>
-            <CardDescription className="text-xs">Last 3 recorded sales logs</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {overviewLoading ? (
-              <div className="flex items-center justify-center py-8 text-muted-foreground text-xs">
-                <SpinnerEllipsis />
+        <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+          <div>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <TrendingUp size={15} className="text-emerald-500" />
+                  Recent Sales
+                </CardTitle>
+                <CardDescription className="text-xs">Last 3 recorded sales logs</CardDescription>
               </div>
-            ) : recentSales.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">No sales recorded yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {recentSales.slice(0, 3).map((sale) => {
-                  const revenue = Number(sale.amountPos) + Number(sale.amountTransfer);
-                  return (
-                    <div key={sale.id} className="flex items-center justify-between gap-3 py-2 border-b border-border/40 last:border-0">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-[9px] font-mono">{sale.productType}</Badge>
-                          <span className="text-[10px] text-muted-foreground truncate">
-                            {formatHumanReadableDateOnly(sale.logDate)}
-                          </span>
+              <Button variant="ghost" size="sm" asChild className="h-7 text-xs text-primary hover:text-primary gap-1 px-2 font-medium shrink-0">
+                <Link href={`/admin/station/sales-reports?stationId=${station.id}`}>
+                  View more <ArrowRight size={12} />
+                </Link>
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {overviewLoading ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground text-xs">
+                  <SpinnerEllipsis />
+                </div>
+              ) : recentSales.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">No sales recorded yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {recentSales.slice(0, 3).map((sale) => {
+                    const revenue = Number(sale.amountPos) + Number(sale.amountTransfer);
+                    return (
+                      <div key={sale.id} className="flex items-center justify-between gap-3 py-2 border-b border-border/40 last:border-0">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-[9px] font-mono">{sale.productType}</Badge>
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              {formatHumanReadableDateOnly(sale.logDate)}
+                            </span>
+                          </div>
+                          <p className="text-xs font-mono text-muted-foreground mt-0.5">
+                            {Number(sale.litersSold).toLocaleString()} L
+                          </p>
                         </div>
-                        <p className="text-xs font-mono text-muted-foreground mt-0.5">
-                          {Number(sale.litersSold).toLocaleString()} L
-                        </p>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold font-mono text-foreground">
+                            ₦{revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </p>
+                          <Badge variant="outline" className={cn(
+                            "text-[8px] mt-0.5",
+                            sale.status === "APPROVED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" :
+                            sale.status === "REJECTED" ? "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30" :
+                            "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30"
+                          )}>
+                            {sale.status ?? "PENDING"}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-bold font-mono text-foreground">
-                          ₦{revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </p>
-                        <Badge variant="outline" className={cn(
-                          "text-[8px] mt-0.5",
-                          sale.status === "APPROVED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" :
-                          sale.status === "REJECTED" ? "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30" :
-                          "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30"
-                        )}>
-                          {sale.status ?? "PENDING"}
-                        </Badge>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </div>
+          <div className="p-4 pt-0">
+            <Button variant="outline" size="sm" asChild className="w-full text-xs h-8 gap-1.5 font-medium">
+              <Link href={`/admin/station/sales-reports?stationId=${station.id}`}>
+                View more sales <ArrowRight size={12} />
+              </Link>
+            </Button>
+          </div>
         </Card>
 
-        {/* Today's Expenses */}
-        <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Wallet size={15} className="text-amber-500" />
-              Today&apos;s Expenses
-            </CardTitle>
-            <CardDescription className="text-xs">Expenses recorded today only</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {overviewLoading ? (
-              <div className="flex items-center justify-center py-8 text-muted-foreground text-xs">
-                <SpinnerEllipsis />
+        {/* Recent Expenses */}
+        <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+          <div>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <Wallet size={15} className="text-amber-500" />
+                  Recent Expenses
+                </CardTitle>
+                <CardDescription className="text-xs">Last 3 recorded expenses</CardDescription>
               </div>
-            ) : todayExpenses.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">No expenses recorded today.</p>
-            ) : (
-              <>
-                <div className="mb-4 p-3 rounded-lg bg-amber-500/5 border border-amber-500/15">
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Total Today</p>
-                  <p className="text-xl font-bold font-mono text-foreground mt-0.5">
-                    ₦{todayExpensesTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{todayExpenses.length} expense{todayExpenses.length !== 1 ? "s" : ""}</p>
+              <Button variant="ghost" size="sm" asChild className="h-7 text-xs text-primary hover:text-primary gap-1 px-2 font-medium shrink-0">
+                <Link href={`/admin/station/expenses?stationId=${station.id}`}>
+                  View more <ArrowRight size={12} />
+                </Link>
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {overviewLoading ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground text-xs">
+                  <SpinnerEllipsis />
                 </div>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {todayExpenses.map((expense) => (
-                    <div key={expense.id} className="flex items-start justify-between gap-2 py-2 border-b border-border/40 last:border-0">
-                      <div className="min-w-0">
-                        <Badge variant="secondary" className="text-[9px]">{expense.category.replace(/_/g, " ")}</Badge>
-                        <p className="text-xs text-muted-foreground truncate mt-1">{expense.description}</p>
+              ) : recentExpenses.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">No expenses recorded yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {recentExpenses.slice(0, 3).map((expense) => {
+                    const expenseDate = expense.expenseDate || expense.createdAt;
+                    return (
+                      <div key={expense.id} className="flex items-start justify-between gap-2 py-2 border-b border-border/40 last:border-0">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-[9px]">
+                              {expense.category?.replace(/_/g, " ") || "EXPENSE"}
+                            </Badge>
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              {expenseDate ? formatHumanReadableDateOnly(expenseDate) : "—"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-1">
+                            {expense.description || "No description"}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-mono font-semibold text-foreground">
+                            ₦{Number(expense.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </p>
+                          {expense.status && (
+                            <Badge variant="outline" className={cn(
+                              "text-[8px] mt-0.5",
+                              expense.status === "APPROVED" ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" :
+                              expense.status === "REJECTED" ? "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30" :
+                              "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30"
+                            )}>
+                              {expense.status}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-xs font-mono font-semibold text-foreground shrink-0">
-                        ₦{Number(expense.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              </>
-            )}
-          </CardContent>
+              )}
+            </CardContent>
+          </div>
+          <div className="p-4 pt-0">
+            <Button variant="outline" size="sm" asChild className="w-full text-xs h-8 gap-1.5 font-medium">
+              <Link href={`/admin/station/expenses?stationId=${station.id}`}>
+                View more expenses <ArrowRight size={12} />
+              </Link>
+            </Button>
+          </div>
         </Card>
 
         {/* Recent Waybills */}
-        <Card className="border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Truck size={15} className="text-blue-500" />
-              Recent Waybills
-            </CardTitle>
-            <CardDescription className="text-xs">Last 3 fuel deliveries</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {overviewLoading ? (
-              <div className="flex items-center justify-center py-8 text-muted-foreground text-xs">
-                <SpinnerEllipsis />
+        <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+          <div>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <Truck size={15} className="text-blue-500" />
+                  Recent Waybills
+                </CardTitle>
+                <CardDescription className="text-xs">Last 3 fuel deliveries</CardDescription>
               </div>
-            ) : recentWaybills.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">No waybill deliveries yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {recentWaybills.map((wb) => {
-                  const productType = wb.waybill?.productType || wb.productType || "PMS";
-                  const dispatchedAt = wb.waybill?.dispatchedAt || wb.dispatchedAt;
-                  const qty = Number(wb.litersToDispense || wb.litersReceived || 0);
+              <Button variant="ghost" size="sm" asChild className="h-7 text-xs text-primary hover:text-primary gap-1 px-2 font-medium shrink-0">
+                <Link href={`/admin/station/waybills?stationId=${station.id}`}>
+                  View more <ArrowRight size={12} />
+                </Link>
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {overviewLoading ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground text-xs">
+                  <SpinnerEllipsis />
+                </div>
+              ) : recentWaybills.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">No waybill deliveries yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {recentWaybills.slice(0, 3).map((wb) => {
+                    const productType = wb.waybill?.productType || wb.productType || "PMS";
+                    const dispatchedAt = wb.waybill?.dispatchedAt || wb.dispatchedAt;
+                    const qty = Number(wb.litersToDispense || wb.litersReceived || 0);
 
-                  return (
-                    <div key={wb.id} className="flex items-center justify-between gap-3 py-2 border-b border-border/40 last:border-0">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-[9px] font-mono">
-                            {productType}
-                          </Badge>
-                          <span className="text-[10px] text-muted-foreground truncate">
-                            {dispatchedAt ? formatHumanReadableDate(dispatchedAt).split(" ").slice(0, 3).join(" ") : "—"}
-                          </span>
+                    return (
+                      <div key={wb.id} className="flex items-center justify-between gap-3 py-2 border-b border-border/40 last:border-0">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-[9px] font-mono">
+                              {productType}
+                            </Badge>
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              {dispatchedAt ? formatHumanReadableDate(dispatchedAt).split(" ").slice(0, 3).join(" ") : "—"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-mono font-semibold text-foreground">
+                            {qty.toLocaleString()} L
+                          </p>
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-xs font-mono font-semibold text-foreground">
-                          {qty.toLocaleString()} L
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </div>
+          <div className="p-4 pt-0">
+            <Button variant="outline" size="sm" asChild className="w-full text-xs h-8 gap-1.5 font-medium">
+              <Link href={`/admin/station/waybills?stationId=${station.id}`}>
+                View more waybills <ArrowRight size={12} />
+              </Link>
+            </Button>
+          </div>
         </Card>
       </div>
 

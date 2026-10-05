@@ -25,6 +25,7 @@ import {
 } from "@/lib/auth/membership";
 import { resolveActiveOrgIdFromCookie } from "@/lib/auth/org-scope";
 import type { AppModule } from "@/lib/generated/prisma/client";
+import { resolveUserRole } from "@/lib/auth/role-resolver";
 
 const InviteBody = z.object({
   email: z.email(),
@@ -111,6 +112,8 @@ export async function GET(request: Request) {
       lastLoginAt: true,
       createdAt: true,
       activeModules: true,
+      stationPermissions: true,
+      fleetPermissions: true,
       organizationId: true,
       organization: {
         select: {
@@ -126,7 +129,7 @@ export async function GET(request: Request) {
 
     if (useOffset) {
       const { page, take, skip } = parseOffsetPagination(url.searchParams);
-      const [totalCount, rows] = await Promise.all([
+      const [totalCount, rawRows, roleTemplates] = await Promise.all([
         prisma.tenantUser.count({ where: whereClause }),
         prisma.tenantUser.findMany({
           where: whereClause,
@@ -135,17 +138,43 @@ export async function GET(request: Request) {
           skip,
           select: userSelect,
         }),
+        prisma.roleTemplate.findMany({
+          where: {
+            scope: "TENANT",
+            tenantId: actor.tenantId,
+            ...(moduleFilter ? { module: moduleFilter } : {}),
+          },
+          select: { name: true, permissions: true, module: true },
+        }),
       ]);
+      const rows = rawRows.map((u) => ({
+        ...u,
+        role: resolveUserRole(u, roleTemplates, moduleFilter),
+      }));
       return ok(rows, buildOffsetPageMeta(totalCount, page, take));
     } else {
       const { cursor, take } = parsePagination(url.searchParams);
-      const rows = await prisma.tenantUser.findMany({
-        where: whereClause,
-        orderBy: { createdAt: "asc" },
-        take,
-        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-        select: userSelect,
-      });
+      const [rawRows, roleTemplates] = await Promise.all([
+        prisma.tenantUser.findMany({
+          where: whereClause,
+          orderBy: { createdAt: "asc" },
+          take,
+          ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+          select: userSelect,
+        }),
+        prisma.roleTemplate.findMany({
+          where: {
+            scope: "TENANT",
+            tenantId: actor.tenantId,
+            ...(moduleFilter ? { module: moduleFilter } : {}),
+          },
+          select: { name: true, permissions: true, module: true },
+        }),
+      ]);
+      const rows = rawRows.map((u) => ({
+        ...u,
+        role: resolveUserRole(u, roleTemplates, moduleFilter),
+      }));
       return ok(rows, buildPageMeta(rows, take));
     }
   } catch (e) {

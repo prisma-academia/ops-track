@@ -12,10 +12,17 @@ import {
   XCircle,
   Trash2,
   Building2,
+  Copy,
+  Check,
+  Landmark,
+  Wifi,
+  ReceiptText,
 } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { apiDelete } from "@/lib/client/api";
 import {
@@ -216,6 +223,8 @@ export function BankAccountDetailsView({
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
   const { account, summary, transactions } = initialDetails;
 
   const handleDelete = async () => {
@@ -231,34 +240,6 @@ export function BankAccountDetailsView({
       setIsDeleteDialogOpen(false);
     }
   };
-
-  const insightStats = useMemo(
-    () =>
-      buildPctStats([
-        {
-          key: "credited",
-          label: "Total Credited",
-          value: summary.totalCredited,
-          color: "#10b981",
-          format: formatMoney,
-        },
-        {
-          key: "debited",
-          label: "Total Debited",
-          value: summary.totalDebited,
-          color: "#ef4444",
-          format: formatMoney,
-        },
-        {
-          key: "netBalance",
-          label: "Net Balance",
-          value: summary.netBalance,
-          color: summary.netBalance >= 0 ? "#10b981" : "#ef4444",
-          format: formatMoney,
-        },
-      ]),
-    [summary]
-  );
 
   const filterFields: DataTableFilterField<TransactionRow>[] = useMemo(() => {
     const categories = Array.from(new Set(transactions.map((t) => t.category).filter(Boolean)));
@@ -282,8 +263,22 @@ export function BankAccountDetailsView({
     ];
   }, [transactions]);
 
+  const copyAccountNumber = () => {
+    if (!account.accountNumber) return;
+    navigator.clipboard.writeText(account.accountNumber);
+    setCopied(true);
+    toast.success("Account number copied to clipboard");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const formatCardNumber = (num: string) => {
+    const clean = num.replace(/\s+/g, "");
+    return clean.replace(/(\d{4})/g, "$1 ").trim();
+  };
+
   return (
     <div className="space-y-6">
+      {/* Top Breadcrumb & Actions Toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Button variant="outline" size="icon" asChild>
@@ -293,10 +288,10 @@ export function BankAccountDetailsView({
           </Button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">{account.bankName}</h1>
-              <span className="px-2.5 py-0.5 text-xs font-bold rounded-md bg-primary/10 text-primary uppercase">
+              <h1 className="text-xl font-bold tracking-tight">{account.bankName} Account</h1>
+              <Badge variant="outline" className="text-xs font-semibold uppercase">
                 {account.scope}
-              </span>
+              </Badge>
               {account.isActive ? (
                 <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
                   <CheckCircle2 className="size-3" /> Active
@@ -307,10 +302,7 @@ export function BankAccountDetailsView({
                 </span>
               )}
             </div>
-            <p className="text-sm text-muted-foreground">
-              {account.accountName} • <span className="font-mono">{account.accountNumber}</span>
-            </p>
-            {account.scope === "STATION" && (
+            {/* {account.scope === "STATION" && (
               <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Building2 className="size-3.5 text-muted-foreground" />
                 <span>
@@ -319,7 +311,7 @@ export function BankAccountDetailsView({
                     : "0 Stations Assigned"}
                 </span>
               </div>
-            )}
+            )} */}
           </div>
         </div>
 
@@ -348,7 +340,147 @@ export function BankAccountDetailsView({
         </div>
       </div>
 
-      <TableInsightCards stats={insightStats} breakdownTitle="Cashflow mix" />
+      {/* Main Bank Account Header Card with Balance (Left) & ATM Card (Right) */}
+      <Card className="overflow-hidden border border-border/60 shadow-xs bg-card">
+        <CardContent>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* LEFT: Balance & Transaction Metrics */}
+            <div className="lg:col-span-7 flex flex-col justify-between space-y-6">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Account Balance
+                  </span>
+                  <Badge variant="secondary" className="text-[11px] font-mono px-2 py-0">
+                    {account.scope} LEDGER
+                  </Badge>
+                </div>
+                <div className="flex items-baseline gap-3">
+                  <h2
+                    className={cn(
+                      "font-heading text-3xl font-bold tracking-tight font-mono",
+                      summary.netBalance >= 0 ? "text-foreground" : "text-rose-600"
+                    )}
+                  >
+                    {formatMoney(summary.netBalance)}
+                  </h2>
+                </div>
+              </div>
+
+              {/* 3 Metric Summary Tiles */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="rounded-xl border border-border/50 bg-muted/20 p-3.5 flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-muted-foreground mb-1">
+                    <span className="text-xs font-medium">Total Credited</span>
+                    <ArrowDownLeft className="size-4 text-emerald-500" />
+                  </div>
+                  <span className="font-mono text-sm sm:text-base font-semibold text-emerald-600 dark:text-emerald-400">
+                    +{formatMoney(summary.totalCredited)}
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-border/50 bg-muted/20 p-3.5 flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-muted-foreground mb-1">
+                    <span className="text-xs font-medium">Total Debited</span>
+                    <ArrowUpRight className="size-4 text-rose-500" />
+                  </div>
+                  <span className="font-mono text-sm sm:text-base font-semibold text-rose-600 dark:text-rose-400">
+                    -{formatMoney(summary.totalDebited)}
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-border/50 bg-muted/20 p-3.5 flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-muted-foreground mb-1">
+                    <span className="text-xs font-medium">Total Transactions</span>
+                    <ReceiptText className="size-4 text-primary" />
+                  </div>
+                  <span className="font-mono text-sm sm:text-base font-semibold text-foreground">
+                    {summary.transactionCount.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT: ATM Card Design */}
+            <div className="lg:col-span-5 flex justify-center lg:justify-end">
+              <div className="w-full max-w-[360px] sm:max-w-[380px] h-[215px] sm:h-[225px] rounded-2xl p-5 sm:p-6 text-white shadow-2xl relative overflow-hidden flex flex-col justify-between select-none bg-gradient-to-br from-slate-900 via-neutral-900 to-zinc-950 border border-white/10 group transition-all duration-300">
+                {/* Decorative background glow & shapes */}
+                <div className="absolute -right-12 -top-12 w-44 h-44 bg-primary/25 rounded-full blur-2xl pointer-events-none group-hover:bg-primary/35 transition-all duration-500" />
+                <div className="absolute -left-12 -bottom-12 w-44 h-44 bg-sky-500/15 rounded-full blur-2xl pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.08),_transparent_70%)] pointer-events-none" />
+
+                {/* Top of Card: Bank Name & Wireless Contactless Icon */}
+                <div className="relative z-10 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Landmark className="size-4 sm:size-5 text-amber-300 shrink-0" />
+                    <span className="font-bold tracking-wider text-sm sm:text-base text-zinc-100 uppercase truncate max-w-[200px]">
+                      {account.bankName}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Wifi className="size-4 text-zinc-400 rotate-90" />
+                    <span className="text-[10px] font-mono tracking-widest text-zinc-400 font-semibold uppercase">
+                      {account.scope}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Middle: EMV Chip & Account Number */}
+                <div className="relative z-10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    {/* Metallic Golden Chip */}
+                    <div className="w-11 h-8 rounded-md bg-gradient-to-br from-yellow-200 via-amber-400 to-yellow-600 p-[1.5px] shadow-sm">
+                      <div className="w-full h-full rounded-[3px] border border-amber-900/40 grid grid-cols-3 grid-rows-2 gap-[1.5px] p-[1.5px] opacity-85">
+                        <div className="border-r border-b border-amber-900/30 rounded-tl" />
+                        <div className="border-b border-amber-900/30" />
+                        <div className="border-l border-b border-amber-900/30 rounded-tr" />
+                        <div className="border-r border-amber-900/30 rounded-bl" />
+                        <div />
+                        <div className="border-l border-amber-900/30 rounded-br" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Formatted Account Number with Copy Button */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-base sm:text-lg font-bold tracking-[0.2em] text-zinc-100">
+                      {formatCardNumber(account.accountNumber)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={copyAccountNumber}
+                      className="p-1.5 rounded-md bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                      title="Copy account number"
+                    >
+                      {copied ? (
+                        <Check className="size-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bottom of Card: Card Holder & Overlapping Circles */}
+                <div className="relative z-10 flex items-end justify-between pt-1">
+                  <div className="space-y-0.5 max-w-[220px]">
+                    <div className="text-[9px] uppercase tracking-wider text-zinc-400 font-medium">
+                      Account Holder
+                    </div>
+                    <div className="text-xs sm:text-sm font-semibold tracking-wide text-zinc-100 uppercase truncate">
+                      {account.accountName}
+                    </div>
+                  </div>
+                  <div className="flex -space-x-2.5 opacity-80">
+                    <div className="size-6 sm:size-7 rounded-full bg-rose-500/80" />
+                    <div className="size-6 sm:size-7 rounded-full bg-amber-400/80" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <DataTable
         columns={columns}

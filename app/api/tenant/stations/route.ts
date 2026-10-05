@@ -52,7 +52,7 @@ export async function GET(request: Request) {
         // Fetch all, format, post-filter, then paginate
         const rawRows = await prisma.station.findMany({
           where: whereClause,
-          orderBy: { createdAt: "desc" },
+          orderBy: { createdAt: "asc" },
           include,
         });
         
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
           }),
           prisma.station.findMany({
             where: whereClause,
-            orderBy: { createdAt: "desc" },
+            orderBy: { createdAt: "asc" },
             take,
             skip,
             include,
@@ -97,7 +97,7 @@ export async function GET(request: Request) {
 
       const rawRows = await prisma.station.findMany({
         where: whereClause,
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: "asc" },
         take,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
         include,

@@ -189,11 +189,18 @@ export function SalesOverviewChartCard({
             />
             <ChartTooltip content={<ChartTooltipContent hideLabel />} />
             <Bar
+              dataKey="earning"
+              fill="var(--color-earning)"
+              radius={[4, 4, 0, 0]}
+              barSize={16}
+              opacity={hoveredCategory === null || hoveredCategory === "earning" ? 1 : 0.15}
+            />
+            <Bar
               dataKey="expense"
-              stackId="a"
+              stackId="costs"
               fill="var(--color-expense)"
               radius={[0, 0, 4, 4]}
-              barSize={20}
+              barSize={16}
               opacity={
                 hoveredCategory === null || hoveredCategory === "expense"
                   ? 1
@@ -202,27 +209,19 @@ export function SalesOverviewChartCard({
             />
             <Bar
               dataKey="loss"
-              stackId="a"
+              stackId="costs"
               fill="var(--color-loss)"
               radius={[0, 0, 0, 0]}
-              barSize={20}
+              barSize={16}
               opacity={hoveredCategory === null || hoveredCategory === "loss" ? 1 : 0.15}
             />
             <Bar
               dataKey="profit"
-              stackId="a"
+              stackId="costs"
               fill="var(--color-profit)"
-              radius={[0, 0, 0, 0]}
-              barSize={20}
-              opacity={hoveredCategory === null || hoveredCategory === "profit" ? 1 : 0.15}
-            />
-            <Bar
-              dataKey="earning"
-              stackId="a"
-              fill="var(--color-earning)"
               radius={[4, 4, 0, 0]}
-              barSize={20}
-              opacity={hoveredCategory === null || hoveredCategory === "earning" ? 1 : 0.15}
+              barSize={16}
+              opacity={hoveredCategory === null || hoveredCategory === "profit" ? 1 : 0.15}
             />
           </BarChart>
         </ChartContainer>

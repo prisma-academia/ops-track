@@ -54,7 +54,7 @@ export default async function OrdersPage({
     .filter(d => !!d.sourceDepot)
     .map(d => ({ value: d.sourceDepot as string, label: d.sourceDepot as string }));
 
-  const [totalCount, orders, statsRaw] = await Promise.all([
+  const [totalCount, orders, allOrdersSummary] = await Promise.all([
     prisma.order.count({ where }),
     prisma.order.findMany({
       where,
@@ -67,32 +67,61 @@ export default async function OrdersPage({
             transports: true,
           },
         },
+        transports: {
+          where: { status: { not: "CANCELLED" } },
+          select: {
+            litersCarried: true,
+          },
+        },
       },
     }),
-    prisma.order.groupBy({
-      by: ["status"],
+    prisma.order.findMany({
       where,
-      _sum: { litersOrdered: true },
-      _count: { _all: true },
+      select: {
+        id: true,
+        litersOrdered: true,
+        status: true,
+        transports: {
+          where: { status: { not: "CANCELLED" } },
+          select: {
+            litersCarried: true,
+          },
+        },
+      },
     }),
   ]);
 
-  const totalVolume = statsRaw.reduce((acc, curr) => acc + Number(curr._sum.litersOrdered || 0), 0);
-  const activeOrders = statsRaw.filter(s => ["DRAFT", "PENDING", "CONFIRMED", "ASSIGNED", "IN_TRANSIT", "DELIVERED"].includes(s.status)).reduce((acc, curr) => acc + curr._count._all, 0);
-  const completedOrders = statsRaw.filter(s => s.status === "COMPLETED").reduce((acc, curr) => acc + curr._count._all, 0);
+  const totalVolume = allOrdersSummary.reduce((acc, curr) => acc + Number(curr.litersOrdered || 0), 0);
+  const totalRemaining = allOrdersSummary.reduce((acc, curr) => {
+    const lifted = curr.transports.reduce((sum, t) => sum + Number(t.litersCarried || 0), 0);
+    return acc + Math.max(0, Number(curr.litersOrdered || 0) - lifted);
+  }, 0);
+  const pendingOrders = allOrdersSummary.filter(s => s.status === "PENDING").length;
+  const pendingVolume = allOrdersSummary.filter(s => s.status === "PENDING").reduce((acc, curr) => acc + Number(curr.litersOrdered || 0), 0);
+  const activeOrders = allOrdersSummary.filter(s => ["DRAFT", "PENDING", "CONFIRMED", "ASSIGNED", "IN_TRANSIT", "DELIVERED"].includes(s.status)).length;
+  const completedOrders = allOrdersSummary.filter(s => s.status === "COMPLETED").length;
 
-  const rows = orders.map((o) => ({
-    id: o.id,
-    reference: o.reference || "-",
-    productType: o.productType,
-    litersOrdered: Number(o.litersOrdered),
-    sourceDepot: o.sourceDepot || "-",
-    pricePerLitre: Number(o.pricePerLitre),
-    totalCost: (Number(o.pricePerLitre) + Number(o.loadingCostPerLitre)) * Number(o.litersOrdered),
-    status: o.status,
-    transportCount: o._count.transports,
-    createdAt: o.createdAt.toISOString(),
-  }));
+  const rows = orders.map((o) => {
+    const litersOrdered = Number(o.litersOrdered);
+    const litersLifted = o.transports.reduce((sum, t) => sum + Number(t.litersCarried || 0), 0);
+    const litersRemaining = Math.max(0, litersOrdered - litersLifted);
+    const fulfillmentProgress = litersOrdered > 0 ? Math.min(100, Math.round((litersLifted / litersOrdered) * 100)) : 0;
+
+    return {
+      id: o.id,
+      reference: o.reference || "-",
+      productType: o.productType,
+      litersOrdered,
+      litersLifted,
+      litersRemaining,
+      fulfillmentProgress,
+      pricePerLitre: Number(o.pricePerLitre),
+      totalCost: (Number(o.pricePerLitre) + Number(o.loadingCostPerLitre)) * litersOrdered,
+      status: o.status,
+      transportCount: o._count.transports,
+      createdAt: o.createdAt.toISOString(),
+    };
+  });
 
   const totalPages = Math.ceil(totalCount / take);
 
@@ -113,12 +142,28 @@ export default async function OrdersPage({
       valueColor: "text-blue-600",
     },
     {
+      title: "Total Remaining",
+      value: `${totalRemaining.toLocaleString()} L`,
+      fullValue: `${totalRemaining.toLocaleString()} Liters remaining to be lifted`,
+      icon: Droplet,
+      iconColor: "text-rose-600",
+      valueColor: "text-rose-600",
+    },
+    {
+      title: "Pending",
+      value: pendingOrders.toString(),
+      fullValue: `${pendingOrders} Pending Orders (${pendingVolume.toLocaleString()} L)`,
+      icon: Clock,
+      iconColor: "text-amber-600",
+      valueColor: "text-amber-600",
+    },
+    {
       title: "Active Orders",
       value: activeOrders.toString(),
       fullValue: null,
       icon: Clock,
-      iconColor: "text-amber-600",
-      valueColor: "text-amber-600",
+      iconColor: "text-indigo-600",
+      valueColor: "text-indigo-600",
     },
     {
       title: "Completed",

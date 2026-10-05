@@ -29,7 +29,7 @@ export default async function StationUsersPage() {
     prisma.tenantUser.count({ where }),
     prisma.tenantUser.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
       take,
       skip,
       select: {

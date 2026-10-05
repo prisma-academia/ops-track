@@ -14,7 +14,7 @@ export default async function TenantUsersPage() {
     prisma.tenantUser.count({ where: { tenantId: actor.tenantId, activeModules: { has: "FLEET" } } }),
     prisma.tenantUser.findMany({
       where: { tenantId: actor.tenantId, activeModules: { has: "FLEET" } },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
       take,
       skip,
       select: {

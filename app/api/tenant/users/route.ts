@@ -130,7 +130,7 @@ export async function GET(request: Request) {
         prisma.tenantUser.count({ where: whereClause }),
         prisma.tenantUser.findMany({
           where: whereClause,
-          orderBy: { createdAt: "desc" },
+          orderBy: { createdAt: "asc" },
           take,
           skip,
           select: userSelect,
@@ -141,7 +141,7 @@ export async function GET(request: Request) {
       const { cursor, take } = parsePagination(url.searchParams);
       const rows = await prisma.tenantUser.findMany({
         where: whereClause,
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: "asc" },
         take,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
         select: userSelect,

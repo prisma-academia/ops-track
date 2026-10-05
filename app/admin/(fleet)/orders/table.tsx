@@ -7,12 +7,16 @@ import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { cn } from "@/lib/utils";
+
 export type OrderRow = {
   id: string;
   reference: string;
   productType: string;
   litersOrdered: number;
-  sourceDepot: string;
+  litersLifted: number;
+  litersRemaining: number;
+  fulfillmentProgress: number;
   pricePerLitre: number;
   totalCost: number;
   status: string;
@@ -41,13 +45,42 @@ const columns: ColumnDef<OrderRow>[] = [
   },
   { 
     accessorKey: "litersOrdered", 
-    header: "Volume (L)",
-    cell: ({ row }) => row.original.litersOrdered.toLocaleString()
-  },
-  { 
-    accessorKey: "sourceDepot", 
-    header: "Depot",
-    cell: ({ row }) => row.original.sourceDepot
+    header: "Volume & Progress",
+    cell: ({ row }) => {
+      const { litersOrdered, litersRemaining, fulfillmentProgress } = row.original;
+      return (
+        <div className="flex flex-col gap-1.5 py-1 min-w-[150px]">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-foreground">
+              {litersOrdered.toLocaleString()} L
+            </span>
+            <span className="text-[11px] font-medium font-mono text-muted-foreground">
+              {fulfillmentProgress}%
+            </span>
+          </div>
+          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-300",
+                fulfillmentProgress >= 100
+                  ? "bg-emerald-500"
+                  : fulfillmentProgress > 0
+                  ? "bg-primary"
+                  : "bg-muted-foreground/30"
+              )}
+              style={{ width: `${Math.min(100, Math.max(0, fulfillmentProgress))}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>
+              {litersRemaining > 0
+                ? `${litersRemaining.toLocaleString()} L remaining`
+                : "Fully lifted"}
+            </span>
+          </div>
+        </div>
+      );
+    }
   },
   { 
     accessorKey: "pricePerLitre", 

@@ -9,7 +9,7 @@ export default async function PlatformUsersPage() {
   const canInvite = hasPermission(actor, PERMISSIONS.PLATFORM_USERS_WRITE.key);
 
   const users = await prisma.platformUser.findMany({
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: "asc" },
     take: 200,
     select: {
       id: true,

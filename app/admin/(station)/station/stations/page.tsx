@@ -38,7 +38,7 @@ export default async function StationsPage() {
       prisma.station.count({ where: whereClause }),
       prisma.station.findMany({
         where: whereClause,
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: "asc" },
         take,
         skip,
         include: stationIncludeQuery,

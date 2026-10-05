@@ -24,8 +24,15 @@ export const stationIncludeQuery = {
   SalesLogs: {
     where: { status: "APPROVED" as const },
     orderBy: { logDate: "desc" as const },
-    take: 1,
-    select: { amountPos: true, amountTransfer: true },
+    take: 10,
+    select: {
+      logDate: true,
+      productType: true,
+      amountPos: true,
+      amountTransfer: true,
+      litersSold: true,
+      pricePerLiter: true,
+    },
   },
   waybillAllocations: {
     orderBy: { createdAt: "desc" as const },
@@ -105,10 +112,34 @@ export async function formatStationRows(rawRows: any[]) {
       }
     });
 
-    const lastSales = s.SalesLogs?.[0];
-    const lastSalesAmount = lastSales
-      ? Number(lastSales.amountPos) + Number(lastSales.amountTransfer)
-      : 0;
+    const salesLogs = s.SalesLogs || [];
+    let lastSalesDate: string | null = null;
+    let lastSalesAmount = 0;
+    const lastSalesProducts: { PMS: number; AGO: number; LPG: number } = { PMS: 0, AGO: 0, LPG: 0 };
+
+    if (salesLogs.length > 0 && salesLogs[0].logDate) {
+      const latestDateObj = new Date(salesLogs[0].logDate);
+      lastSalesDate = latestDateObj.toISOString();
+      const latestDayString = lastSalesDate.split("T")[0];
+
+      const logsOnLatestDate = salesLogs.filter((log: any) => {
+        if (!log.logDate) return false;
+        return new Date(log.logDate).toISOString().split("T")[0] === latestDayString;
+      });
+
+      for (const log of logsOnLatestDate) {
+        const posTransfer = Number(log.amountPos || 0) + Number(log.amountTransfer || 0);
+        const val =
+          posTransfer > 0
+            ? posTransfer
+            : Number(log.litersSold || 0) * Number(log.pricePerLiter || 0);
+        lastSalesAmount += val;
+        const prod = log.productType as "PMS" | "AGO" | "LPG";
+        if (prod && lastSalesProducts[prod] !== undefined) {
+          lastSalesProducts[prod] += val;
+        }
+      }
+    }
 
     const lastWaybillDate = s.waybillAllocations?.[0]?.waybill?.dispatchedAt?.toISOString() || null;
     const todaySales = todaySalesByStation[s.id] || { PMS: 0, AGO: 0, LPG: 0 };
@@ -124,6 +155,8 @@ export async function formatStationRows(rawRows: any[]) {
       agoLiters,
       lpgLiters,
       lastSalesAmount,
+      lastSalesDate,
+      lastSalesProducts,
       lastWaybillDate,
       derivedBalance: balanceByStation[s.id] || 0,
       todaySales,

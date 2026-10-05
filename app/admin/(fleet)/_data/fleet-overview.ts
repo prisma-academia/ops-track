@@ -129,6 +129,8 @@ async function getStationSnapshots(
   return map;
 }
 
+import { fleetLedgerWhere } from "@/lib/finance/fleet-ledger"
+
 export async function getFleetOverviewData(
   tenantId: string,
   periodInput?: string
@@ -140,12 +142,19 @@ export async function getFleetOverviewData(
   const prevBuckets = getOverviewChartBuckets(period, { from: prevFrom, to: prevTo })
 
   const transportSelect = {
+    id: true,
     createdAt: true,
     litersCarried: true,
     litersDelivered: true,
     litersLost: true,
+    maintenanceCost: true,
     netTransportFeePaid: true,
     totalDeduction: true,
+    ratePerLiter: true,
+    isOneTime: true,
+    oneTimeTransporterName: true,
+    transporterId: true,
+    transporter: { select: { id: true, name: true } },
   } as const
 
   const [
@@ -157,6 +166,7 @@ export async function getFleetOverviewData(
     prevTransports,
     currentDeliveries,
     currentOutflows,
+    currentLossLogs,
     currentOrders,
     prevOrdersAgg,
   ] = await Promise.all([
@@ -180,17 +190,28 @@ export async function getFleetOverviewData(
         litersReceived: true,
         amountPerLiter: true,
         totalExpectedAmount: true,
+        transportCost: true,
+        transportCostBorneBy: true,
         transport: { select: { productType: true } },
       },
     }),
     prisma.transaction.findMany({
-      where: {
+      where: fleetLedgerWhere({
         tenantId,
         type: "OUTFLOW",
-        category: { in: [...FLEET_OUTFLOW_CATEGORIES] },
         createdAt: { gte: periodFrom, lte: periodTo },
-      },
+      }),
       select: { createdAt: true, amount: true, category: true },
+    }),
+    prisma.transportLossLog.findMany({
+      where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
+      select: {
+        createdAt: true,
+        lossType: true,
+        lostQuantity: true,
+        expensesIncurred: true,
+        transport: { select: { ratePerLiter: true } },
+      },
     }),
     prisma.order.findMany({
       where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
@@ -235,27 +256,63 @@ export async function getFleetOverviewData(
   )
   const prevLitresOrdered = Number(prevOrdersAgg._sum.litersOrdered) || 0
 
-  const currentSalesRevenue = currentDeliveries.reduce(
-    (sum, d) => sum + (Number(d.totalExpectedAmount) || 0),
-    0
-  )
-  const currentExpenses = currentOutflows.reduce(
+  const currentSalesRevenue = currentDeliveries.reduce((sum, d) => {
+    const desp = Number(d.litersDespatched) || 0
+    const rec = d.litersReceived != null ? Number(d.litersReceived) : desp
+    const price = Number(d.amountPerLiter) || 0
+    const expected = Number(d.totalExpectedAmount) || (rec * price)
+    return sum + expected
+  }, 0)
+
+  const directOutflows = currentOutflows.reduce(
     (sum, t) => sum + (Number(t.amount) || 0),
     0
   )
+  const maintenanceExpenses = currentTransports.reduce(
+    (sum, t) => sum + (Number(t.maintenanceCost) || 0),
+    0
+  )
+  const companyTransportExpenses = currentDeliveries
+    .filter((d) => d.transportCostBorneBy === "COMPANY")
+    .reduce((sum, d) => sum + (Number(d.transportCost) || 0), 0)
+  const lossIncurredExpenses = currentLossLogs.reduce(
+    (sum, l) => sum + (Number(l.expensesIncurred) || 0),
+    0
+  )
+  const currentExpenses =
+    directOutflows + maintenanceExpenses + companyTransportExpenses + lossIncurredExpenses
+
   const deliveryLossLiters = currentDeliveries.reduce(
     (sum, d) => sum + shortageLiters(d),
     0
   )
-  const transportLossLiters = currentTransports.reduce(
-    (sum, t) => sum + (Number(t.litersLost) || 0),
-    0
-  )
-  const currentLitersLost = deliveryLossLiters + transportLossLiters
-  const currentLossAmount = currentDeliveries.reduce(
+  const deliveryLossAmount = currentDeliveries.reduce(
     (sum, d) => sum + shortageAmount(d),
     0
   )
+
+  const incidentLossLiters = currentLossLogs.reduce(
+    (sum, l) => sum + (Number(l.lostQuantity) || 0),
+    0
+  )
+  const transportFallbackLossLiters = currentTransports.reduce(
+    (sum, t) => sum + (Number(t.litersLost) || 0),
+    0
+  )
+  const transportLossLiters = Math.max(incidentLossLiters, transportFallbackLossLiters)
+
+  const transportLossAmount =
+    currentLossLogs.reduce((sum, l) => {
+      if (l.lossType === "SHORTAGE") return sum
+      const rate = Number(l.transport?.ratePerLiter) || 200
+      return sum + (Number(l.lostQuantity) || 0) * rate
+    }, 0) +
+    (incidentLossLiters === 0 && transportFallbackLossLiters > 0
+      ? transportFallbackLossLiters * 200
+      : 0)
+
+  const currentLitersLost = deliveryLossLiters + transportLossLiters
+  const currentLossAmount = deliveryLossAmount + transportLossAmount
   const currentProfit = currentSalesRevenue - currentExpenses - currentLossAmount
 
   const periodTrends = buckets.map((bucket) => {
@@ -281,14 +338,44 @@ export async function getFleetOverviewData(
     const bucketDeliveries = currentDeliveries.filter((d) =>
       inRange(d.createdAt, bucket.from, bucket.to)
     )
-    const earning = bucketDeliveries.reduce(
-      (sum, d) => sum + (Number(d.totalExpectedAmount) || 0),
-      0
+    const bucketTransports = currentTransports.filter((t) =>
+      inRange(t.createdAt, bucket.from, bucket.to)
     )
-    const expense = currentOutflows
+    const bucketLossLogs = currentLossLogs.filter((l) =>
+      inRange(l.createdAt, bucket.from, bucket.to)
+    )
+    const earning = bucketDeliveries.reduce((sum, d) => {
+      const desp = Number(d.litersDespatched) || 0
+      const rec = d.litersReceived != null ? Number(d.litersReceived) : desp
+      const price = Number(d.amountPerLiter) || 0
+      return sum + (Number(d.totalExpectedAmount) || (rec * price))
+    }, 0)
+
+    const bucketDirectOutflow = currentOutflows
       .filter((t) => inRange(t.createdAt, bucket.from, bucket.to))
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
-    const loss = bucketDeliveries.reduce((sum, d) => sum + shortageAmount(d), 0)
+    const bucketMaintenance = bucketTransports.reduce(
+      (sum, t) => sum + (Number(t.maintenanceCost) || 0),
+      0
+    )
+    const bucketCompanyTransport = bucketDeliveries
+      .filter((d) => d.transportCostBorneBy === "COMPANY")
+      .reduce((sum, d) => sum + (Number(d.transportCost) || 0), 0)
+    const bucketLossExpense = bucketLossLogs.reduce(
+      (sum, l) => sum + (Number(l.expensesIncurred) || 0),
+      0
+    )
+    const expense =
+      bucketDirectOutflow + bucketMaintenance + bucketCompanyTransport + bucketLossExpense
+
+    const deliveryLoss = bucketDeliveries.reduce((sum, d) => sum + shortageAmount(d), 0)
+    const transportIncidentLoss = bucketLossLogs.reduce((sum, l) => {
+      if (l.lossType === "SHORTAGE") return sum
+      const rate = Number(l.transport?.ratePerLiter) || 200
+      return sum + (Number(l.lostQuantity) || 0) * rate
+    }, 0)
+    const loss = deliveryLoss + transportIncidentLoss
+
     return { name: bucket.label, earning, expense, loss }
   })
 
@@ -321,7 +408,6 @@ export async function getFleetOverviewData(
 
   const [
     statusRaw,
-    transporterGroupRaw,
     stationGroupRaw,
     clientGroupRaw,
     salesPaymentGroupRaw,
@@ -331,14 +417,6 @@ export async function getFleetOverviewData(
       by: ["status"],
       where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
       _count: { _all: true },
-    }),
-    prisma.transport.groupBy({
-      by: ["transporterId"],
-      where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
-      _sum: { litersDelivered: true, litersCarried: true, netTransportFeePaid: true },
-      _count: { id: true },
-      orderBy: { _sum: { litersCarried: "desc" } },
-      take: 5,
     }),
     prisma.delivery.groupBy({
       by: ["stationId"],
@@ -363,12 +441,11 @@ export async function getFleetOverviewData(
     }),
     prisma.transaction.groupBy({
       by: ["category"],
-      where: {
+      where: fleetLedgerWhere({
         tenantId,
         type: "OUTFLOW",
-        category: { in: [...FLEET_OUTFLOW_CATEGORIES] },
         createdAt: { gte: periodFrom, lte: periodTo },
-      },
+      }),
       _sum: { amount: true },
     }),
   ])
@@ -411,22 +488,37 @@ export async function getFleetOverviewData(
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5)
 
-  const topTransporterIds = transporterGroupRaw.map((t) => t.transporterId).filter((id): id is string => id !== null)
-  const transporters = await prisma.transporter.findMany({
-    where: { id: { in: topTransporterIds } },
-    select: { id: true, name: true },
-  })
-
-  const transporterPerformance = transporterGroupRaw.map((t) => {
-    const tr = transporters.find((x) => x.id === t.transporterId)
-    return {
-      transporter: tr?.name || "Unknown",
-      volume:
-        Number(t._sum.litersDelivered) || Number(t._sum.litersCarried) || 0,
-      trips: t._count.id,
-      amount: Number(t._sum.netTransportFeePaid) || 0,
+  const transporterMap = new Map<
+    string,
+    { name: string; volume: number; trips: number; amount: number }
+  >()
+  for (const t of currentTransports) {
+    const name =
+      (t.isOneTime ? t.oneTimeTransporterName : t.transporter?.name) ||
+      t.oneTimeTransporterName ||
+      t.transporter?.name
+    if (!name) continue
+    const volume = Number(t.litersDelivered) || Number(t.litersCarried) || 0
+    const amount = Number(t.netTransportFeePaid) || 0
+    const existing = transporterMap.get(name)
+    if (existing) {
+      existing.volume += volume
+      existing.trips += 1
+      existing.amount += amount
+    } else {
+      transporterMap.set(name, { name, volume, trips: 1, amount })
     }
-  })
+  }
+
+  const transporterPerformance = Array.from(transporterMap.values())
+    .sort((a, b) => b.volume - a.volume)
+    .slice(0, 5)
+    .map((t) => ({
+      transporter: t.name,
+      volume: t.volume,
+      trips: t.trips,
+      amount: t.amount,
+    }))
 
   const topStationIds = stationGroupRaw
     .map((s) => s.stationId)

@@ -19,6 +19,8 @@ export type StationRow = {
   todaySales: { PMS: number; AGO: number; LPG: number };
   lastClosingStock: { PMS: number; AGO: number; LPG: number };
   lastSalesAmount: number;
+  lastSalesDate?: string | null;
+  lastSalesProducts?: { PMS: number; AGO: number; LPG: number };
   lastWaybillDate: string | null;
   derivedBalance: number;
 };
@@ -32,35 +34,64 @@ const columns: ColumnDef<StationRow>[] = [
       const locationParts = [row.original.state, row.original.ward, row.original.lga].filter(Boolean);
       const locationText = locationParts.length > 0 ? locationParts.join(" - ") : "—";
       return (
-        <div className="flex items-center gap-3 py-1">
-          <div className="size-10 flex items-center justify-center shrink-0 text-primary">
+        <div className="flex items-center gap-3 py-1 min-w-0 max-w-[200px] sm:max-w-[250px]">
+          <div className="size-9 flex items-center justify-center shrink-0 text-primary">
             <Image
               src="/assets/icons/gps.png"
-              alt="My Image"
-              width={500}
-              height={300}
+              alt="Station icon"
+              width={36}
+              height={36}
+              className="object-contain"
             />
           </div>
-          <div className="flex flex-col">
-            <span className="font-semibold text-foreground">{name}</span>
-            <span className="text-xs text-muted-foreground">{locationText}</span>
+          <div className="flex flex-col min-w-0 overflow-hidden">
+            <span className="font-semibold text-foreground truncate" title={name}>
+              {name}
+            </span>
+            <span className="text-xs text-muted-foreground truncate" title={locationText}>
+              {locationText}
+            </span>
           </div>
         </div>
       );
     }
   },
   { 
-    accessorKey: "todaySales", 
-    header: "Today's Sales",
+    accessorKey: "lastSalesAmount", 
+    header: "Last Sales",
     cell: ({ row }) => {
-      const sales = row.original.todaySales;
+      const amount = row.original.lastSalesAmount;
+      const dateStr = row.original.lastSalesDate;
+      if (!amount && !dateStr) {
+        return <span className="text-muted-foreground text-xs">—</span>;
+      }
+
+      const date = dateStr ? new Date(dateStr) : null;
+      const formattedDate = date
+        ? date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+        : null;
+
+      const products = row.original.lastSalesProducts;
       const parts = [];
-      if (sales.PMS) parts.push(`PMS: ₦${sales.PMS.toLocaleString()}`);
-      if (sales.AGO) parts.push(`AGO: ₦${sales.AGO.toLocaleString()}`);
-      if (sales.LPG) parts.push(`LPG: ₦${sales.LPG.toLocaleString()}`);
-      return parts.length ? (
-        <span className="text-xs font-medium">{parts.join(" | ")}</span>
-      ) : "—";
+      if (products?.PMS) parts.push(`PMS: ₦${products.PMS.toLocaleString()}`);
+      if (products?.AGO) parts.push(`AGO: ₦${products.AGO.toLocaleString()}`);
+      if (products?.LPG) parts.push(`LPG: ₦${products.LPG.toLocaleString()}`);
+
+      return (
+        <div className="flex flex-col py-1">
+          <span className="font-semibold text-foreground font-mono text-sm">
+            ₦{amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+          </span>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {formattedDate && <span>{formattedDate}</span>}
+            {parts.length > 0 && (
+              <span className="text-[11px] text-muted-foreground/80 truncate max-w-[180px]" title={parts.join(" | ")}>
+                • {parts.join(" | ")}
+              </span>
+            )}
+          </div>
+        </div>
+      );
     }
   },
   {

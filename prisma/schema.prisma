@@ -919,7 +919,7 @@ model SalesLog {
   transferReceiptUrl String?
   logDate            DateTime       @db.Date
   createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  updatedAt          DateTime       @default(now()) @updatedAt
   status             SalesLogStatus @default(PENDING)
   reason             String?        @db.Text
   approvedById       String?

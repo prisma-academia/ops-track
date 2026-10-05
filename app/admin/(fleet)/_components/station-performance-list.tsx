@@ -108,18 +108,12 @@ export function StationPerformanceList({ data }: { data: StationPerformanceData[
   }
 
   const top3 = data.slice(0, 3);
-  const others = data.slice(3);
 
   return (
     <ul className="space-y-2 mt-4">
       {top3.map((station, index) => (
         <li key={station.name + index}>
           <StationPerformanceRow station={station} index={index} isTop3 />
-        </li>
-      ))}
-      {others.map((station, index) => (
-        <li key={station.name + index}>
-          <StationPerformanceRow station={station} index={index + 3} isTop3={false} />
         </li>
       ))}
     </ul>

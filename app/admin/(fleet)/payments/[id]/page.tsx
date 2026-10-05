@@ -8,6 +8,12 @@ import { InvoiceReceipt } from "./invoice-receipt";
 import { PaymentActions } from "./payment-actions";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 import { isStationLedgerTransaction } from "@/lib/finance/fleet-ledger";
+import { parseTenantSettings } from "@/lib/tenant/settings";
+import {
+  getFeeLegBreakdown,
+  getFeeLegLabel,
+  getRemainingForLeg,
+} from "@/lib/fleet/transport-fees";
 
 export default async function PaymentDetailsPage({
   params,
@@ -27,7 +33,11 @@ export default async function PaymentDetailsPage({
           station: true,
           organization: true,
           transport: {
-            include: { order: true },
+            include: {
+              order: true,
+              transporter: true,
+              truck: true,
+            },
           },
         },
       },
@@ -37,7 +47,11 @@ export default async function PaymentDetailsPage({
       truck: true,
       order: true,
       transport: {
-        include: { order: true },
+        include: {
+          order: true,
+          transporter: true,
+          truck: true,
+        },
       },
       tenant: true,
       bankAccount: true,
@@ -68,6 +82,119 @@ export default async function PaymentDetailsPage({
     }
   }
 
+  const transportId =
+    transaction.transportId ||
+    transaction.transport?.id ||
+    transaction.delivery?.transport?.id ||
+    null;
+
+  let tripFinancials: {
+    tripExpected: number;
+    tripPaid: number;
+    tripOutstanding: number;
+    lossDeduction: number;
+    fleetExpense: number;
+    legRemaining: number | null;
+    feeLegLabel: string | null;
+    destination: string | null;
+    truckPlate: string | null;
+    transporterName: string | null;
+  } | null = null;
+
+  if (transportId) {
+    const fullTransport = await prisma.transport.findUnique({
+      where: { id: transportId },
+      include: {
+        deliveries: {
+          include: {
+            station: true,
+            customer: true,
+          },
+        },
+        lossLogs: true,
+        transactions: true,
+        transporter: true,
+        truck: true,
+        order: true,
+      },
+    });
+
+    if (fullTransport) {
+      const tenantSettings = parseTenantSettings(transaction.tenant?.settingsJson);
+      const originToDepotFee = tenantSettings.originToDepotFee ?? 0;
+
+      const feeTransactions = fullTransport.transactions.filter(
+        (t) => t.category === "TRANSPORT_PAYMENT"
+      );
+      const breakdown = getFeeLegBreakdown(fullTransport, feeTransactions, { originToDepotFee });
+      const fullTripRow = breakdown.find((row) => row.feeLeg === "FULL_TRIP");
+
+      const ratePerLiter = Number(fullTransport.ratePerLiter) || 0;
+      let lossDeduction = 0;
+      for (const log of fullTransport.lossLogs) {
+        const liters = Number(log.lostQuantity) || 0;
+        const logged = Number(log.expensesIncurred) || 0;
+        lossDeduction += logged > 0 ? logged : liters * ratePerLiter;
+      }
+
+      const fleetExpense = fullTransport.transactions
+        .filter((txn) => txn.category === "EXPENSE" || txn.category === "FLEET_EXPENSE")
+        .reduce((sum, txn) => sum + Number(txn.amount), 0);
+
+      const tripExpected =
+        fullTripRow?.expected ??
+        (ratePerLiter * (Number(fullTransport.litersCarried) || 0));
+      const tripPaid =
+        fullTripRow?.paid ?? Number(fullTransport.netTransportFeePaid) ?? 0;
+      const tripOutstanding = Math.max(
+        0,
+        tripExpected - tripPaid - lossDeduction - fleetExpense
+      );
+
+      let legRemaining: number | null = null;
+      let feeLegLabel: string | null = null;
+      if (transaction.feeLeg) {
+        feeLegLabel = getFeeLegLabel(transaction.feeLeg, null, {
+          destination: fullTransport.destination,
+          sourceDepot: fullTransport.order?.sourceDepot,
+          supplier: fullTransport.order?.supplier,
+        });
+        legRemaining = getRemainingForLeg(
+          fullTransport,
+          feeTransactions,
+          transaction.feeLeg,
+          {
+            deliveryId: transaction.deliveryId ?? undefined,
+            originToDepotFee,
+          }
+        );
+      }
+
+      const transporterName =
+        fullTransport.transporter?.name ||
+        fullTransport.oneTimeTransporterName ||
+        null;
+      const truckPlate =
+        fullTransport.truck?.plateNumber ||
+        fullTransport.truck?.name ||
+        fullTransport.oneTimeTruckPlate ||
+        null;
+
+      tripFinancials = {
+        tripExpected,
+        tripPaid,
+        tripOutstanding,
+        lossDeduction,
+        fleetExpense,
+        legRemaining,
+        feeLegLabel,
+        destination: fullTransport.destination,
+        truckPlate,
+        transporterName,
+      };
+    }
+  }
+
   // Determine the "receiver" (counterparty) — same priority order the
   // receipt uses to label who the money went to/came from.
   let receiver: {
@@ -90,6 +217,17 @@ export default async function PaymentDetailsPage({
         .filter(Boolean)
         .join(", ") || null,
     };
+  } else if (transaction.organization) {
+    receiver = {
+      label: "Organization",
+      name: transaction.organization.name,
+      contactPerson: transaction.organization.contactPerson,
+      phone: transaction.organization.companyPhone || transaction.organization.contactPhone,
+      email: transaction.organization.companyEmail,
+      address: [transaction.organization.address, transaction.organization.lga, transaction.organization.state]
+        .filter(Boolean)
+        .join(", ") || null,
+    };
   } else if (transaction.station) {
     receiver = {
       label: "Station",
@@ -100,6 +238,8 @@ export default async function PaymentDetailsPage({
     };
   } else if (transaction.delivery?.customer) {
     receiver = { label: "Customer", name: transaction.delivery.customer.name };
+  } else if (transaction.delivery?.organization) {
+    receiver = { label: "Organization", name: transaction.delivery.organization.name };
   } else if (transaction.delivery?.station) {
     receiver = { label: "Station", name: transaction.delivery.station.name };
   } else if (transaction.transporter) {
@@ -112,6 +252,22 @@ export default async function PaymentDetailsPage({
       address: [transaction.transporter.address, transaction.transporter.lga, transaction.transporter.state]
         .filter(Boolean)
         .join(", ") || null,
+    };
+  } else if (tripFinancials?.transporterName) {
+    receiver = {
+      label: "Transporter",
+      name: tripFinancials.transporterName,
+      address: tripFinancials.truckPlate ? `Truck: ${tripFinancials.truckPlate}` : null,
+    };
+  } else if (transaction.order?.supplier) {
+    receiver = {
+      label: "Supplier",
+      name: transaction.order.supplier,
+    };
+  } else if (transaction.truck) {
+    receiver = {
+      label: "Truck",
+      name: transaction.truck.plateNumber || transaction.truck.name || "Fleet Vehicle",
     };
   }
 
@@ -223,10 +379,16 @@ export default async function PaymentDetailsPage({
               : null,
           }
         : null,
-    transporter: transaction.transporter ? { id: transaction.transporter.id, name: transaction.transporter.name } : null,
+    transporter: transaction.transporter
+      ? { id: transaction.transporter.id, name: transaction.transporter.name }
+      : tripFinancials?.transporterName
+        ? { id: "", name: tripFinancials.transporterName }
+        : null,
     truck: transaction.truck
       ? { id: transaction.truck.id, name: transaction.truck.name, plateNumber: transaction.truck.plateNumber }
-      : null,
+      : tripFinancials?.truckPlate
+        ? { id: "", name: tripFinancials.truckPlate, plateNumber: tripFinancials.truckPlate }
+        : null,
     tenant: transaction.tenant
       ? {
           name: transaction.tenant.name,
@@ -248,6 +410,7 @@ export default async function PaymentDetailsPage({
       : null,
     receiver,
     qrCodeDataUrl,
+    tripFinancials,
   };
 
   return (
@@ -266,6 +429,7 @@ export default async function PaymentDetailsPage({
             receiptUrl={transaction.receiptUrl}
             amount={Number(transaction.amount)}
             reference={ref}
+            tripOutstanding={tripFinancials?.tripOutstanding ?? null}
           />
         </div>
 

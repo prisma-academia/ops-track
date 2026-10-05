@@ -14,9 +14,9 @@ import {
 } from "@/lib/fleet/transport-fees";
 
 const TransportPaymentSchema = z.object({
-  transportId: z.string(),
-  transporterId: z.string().min(1),
-  amount: z.number().positive(),
+  transportId: z.string().min(1, "Transport is required"),
+  transporterId: z.string().optional().nullable().or(z.literal("")),
+  amount: z.number().positive("Amount must be greater than zero"),
   feeLeg: z.enum([
     "ORIGIN_TO_DEPOT",
     "DEPOT_TO_PRIMARY",
@@ -151,6 +151,11 @@ export async function POST(request: Request) {
         );
       }
 
+      const finalTransporterId =
+        body.transporterId && body.transporterId.trim() !== ""
+          ? body.transporterId
+          : (transport.transporterId ?? null);
+
       const trx = await tx.transaction.create({
         data: {
           tenantId: actor.tenantId,
@@ -162,7 +167,9 @@ export async function POST(request: Request) {
           receiptUrl: body.receiptUrl,
           description: body.description,
           transportId: body.transportId,
-          transporterId: body.transporterId,
+          transporterId: finalTransporterId,
+          truckId: transport.truckId ?? null,
+          orderId: transport.orderId ?? null,
           bankAccountId: body.bankAccountId,
           feeLeg: body.feeLeg,
           deliveryId:

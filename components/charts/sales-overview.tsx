@@ -25,7 +25,7 @@ const formatFullCurrency = (value: number) => {
 const chartConfig = {
   expense: {
     label: "Expense",
-    color: "var(--color-blue-500)",
+    color: "#eab308",
   },
   loss: {
     label: "Loss",
@@ -46,6 +46,7 @@ export interface SalesOverviewChartPoint {
   earning: number;
   expense: number;
   loss?: number;
+  profit?: number;
 }
 
 export interface SalesOverviewChartCardProps {
@@ -55,6 +56,7 @@ export interface SalesOverviewChartCardProps {
   expense?: number;
   profit?: number;
   loss?: number;
+  showLoss?: boolean;
   /** @deprecated Prefer numeric `revenue`. Kept for station dashboard compatibility. */
   revenueValue?: string;
   /** @deprecated Prefer numeric `expense`. Kept for station dashboard compatibility. */
@@ -62,9 +64,8 @@ export interface SalesOverviewChartCardProps {
 }
 
 /**
- * Generic "Sales Overview" card: 4 highlight tiles (Revenue/Profit/Loss/Expense)
- * above a stacked bar chart. Shared between the Fleet and Station dashboards so
- * both surfaces get the same look & feel for revenue vs. expense trends.
+ * Generic "Sales Overview" card: highlight tiles (Revenue/Profit/Expense, optional Loss)
+ * above a stacked bar chart. Shared between the Fleet and Station dashboards.
  */
 export function SalesOverviewChartCard({
   title = "Sales Overview",
@@ -73,6 +74,7 @@ export function SalesOverviewChartCard({
   expense,
   profit,
   loss,
+  showLoss = true,
 }: SalesOverviewChartCardProps) {
   const [hoveredCategory, setHoveredCategory] = React.useState<string | null>(null);
 
@@ -80,8 +82,8 @@ export function SalesOverviewChartCard({
     name: point.name,
     earning: point.earning,
     expense: point.expense,
-    loss: point.loss ?? 0,
-    profit: point.earning - point.expense - (point.loss ?? 0),
+    loss: showLoss ? (point.loss ?? 0) : 0,
+    profit: point.profit !== undefined ? point.profit : point.earning - point.expense - (showLoss ? (point.loss ?? 0) : 0),
   }));
 
   const totalRevenueVal =
@@ -91,7 +93,7 @@ export function SalesOverviewChartCard({
   const totalLossVal =
     loss ?? stackedData.reduce((acc, curr) => acc + curr.loss, 0);
   const totalProfitVal =
-    profit ?? totalRevenueVal - totalExpenseVal - totalLossVal;
+    profit ?? totalRevenueVal - totalExpenseVal - (showLoss ? totalLossVal : 0);
 
   const categories = [
     {
@@ -108,19 +110,23 @@ export function SalesOverviewChartCard({
       dotColor: "bg-sky-400",
       activeBorder: "border-sky-400 ring-sky-400/30",
     },
-    {
-      key: "loss",
-      title: "Loss",
-      value: totalLossVal,
-      dotColor: "bg-red-500",
-      activeBorder: "border-red-500 ring-red-500/30",
-    },
+    ...(showLoss
+      ? [
+          {
+            key: "loss",
+            title: "Loss",
+            value: totalLossVal,
+            dotColor: "bg-red-500",
+            activeBorder: "border-red-500 ring-red-500/30",
+          },
+        ]
+      : []),
     {
       key: "expense",
       title: "Expense",
       value: totalExpenseVal,
-      dotColor: "bg-blue-500",
-      activeBorder: "border-blue-500 ring-blue-500/30",
+      dotColor: "bg-yellow-500",
+      activeBorder: "border-yellow-500 ring-yellow-500/30",
     },
   ];
 
@@ -130,7 +136,7 @@ export function SalesOverviewChartCard({
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-medium">{title}</CardTitle>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+        <div className={cn("grid gap-3 w-full", showLoss ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-1 sm:grid-cols-3")}>
           {categories.map((cat) => {
             const isHovered = hoveredCategory === cat.key;
             return (
@@ -207,14 +213,16 @@ export function SalesOverviewChartCard({
                   : 0.15
               }
             />
-            <Bar
-              dataKey="loss"
-              stackId="costs"
-              fill="var(--color-loss)"
-              radius={[0, 0, 0, 0]}
-              barSize={16}
-              opacity={hoveredCategory === null || hoveredCategory === "loss" ? 1 : 0.15}
-            />
+            {showLoss && (
+              <Bar
+                dataKey="loss"
+                stackId="costs"
+                fill="var(--color-loss)"
+                radius={[0, 0, 0, 0]}
+                barSize={16}
+                opacity={hoveredCategory === null || hoveredCategory === "loss" ? 1 : 0.15}
+              />
+            )}
             <Bar
               dataKey="profit"
               stackId="costs"
@@ -236,8 +244,8 @@ export default function SalesOverviewChart({ data }: { data: FleetOverviewData }
       chartData={data.salesOverview.points}
       revenue={data.salesOverview.revenue}
       expense={data.salesOverview.expense}
-      loss={data.salesOverview.loss}
       profit={data.salesOverview.profit}
+      showLoss={false}
     />
   );
 }

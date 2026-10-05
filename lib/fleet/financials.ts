@@ -132,7 +132,12 @@ export async function calculateTripPnL(transportId: string): Promise<TripPnLSumm
     netTransportFeePaid = 0; // Transporter isn't paid, and owes the balance
   }
 
-  const netProfit = totalRevenue - totalCogs - netTransportFeePaid - totalExpenses - totalShortageDeduction;
+  // netTransportFeePaid is already net of shortage + maintenance deductions, and
+  // maintenance is also in totalExpenses (leg1Expenses), so only subtract the net fee
+  // and non-maintenance expenses here. Shortage is recovered from the transporter,
+  // so it is not a further company cost.
+  const netProfit =
+    totalRevenue - totalCogs - netTransportFeePaid - (totalExpenses - maintenanceCost);
 
   return {
     transportId,

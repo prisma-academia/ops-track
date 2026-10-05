@@ -98,10 +98,33 @@ export default async function PaymentsPage({
         customer: { select: { name: true } },
         station: { select: { name: true, code: true } },
         transporter: { select: { name: true } },
+        organization: { select: { name: true } },
+        truck: { select: { plateNumber: true, name: true } },
+        order: { select: { reference: true, supplier: true } },
+        transport: {
+          select: {
+            id: true,
+            destination: true,
+            isOneTime: true,
+            oneTimeTransporterName: true,
+            oneTimeTruckPlate: true,
+            transporter: { select: { name: true } },
+            truck: { select: { plateNumber: true, name: true } },
+            order: { select: { reference: true, supplier: true } },
+          },
+        },
         delivery: {
           select: {
             customer: { select: { name: true } },
             station: { select: { name: true, code: true } },
+            organization: { select: { name: true } },
+            transport: {
+              select: {
+                destination: true,
+                oneTimeTransporterName: true,
+                transporter: { select: { name: true } },
+              },
+            },
           },
         },
       },
@@ -111,17 +134,26 @@ export default async function PaymentsPage({
     }),
   ]);
 
-  const rows = transactions.map((t) => ({
-    id: t.id,
-    reference: t.reference || t.id.substring(0, 8).toUpperCase(),
-    type: t.type,
-    category: t.category,
-    counterpartyName: resolveTransactionCounterpartyName(t),
-    amount: Number(t.amount),
-    paymentMethod: t.paymentMethod || "Bank Transfer",
-    bankAccount: t.bankAccount ? `${t.bankAccount.bankName} - ${t.bankAccount.accountNumber}` : null,
-    createdAt: t.createdAt.toISOString(),
-  }));
+  const rows = transactions.map((t) => {
+    const isOutflow = t.type === "OUTFLOW";
+    const resolvedName = resolveTransactionCounterpartyName(t);
+    const counterpartyName = resolvedName || (isOutflow ? "General Fleet Outflow" : "Direct Inflow");
+
+    return {
+      id: t.id,
+      reference: t.reference || t.id.substring(0, 8).toUpperCase(),
+      type: t.type,
+      category: t.category,
+      counterpartyName,
+      amount: Number(t.amount),
+      paymentMethod: t.paymentMethod || "Bank Transfer",
+      bankAccount: t.bankAccount ? `${t.bankAccount.bankName} - ${t.bankAccount.accountNumber}` : null,
+      createdAt: t.createdAt.toISOString(),
+      tripDestination: t.transport?.destination || t.delivery?.transport?.destination || null,
+      description: t.description || null,
+    };
+  });
+
 
   const totalPages = Math.ceil(totalCount / take);
 

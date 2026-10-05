@@ -23,13 +23,16 @@ import {
   XIcon,
   Loader2,
   ArrowLeft,
-  Wallet,
-  Truck as TruckIcon,
-  Route,
   FileText,
   ExternalLink,
   Eye,
 } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  BuildingIcon,
+  TankerTruckIcon,
+  Route03Icon,
+} from "@hugeicons/core-free-icons";
 import { FilePreviewTrigger } from "@/components/file-viewer-modal";
 import { cn } from "@/lib/utils";
 import { apiPost } from "@/lib/client/api";
@@ -70,25 +73,25 @@ const CATEGORY_OPTIONS: Array<{
   value: ExpenseCategory;
   title: string;
   description: string;
-  icon: typeof Wallet;
+  icon: typeof BuildingIcon;
 }> = [
   {
     value: "PERSONAL_EXPENSE",
     title: "Personal / Administrative",
     description: "Office supplies, admin costs, and other non-fleet expenses.",
-    icon: Wallet,
+    icon: BuildingIcon,
   },
   {
     value: "FLEET_EXPENSE",
     title: "Fleet-Related Expense",
     description: "Fuel, maintenance, tickets, or other trip-related costs.",
-    icon: TruckIcon,
+    icon: TankerTruckIcon,
   },
   {
     value: "TRANSPORT_FEE",
     title: "Transport Fee Payment",
     description: "Payout to a transporter for a completed delivery leg.",
-    icon: Route,
+    icon: Route03Icon,
   },
 ];
 
@@ -107,6 +110,41 @@ function formatVolumeAndFee(liters: number, amount: number) {
   if (liters > 0) parts.push(`${liters.toLocaleString()} L`);
   if (amount > 0) parts.push(`₦${amount.toLocaleString()}`);
   return parts.join(" • ");
+}
+
+function getTransportLabelParts(t: any) {
+  if (!t) return { ref: "", transporter: "", truck: "", destination: "", volume: "" };
+
+  const ref =
+    t.order?.reference ||
+    (t.order?.supplier ? `Supplier: ${t.order.supplier}` : "") ||
+    (t.orderId ? `Order #${t.orderId.slice(0, 8)}` : "") ||
+    (t.deliveries?.[0]?.station?.name ? `To: ${t.deliveries[0].station.name}` : "") ||
+    (t.deliveries?.[0]?.customer?.name ? `To: ${t.deliveries[0].customer.name}` : "") ||
+    `Trip #${t.id?.slice(0, 8) || "N/A"}`;
+
+  const transporter =
+    (t.isOneTime ? t.oneTimeTransporterName : t.transporter?.name) ||
+    t.oneTimeTransporterName ||
+    t.transporter?.name ||
+    "Ad-hoc Transporter";
+
+  const truck =
+    (t.isOneTime ? t.oneTimeTruckPlate : (t.truck?.plateNumber || t.truck?.name)) ||
+    t.oneTimeTruckPlate ||
+    t.truck?.plateNumber ||
+    t.truck?.name ||
+    "Unassigned Truck";
+
+  const destination =
+    t.destination ||
+    t.deliveries?.[0]?.station?.name ||
+    t.deliveries?.[0]?.customer?.name ||
+    "Direct";
+
+  const volume = Number(t.litersCarried || 0) > 0 ? `${Number(t.litersCarried).toLocaleString()} L` : "";
+
+  return { ref, transporter, truck, destination, volume };
 }
 
 export default function OutgoingPaymentForm({ metadata, loading }: { metadata: any, loading: boolean }) {
@@ -234,6 +272,16 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
     ? getFeeLegBreakdown(selectedTransport, selectedTransport.transactions || [], { originToDepotFee })
     : [];
 
+  const hasPrefilledTransporter = Boolean(
+    formData.transportId && (formData.transporterId || selectedTransport?.oneTimeTransporterName)
+  );
+  const hasPrefilledTruck = Boolean(
+    formData.transportId && (formData.truckId || selectedTransport?.oneTimeTruckPlate)
+  );
+  const hasPrefilledOrder = Boolean(
+    formData.transportId && formData.orderId
+  );
+
   useEffect(() => {
     if ((category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && formData.transportId && metadata?.transports) {
       const t = metadata.transports.find((x: any) => x.id === formData.transportId);
@@ -283,15 +331,15 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
         payload.expenseType = "PERSONAL";
       } else if (category === "FLEET_EXPENSE") {
         payload.expenseType = "FLEET";
-        payload.transporterId = formData.transporterId;
-        payload.truckId = formData.truckId;
-        payload.orderId = formData.orderId;
-        payload.transportId = formData.transportId;
+        payload.transporterId = formData.transporterId || undefined;
+        payload.truckId = formData.truckId || undefined;
+        payload.orderId = formData.orderId || undefined;
+        payload.transportId = formData.transportId || undefined;
       } else if (category === "TRANSPORT_FEE") {
         endpoint = `/api/tenant/fleet/payments/outflow/transport`;
         payload = {
           transportId: formData.transportId,
-          transporterId: formData.transporterId,
+          transporterId: formData.transporterId || selectedTransport?.transporterId || undefined,
           amount: Number(formData.amount),
           feeLeg,
           deliveryId:
@@ -299,9 +347,9 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
               ? deliveryId || selectedTransport?.deliveries?.[0]?.id || null
               : null,
           paymentMethod: formData.paymentMethod,
-          reference: formData.reference,
-          receiptUrl: formData.receiptUrl,
-          description: formData.description,
+          reference: formData.reference || undefined,
+          receiptUrl: formData.receiptUrl || undefined,
+          description: formData.description || undefined,
           bankAccountId: formData.paymentMethod !== "CASH" ? formData.bankAccountId : undefined,
         };
       }
@@ -393,11 +441,23 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                         variant="outline"
                         role="combobox"
                         aria-expanded={categoryOpen}
-                        className="w-full justify-between font-normal text-left h-auto py-2"
+                        className="w-full justify-between font-normal text-left h-auto py-2.5"
                       >
-                        <span className="truncate pr-4">
-                          {categoryMeta ? categoryMeta.title : "Select expense category..."}
-                        </span>
+                        <div className="flex items-center gap-2.5 truncate pr-4">
+                          {categoryMeta ? (
+                            <>
+                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                                <HugeiconsIcon icon={categoryMeta.icon} size={16} strokeWidth={2} />
+                              </div>
+                              <div className="flex flex-col text-left">
+                                <span className="text-sm font-medium">{categoryMeta.title}</span>
+                                <span className="text-xs text-muted-foreground truncate">{categoryMeta.description}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">Select expense category...</span>
+                          )}
+                        </div>
                         <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
@@ -409,22 +469,45 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                       <Command>
                         <CommandList>
                           <CommandGroup>
-                            {CATEGORY_OPTIONS.map((opt) => (
-                              <CommandItem
-                                key={opt.value}
-                                value={`${opt.title} ${opt.description}`}
-                                onSelect={() => {
-                                  setCategory(opt.value);
-                                  setCategoryOpen(false);
-                                }}
-                              >
-                                <Check className={cn("mr-2 h-4 w-4 shrink-0", category === opt.value ? "opacity-100" : "opacity-0")} />
-                                <div className="flex flex-col text-left">
-                                  <span className="font-semibold text-sm">{opt.title}</span>
-                                  <span className="text-xs text-muted-foreground mt-0.5">{opt.description}</span>
-                                </div>
-                              </CommandItem>
-                            ))}
+                            {CATEGORY_OPTIONS.map((opt) => {
+                              const isSelected = category === opt.value;
+                              return (
+                                <CommandItem
+                                  key={opt.value}
+                                  value={`${opt.title} ${opt.description}`}
+                                  onSelect={() => {
+                                    setCategory(opt.value);
+                                    setCategoryOpen(false);
+                                  }}
+                                  className="flex items-center gap-3 p-3 cursor-pointer"
+                                >
+                                  <div
+                                    className={cn(
+                                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors",
+                                      isSelected
+                                        ? "border-primary/40 bg-primary/15 text-primary"
+                                        : "border-border/60 bg-muted/40 text-muted-foreground"
+                                    )}
+                                  >
+                                    <HugeiconsIcon icon={opt.icon} size={18} strokeWidth={2} />
+                                  </div>
+                                  <div className="flex flex-col text-left flex-1 min-w-0">
+                                    <span className={cn("font-medium text-sm", isSelected && "font-semibold text-primary")}>
+                                      {opt.title}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                                      {opt.description}
+                                    </span>
+                                  </div>
+                                  <Check
+                                    className={cn(
+                                      "ml-auto h-4 w-4 shrink-0 transition-opacity",
+                                      isSelected ? "opacity-100 text-primary" : "opacity-0"
+                                    )}
+                                  />
+                                </CommandItem>
+                              );
+                            })}
                           </CommandGroup>
                         </CommandList>
                       </Command>
@@ -446,10 +529,10 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                   <span className="truncate pr-4">
                     {formData.transportId
                       ? (() => {
-                          const t = metadata?.transports?.find((t: any) => t.id === formData.transportId);
-                          return t 
-                            ? `${t.order?.reference || "No Ref"} • ${t.transporter?.name || "No Transporter"} • ${t.truck?.plateNumber || t.truck?.name || "No Truck"} • ${t.destination}`
-                            : "Select Transport Trip...";
+                          const t = metadata?.transports?.find((x: any) => x.id === formData.transportId);
+                          if (!t) return "Select Transport Trip...";
+                          const { ref, transporter, truck, destination } = getTransportLabelParts(t);
+                          return `${ref} • ${transporter} • ${truck} • ${destination}`;
                         })()
                       : "Select Transport Trip..."}
                   </span>
@@ -466,32 +549,42 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                   <CommandList>
                     <CommandEmpty>No transports found.</CommandEmpty>
                     <CommandGroup>
-                      {metadata?.transports?.map((t: any) => (
-                        <CommandItem
-                          key={t.id}
-                          value={`${t.id} ${t.order?.reference || ""} ${t.transporter?.name || ""} ${t.truck?.plateNumber || t.truck?.name || ""} ${t.destination}`.toLowerCase()}
-                          onSelect={() => {
-                            if (formData.transportId === t.id) {
-                              setFormData({ ...formData, transportId: "", transporterId: "", truckId: "", orderId: "", amount: "" });
-                            } else {
-                              setFormData({ ...formData, transportId: t.id, amount: "" });
-                            }
-                            setFeeLeg("");
-                            setDeliveryId("");
-                            setTransportOpen(false);
-                          }}
-                        >
-                          <Check className={cn("mr-2 h-4 w-4 shrink-0", formData.transportId === t.id ? "opacity-100" : "opacity-0")} />
-                          <div className="flex flex-col text-left">
-                            <span className="font-semibold text-sm">
-                              {t.order?.reference || "No Ref"} • {t.destination}
-                            </span>
-                            <span className="text-xs text-muted-foreground mt-0.5">
-                              {t.transporter?.name || "Unknown Transporter"} • {t.truck?.plateNumber || t.truck?.name || "Unknown Truck"} • {Number(t.litersCarried || 0).toLocaleString()} L
-                            </span>
-                          </div>
-                        </CommandItem>
-                      ))}
+                      {metadata?.transports?.map((t: any) => {
+                        const { ref, transporter, truck, destination, volume } = getTransportLabelParts(t);
+                        return (
+                          <CommandItem
+                            key={t.id}
+                            value={`${t.id} ${ref} ${transporter} ${truck} ${destination} ${t.isOneTime ? "one-time" : ""}`.toLowerCase()}
+                            onSelect={() => {
+                              if (formData.transportId === t.id) {
+                                setFormData({ ...formData, transportId: "", transporterId: "", truckId: "", orderId: "", amount: "" });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  transportId: t.id,
+                                  transporterId: t.transporterId || "",
+                                  truckId: t.truckId || "",
+                                  orderId: t.orderId || "",
+                                  amount: ""
+                                });
+                              }
+                              setFeeLeg("");
+                              setDeliveryId("");
+                              setTransportOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4 shrink-0", formData.transportId === t.id ? "opacity-100" : "opacity-0")} />
+                            <div className="flex flex-col text-left">
+                              <span className="font-semibold text-sm">
+                                {ref} • {destination}
+                              </span>
+                              <span className="text-xs text-muted-foreground mt-0.5">
+                                {transporter} • {truck} {volume ? `• ${volume}` : ""}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        );
+                      })}
                     </CommandGroup>
                   </CommandList>
                 </Command>
@@ -587,7 +680,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
           </div>
         )}
 
-        {(category === "FLEET_EXPENSE" || category === "TRANSPORT_FEE") && (
+        {(category === "FLEET_EXPENSE" || category === "TRANSPORT_FEE") && !hasPrefilledTransporter && (
           <div className="space-y-2 flex flex-col justify-end">
             <Label>Transporter {category === "TRANSPORT_FEE" ? "*" : ""}</Label>
             <Popover open={transporterOpen} onOpenChange={setTransporterOpen}>
@@ -596,7 +689,6 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                   variant="outline"
                   role="combobox"
                   aria-expanded={transporterOpen}
-                  disabled={(category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && !!formData.transportId}
                   className="w-full justify-between font-normal"
                 >
                   {formData.transporterId
@@ -638,96 +730,98 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
 
         {(category === "FLEET_EXPENSE" || category === "TRANSPORT_FEE") && (
           <>
-            <div className="space-y-2 flex flex-col justify-end">
-              <Label>Truck (Optional)</Label>
-              <Popover open={truckOpen} onOpenChange={setTruckOpen}>
-                <PopoverTrigger asChild className="w-full">
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={truckOpen}
-                    disabled={(category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && !!formData.transportId}
-                    className="w-full justify-between font-normal"
-                  >
-                    {formData.truckId
-                      ? (() => {
-                          const t = metadata?.trucks?.find((t: any) => t.id === formData.truckId);
-                          return t ? `${t.name} - ${t.truckNumber}` : "Select Truck...";
-                        })()
-                      : "Select Truck..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search truck..." />
-                    <CommandList>
-                      <CommandEmpty>No trucks found.</CommandEmpty>
-                      <CommandGroup>
-                        {metadata?.trucks?.map((t: any) => (
-                          <CommandItem
-                            key={t.id}
-                            value={`${t.name} ${t.truckNumber}`}
-                            onSelect={() => {
-                              setFormData({ ...formData, truckId: formData.truckId === t.id ? "" : t.id });
-                              setTruckOpen(false);
-                            }}
-                          >
-                            <Check className={cn("mr-2 h-4 w-4", formData.truckId === t.id ? "opacity-100" : "opacity-0")} />
-                            {t.name} - {t.truckNumber}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="space-y-2 flex flex-col justify-end">
-              <Label>Order (Optional)</Label>
-              <Popover open={orderOpen} onOpenChange={setOrderOpen}>
-                <PopoverTrigger asChild className="w-full">
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={orderOpen}
-                    disabled={(category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && !!formData.transportId}
-                    className="w-full justify-between font-normal"
-                  >
-                    {formData.orderId
-                      ? (() => {
-                          const o = metadata?.orders?.find((o: any) => o.id === formData.orderId);
-                          return o ? (o.reference || o.id.substring(0,8)) : "Select Order...";
-                        })()
-                      : "Select Order..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search order..." />
-                    <CommandList>
-                      <CommandEmpty>No orders found.</CommandEmpty>
-                      <CommandGroup>
-                        {metadata?.orders?.map((o: any) => (
-                          <CommandItem
-                            key={o.id}
-                            value={o.reference || o.id}
-                            onSelect={() => {
-                              setFormData({ ...formData, orderId: formData.orderId === o.id ? "" : o.id });
-                              setOrderOpen(false);
-                            }}
-                          >
-                            <Check className={cn("mr-2 h-4 w-4", formData.orderId === o.id ? "opacity-100" : "opacity-0")} />
-                            {o.reference || o.id.substring(0,8)}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
+            {!hasPrefilledTruck && (
+              <div className="space-y-2 flex flex-col justify-end">
+                <Label>Truck (Optional)</Label>
+                <Popover open={truckOpen} onOpenChange={setTruckOpen}>
+                  <PopoverTrigger asChild className="w-full">
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={truckOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      {formData.truckId
+                        ? (() => {
+                            const t = metadata?.trucks?.find((t: any) => t.id === formData.truckId);
+                            return t ? `${t.name} - ${t.truckNumber || t.plateNumber}` : "Select Truck...";
+                          })()
+                        : "Select Truck..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search truck..." />
+                      <CommandList>
+                        <CommandEmpty>No trucks found.</CommandEmpty>
+                        <CommandGroup>
+                          {metadata?.trucks?.map((t: any) => (
+                            <CommandItem
+                              key={t.id}
+                              value={`${t.name} ${t.truckNumber}`}
+                              onSelect={() => {
+                                setFormData({ ...formData, truckId: formData.truckId === t.id ? "" : t.id });
+                                setTruckOpen(false);
+                              }}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", formData.truckId === t.id ? "opacity-100" : "opacity-0")} />
+                              {t.name} - {t.truckNumber}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+            {!hasPrefilledOrder && (
+              <div className="space-y-2 flex flex-col justify-end">
+                <Label>Order (Optional)</Label>
+                <Popover open={orderOpen} onOpenChange={setOrderOpen}>
+                  <PopoverTrigger asChild className="w-full">
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={orderOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      {formData.orderId
+                        ? (() => {
+                            const o = metadata?.orders?.find((o: any) => o.id === formData.orderId);
+                            return o ? (o.reference || o.id.substring(0,8)) : "Select Order...";
+                          })()
+                        : "Select Order..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search order..." />
+                      <CommandList>
+                        <CommandEmpty>No orders found.</CommandEmpty>
+                        <CommandGroup>
+                          {metadata?.orders?.map((o: any) => (
+                            <CommandItem
+                              key={o.id}
+                              value={o.reference || o.id}
+                              onSelect={() => {
+                                setFormData({ ...formData, orderId: formData.orderId === o.id ? "" : o.id });
+                                setOrderOpen(false);
+                              }}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", formData.orderId === o.id ? "opacity-100" : "opacity-0")} />
+                              {o.reference || o.id.substring(0,8)}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1000,9 +1094,33 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
       <div>
       {selectedTransport && category === "TRANSPORT_FEE" ? (
         <>
-          <SummaryRow label="Order Ref" value={selectedTransport.order?.reference || "Unlinked"} />
-          <SummaryRow label="Transporter" value={selectedTransport.transporter?.name || "N/A"} />
-          <SummaryRow label="Destination" value={selectedTransport.destination || "N/A"} />
+          <SummaryRow
+            label="Trip / Order"
+            value={
+              selectedTransport.order?.reference ||
+              (selectedTransport.orderId ? `Order #${selectedTransport.orderId.slice(0, 8)}` : `Trip #${selectedTransport.id.slice(0, 8)}`)
+            }
+          />
+          <SummaryRow
+            label="Transporter"
+            value={
+              (selectedTransport.isOneTime ? selectedTransport.oneTimeTransporterName : selectedTransport.transporter?.name) ||
+              selectedTransport.oneTimeTransporterName ||
+              selectedTransport.transporter?.name ||
+              "Ad-hoc Transporter"
+            }
+          />
+          <SummaryRow
+            label="Truck"
+            value={
+              (selectedTransport.isOneTime ? selectedTransport.oneTimeTruckPlate : (selectedTransport.truck?.plateNumber || selectedTransport.truck?.name)) ||
+              selectedTransport.oneTimeTruckPlate ||
+              selectedTransport.truck?.plateNumber ||
+              selectedTransport.truck?.name ||
+              "Unassigned Truck"
+            }
+          />
+          <SummaryRow label="Destination" value={selectedTransport.destination || "Direct"} />
           <div className="px-4 py-2 bg-muted/30 border-y border-border/60">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fee Breakdown</span>
           </div>
@@ -1032,10 +1150,33 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
         </>
       ) : selectedTransport ? (
         <>
-          <SummaryRow label="Order Ref" value={selectedTransport.order?.reference || "N/A"} />
-          <SummaryRow label="Transporter" value={selectedTransport.transporter?.name || "N/A"} />
-          <SummaryRow label="Truck" value={selectedTransport.truck?.plateNumber || selectedTransport.truck?.name || "N/A"} />
-          <SummaryRow label="Destination" value={selectedTransport.destination || "N/A"} />
+          <SummaryRow
+            label="Trip / Order"
+            value={
+              selectedTransport.order?.reference ||
+              (selectedTransport.orderId ? `Order #${selectedTransport.orderId.slice(0, 8)}` : `Trip #${selectedTransport.id.slice(0, 8)}`)
+            }
+          />
+          <SummaryRow
+            label="Transporter"
+            value={
+              (selectedTransport.isOneTime ? selectedTransport.oneTimeTransporterName : selectedTransport.transporter?.name) ||
+              selectedTransport.oneTimeTransporterName ||
+              selectedTransport.transporter?.name ||
+              "Ad-hoc Transporter"
+            }
+          />
+          <SummaryRow
+            label="Truck"
+            value={
+              (selectedTransport.isOneTime ? selectedTransport.oneTimeTruckPlate : (selectedTransport.truck?.plateNumber || selectedTransport.truck?.name)) ||
+              selectedTransport.oneTimeTruckPlate ||
+              selectedTransport.truck?.plateNumber ||
+              selectedTransport.truck?.name ||
+              "Unassigned Truck"
+            }
+          />
+          <SummaryRow label="Destination" value={selectedTransport.destination || "Direct"} />
         </>
       ) : category ? (
         <div className="px-4 py-6 text-center">

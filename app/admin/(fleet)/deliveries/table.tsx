@@ -427,14 +427,19 @@ const columns: ColumnDef<SaleRow>[] = [
     header: "Customer",
     cell: ({ row }) => {
       const name = row.original.customerName;
+      const details = row.original.transportDetails;
       return (
-        <div className="flex items-center gap-3 py-1">
+        <div className="flex items-center gap-3 py-1 min-w-0 max-w-[220px] sm:max-w-[260px]">
           <div className="size-10 flex items-center justify-center shrink-0 text-primary bg-primary/10 rounded-md">
             <BadgeDollarSign className="w-5 h-5" />
           </div>
-          <div className="flex flex-col">
-            <span className="font-semibold text-foreground">{name}</span>
-            <span className="text-xs text-muted-foreground">{row.original.transportDetails}</span>
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className="font-semibold text-foreground truncate" title={name}>
+              {name}
+            </span>
+            <span className="text-xs text-muted-foreground truncate" title={details}>
+              {details}
+            </span>
           </div>
         </div>
       );

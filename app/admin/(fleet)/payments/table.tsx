@@ -18,25 +18,33 @@ export type PaymentRow = {
   paymentMethod: string;
   bankAccount: string | null;
   createdAt: string;
+  tripDestination?: string | null;
+  description?: string | null;
 };
 
 const columns: ColumnDef<PaymentRow>[] = [
   { 
     accessorKey: "counterpartyName", 
-    header: "Station / Client",
+    header: "Beneficiary / Source",
     cell: ({ row }) => {
-      const name = row.original.counterpartyName || "—";
       const isOutflow = row.original.type === "OUTFLOW";
+      const name = row.original.counterpartyName || (isOutflow ? "General Fleet Outflow" : "Direct Inflow");
+      const subtitleParts = [
+        row.original.paymentMethod || "Bank Transfer",
+        row.original.bankAccount,
+        row.original.tripDestination ? `Trip: ${row.original.tripDestination}` : null,
+      ].filter(Boolean);
+      const subtitle = subtitleParts.join(" • ");
+
       return (
         <div className="flex items-center gap-3 py-1">
           <div className={`size-10 flex items-center justify-center shrink-0 rounded-md ${isOutflow ? 'text-red-600 bg-red-600/10' : 'text-green-600 bg-green-600/10'}`}>
             {isOutflow ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownLeft className="w-5 h-5" />}
           </div>
-          <div className="flex flex-col">
-            <span className="font-semibold text-foreground">{name}</span>
-            <span className="text-xs text-muted-foreground">
-              {row.original.paymentMethod || "Bank Transfer"}
-              {row.original.bankAccount ? ` • ${row.original.bankAccount}` : ""}
+          <div className="flex flex-col min-w-0 max-w-[320px]">
+            <span className="font-semibold text-foreground truncate" title={name}>{name}</span>
+            <span className="text-xs text-muted-foreground truncate" title={subtitle}>
+              {subtitle}
             </span>
           </div>
         </div>

@@ -51,7 +51,7 @@ export default async function TransportsPage({
       take,
       include: {
         transporter: { select: { id: true, name: true } },
-        truck: { select: { id: true, name: true } },
+        truck: { select: { id: true, name: true, plateNumber: true, truckNumber: true } },
         driver: { select: { id: true, firstName: true, lastName: true } },
         order: { select: { id: true, reference: true, sourceDepot: true } },
         _count: {
@@ -69,21 +69,49 @@ export default async function TransportsPage({
     }),
   ]);
 
-  const rows = transports.map((t) => ({
-    id: t.id,
-    destination: t.destination,
-    sourceDepot: t.order?.sourceDepot || "Depot",
-    transporterName: (t.isOneTime ? t.oneTimeTransporterName : t.transporter?.name) || "Unassigned",
-    truckName: (t.isOneTime ? t.oneTimeTruckPlate : t.truck?.name) || "Unassigned",
-    driverName: (t.isOneTime ? t.oneTimeDriverName : (t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : null)) || "Unassigned",
-    orderReference: t.order?.reference || "Unlinked",
-    isUnlinked: !t.orderId,
-    status: t.status,
-    productType: t.productType || "-",
-    salesCount: t._count.deliveries,
-    litersCarried: Number(t.litersCarried),
-    createdAt: t.createdAt.toISOString(),
-  }));
+  const rows = transports.map((t) => {
+    const rawTransporter = (t.isOneTime ? t.oneTimeTransporterName : t.transporter?.name)?.trim();
+    const transporterName =
+      rawTransporter && rawTransporter.toLowerCase() !== "unknown"
+        ? rawTransporter
+        : "Unassigned";
+
+    const rawTruck = (
+      t.isOneTime
+        ? t.oneTimeTruckPlate
+        : (t.truck?.plateNumber || t.truck?.name || t.truck?.truckNumber)
+    )?.trim();
+    const truckName =
+      rawTruck && rawTruck.toLowerCase() !== "unknown"
+        ? rawTruck
+        : "Unassigned";
+
+    const rawDriver = (
+      t.isOneTime
+        ? t.oneTimeDriverName
+        : (t.driver ? `${t.driver.firstName || ""} ${t.driver.lastName || ""}`.trim() : null)
+    )?.trim();
+    const driverName =
+      rawDriver && rawDriver.toLowerCase() !== "unknown"
+        ? rawDriver
+        : null;
+
+    return {
+      id: t.id,
+      destination: t.destination,
+      sourceDepot: t.order?.sourceDepot || "Depot",
+      transporterName,
+      truckName,
+      driverName,
+      orderReference: t.order?.reference || "Unlinked",
+      isUnlinked: !t.orderId,
+      status: t.status,
+      productType: t.productType || "-",
+      salesCount: t._count.deliveries,
+      litersCarried: Number(t.litersCarried),
+      createdAt: t.createdAt.toISOString(),
+    };
+  });
 
   const allRows = rows;
 

@@ -88,11 +88,16 @@ export function InvoiceReceipt({ transaction }: InvoiceReceiptProps) {
         href: `/admin/transports/${transaction.transport.id}`,
       });
     }
-    if (transaction.transporter) {
+    if (transaction.transporter?.name) {
       paymentForRows.push({
         label: "Transporter",
         value: transaction.transporter.name,
-        href: `/admin/transporters/${transaction.transporter.id}`,
+        href: transaction.transporter.id ? `/admin/transporters/${transaction.transporter.id}` : undefined,
+      });
+    } else if (transaction.tripFinancials?.transporterName) {
+      paymentForRows.push({
+        label: "Transporter",
+        value: transaction.tripFinancials.transporterName,
       });
     }
     if (transaction.feeLeg) {
@@ -110,6 +115,30 @@ export function InvoiceReceipt({ transaction }: InvoiceReceiptProps) {
         value: `Delivery ${transaction.delivery.id.substring(0, 8).toUpperCase()}`,
         href: `/admin/sales/${transaction.delivery.id}`,
       });
+    }
+    if (transaction.tripFinancials) {
+      if (transaction.tripFinancials.tripExpected > 0) {
+        paymentForRows.push({
+          label: "Trip Total Fee",
+          value: `₦${formatAmount(transaction.tripFinancials.tripExpected)}`,
+        });
+      }
+      if (transaction.tripFinancials.tripPaid > 0) {
+        paymentForRows.push({
+          label: "Trip Total Paid",
+          value: `₦${formatAmount(transaction.tripFinancials.tripPaid)}`,
+        });
+      }
+      paymentForRows.push({
+        label: "Trip Outstanding",
+        value: `₦${formatAmount(transaction.tripFinancials.tripOutstanding)}`,
+      });
+      if (transaction.tripFinancials.legRemaining !== null) {
+        paymentForRows.push({
+          label: `${transaction.tripFinancials.feeLegLabel || "Leg"} Outstanding`,
+          value: `₦${formatAmount(transaction.tripFinancials.legRemaining)}`,
+        });
+      }
     }
     if (transaction.description) {
       paymentForRows.push({ label: "Description", value: transaction.description });
@@ -165,7 +194,21 @@ export function InvoiceReceipt({ transaction }: InvoiceReceiptProps) {
           label: "Sale Amount",
           value: `₦${Number(transaction.delivery.totalExpectedAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
         });
+        const deliveryOutstanding = Math.max(
+          0,
+          Number(transaction.delivery.totalExpectedAmount) - Number(transaction.delivery.paymentReceived || 0)
+        );
+        paymentForRows.push({
+          label: "Delivery Outstanding",
+          value: `₦${formatAmount(deliveryOutstanding)}`,
+        });
       }
+    }
+    if (transaction.tripFinancials) {
+      paymentForRows.push({
+        label: "Trip Outstanding",
+        value: `₦${formatAmount(transaction.tripFinancials.tripOutstanding)}`,
+      });
     }
     if (transaction.paymentType) {
       paymentForRows.push({ label: "Payment Type", value: formatLabel(transaction.paymentType) });
@@ -275,6 +318,19 @@ export function InvoiceReceipt({ transaction }: InvoiceReceiptProps) {
               strong
               compact
             />
+            {transaction.tripFinancials && (
+              <DetailRow
+                label="Outstanding on Trip"
+                value={
+                  <span className={transaction.tripFinancials.tripOutstanding > 0 ? "font-semibold text-amber-600" : "font-semibold text-emerald-600"}>
+                    ₦{formatAmount(transaction.tripFinancials.tripOutstanding)}
+                    {transaction.tripFinancials.tripOutstanding === 0 ? " (Settled)" : ""}
+                  </span>
+                }
+                strong
+                compact
+              />
+            )}
             <DetailRow label="Status" value="Successful" strong compact />
           </div>
 

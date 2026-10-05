@@ -77,6 +77,7 @@ export default async function SalesPage({
       include: {
         customer: { select: { id: true, name: true } },
         station: { select: { id: true, name: true } },
+        organization: { select: { id: true, name: true } },
         transport: {
           select: {
             id: true,
@@ -88,8 +89,9 @@ export default async function SalesPage({
             oneTimeTruckPlate: true,
             oneTimeTransporterName: true,
             transporter: { select: { id: true, name: true } },
-            truck: { select: { id: true, name: true, plateNumber: true, truckNumber: true } }
-          }
+            truck: { select: { id: true, name: true, plateNumber: true, truckNumber: true } },
+            order: { select: { id: true, reference: true, sourceDepot: true } },
+          },
         },
         _count: {
           select: {
@@ -104,17 +106,43 @@ export default async function SalesPage({
     const litersDespatched = Number(delivery.litersDespatched);
     const litersReceived = delivery.litersReceived ? Number(delivery.litersReceived) : null;
     const variance = litersReceived !== null ? litersDespatched - litersReceived : null;
-    const isExternalClient = Boolean(delivery.customer || !delivery.station);
+    const isExternalClient = Boolean(delivery.customer || delivery.organization || !delivery.station);
     const productType = delivery.transport?.productType || "PMS";
     const volumeUnit = productType === "LPG" ? "KG" : "L";
     const transportRate = delivery.transport ? Number(delivery.transport.ratePerLiter || 0) : 0;
 
+    const depotName = delivery.transport?.order?.sourceDepot?.trim() || "Depot";
+    const primaryDestination = delivery.transport?.destination
+      ? formatDestination(delivery.transport.destination)
+      : null;
+    const route = primaryDestination
+      ? `${depotName} to ${primaryDestination}`
+      : depotName;
+
+    const truckLabel = delivery.transport ? formatTruckLabel(delivery.transport) : null;
+    const validTruck =
+      truckLabel &&
+      truckLabel !== "Unassigned Truck" &&
+      truckLabel.toLowerCase() !== "unknown"
+        ? truckLabel
+        : null;
+
+    const transportDetails = delivery.transport
+      ? validTruck
+        ? `${route} • ${validTruck}`
+        : route
+      : "Direct / No Transport";
+
+    const customerName =
+      delivery.customer?.name ||
+      delivery.station?.name ||
+      delivery.organization?.name ||
+      "Walk-in Client";
+
     return {
       id: delivery.id,
-      customerName: delivery.customer ? delivery.customer.name : (delivery.station ? delivery.station.name : "Unknown"),
-      transportDetails: delivery.transport
-        ? `${formatTruckLabel(delivery.transport)} to ${formatDestination(delivery.transport.destination)}`
-        : "None",
+      customerName,
+      transportDetails,
       litersDespatched,
       litersReceived,
       litersReturned: Number(delivery.litersReturned || 0),

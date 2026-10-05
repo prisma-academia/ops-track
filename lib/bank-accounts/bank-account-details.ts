@@ -61,10 +61,31 @@ export async function getBankAccountDetailsData({
         customer: { select: { name: true } },
         station: { select: { name: true, code: true } },
         transporter: { select: { name: true } },
+        organization: { select: { name: true } },
+        truck: { select: { plateNumber: true, name: true } },
+        order: { select: { reference: true, supplier: true } },
+        transport: {
+          select: {
+            destination: true,
+            isOneTime: true,
+            oneTimeTransporterName: true,
+            oneTimeTruckPlate: true,
+            transporter: { select: { name: true } },
+            truck: { select: { plateNumber: true, name: true } },
+          },
+        },
         delivery: {
           select: {
             customer: { select: { name: true } },
             station: { select: { name: true, code: true } },
+            organization: { select: { name: true } },
+            transport: {
+              select: {
+                destination: true,
+                oneTimeTransporterName: true,
+                transporter: { select: { name: true } },
+              },
+            },
           },
         },
       },

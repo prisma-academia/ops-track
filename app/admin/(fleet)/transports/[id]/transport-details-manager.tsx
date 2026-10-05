@@ -446,15 +446,34 @@ export function TransportDetailsManager({
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 p-4 rounded-2xl border bg-card">
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Transporter</p>
-          <p className="text-sm font-medium text-foreground mt-0.5">{transport.isOneTime ? transport.oneTimeTransporterName : transport.transporter?.name}</p>
+          <p className="text-sm font-medium text-foreground mt-0.5">
+            {(() => {
+              const raw = transport.isOneTime ? transport.oneTimeTransporterName : transport.transporter?.name;
+              return raw && raw.toLowerCase() !== "unknown" ? raw : "Unassigned";
+            })()}
+          </p>
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Truck</p>
-          <p className="text-sm font-medium text-foreground mt-0.5">{transport.isOneTime ? transport.oneTimeTruckPlate : (transport.truck?.name || "Unassigned")}</p>
+          <p className="text-sm font-medium text-foreground mt-0.5">
+            {(() => {
+              const raw = transport.isOneTime
+                ? transport.oneTimeTruckPlate
+                : (transport.truck?.plateNumber || transport.truck?.name || transport.truck?.truckNumber);
+              return raw && raw.toLowerCase() !== "unknown" ? raw : "Unassigned";
+            })()}
+          </p>
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Driver</p>
-          <p className="text-sm font-medium text-foreground mt-0.5">{transport.isOneTime ? transport.oneTimeDriverName : (transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : "Unassigned")}</p>
+          <p className="text-sm font-medium text-foreground mt-0.5">
+            {(() => {
+              const raw = transport.isOneTime
+                ? transport.oneTimeDriverName
+                : (transport.driver ? `${transport.driver.firstName || ""} ${transport.driver.lastName || ""}`.trim() : null);
+              return raw && raw.toLowerCase() !== "unknown" ? raw : "Unassigned";
+            })()}
+          </p>
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Product Type</p>

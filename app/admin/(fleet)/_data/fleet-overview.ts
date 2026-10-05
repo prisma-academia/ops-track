@@ -53,14 +53,6 @@ function shortageLiters(delivery: {
   return despatched > received ? despatched - received : 0
 }
 
-function shortageAmount(delivery: {
-  litersReceived: unknown
-  litersDespatched: unknown
-  amountPerLiter: unknown
-}): number {
-  return shortageLiters(delivery) * (Number(delivery.amountPerLiter) || 0)
-}
-
 function inRange(date: Date, from: Date, to: Date): boolean {
   return date >= from && date <= to
 }
@@ -130,6 +122,9 @@ async function getStationSnapshots(
 }
 
 import { fleetLedgerWhere } from "@/lib/finance/fleet-ledger"
+import { calculateOrderPnlSummary } from "@/lib/fleet/order-pnl-summary"
+import { getExpectedFeeForLeg, getRemainingForLeg } from "@/lib/fleet/transport-fees"
+import { parseTenantSettings } from "@/lib/tenant/settings"
 
 export async function getFleetOverviewData(
   tenantId: string,
@@ -165,10 +160,18 @@ export async function getFleetOverviewData(
     currentTransports,
     prevTransports,
     currentDeliveries,
+    prevDeliveriesAgg,
+    currentInflows,
     currentOutflows,
+    unclearedDeliveries,
+    allTransportsForFees,
+    allOrdersForBalance,
+    tenantRecord,
     currentLossLogs,
+    prevLossLogsAgg,
     currentOrders,
     prevOrdersAgg,
+    pnlOrders,
   ] = await Promise.all([
     prisma.transporter.count({ where: { tenantId } }),
     prisma.truck.count({ where: { tenantId } }),
@@ -195,14 +198,75 @@ export async function getFleetOverviewData(
         transport: { select: { productType: true } },
       },
     }),
+    prisma.delivery.aggregate({
+      where: { tenantId, createdAt: { gte: prevFrom, lte: prevTo } },
+      _sum: { litersReceived: true, litersDespatched: true },
+    }),
+    // Cash in / cash out: fleet ledger only (station sales/expenses excluded)
+    prisma.transaction.findMany({
+      where: fleetLedgerWhere({
+        tenantId,
+        type: "INFLOW",
+        createdAt: { gte: periodFrom, lte: periodTo },
+      }),
+      select: { createdAt: true, amount: true },
+    }),
     prisma.transaction.findMany({
       where: fleetLedgerWhere({
         tenantId,
         type: "OUTFLOW",
         createdAt: { gte: periodFrom, lte: periodTo },
       }),
-      select: { createdAt: true, amount: true, category: true },
+      select: { createdAt: true, amount: true },
     }),
+    // Sales receivable: all deliveries not fully paid (all-time)
+    prisma.delivery.findMany({
+      where: { tenantId, status: { not: "CLEARED" } },
+      select: {
+        totalExpectedAmount: true,
+        paymentReceived: true,
+        transactions: { where: { type: "INFLOW" }, select: { amount: true } },
+      },
+    }),
+    // Transport payable: expected fee legs minus TRANSPORT_PAYMENT outflows (all-time)
+    prisma.transport.findMany({
+      where: { tenantId },
+      select: {
+        id: true,
+        destination: true,
+        litersCarried: true,
+        ratePerLiter: true,
+        netTransportFeePaid: true,
+        deliveries: {
+          select: {
+            id: true,
+            litersDespatched: true,
+            litersReceived: true,
+            transportRate: true,
+            transportCost: true,
+          },
+        },
+        transactions: {
+          where: { category: "TRANSPORT_PAYMENT" },
+          select: { id: true, amount: true, category: true, feeLeg: true, deliveryId: true },
+        },
+      },
+    }),
+    // Orders with outflow payments (for outstanding order payables)
+    prisma.order.findMany({
+      where: { tenantId },
+      select: {
+        id: true,
+        litersOrdered: true,
+        pricePerLitre: true,
+        loadingCostPerLitre: true,
+        transactions: {
+          where: { type: "OUTFLOW" },
+          select: { amount: true },
+        },
+      },
+    }),
+    prisma.tenant.findUnique({ where: { id: tenantId }, select: { settingsJson: true } }),
     prisma.transportLossLog.findMany({
       where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
       select: {
@@ -210,8 +274,12 @@ export async function getFleetOverviewData(
         lossType: true,
         lostQuantity: true,
         expensesIncurred: true,
-        transport: { select: { ratePerLiter: true } },
+        transport: { select: { order: { select: { pricePerLitre: true } } } },
       },
+    }),
+    prisma.transportLossLog.aggregate({
+      where: { tenantId, createdAt: { gte: prevFrom, lte: prevTo } },
+      _sum: { lostQuantity: true },
     }),
     prisma.order.findMany({
       where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
@@ -220,6 +288,34 @@ export async function getFleetOverviewData(
     prisma.order.aggregate({
       where: { tenantId, createdAt: { gte: prevFrom, lte: prevTo } },
       _sum: { litersOrdered: true },
+    }),
+    // Orders with deliveries in period (for accurate profit on volume sold)
+    prisma.order.findMany({
+      where: {
+        tenantId,
+        transports: {
+          some: { deliveries: { some: { createdAt: { gte: periodFrom, lte: periodTo } } } },
+        },
+      },
+      include: {
+        transports: {
+          include: {
+            transporter: { select: { name: true } },
+            truck: { select: { id: true, name: true, plateNumber: true } },
+            lossLogs: true,
+            deliveries: {
+              include: {
+                customer: { select: { name: true } },
+                station: { select: { name: true } },
+                transactions: {
+                  where: { type: "INFLOW" },
+                  select: { type: true, amount: true },
+                },
+              },
+            },
+          },
+        },
+      },
     }),
   ])
 
@@ -256,6 +352,12 @@ export async function getFleetOverviewData(
   )
   const prevLitresOrdered = Number(prevOrdersAgg._sum.litersOrdered) || 0
 
+  // Litres sold from sales deliveries
+  const currentLitresSold = currentDeliveries.reduce((sum, d) => sum + soldLiters(d), 0)
+  const prevLitresSold =
+    Number(prevDeliveriesAgg._sum.litersReceived ?? prevDeliveriesAgg._sum.litersDespatched) || 0
+
+  // Revenue: what was sold (sales delivery total expected amount)
   const currentSalesRevenue = currentDeliveries.reduce((sum, d) => {
     const desp = Number(d.litersDespatched) || 0
     const rec = d.litersReceived != null ? Number(d.litersReceived) : desp
@@ -264,56 +366,60 @@ export async function getFleetOverviewData(
     return sum + expected
   }, 0)
 
-  const directOutflows = currentOutflows.reduce(
-    (sum, t) => sum + (Number(t.amount) || 0),
-    0
-  )
-  const maintenanceExpenses = currentTransports.reduce(
-    (sum, t) => sum + (Number(t.maintenanceCost) || 0),
-    0
-  )
-  const companyTransportExpenses = currentDeliveries
-    .filter((d) => d.transportCostBorneBy === "COMPANY")
-    .reduce((sum, d) => sum + (Number(d.transportCost) || 0), 0)
-  const lossIncurredExpenses = currentLossLogs.reduce(
-    (sum, l) => sum + (Number(l.expensesIncurred) || 0),
-    0
-  )
-  const currentExpenses =
-    directOutflows + maintenanceExpenses + companyTransportExpenses + lossIncurredExpenses
+  // Expense: outflow payment (actual cash outflows paid in period)
+  const currentExpenses = currentOutflows.reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
 
-  const deliveryLossLiters = currentDeliveries.reduce(
-    (sum, d) => sum + shortageLiters(d),
-    0
-  )
-  const deliveryLossAmount = currentDeliveries.reduce(
-    (sum, d) => sum + shortageAmount(d),
-    0
-  )
+  // Profit on volume sold: PnL from order P&L engine for deliveries made in period
+  const pnlDeliveryRows = pnlOrders
+    .flatMap((order) =>
+      calculateOrderPnlSummary(order).transports.flatMap((t) => t.deliveries)
+    )
+    .map((row) => ({ ...row, date: new Date(row.createdAt) }))
+    .filter((row) => inRange(row.date, periodFrom, periodTo))
 
-  const incidentLossLiters = currentLossLogs.reduce(
-    (sum, l) => sum + (Number(l.lostQuantity) || 0),
-    0
-  )
-  const transportFallbackLossLiters = currentTransports.reduce(
-    (sum, t) => sum + (Number(t.litersLost) || 0),
-    0
-  )
-  const transportLossLiters = Math.max(incidentLossLiters, transportFallbackLossLiters)
+  const profitOnVolumeSold =
+    pnlDeliveryRows.length > 0
+      ? pnlDeliveryRows.reduce((sum, r) => sum + r.pnl, 0)
+      : currentSalesRevenue - currentExpenses
 
-  const transportLossAmount =
-    currentLossLogs.reduce((sum, l) => {
-      if (l.lossType === "SHORTAGE") return sum
-      const rate = Number(l.transport?.ratePerLiter) || 200
-      return sum + (Number(l.lostQuantity) || 0) * rate
-    }, 0) +
-    (incidentLossLiters === 0 && transportFallbackLossLiters > 0
-      ? transportFallbackLossLiters * 200
-      : 0)
+  // Shortage: only log/loss ones
+  const currentLogLossLiters = currentLossLogs.reduce((sum, l) => sum + (Number(l.lostQuantity) || 0), 0)
+  const currentLogLossAmount = currentLossLogs.reduce((sum, l) => {
+    const price = Number(l.transport?.order?.pricePerLitre) || 0
+    const qty = Number(l.lostQuantity) || 0
+    const expIncurred = Number(l.expensesIncurred) || 0
+    return sum + qty * price + expIncurred
+  }, 0)
+  const prevLogLossLiters = Number(prevLossLogsAgg._sum.lostQuantity) || 0
 
-  const currentLitersLost = deliveryLossLiters + transportLossLiters
-  const currentLossAmount = deliveryLossAmount + transportLossAmount
-  const currentProfit = currentSalesRevenue - currentExpenses - currentLossAmount
+  // Outstanding Sales: uncollected receivables on deliveries (all-time)
+  const outstandingSales = unclearedDeliveries.reduce((sum, d) => {
+    const totalExpected = Number(d.totalExpectedAmount) || 0
+    const fromTxns = d.transactions.reduce((s, t) => s + (Number(t.amount) || 0), 0)
+    const received = Math.max(Number(d.paymentReceived) || 0, fromTxns)
+    return sum + Math.max(0, totalExpected - received)
+  }, 0)
+
+  // Outstanding Fleet: both order, sales transport and fleet
+  const outstandingOrders = allOrdersForBalance.reduce((sum, order) => {
+    const orderCost =
+      Number(order.litersOrdered) *
+      (Number(order.pricePerLitre) + Number(order.loadingCostPerLitre))
+    const paid = order.transactions.reduce((s, t) => s + (Number(t.amount) || 0), 0)
+    return sum + Math.max(0, orderCost - paid)
+  }, 0)
+
+  const originToDepotFee = parseTenantSettings(tenantRecord?.settingsJson).originToDepotFee
+  const outstandingTransport = allTransportsForFees.reduce((sum, t) => {
+    const fromLegs = getRemainingForLeg(t, t.transactions, "FULL_TRIP", { originToDepotFee })
+    const directRemaining = Math.max(
+      0,
+      getExpectedFeeForLeg(t, "FULL_TRIP", { originToDepotFee }) - Number(t.netTransportFeePaid || 0)
+    )
+    return sum + (t.transactions.length > 0 ? fromLegs : directRemaining)
+  }, 0)
+
+  const outstandingFleet = outstandingOrders + outstandingTransport
 
   const periodTrends = buckets.map((bucket) => {
     const chunk = currentTransports.filter((t) =>
@@ -322,15 +428,23 @@ export async function getFleetOverviewData(
     const orderChunk = currentOrders.filter((order) =>
       inRange(order.createdAt, bucket.from, bucket.to)
     )
+    const deliveryChunk = currentDeliveries.filter((d) =>
+      inRange(d.createdAt, bucket.from, bucket.to)
+    )
+    const lossChunk = currentLossLogs.filter((l) =>
+      inRange(l.createdAt, bucket.from, bucket.to)
+    )
     return {
       label: bucket.label,
-      fees: chunk.reduce((sum, t) => sum + (Number(t.netTransportFeePaid) || 0), 0),
-      volume: chunk.reduce((sum, t) => sum + deliveredLiters(t), 0),
-      deductions: chunk.reduce((sum, t) => sum + (Number(t.totalDeduction) || 0), 0),
       litresOrdered: orderChunk.reduce(
         (sum, order) => sum + (Number(order.litersOrdered) || 0),
         0
       ),
+      litresSold: deliveryChunk.reduce((sum, d) => sum + soldLiters(d), 0),
+      shortage: lossChunk.reduce((sum, l) => sum + (Number(l.lostQuantity) || 0), 0),
+      fees: chunk.reduce((sum, t) => sum + (Number(t.netTransportFeePaid) || 0), 0),
+      volume: deliveryChunk.reduce((sum, d) => sum + soldLiters(d), 0),
+      deductions: chunk.reduce((sum, t) => sum + (Number(t.totalDeduction) || 0), 0),
     }
   })
 
@@ -338,12 +452,11 @@ export async function getFleetOverviewData(
     const bucketDeliveries = currentDeliveries.filter((d) =>
       inRange(d.createdAt, bucket.from, bucket.to)
     )
-    const bucketTransports = currentTransports.filter((t) =>
-      inRange(t.createdAt, bucket.from, bucket.to)
-    )
     const bucketLossLogs = currentLossLogs.filter((l) =>
       inRange(l.createdAt, bucket.from, bucket.to)
     )
+    const bucketRows = pnlDeliveryRows.filter((r) => inRange(r.date, bucket.from, bucket.to))
+
     const earning = bucketDeliveries.reduce((sum, d) => {
       const desp = Number(d.litersDespatched) || 0
       const rec = d.litersReceived != null ? Number(d.litersReceived) : desp
@@ -351,32 +464,23 @@ export async function getFleetOverviewData(
       return sum + (Number(d.totalExpectedAmount) || (rec * price))
     }, 0)
 
-    const bucketDirectOutflow = currentOutflows
+    const expense = currentOutflows
       .filter((t) => inRange(t.createdAt, bucket.from, bucket.to))
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
-    const bucketMaintenance = bucketTransports.reduce(
-      (sum, t) => sum + (Number(t.maintenanceCost) || 0),
-      0
-    )
-    const bucketCompanyTransport = bucketDeliveries
-      .filter((d) => d.transportCostBorneBy === "COMPANY")
-      .reduce((sum, d) => sum + (Number(d.transportCost) || 0), 0)
-    const bucketLossExpense = bucketLossLogs.reduce(
-      (sum, l) => sum + (Number(l.expensesIncurred) || 0),
-      0
-    )
-    const expense =
-      bucketDirectOutflow + bucketMaintenance + bucketCompanyTransport + bucketLossExpense
 
-    const deliveryLoss = bucketDeliveries.reduce((sum, d) => sum + shortageAmount(d), 0)
-    const transportIncidentLoss = bucketLossLogs.reduce((sum, l) => {
-      if (l.lossType === "SHORTAGE") return sum
-      const rate = Number(l.transport?.ratePerLiter) || 200
-      return sum + (Number(l.lostQuantity) || 0) * rate
+    const loss = bucketLossLogs.reduce((sum, l) => {
+      const price = Number(l.transport?.order?.pricePerLitre) || 0
+      const qty = Number(l.lostQuantity) || 0
+      const expIncurred = Number(l.expensesIncurred) || 0
+      return sum + qty * price + expIncurred
     }, 0)
-    const loss = deliveryLoss + transportIncidentLoss
 
-    return { name: bucket.label, earning, expense, loss }
+    const profit =
+      bucketRows.length > 0
+        ? bucketRows.reduce((sum, r) => sum + r.pnl, 0)
+        : earning - expense
+
+    return { name: bucket.label, earning, expense, loss, profit }
   })
 
   const comparativeVolume = buckets.map((bucket, index) => {
@@ -424,7 +528,7 @@ export async function getFleetOverviewData(
       _sum: { litersDespatched: true, totalExpectedAmount: true },
       _count: { id: true },
       orderBy: { _sum: { litersDespatched: "desc" } },
-      take: 5,
+      take: 3,
     }),
     prisma.delivery.groupBy({
       by: ["customerId"],
@@ -432,7 +536,7 @@ export async function getFleetOverviewData(
       _sum: { litersDespatched: true, totalExpectedAmount: true },
       _count: { id: true },
       orderBy: { _sum: { litersDespatched: "desc" } },
-      take: 5,
+      take: 3,
     }),
     prisma.delivery.groupBy({
       by: ["status"],
@@ -512,7 +616,7 @@ export async function getFleetOverviewData(
 
   const transporterPerformance = Array.from(transporterMap.values())
     .sort((a, b) => b.volume - a.volume)
-    .slice(0, 5)
+    .slice(0, 3)
     .map((t) => ({
       transporter: t.name,
       volume: t.volume,
@@ -562,14 +666,38 @@ export async function getFleetOverviewData(
 
   return {
     kpi: {
-      transportFees: {
-        formattedValue: formatCurrency(currentFees),
-        percentageChange: calcChange(currentFees, prevFees),
+      litersOrdered: {
+        formattedValue: `${currentLitresOrdered.toLocaleString()} L`,
+        percentageChange: calcChange(currentLitresOrdered, prevLitresOrdered),
         weeklyTrend: periodTrends.map((w) => ({
           label: w.label,
-          value: w.fees,
+          value: w.litresOrdered,
         })),
       },
+      litresSold: {
+        formattedValue: `${currentLitresSold.toLocaleString()} L`,
+        percentageChange: calcChange(currentLitresSold, prevLitresSold),
+        weeklyTrend: periodTrends.map((w) => ({
+          label: w.label,
+          value: w.litresSold,
+        })),
+      },
+      shortage: {
+        formattedValue: formatCurrency(currentLogLossAmount),
+        percentageChange: calcChange(currentLogLossLiters, prevLogLossLiters),
+        weeklyTrend: periodTrends.map((w) => ({
+          label: w.label,
+          value: w.shortage,
+        })),
+        subtitleClassName: "text-rose-600",
+      },
+      outstandingSales: {
+        formattedValue: formatCurrency(outstandingSales),
+      },
+      outstandingFleet: {
+        formattedValue: formatCurrency(outstandingFleet),
+      },
+      // Aliases for compatibility
       totalLitresOrdered: {
         formattedValue: `${currentLitresOrdered.toLocaleString()} L`,
         percentageChange: calcChange(currentLitresOrdered, prevLitresOrdered),
@@ -578,32 +706,44 @@ export async function getFleetOverviewData(
           value: w.litresOrdered,
         })),
       },
-      shortageDeductions: {
-        formattedValue: formatCurrency(currentDeductions),
-        percentageChange: calcChange(currentDeductions, prevDeductions),
+      deliveredVolume: {
+        formattedValue: `${currentLitresSold.toLocaleString()} L`,
+        percentageChange: calcChange(currentLitresSold, prevLitresSold),
         weeklyTrend: periodTrends.map((w) => ({
           label: w.label,
-          value: w.deductions,
+          value: w.litresSold,
         })),
-        subtitle: `${currentLitersLost.toLocaleString()} L lost`,
+        subtitle: `${formatShortCurrency(currentSalesRevenue)} revenue`,
+      },
+      shortageDeductions: {
+        formattedValue: formatCurrency(currentLogLossAmount),
+        percentageChange: calcChange(currentLogLossLiters, prevLogLossLiters),
+        weeklyTrend: periodTrends.map((w) => ({
+          label: w.label,
+          value: w.shortage,
+        })),
+        subtitle: `${currentLogLossLiters.toLocaleString()} L logged loss`,
         subtitleClassName: "text-rose-600",
       },
-      deliveredVolume: {
-        formattedValue: currentVolume.toLocaleString(),
-        percentageChange: calcChange(currentVolume, prevVolume),
+      transportFees: {
+        formattedValue: formatCurrency(currentFees),
+        percentageChange: calcChange(currentFees, prevFees),
         weeklyTrend: periodTrends.map((w) => ({
           label: w.label,
-          value: w.volume,
+          value: w.fees,
         })),
-        subtitle: `${formatShortCurrency(currentSalesRevenue)} sold`,
+      },
+      outstandingTransport: {
+        formattedValue: formatCurrency(outstandingTransport),
+        subtitle: "Payables to transporters",
       },
     },
     salesOverview: {
       points: salesOverviewPoints,
       revenue: currentSalesRevenue,
       expense: currentExpenses,
-      loss: currentLossAmount,
-      profit: currentProfit,
+      loss: currentLogLossAmount,
+      profit: profitOnVolumeSold,
     },
     counts: {
       transporters: transportersCount,

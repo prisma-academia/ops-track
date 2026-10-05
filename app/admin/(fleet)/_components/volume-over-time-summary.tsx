@@ -14,7 +14,7 @@ export function VolumeOverTimeSummary({
       </p>
       <PercentageChangeBadge
         variant="ghost"
-        value={data.kpi.transportFees.percentageChange}
+        value={data.kpi.transportFees.percentageChange ?? 0}
       />
     </div>
   )

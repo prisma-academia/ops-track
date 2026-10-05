@@ -15,7 +15,7 @@ export type TransportRow = {
   sourceDepot?: string;
   transporterName: string;
   truckName: string;
-  driverName: string;
+  driverName?: string | null;
   orderReference: string;
   isUnlinked?: boolean;
   status: string;
@@ -32,6 +32,40 @@ const columns: ColumnDef<TransportRow>[] = [
     cell: ({ row }) => {
       const dest = formatDestination(row.original.destination);
       const source = row.original.sourceDepot || "Depot";
+
+      const transporter = row.original.transporterName?.trim();
+      const hasValidTransporter =
+        transporter &&
+        transporter.toLowerCase() !== "unknown" &&
+        transporter.toLowerCase() !== "unassigned";
+
+      const truck = row.original.truckName?.trim();
+      const hasValidTruck =
+        truck &&
+        truck.toLowerCase() !== "unknown" &&
+        truck.toLowerCase() !== "unassigned";
+
+      const driver = row.original.driverName?.trim();
+      const hasValidDriver =
+        driver &&
+        driver.toLowerCase() !== "unknown" &&
+        driver.toLowerCase() !== "unassigned";
+
+      const parts: string[] = [];
+      if (hasValidTransporter) {
+        parts.push(transporter);
+      }
+      if (hasValidTruck) {
+        parts.push(truck);
+      } else if (!hasValidTransporter) {
+        parts.push("Unassigned Transporter / Truck");
+      }
+      if (hasValidDriver) {
+        parts.push(driver);
+      }
+
+      const subtitle = parts.join(" • ");
+
       return (
         <div className="flex items-center gap-3 py-1">
           <div className="size-10 flex items-center justify-center shrink-0">
@@ -45,7 +79,7 @@ const columns: ColumnDef<TransportRow>[] = [
           </div>
           <div className="flex flex-col">
             <span className="font-semibold text-foreground">{source} to {dest}</span>
-            <span className="text-xs text-muted-foreground">{row.original.truckName} - {row.original.driverName}</span>
+            <span className="text-xs text-muted-foreground">{subtitle}</span>
           </div>
         </div>
       );

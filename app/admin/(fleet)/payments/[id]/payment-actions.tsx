@@ -14,6 +14,7 @@ interface PaymentActionsProps {
   receiptUrl: string | null;
   amount: number;
   reference: string;
+  tripOutstanding?: number | null;
 }
 
 export function PaymentActions({
@@ -22,6 +23,7 @@ export function PaymentActions({
   receiptUrl,
   amount,
   reference,
+  tripOutstanding,
 }: PaymentActionsProps) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
@@ -33,6 +35,21 @@ export function PaymentActions({
 
   return (
     <>
+      {tripOutstanding !== undefined && tripOutstanding !== null && (
+        <Card className="print:hidden border-amber-500/30 bg-amber-500/5 mb-4">
+          <CardContent className="p-4 flex flex-col gap-1">
+            <span className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+              Trip Outstanding
+            </span>
+            <span className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+              ₦{tripOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              Remaining balance on this transport trip
+            </span>
+          </CardContent>
+        </Card>
+      )}
       <Card className="print:hidden">
         <CardContent className="flex flex-col gap-3 p-4">
           {/* Back button — full width, primary color */}

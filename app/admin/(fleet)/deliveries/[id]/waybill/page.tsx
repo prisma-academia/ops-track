@@ -3,11 +3,9 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft } from "lucide-react";
-import Link from "next/link";
 import QRCode from "qrcode";
 import { DeliveryWaybillView } from "../delivery-waybill-view";
+import { WaybillActions } from "./waybill-actions";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 
 export default async function DeliveryWaybillPage({
@@ -50,13 +48,21 @@ export default async function DeliveryWaybillPage({
   if (!delivery) notFound();
 
   let logoUrl: string | null = null;
+  let signatureUrl: string | null = null;
   if (delivery.tenant?.settingsJson) {
-    const settings = delivery.tenant.settingsJson as { logoKey?: string };
+    const settings = delivery.tenant.settingsJson as { logoKey?: string; signatureKey?: string };
     if (settings.logoKey) {
       if (settings.logoKey.startsWith("http")) {
         logoUrl = settings.logoKey;
       } else if (s3Configured()) {
         logoUrl = publicUrlForKey(settings.logoKey);
+      }
+    }
+    if (settings.signatureKey) {
+      if (settings.signatureKey.startsWith("http")) {
+        signatureUrl = settings.signatureKey;
+      } else if (s3Configured()) {
+        signatureUrl = publicUrlForKey(settings.signatureKey);
       }
     }
   }
@@ -69,12 +75,6 @@ export default async function DeliveryWaybillPage({
   const qrCodeDataUrl = verifyUrl
     ? await QRCode.toDataURL(verifyUrl, { margin: 1, width: 200, color: { dark: "#111827", light: "#ffffff" } })
     : null;
-
-  const recipientName = delivery.customer
-    ? delivery.customer.name
-    : delivery.station
-      ? delivery.station.name
-      : "Unknown Recipient";
 
   const orderRef = delivery.transport?.order?.reference;
   const fallbackWbNumber = orderRef
@@ -117,7 +117,16 @@ export default async function DeliveryWaybillPage({
           state: delivery.station.state,
         }
       : null,
-    organization: delivery.organization ? { name: delivery.organization.name } : null,
+    organization: delivery.organization
+      ? {
+          name: delivery.organization.name,
+          contactPerson: delivery.organization.contactPerson,
+          companyPhone: delivery.organization.companyPhone,
+          address: delivery.organization.address,
+          lga: delivery.organization.lga,
+          state: delivery.organization.state,
+        }
+      : null,
     transport: delivery.transport
       ? {
           id: delivery.transport.id,
@@ -150,10 +159,19 @@ export default async function DeliveryWaybillPage({
             : null,
         }
       : null,
+    waybillAllocation: waybillAllocation
+      ? {
+          truckPlate: waybillAllocation.waybill?.truckPlate,
+          driverName: waybillAllocation.waybill?.driverName,
+          driverPhone: waybillAllocation.waybill?.driverPhone,
+          transportCompany: waybillAllocation.waybill?.transportCompany,
+        }
+      : null,
     tenant: delivery.tenant
       ? {
           name: delivery.tenant.name,
           logoUrl,
+          signatureUrl,
           email: delivery.tenant.companyEmail,
           phone: delivery.tenant.companyPhone,
           address: [delivery.tenant.addressLine1, delivery.tenant.addressLine2, delivery.tenant.city, delivery.tenant.region]
@@ -175,25 +193,39 @@ export default async function DeliveryWaybillPage({
           ? `/admin/transports/${delivery.transport.id}?tab=distribution`
           : `/admin/deliveries/${delivery.id}`;
 
+  const backLabel =
+    from === "transport"
+      ? "Back to Transport"
+      : from === "customer"
+        ? "Back to Customer"
+        : from === "organization"
+          ? "Back to Organization"
+          : "Back to Deliveries";
+
   const invoiceHref = `/admin/deliveries/${delivery.id}/print${from ? `?from=${from}` : ""}`;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4 print:hidden">
-        <Button variant="outline" size="icon" asChild>
-          <Link href={backHref}>
-            <ChevronLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Driver Waybill</h1>
-          <p className="text-muted-foreground mt-1">
-            Waybill to {recipientName} • Waybill No: {waybillNumber}
-          </p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight print:hidden">Waybill Details</h1>
+        <p className="text-muted-foreground mt-1 print:hidden">
+          Waybill No: {waybillNumber}
+        </p>
       </div>
 
-      <DeliveryWaybillView delivery={safeDelivery} invoiceHref={invoiceHref} />
+      <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4 items-start">
+        {/* Actions Card on the LEFT */}
+        <div className="md:sticky md:top-6">
+          <WaybillActions
+            backHref={backHref}
+            backLabel={backLabel}
+            invoiceHref={invoiceHref}
+          />
+        </div>
+
+        {/* Main Waybill Receipt Document */}
+        <DeliveryWaybillView delivery={safeDelivery} />
+      </div>
     </div>
   );
 }

@@ -53,7 +53,14 @@ import {
   AlertTriangle,
   CheckCircle2,
   FileText,
+  MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn, formatHumanReadableDate, formatDestination, formatTruckLabel } from "@/lib/utils";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -164,22 +171,54 @@ export function SalesDetailsManager({
 
   const productType = delivery.transport?.productType || delivery.transport?.order?.productType || "PMS";
   const volumeUnit = productType === "LPG" ? "KG" : "L";
-  const recipientName = delivery.customer ? delivery.customer.name : delivery.station ? delivery.station.name : "Unknown Recipient";
-  const transporterName =
-    delivery.transport?.transporter?.name ||
-    delivery.transport?.oneTimeTransporterName ||
-    (pnlBreakdownRow?.orderReference && pnlBreakdownRow.orderReference !== recipientName ? pnlBreakdownRow.orderReference : null) ||
-    "N/A";
+  const isInvalid = (val?: string | null) => {
+    if (!val) return true;
+    const v = val.trim().toLowerCase();
+    return (
+      !v ||
+      v === "unknown" ||
+      v === "unknown driver" ||
+      v === "unknown recipient" ||
+      v === "n/a" ||
+      v === "null" ||
+      v === "—" ||
+      v === "-" ||
+      v === "unassigned" ||
+      v === "unassigned truck" ||
+      v === "unassigned driver"
+    );
+  };
+
+  const recipientName =
+    delivery.customer?.name ||
+    delivery.station?.name ||
+    delivery.organization?.name ||
+    "Client / Recipient";
+
+  const rawTransporter =
+    delivery.transport?.transporter?.name?.trim() ||
+    delivery.transport?.oneTimeTransporterName?.trim() ||
+    (pnlBreakdownRow?.orderReference && pnlBreakdownRow.orderReference !== recipientName ? pnlBreakdownRow.orderReference : null);
+  const transporterName = !isInvalid(rawTransporter) ? rawTransporter! : "—";
+
+  const formattedTruck = delivery.transport ? formatTruckLabel(delivery.transport) : null;
   const truckPlate =
-    (delivery.transport && formatTruckLabel(delivery.transport) !== "Unassigned Truck" ? formatTruckLabel(delivery.transport) : null) ||
-    delivery.transport?.truck?.plateNumber ||
-    delivery.transport?.truck?.name ||
-    delivery.transport?.oneTimeTruckPlate ||
-    pnlBreakdownRow?.truckLabels?.[0] ||
-    "N/A";
-  const driverName = delivery.transport?.driver
-    ? `${delivery.transport.driver.firstName || ""} ${delivery.transport.driver.lastName || ""}`.trim() || delivery.transport.driver.phone || "N/A"
-    : delivery.transport?.oneTimeDriverName || "N/A";
+    (formattedTruck && formattedTruck !== "Unassigned Truck" && !isInvalid(formattedTruck) ? formattedTruck : null) ||
+    (!isInvalid(delivery.transport?.truck?.plateNumber) ? delivery.transport?.truck?.plateNumber!.trim() : null) ||
+    (!isInvalid(delivery.transport?.truck?.name) ? delivery.transport?.truck?.name!.trim() : null) ||
+    (!isInvalid(delivery.transport?.oneTimeTruckPlate) ? delivery.transport?.oneTimeTruckPlate!.trim() : null) ||
+    (!isInvalid(pnlBreakdownRow?.truckLabels?.[0]) ? pnlBreakdownRow?.truckLabels?.[0]!.trim() : null) ||
+    (transporterName !== "—" ? `Truck (${transporterName})` : "Unassigned Truck");
+
+  const driverFullName = delivery.transport?.driver
+    ? [delivery.transport.driver.firstName, delivery.transport.driver.lastName].filter(Boolean).join(" ").trim()
+    : null;
+
+  const driverName =
+    (!isInvalid(driverFullName) ? driverFullName! : null) ||
+    (!isInvalid(delivery.transport?.oneTimeDriverName) ? delivery.transport?.oneTimeDriverName!.trim() : null) ||
+    (!isInvalid(delivery.transport?.driver?.phone) ? delivery.transport?.driver?.phone!.trim() : null) ||
+    "Unassigned Driver";
   const depotName =
     delivery.transport?.order?.sourceDepot || pnlBreakdownRow?.depot || "Depot";
   const primaryDestination = formatDestination(delivery.transport?.destination);
@@ -444,46 +483,45 @@ export function SalesDetailsManager({
               </Link>
             </Button>
           )}
-          {litersReceived !== null && (unreceived > 0 || litersReturned > 0) && !isTransportFinalized && (
-            <Button
-              variant={litersReturned > 0 ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => {
-                setReturnAmount(litersReturned > 0 ? litersReturned.toString() : unreceived.toString());
-                setReturnError(null);
-                setOpenReturnDialog(true);
-              }}
-              className={cn(
-                "h-9 text-xs font-medium",
-                litersReturned > 0 && "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
-              )}
-            >
-              <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-              {litersReturned > 0 ? `${litersReturned.toLocaleString()} ${volumeUnit} in Truck` : "Return to Truck"}
-            </Button>
-          )}
-          {!isTransportFinalized ? (
-            <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setOpenEditDialog(true)} title="Edit Delivery">
-              <Pencil className="size-4" />
-            </Button>
-          ) : (
+          {isTransportFinalized && (
             <Badge variant="outline" className="h-9 px-3 gap-1.5 bg-muted/40 text-muted-foreground border-dashed">
               <Lock className="size-3.5 text-muted-foreground" />
               Transport Finalized
             </Badge>
           )}
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/admin/deliveries/${delivery.id}/waybill`}>
-              <Printer className="w-4 h-4 mr-2" />
-              Print Waybill
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/admin/deliveries/${delivery.id}/print`}>
-              <FileText className="w-4 h-4 mr-2" />
-              Print Invoice
-            </Link>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 gap-1.5 font-medium" title="Actions">
+                <span className="hidden sm:inline">Actions</span>
+                <MoreVertical className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {!isTransportFinalized ? (
+                <DropdownMenuItem onClick={() => setOpenEditDialog(true)}>
+                  <Pencil className="w-4 h-4 mr-2 text-muted-foreground" />
+                  <span>Edit Delivery</span>
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem disabled className="opacity-50 cursor-not-allowed">
+                  <Lock className="w-4 h-4 mr-2 text-muted-foreground" />
+                  <span>Edit Delivery (Locked)</span>
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem asChild>
+                <Link href={`/admin/deliveries/${delivery.id}/waybill`}>
+                  <Printer className="w-4 h-4 mr-2 text-muted-foreground" />
+                  <span>Print Waybill</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={`/admin/deliveries/${delivery.id}/print`}>
+                  <FileText className="w-4 h-4 mr-2 text-muted-foreground" />
+                  <span>Print Invoice</span>
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

@@ -2,9 +2,11 @@ import { prisma } from "@/lib/db/client"
 
 import type { FleetOverviewData, StationPerformanceData } from "../types"
 import { formatShortCurrency } from "@/lib/utils"
+import { format } from "date-fns"
 import {
   getDateRangeForOverviewPeriod,
   getOverviewChartBuckets,
+  getOverviewChartBucketsForRange,
   getOverviewPeriodLabel,
   getPreviousDateRangeForOverviewPeriod,
   parseOverviewPeriod,
@@ -128,13 +130,38 @@ import { parseTenantSettings } from "@/lib/tenant/settings"
 
 export async function getFleetOverviewData(
   tenantId: string,
-  periodInput?: string
+  periodInput?: string,
+  customRange?: { from: Date; to: Date }
 ): Promise<FleetOverviewData> {
   const period = parseOverviewPeriod(periodInput)
-  const { from: periodFrom, to: periodTo } = getDateRangeForOverviewPeriod(period)
-  const { from: prevFrom, to: prevTo } = getPreviousDateRangeForOverviewPeriod(period)
-  const buckets = getOverviewChartBuckets(period, { from: periodFrom, to: periodTo })
-  const prevBuckets = getOverviewChartBuckets(period, { from: prevFrom, to: prevTo })
+  let periodFrom: Date
+  let periodTo: Date
+  let prevFrom: Date
+  let prevTo: Date
+  let buckets: ReturnType<typeof getOverviewChartBuckets>
+  let prevBuckets: ReturnType<typeof getOverviewChartBuckets>
+  let periodLabelText: string
+
+  if (customRange) {
+    periodFrom = customRange.from
+    periodTo = customRange.to
+    const durationMs = periodTo.getTime() - periodFrom.getTime()
+    prevTo = new Date(periodFrom.getTime() - 1)
+    prevFrom = new Date(prevTo.getTime() - durationMs)
+    buckets = getOverviewChartBucketsForRange({ from: periodFrom, to: periodTo })
+    prevBuckets = getOverviewChartBucketsForRange({ from: prevFrom, to: prevTo })
+    periodLabelText = `${format(periodFrom, "MMM d")} - ${format(periodTo, "MMM d, yyyy")}`
+  } else {
+    const range = getDateRangeForOverviewPeriod(period)
+    periodFrom = range.from
+    periodTo = range.to
+    const prevRange = getPreviousDateRangeForOverviewPeriod(period)
+    prevFrom = prevRange.from
+    prevTo = prevRange.to
+    buckets = getOverviewChartBuckets(period, { from: periodFrom, to: periodTo })
+    prevBuckets = getOverviewChartBuckets(period, { from: prevFrom, to: prevTo })
+    periodLabelText = getOverviewPeriodLabel(period)
+  }
 
   const transportSelect = {
     id: true,
@@ -759,6 +786,6 @@ export async function getFleetOverviewData(
     productVolume,
     paymentStatus,
     spendingBreakdown,
-    period: getOverviewPeriodLabel(period),
+    period: periodLabelText,
   }
 }

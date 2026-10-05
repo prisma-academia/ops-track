@@ -1,11 +1,18 @@
 export function cleanTransportStr(val?: string | null, placeholder?: string): string | null {
   if (!val) return null;
   const trimmed = val.trim();
+  const lower = trimmed.toLowerCase();
   if (
     !trimmed ||
     trimmed === "—" ||
     trimmed === "-" ||
-    (placeholder && trimmed.toLowerCase() === placeholder.toLowerCase())
+    lower === "unknown" ||
+    lower === "unknown driver" ||
+    lower === "n/a" ||
+    lower === "null" ||
+    lower === "unassigned" ||
+    lower === "unassigned truck" ||
+    (placeholder && lower === placeholder.toLowerCase())
   ) {
     return null;
   }

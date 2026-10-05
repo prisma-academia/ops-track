@@ -1,9 +1,7 @@
 "use client";
 
-import { Printer } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn, formatHumanReadableDate, formatDestination, formatTruckLabel } from "@/lib/utils";
-import { printDeliveryInvoice } from "@/lib/print/print-delivery-invoice";
+import Link from "next/link";
+import { cn, formatHumanReadableDate, formatDestination } from "@/lib/utils";
 
 function formatNaira(n: number | null | undefined) {
   if (n === null || n === undefined || Number.isNaN(n)) return "₦0.00";
@@ -15,51 +13,169 @@ function formatQty(n: number | null | undefined) {
   return Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function DeliveryInvoiceView({ delivery }: { delivery: any }) {
-  const handlePrint = () => {
-    printDeliveryInvoice("delivery-note");
-  };
+function cleanText(val?: string | null): string | null {
+  if (!val) return null;
+  const trimmed = val.trim();
+  const lower = trimmed.toLowerCase();
+  if (
+    !trimmed ||
+    trimmed === "—" ||
+    trimmed === "-" ||
+    lower === "unknown" ||
+    lower === "unknown driver" ||
+    lower === "unknown recipient" ||
+    lower === "n/a" ||
+    lower === "null" ||
+    lower === "unassigned" ||
+    lower === "unassigned truck" ||
+    lower === "unassigned driver" ||
+    lower === "none"
+  ) {
+    return null;
+  }
+  return trimmed;
+}
 
+function DetailRow({
+  label,
+  value,
+  href,
+  strong,
+  compact,
+}: {
+  label: string;
+  value: React.ReactNode;
+  href?: string;
+  strong?: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-baseline justify-between gap-4 border-b border-dashed border-gray-200 last:border-b-0",
+        compact ? "py-1 text-[11px]" : "py-2 text-xs"
+      )}
+    >
+      <span className="shrink-0 text-gray-500">{label}</span>
+      {href ? (
+        <Link
+          href={href}
+          className={cn(
+            "truncate text-right text-gray-900 hover:underline print:no-underline",
+            strong && "font-semibold"
+          )}
+        >
+          {value}
+        </Link>
+      ) : (
+        <span className={cn("truncate text-right text-gray-900", strong && "font-semibold")}>
+          {value}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function DeliveryInvoiceView({ delivery }: { delivery: any }) {
   const tenant = delivery.tenant;
-  const invoiceRef = delivery.transport?.order?.reference || delivery.id.substring(0, 8).toUpperCase();
-  const productType = delivery.transport?.productType || delivery.transport?.order?.productType || "PMS";
-  const recipientName = delivery.customer?.name || delivery.station?.name || "Unknown Recipient";
-  const recipientAddress = delivery.customer
-    ? [delivery.customer.address, delivery.customer.lga, delivery.customer.state].filter(Boolean).join(", ") || "N/A"
-    : delivery.station
-      ? [delivery.station.location, delivery.station.lga, delivery.station.state].filter(Boolean).join(", ") || "N/A"
-      : "N/A";
-  const recipientContact = delivery.customer
-    ? [delivery.customer.contactPerson, delivery.customer.contactPhone || delivery.customer.phone].filter(Boolean).join(" • ")
+  const invoiceRef =
+    delivery.transport?.order?.reference || delivery.id.substring(0, 8).toUpperCase();
+
+  // 1. Client Information
+  const clientName =
+    cleanText(delivery.customer?.name) ||
+    cleanText(delivery.station?.name) ||
+    cleanText(delivery.organization?.name) ||
+    "Client / Recipient";
+
+  const contactPerson =
+    cleanText(delivery.customer?.contactPerson) ||
+    cleanText(delivery.organization?.contactPerson) ||
+    null;
+
+  const contactPhone =
+    cleanText(delivery.customer?.contactPhone) ||
+    cleanText(delivery.customer?.phone) ||
+    cleanText(delivery.organization?.companyPhone) ||
+    null;
+
+  const address =
+    cleanText(delivery.customer?.address) ||
+    cleanText(delivery.station?.location) ||
+    cleanText(delivery.organization?.address) ||
+    null;
+
+  const stateLgaParts = [
+    cleanText(delivery.customer?.lga || delivery.station?.lga || delivery.organization?.lga),
+    cleanText(delivery.customer?.state || delivery.station?.state || delivery.organization?.state),
+  ].filter(Boolean);
+  const location = stateLgaParts.length > 0 ? stateLgaParts.join(", ") : null;
+
+  // 2. Truck & Logistics Information (Fix "UNKNOWN")
+  const rawPlate =
+    cleanText(delivery.transport?.truck?.plateNumber) ||
+    cleanText(delivery.transport?.oneTimeTruckPlate) ||
+    cleanText(delivery.truckPlate) ||
+    cleanText(delivery.transport?.truck?.name);
+
+  const rawTransporter =
+    cleanText(delivery.transport?.transporter?.name) ||
+    cleanText(delivery.transport?.oneTimeTransporterName) ||
+    cleanText(delivery.transporterName);
+
+  const driverFullName = delivery.transport?.driver
+    ? [delivery.transport.driver.firstName, delivery.transport.driver.lastName].filter(Boolean).join(" ").trim()
     : null;
 
-  const liters = Number(delivery.litersDespatched);
+  const rawDriver =
+    cleanText(driverFullName) ||
+    cleanText(delivery.transport?.oneTimeDriverName) ||
+    cleanText(delivery.driverName);
+
+  const rawDriverPhone =
+    cleanText(delivery.transport?.driver?.phone) || cleanText(delivery.driverPhone);
+
+  const rawDestination = delivery.transport?.destination
+    ? formatDestination(delivery.transport.destination)
+    : null;
+  const destination = cleanText(rawDestination);
+
+  const rawSourceDepot = delivery.transport?.order?.sourceDepot;
+  const sourceDepot = cleanText(rawSourceDepot);
+
+  const displayTruck = rawPlate
+    ? rawPlate
+    : rawTransporter
+      ? `Truck (${rawTransporter})`
+      : "Unassigned Truck";
+
+  // 3. Financial & Quantity Details
+  const productType =
+    delivery.transport?.productType || delivery.transport?.order?.productType || "PMS";
+  const volumeUnit = productType === "LPG" ? "KG" : "L";
+
+  const liters = Number(delivery.litersDespatched || 0);
   const unitPrice = Number(delivery.amountPerLiter ?? 0);
   const subtotal = liters * unitPrice;
   const transportCost = Number(delivery.transportCost ?? 0);
   const transportBorneByClient = delivery.transportCostBorneBy === "CLIENT";
-  const totalAmount = Number(delivery.totalExpectedAmount ?? 0);
+  const totalAmount = Number(delivery.totalExpectedAmount ?? subtotal);
   const amountPaid = Number(delivery.paymentReceived ?? 0);
   const balanceDue = Math.max(0, totalAmount - amountPaid);
+
   const status = delivery.status as string;
-
   const statusLabel =
-    status === "CLEARED" || status === "COMPLETED"
-      ? "PAID"
-      : status === "PART_PAID"
-        ? "PARTIALLY PAID"
-        : "UNPAID";
+    status === "CLEARED" || status === "COMPLETED" || balanceDue <= 0
+      ? "Paid"
+      : amountPaid > 0
+        ? "Partially Paid"
+        : "Unpaid";
 
-  const statusColor =
-    status === "CLEARED" || status === "COMPLETED"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : status === "PART_PAID"
-        ? "bg-amber-50 text-amber-700 border-amber-200"
-        : "bg-rose-50 text-rose-700 border-rose-200";
-
-  // Payment records
-  const payments: { date: string; method: string; reference: string; amount: number }[] = (delivery.transactions || [])
-    .filter((t: any) => t.type === "CREDIT" || t.category === "FLEET_SALES_PAYMENT")
+  // Payments list
+  const payments: { date: string; method: string; reference: string; amount: number }[] = (
+    delivery.transactions || []
+  )
+    .filter((t: any) => t.type === "CREDIT" || t.category === "FLEET_SALES_PAYMENT" || t.type === "INFLOW")
     .map((t: any) => ({
       date: formatHumanReadableDate(t.createdAt),
       method: (t.paymentMethod || "N/A").replace(/_/g, " "),
@@ -69,225 +185,199 @@ export function DeliveryInvoiceView({ delivery }: { delivery: any }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-2 print:hidden">
-        <Button variant="outline" size="sm" onClick={handlePrint}>
-          <Printer className="w-4 h-4 mr-2" />
-          Print Invoice
-        </Button>
-      </div>
-
+      {/* Invoice Receipt Card */}
       <div
-        id="delivery-note"
-        className="bg-white text-gray-900 border border-gray-200 w-full max-w-3xl mx-auto rounded-lg print:border-0 print:rounded-none print:shadow-none"
+        id="delivery-invoice-receipt"
+        className="bg-white text-gray-900 border border-border w-full rounded-lg print:border-0 print:rounded-none print:shadow-none"
       >
         <div className="p-6 sm:p-10">
-          {/* ── Header: Company branding + INVOICE title ── */}
-          <div className="flex items-start justify-between gap-6 pb-6 mb-6 border-b-2 border-gray-900">
-            <div className="w-40 shrink-0">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-6 border-b-2 border-gray-100 pb-5 mb-6">
+            <div className="w-36 shrink-0">
               {tenant?.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={tenant.logoUrl} alt={`${tenant.name} logo`} className="max-h-16 max-w-full object-contain" />
+                <img
+                  src={tenant.logoUrl}
+                  alt={`${tenant.name} logo`}
+                  className="max-h-16 max-w-full object-contain"
+                />
               ) : (
-                <p className="text-xl font-bold text-gray-900">{tenant?.name || "Company"}</p>
+                <p className="text-lg font-bold text-gray-900">{tenant?.name || "Company"}</p>
               )}
-              <div className="mt-2 text-[11px] text-gray-500 leading-relaxed">
-                {tenant?.address && <p>{tenant.address}</p>}
-                {tenant?.email && <p>{tenant.email}</p>}
-                {tenant?.phone && <p>{tenant.phone}</p>}
-              </div>
             </div>
             <div className="text-right">
-              <h1 className="text-3xl font-bold uppercase tracking-wider text-gray-900">Invoice</h1>
-              <div className="mt-3 space-y-1 text-xs text-gray-600">
-                <p>
-                  <span className="text-gray-400 uppercase tracking-wider text-[10px]">Invoice No.</span><br />
-                  <span className="font-semibold text-gray-900 text-sm font-mono">{invoiceRef}</span>
-                </p>
-                <p>
-                  <span className="text-gray-400 uppercase tracking-wider text-[10px]">Date</span><br />
-                  <span className="font-medium text-gray-900">{formatHumanReadableDate(delivery.createdAt)}</span>
-                </p>
-              </div>
+              <h1 className="text-xl font-bold text-gray-900">{tenant?.name || "Company"}</h1>
+              {tenant?.address && <p className="text-xs text-gray-500 mt-1">{tenant.address}</p>}
+              <p className="text-xs text-gray-500">
+                {[tenant?.email, tenant?.phone].filter(Boolean).join(" • ")}
+              </p>
             </div>
           </div>
 
-          {/* ── Bill To + Status Badge ── */}
-          <div className="flex items-start justify-between gap-6 mb-8">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Bill To</p>
-              <p className="text-sm font-semibold text-gray-900">{recipientName}</p>
-              {delivery.organization?.name && (
-                <p className="text-xs text-gray-600">{delivery.organization.name}</p>
-              )}
-              <p className="text-xs text-gray-500 mt-0.5">{recipientAddress}</p>
-              {recipientContact && (
-                <p className="text-xs text-gray-500">{recipientContact}</p>
-              )}
-            </div>
-            <div className={cn("px-3 py-1.5 rounded-md border text-xs font-bold uppercase tracking-wider", statusColor)}>
-              {statusLabel}
-            </div>
-          </div>
-
-          {/* ── Line Items Table ── */}
+          {/* Title */}
           <div className="mb-6">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b-2 border-gray-900">
-                  <th className="text-left py-2.5 font-bold uppercase tracking-wider text-[10px] text-gray-500">Description</th>
-                  <th className="text-right py-2.5 font-bold uppercase tracking-wider text-[10px] text-gray-500 w-24">Qty (L)</th>
-                  <th className="text-right py-2.5 font-bold uppercase tracking-wider text-[10px] text-gray-500 w-28">Unit Price</th>
-                  <th className="text-right py-2.5 font-bold uppercase tracking-wider text-[10px] text-gray-500 w-32">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-gray-100">
-                  <td className="py-3">
-                    <p className="font-medium text-gray-900">{productType} Fuel Delivery</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      Delivery ID: {delivery.id.substring(0, 8).toUpperCase()}
-                      {delivery.transport?.order?.reference && ` • Order: ${delivery.transport.order.reference}`}
-                    </p>
-                  </td>
-                  <td className="py-3 text-right font-mono text-gray-900">{formatQty(liters)}</td>
-                  <td className="py-3 text-right font-mono text-gray-900">{formatNaira(unitPrice)}</td>
-                  <td className="py-3 text-right font-mono font-medium text-gray-900">{formatNaira(subtotal)}</td>
-                </tr>
-                {transportCost > 0 && transportBorneByClient && (
-                  <tr className="border-b border-gray-100">
-                    <td className="py-3">
-                      <p className="font-medium text-gray-900">Transport / Haulage Charge</p>
-                      {delivery.transportRate && Number(delivery.transportRate) > 0 && (
-                        <p className="text-[11px] text-gray-400 mt-0.5">
-                          Rate: {formatNaira(Number(delivery.transportRate))}/L × {formatQty(liters)} L
-                        </p>
-                      )}
-                    </td>
-                    <td className="py-3 text-right font-mono text-gray-400">—</td>
-                    <td className="py-3 text-right font-mono text-gray-400">—</td>
-                    <td className="py-3 text-right font-mono font-medium text-gray-900">{formatNaira(transportCost)}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <h2 className="text-2xl font-bold uppercase tracking-wide text-gray-900">
+              Delivery Invoice
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Ref: <span className="font-semibold text-orange-600">{invoiceRef}</span> &nbsp;•&nbsp;{" "}
+              {formatHumanReadableDate(delivery.createdAt)}
+            </p>
           </div>
 
-          {/* ── Summary Totals ── */}
-          <div className="flex justify-end mb-8">
-            <div className="w-64">
-              <div className="flex justify-between py-1.5 text-xs text-gray-600">
-                <span>Subtotal</span>
-                <span className="font-mono">{formatNaira(subtotal)}</span>
-              </div>
-              {transportCost > 0 && transportBorneByClient && (
-                <div className="flex justify-between py-1.5 text-xs text-gray-600">
-                  <span>Transport</span>
-                  <span className="font-mono">{formatNaira(transportCost)}</span>
-                </div>
-              )}
-              <div className="flex justify-between py-2 text-sm font-bold text-gray-900 border-t-2 border-gray-900 mt-1">
-                <span>Total</span>
-                <span className="font-mono">{formatNaira(totalAmount)}</span>
-              </div>
-              <div className="flex justify-between py-1.5 text-xs text-gray-600 border-t border-dashed border-gray-200">
-                <span>Amount Paid</span>
-                <span className="font-mono text-emerald-600 font-medium">{formatNaira(amountPaid)}</span>
-              </div>
-              <div className={cn(
-                "flex justify-between py-2 text-sm font-bold border-t border-gray-200",
-                balanceDue > 0 ? "text-rose-600" : "text-emerald-600"
-              )}>
-                <span>Balance Due</span>
-                <span className="font-mono">{formatNaira(balanceDue)}</span>
-              </div>
-            </div>
+          {/* Client Information */}
+          <div className="rounded-lg border border-gray-200 p-4 mb-4">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 pb-2 mb-1">
+              Client Information
+            </h3>
+            <DetailRow label="Client Name" value={clientName} strong compact />
+            {contactPerson && (
+              <DetailRow label="Contact Person" value={contactPerson} compact />
+            )}
+            {contactPhone && (
+              <DetailRow label="Phone Number" value={contactPhone} compact />
+            )}
+            {address && (
+              <DetailRow label="Address" value={address} compact />
+            )}
+            {location && (
+              <DetailRow label="LGA / State" value={location} compact />
+            )}
           </div>
 
-          {/* ── Payment History (if any) ── */}
+          {/* Truck & Logistics Information */}
+          <div className="rounded-lg border border-gray-200 p-4 mb-4">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 pb-2 mb-1">
+              Truck & Logistics Information
+            </h3>
+            <DetailRow label="Truck" value={displayTruck} strong compact />
+            {rawTransporter && (
+              <DetailRow label="Transporter / Carrier" value={rawTransporter} compact />
+            )}
+            {rawDriver && (
+              <DetailRow label="Driver" value={rawDriver} compact />
+            )}
+            {rawDriverPhone && (
+              <DetailRow label="Driver Phone" value={rawDriverPhone} compact />
+            )}
+            {destination && (
+              <DetailRow label="Destination" value={destination} compact />
+            )}
+            {sourceDepot && (
+              <DetailRow label="Source Depot" value={sourceDepot} compact />
+            )}
+          </div>
+
+          {/* Invoice & Financial Details */}
+          <div className="rounded-lg border border-gray-200 p-4 mb-4">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 pb-2 mb-1">
+              Invoice & Financial Details
+            </h3>
+            <DetailRow label="Product" value={`${productType} Fuel Delivery`} compact />
+            <DetailRow
+              label="Volume (Liters)"
+              value={`${formatQty(liters)} ${volumeUnit}`}
+              strong
+              compact
+            />
+            <DetailRow
+              label="Price / Liter"
+              value={`${formatNaira(unitPrice)} / ${volumeUnit}`}
+              compact
+            />
+            <DetailRow
+              label="Subtotal"
+              value={formatNaira(subtotal)}
+              compact
+            />
+            {transportCost > 0 && transportBorneByClient && (
+              <DetailRow
+                label="Transport / Haulage Charge"
+                value={formatNaira(transportCost)}
+                compact
+              />
+            )}
+            <DetailRow
+              label="Total Expected Amount"
+              value={formatNaira(totalAmount)}
+              strong
+              compact
+            />
+            <DetailRow
+              label="Amount Paid"
+              value={
+                <span className="font-semibold text-emerald-600">
+                  {formatNaira(amountPaid)}
+                </span>
+              }
+              compact
+            />
+            <DetailRow
+              label="Balance Due"
+              value={
+                <span
+                  className={cn(
+                    "font-semibold",
+                    balanceDue > 0 ? "text-rose-600" : "text-emerald-600"
+                  )}
+                >
+                  {formatNaira(balanceDue)}
+                </span>
+              }
+              strong
+              compact
+            />
+            <DetailRow
+              label="Status"
+              value={
+                <span
+                  className={cn(
+                    "font-semibold",
+                    balanceDue <= 0 ? "text-emerald-600" : "text-amber-600"
+                  )}
+                >
+                  {statusLabel}
+                </span>
+              }
+              strong
+              compact
+            />
+          </div>
+
+          {/* Payment History (if any) */}
           {payments.length > 0 && (
-            <div className="mb-8">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 border-b border-gray-100 pb-1.5">Payment History</p>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left py-1.5 font-semibold text-[10px] uppercase tracking-wider text-gray-400">Date</th>
-                    <th className="text-left py-1.5 font-semibold text-[10px] uppercase tracking-wider text-gray-400">Method</th>
-                    <th className="text-left py-1.5 font-semibold text-[10px] uppercase tracking-wider text-gray-400">Reference</th>
-                    <th className="text-right py-1.5 font-semibold text-[10px] uppercase tracking-wider text-gray-400">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.map((p, i) => (
-                    <tr key={i} className="border-b border-gray-50">
-                      <td className="py-1.5 text-gray-600">{p.date}</td>
-                      <td className="py-1.5 text-gray-600 capitalize">{p.method.toLowerCase()}</td>
-                      <td className="py-1.5 text-gray-500 font-mono">{p.reference}</td>
-                      <td className="py-1.5 text-right font-mono font-medium text-emerald-600">{formatNaira(p.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="rounded-lg border border-gray-200 p-4 mb-4">
+              <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 pb-2 mb-1">
+                Payment History
+              </h3>
+              {payments.map((p, idx) => (
+                <DetailRow
+                  key={idx}
+                  label={`${p.date} • ${p.method}`}
+                  value={
+                    <span className="font-mono text-emerald-600 font-semibold">
+                      {formatNaira(p.amount)}
+                    </span>
+                  }
+                  compact
+                />
+              ))}
             </div>
           )}
 
-          {/* ── Delivery Details (compact reference) ── */}
-          <div className="rounded border border-gray-100 p-3 mb-6 bg-gray-50/50">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Delivery Reference</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-[11px]">
-              <div>
-                <span className="text-gray-400">Product</span>
-                <p className="font-medium text-gray-700">{productType}</p>
-              </div>
-              <div>
-                <span className="text-gray-400">Qty Despatched</span>
-                <p className="font-medium text-gray-700">{formatQty(liters)} L</p>
-              </div>
-              {delivery.litersReceived != null && (
-                <div>
-                  <span className="text-gray-400">Qty Received</span>
-                  <p className="font-medium text-gray-700">{formatQty(Number(delivery.litersReceived))} L</p>
-                </div>
-              )}
-              {(delivery.transport?.transporter?.name || delivery.transport?.oneTimeTransporterName) && (
-                <div>
-                  <span className="text-gray-400">Transporter</span>
-                  <p className="font-medium text-gray-700">{delivery.transport.transporter?.name || delivery.transport.oneTimeTransporterName}</p>
-                </div>
-              )}
-              {delivery.transport && (
-                <div>
-                  <span className="text-gray-400">Truck</span>
-                  <p className="font-medium text-gray-700">{formatTruckLabel(delivery.transport)}</p>
-                </div>
-              )}
-              {(delivery.transport?.driver || delivery.transport?.oneTimeDriverName) && (
-                <div>
-                  <span className="text-gray-400">Driver</span>
-                  <p className="font-medium text-gray-700">
-                    {delivery.transport.driver
-                      ? `${delivery.transport.driver.firstName} ${delivery.transport.driver.lastName}`.trim()
-                      : delivery.transport.oneTimeDriverName}
-                  </p>
-                </div>
-              )}
-              {delivery.transport?.order?.sourceDepot && (
-                <div>
-                  <span className="text-gray-400">Source Depot</span>
-                  <p className="font-medium text-gray-700">{delivery.transport.order.sourceDepot}</p>
-                </div>
-              )}
-              {delivery.transport?.destination && (
-                <div>
-                  <span className="text-gray-400">Destination</span>
-                  <p className="font-medium text-gray-700">{formatDestination(delivery.transport.destination)}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── Signatures ── */}
-          <div className="flex items-end justify-between gap-6 mt-10 pt-6 border-t border-gray-200">
+          {/* Signature + QR verification */}
+          <div className="flex items-end justify-between gap-6 mt-10 pt-6 border-t border-gray-100">
             <div className="flex-1 max-w-[220px]">
+              {tenant?.signatureUrl && (
+                <div className="mb-2 flex justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={tenant.signatureUrl}
+                    alt="Authorized Signature"
+                    className="max-h-16 object-contain"
+                  />
+                </div>
+              )}
               <div className="border-t border-gray-900 pt-2 text-center text-xs font-medium text-gray-700">
                 Authorized Signature
               </div>
@@ -295,22 +385,27 @@ export function DeliveryInvoiceView({ delivery }: { delivery: any }) {
             {delivery.qrCodeDataUrl && (
               <div className="flex flex-col items-center gap-1 shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={delivery.qrCodeDataUrl} alt="Verification QR code" className="h-20 w-20" />
+                <img
+                  src={delivery.qrCodeDataUrl}
+                  alt="Verification QR code"
+                  className="h-20 w-20"
+                />
                 <p className="text-[9px] text-gray-400">Scan to verify</p>
               </div>
             )}
           </div>
 
-          {/* ── Footer ── */}
+          {/* Footer */}
           <div className="mt-6 pt-4 border-t border-dashed border-gray-200 text-center text-[11px] text-gray-400">
             <p>
-              Generated by {tenant?.name || "Fuel Management System"} • Invoice ID: {delivery.id}
+              Generated by {tenant?.name || "Fuel Management System"} • Document ID: {delivery.id}
             </p>
-            <p className="mt-1">Thank you for your business</p>
+            <p className="mt-1">*** Keep this document for your records ***</p>
           </div>
         </div>
       </div>
 
+      {/* Print styles matching Payment Receipt */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -322,10 +417,10 @@ export function DeliveryInvoiceView({ delivery }: { delivery: any }) {
           .print\\:hidden {
             display: none !important;
           }
-          #delivery-note, #delivery-note * {
+          #delivery-invoice-receipt, #delivery-invoice-receipt * {
             visibility: visible;
           }
-          #delivery-note {
+          #delivery-invoice-receipt {
             position: absolute;
             left: 0;
             top: 0;

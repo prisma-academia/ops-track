@@ -33,6 +33,59 @@ export type SalesLedgerRow = {
   };
 };
 
+function cleanLedgerValue(val?: string | null): string | null {
+  if (!val) return null;
+  const trimmed = val.trim();
+  const lower = trimmed.toLowerCase();
+  if (
+    !trimmed ||
+    trimmed === "—" ||
+    trimmed === "-" ||
+    lower === "unknown" ||
+    lower === "unknown driver" ||
+    lower === "unknown recipient" ||
+    lower === "n/a" ||
+    lower === "null" ||
+    lower === "unassigned" ||
+    lower === "unassigned truck" ||
+    lower === "unassigned driver"
+  ) {
+    return null;
+  }
+  return trimmed;
+}
+
+function resolveLedgerTransporter(row: SalesLedgerRow): string {
+  const t = row.delivery?.transport;
+  const raw = t?.transporter?.name || t?.oneTimeTransporterName;
+  return cleanLedgerValue(raw) || "-";
+}
+
+function resolveLedgerTruck(row: SalesLedgerRow): string {
+  const t = row.delivery?.transport;
+  if (!t) return "-";
+  const rawPlate =
+    cleanLedgerValue(t.truck?.plateNumber) ||
+    cleanLedgerValue(t.truck?.name) ||
+    cleanLedgerValue(t.oneTimeTruckPlate);
+
+  if (rawPlate) return rawPlate;
+
+  const transporter = cleanLedgerValue(t.transporter?.name || t.oneTimeTransporterName);
+  if (transporter) return `Truck (${transporter})`;
+
+  return "-";
+}
+
+function resolveLedgerDriver(row: SalesLedgerRow): string {
+  const t = row.delivery?.transport;
+  if (!t) return "-";
+  const d = t.driver;
+  const driverFullName = d ? `${d.firstName || ""} ${d.lastName || ""}`.trim() : null;
+  const raw = cleanLedgerValue(driverFullName) || cleanLedgerValue(t.oneTimeDriverName);
+  return raw || "-";
+}
+
 export const salesColumns: ColumnDef<SalesLedgerRow>[] = [
   {
     id: "clientName",
@@ -41,10 +94,10 @@ export const salesColumns: ColumnDef<SalesLedgerRow>[] = [
     enableHiding: false,
     footer: () => "Total",
     accessorFn: (row) =>
-      row.delivery?.customer?.name || row.delivery?.station?.name || "-",
+      cleanLedgerValue(row.delivery?.customer?.name) || cleanLedgerValue(row.delivery?.station?.name) || "-",
     cell: ({ row }) => {
       const name =
-        row.original.delivery?.customer?.name || row.original.delivery?.station?.name || "-";
+        cleanLedgerValue(row.original.delivery?.customer?.name) || cleanLedgerValue(row.original.delivery?.station?.name) || "-";
       return <span className="font-medium">{name}</span>;
     },
   },
@@ -52,33 +105,19 @@ export const salesColumns: ColumnDef<SalesLedgerRow>[] = [
     id: "transporter",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Transporter" />,
     meta: { label: "Transporter" },
-    accessorFn: (row) =>
-      row.delivery?.transport?.transporter?.name ||
-      row.delivery?.transport?.oneTimeTransporterName ||
-      "-",
-    cell: ({ row }) => (
-      <span className="truncate max-w-[130px] inline-block font-medium">
-        {row.original.delivery?.transport?.transporter?.name ||
-          row.original.delivery?.transport?.oneTimeTransporterName ||
-          "-"}
-      </span>
-    ),
+    accessorFn: (row) => resolveLedgerTransporter(row),
+    cell: ({ row }) => {
+      const val = resolveLedgerTransporter(row.original);
+      return <span className="truncate max-w-[130px] inline-block font-medium">{val}</span>;
+    },
   },
   {
     id: "truck",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Truck" />,
     meta: { label: "Truck" },
-    accessorFn: (row) =>
-      row.delivery?.transport?.truck?.plateNumber ||
-      row.delivery?.transport?.truck?.name ||
-      row.delivery?.transport?.oneTimeTruckPlate ||
-      "-",
+    accessorFn: (row) => resolveLedgerTruck(row),
     cell: ({ row }) => {
-      const truck =
-        row.original.delivery?.transport?.truck?.plateNumber ||
-        row.original.delivery?.transport?.truck?.name ||
-        row.original.delivery?.transport?.oneTimeTruckPlate ||
-        "-";
+      const truck = resolveLedgerTruck(row.original);
       return <span className="font-mono text-xs uppercase">{truck}</span>;
     },
   },
@@ -86,20 +125,10 @@ export const salesColumns: ColumnDef<SalesLedgerRow>[] = [
     id: "driver",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Driver" />,
     meta: { label: "Driver" },
-    accessorFn: (row) => {
-      const d = row.delivery?.transport?.driver;
-      if (d) {
-        const full = `${d.firstName || ""} ${d.lastName || ""}`.trim();
-        if (full) return full;
-      }
-      return row.delivery?.transport?.oneTimeDriverName || "-";
-    },
+    accessorFn: (row) => resolveLedgerDriver(row),
     cell: ({ row }) => {
-      const d = row.original.delivery?.transport?.driver;
-      const name = d
-        ? `${d.firstName || ""} ${d.lastName || ""}`.trim()
-        : row.original.delivery?.transport?.oneTimeDriverName || "-";
-      return <span className="text-muted-foreground">{name || "-"}</span>;
+      const driver = resolveLedgerDriver(row.original);
+      return <span className="text-muted-foreground">{driver}</span>;
     },
   },
   {

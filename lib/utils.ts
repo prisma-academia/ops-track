@@ -129,21 +129,37 @@ export function formatTruckLabel(transport?: {
   transporter?: { name?: string | null } | null;
 } | null): string {
   if (!transport) return "Unassigned Truck";
-  if (transport.isOneTime && transport.oneTimeTruckPlate?.trim()) {
-    return transport.oneTimeTruckPlate.trim();
-  }
+
+  const isInvalid = (val?: string | null) => {
+    if (!val) return true;
+    const v = val.trim().toLowerCase();
+    return (
+      !v ||
+      v === "unknown" ||
+      v === "n/a" ||
+      v === "null" ||
+      v === "—" ||
+      v === "-" ||
+      v === "unassigned" ||
+      v === "unassigned truck"
+    );
+  };
+
+  const oneTimePlate = transport.oneTimeTruckPlate?.trim();
   const plate = transport.truck?.plateNumber?.trim();
   const name = transport.truck?.name?.trim();
   const truckNum = transport.truck?.truckNumber?.trim();
-  const oneTimePlate = transport.oneTimeTruckPlate?.trim();
 
-  const primary = plate || name || truckNum || oneTimePlate;
-  if (primary && primary.toLowerCase() !== "unknown") {
+  const primary = transport.isOneTime
+    ? (!isInvalid(oneTimePlate) ? oneTimePlate : (!isInvalid(plate) ? plate : (!isInvalid(name) ? name : (!isInvalid(truckNum) ? truckNum : null))))
+    : (!isInvalid(plate) ? plate : (!isInvalid(name) ? name : (!isInvalid(truckNum) ? truckNum : (!isInvalid(oneTimePlate) ? oneTimePlate : null))));
+
+  if (primary) {
     return primary;
   }
 
   const transporter = transport.transporter?.name?.trim() || transport.oneTimeTransporterName?.trim();
-  if (transporter && transporter.toLowerCase() !== "unknown") {
+  if (transporter && !isInvalid(transporter)) {
     return `Truck (${transporter})`;
   }
 

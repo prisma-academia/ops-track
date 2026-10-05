@@ -29,6 +29,44 @@ export type TransportsLedgerRow = {
   netTransportFeePaid: number;
 };
 
+function cleanTransportLedgerVal(val?: string | null): string | null {
+  if (!val) return null;
+  const trimmed = val.trim();
+  const lower = trimmed.toLowerCase();
+  if (
+    !trimmed ||
+    trimmed === "—" ||
+    trimmed === "-" ||
+    lower === "unknown" ||
+    lower === "unknown driver" ||
+    lower === "unknown recipient" ||
+    lower === "n/a" ||
+    lower === "null" ||
+    lower === "unassigned" ||
+    lower === "unassigned truck" ||
+    lower === "unassigned driver"
+  ) {
+    return null;
+  }
+  return trimmed;
+}
+
+function resolveTransportLedgerTruck(row: TransportsLedgerRow): string {
+  const plate =
+    cleanTransportLedgerVal(row.truck?.plateNumber) ||
+    cleanTransportLedgerVal(row.truck?.name) ||
+    cleanTransportLedgerVal(row.oneTimeTruckPlate);
+  if (plate) return plate;
+  const transporter = cleanTransportLedgerVal(row.transporter?.name || row.oneTimeTransporterName);
+  if (transporter) return `Truck (${transporter})`;
+  return "-";
+}
+
+function resolveTransportLedgerDriver(row: TransportsLedgerRow): string {
+  const fullName = row.driver ? `${row.driver.firstName || ""} ${row.driver.lastName || ""}`.trim() : null;
+  return cleanTransportLedgerVal(fullName) || cleanTransportLedgerVal(row.oneTimeDriverName) || "-";
+}
+
 export const transportsColumns: ColumnDef<TransportsLedgerRow>[] = [
   {
     accessorKey: "createdAt",
@@ -46,26 +84,26 @@ export const transportsColumns: ColumnDef<TransportsLedgerRow>[] = [
     id: "transporter",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Transporter" />,
     meta: { label: "Transporter" },
-    accessorFn: (row) => row.transporter?.name || row.oneTimeTransporterName || "-",
-    cell: ({ row }) => <span className="font-medium">{row.original.transporter?.name || row.original.oneTimeTransporterName || "-"}</span>,
+    accessorFn: (row) => cleanTransportLedgerVal(row.transporter?.name || row.oneTimeTransporterName) || "-",
+    cell: ({ row }) => (
+      <span className="font-medium">
+        {cleanTransportLedgerVal(row.original.transporter?.name || row.original.oneTimeTransporterName) || "-"}
+      </span>
+    ),
   },
   {
     id: "truck",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Truck" />,
     meta: { label: "Truck" },
-    accessorFn: (row) => row.truck?.plateNumber || row.truck?.name || row.oneTimeTruckPlate || "-",
-    cell: ({ row }) => row.original.truck?.plateNumber || row.original.truck?.name || row.original.oneTimeTruckPlate || "-",
+    accessorFn: (row) => resolveTransportLedgerTruck(row),
+    cell: ({ row }) => resolveTransportLedgerTruck(row.original),
   },
   {
     id: "driver",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Driver" />,
     meta: { label: "Driver" },
-    accessorFn: (row) =>
-      row.driver ? `${row.driver.firstName || ""} ${row.driver.lastName || ""}`.trim() : row.oneTimeDriverName || "-",
-    cell: ({ row }) =>
-      row.original.driver
-        ? `${row.original.driver.firstName || ""} ${row.original.driver.lastName || ""}`.trim()
-        : row.original.oneTimeDriverName || "-",
+    accessorFn: (row) => resolveTransportLedgerDriver(row),
+    cell: ({ row }) => resolveTransportLedgerDriver(row.original),
   },
   {
     id: "orderRef",

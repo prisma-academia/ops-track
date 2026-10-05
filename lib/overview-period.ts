@@ -1,3 +1,5 @@
+import { format } from "date-fns";
+
 export type OverviewPeriod = "today" | "week" | "month" | "quarter" | "year";
 
 export const OVERVIEW_PERIOD_OPTIONS: Array<{ value: OverviewPeriod; label: string }> = [
@@ -164,5 +166,69 @@ export function getOverviewChartBuckets(
     }
   }
 
+  return buckets;
+}
+
+export function getOverviewChartBucketsForRange(range: { from: Date; to: Date }): OverviewChartBucket[] {
+  const diffMs = range.to.getTime() - range.from.getTime();
+  const diffDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+  if (diffDays <= 2) {
+    return getOverviewChartBuckets("today", range);
+  }
+
+  if (diffDays <= 14) {
+    const buckets: OverviewChartBucket[] = [];
+    const cursor = new Date(range.from);
+    while (cursor <= range.to) {
+      const bFrom = new Date(cursor);
+      bFrom.setHours(0, 0, 0, 0);
+      const bTo = new Date(cursor);
+      bTo.setHours(23, 59, 59, 999);
+      if (bTo > range.to) bTo.setTime(range.to.getTime());
+      buckets.push({
+        label: format(bFrom, "MMM d"),
+        from: bFrom,
+        to: bTo,
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return buckets;
+  }
+
+  if (diffDays <= 60) {
+    const buckets: OverviewChartBucket[] = [];
+    let week = 1;
+    const cursor = new Date(range.from);
+    while (cursor <= range.to) {
+      const bFrom = new Date(cursor);
+      const bTo = new Date(cursor);
+      bTo.setDate(bTo.getDate() + 6);
+      bTo.setHours(23, 59, 59, 999);
+      if (bTo > range.to) bTo.setTime(range.to.getTime());
+      buckets.push({
+        label: `Wk ${week} (${format(bFrom, "MMM d")})`,
+        from: bFrom,
+        to: bTo,
+      });
+      week++;
+      cursor.setDate(cursor.getDate() + 7);
+    }
+    return buckets;
+  }
+
+  const buckets: OverviewChartBucket[] = [];
+  const cursor = new Date(range.from.getFullYear(), range.from.getMonth(), 1);
+  while (cursor <= range.to) {
+    const bFrom = new Date(Math.max(cursor.getTime(), range.from.getTime()));
+    const bTo = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59, 999);
+    if (bTo > range.to) bTo.setTime(range.to.getTime());
+    buckets.push({
+      label: MONTH_LABELS[cursor.getMonth()] + (range.to.getFullYear() !== range.from.getFullYear() ? ` '${String(cursor.getFullYear()).slice(-2)}` : ""),
+      from: bFrom,
+      to: bTo,
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
   return buckets;
 }

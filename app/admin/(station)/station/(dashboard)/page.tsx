@@ -14,7 +14,7 @@ import {
 import { reconcileNegativeTanks } from "@/lib/inventory/tank-balance"
 import { DashboardClient, MonthlyData, ProductVolumeTotals, TopStats } from "../dashboard-client"
 import { DashboardContentSkeleton } from "../dashboard-content-skeleton"
-import { DashboardDatePicker } from "../dashboard-date-picker"
+import { DashboardDateRangeFilter } from "@/components/dashboards/dashboard-date-range-filter"
 import StationLocationsMap from "./station-locations-map-loader"
 
 function calcChange(curr: number, prev: number): number {
@@ -53,15 +53,26 @@ export default async function DashboardPage({
     }
   }
 
+  const user = await prisma.tenantUser.findUnique({
+    where: { id: actor.userId },
+    select: { firstName: true, lastName: true, email: true },
+  });
+  const userName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "User";
+
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4">
           <div>
-            <CardTitle>Hi, Welcome back!</CardTitle>
+            <CardTitle className="text-xl font-bold tracking-tight">
+              Hi, Welcome back! {userName}
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              {format(new Date(), "EEEE, MMMM d, yyyy")}
+            </p>
           </div>
           <CardAction className="flex items-center gap-2">
-            <DashboardDatePicker />
+            <DashboardDateRangeFilter />
           </CardAction>
         </CardHeader>
       </Card>

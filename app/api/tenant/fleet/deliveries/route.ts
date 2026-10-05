@@ -83,6 +83,13 @@ export async function POST(request: Request) {
     if (!transportRecord || transportRecord.tenantId !== actor.tenantId) {
       throw new DomainError(404, "not_found", "Transport not found.");
     }
+    if (transportRecord.status === "COMPLETED" || transportRecord.status === "CANCELLED") {
+      throw new DomainError(
+        400,
+        "invalid_state",
+        "Cannot add deliveries to a transport that is finalized and marked as completed."
+      );
+    }
     const available = await getAvailableVolume(prisma, transportRecord.id);
     if (body.litersDespatched > available) {
       throw new DomainError(

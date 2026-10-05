@@ -62,8 +62,33 @@ export async function PATCH(
 
     const existing = await prisma.delivery.findFirst({
       where: { id, tenantId: actor.tenantId },
+      include: {
+        transport: {
+          select: { id: true, status: true },
+        },
+      },
     });
     if (!existing) throw new DomainError(404, "not_found", "Delivery not found.");
+
+    const parentTransport =
+      existing.transport ??
+      (existing.transportId
+        ? await prisma.transport.findUnique({
+            where: { id: existing.transportId },
+            select: { id: true, status: true },
+          })
+        : null);
+
+    if (
+      parentTransport?.status === "COMPLETED" ||
+      parentTransport?.status === "CANCELLED"
+    ) {
+      throw new DomainError(
+        400,
+        "invalid_state",
+        "Cannot edit sales delivery because the transport is finalized and marked as completed."
+      );
+    }
 
     const isAlreadyReceived = existing.litersReceived !== null;
     const isDispatchVolumeChanged =
@@ -87,20 +112,6 @@ export async function PATCH(
       });
       if (!station) throw new DomainError(404, "not_found", "Station not found.");
       newOrganizationId = station.organizationId ?? null;
-    }
-
-    if (existing.transportId) {
-      const parentTransport = await prisma.transport.findUnique({
-        where: { id: existing.transportId },
-        select: { status: true },
-      });
-      if (
-        body.litersReturned !== undefined &&
-        body.litersReturned !== Number(existing.litersReturned) &&
-        (parentTransport?.status === "COMPLETED" || parentTransport?.status === "CANCELLED")
-      ) {
-        throw new DomainError(400, "invalid_state", "Cannot return volume on a completed or cancelled transport.");
-      }
     }
 
     // Returned volume only makes sense for a received delivery and cannot exceed the shortfall.

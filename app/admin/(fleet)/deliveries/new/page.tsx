@@ -31,7 +31,7 @@ export default async function NewSalePage(
   });
   
   const transports = await prisma.transport.findMany({
-    where: { tenantId: actor.tenantId, status: { in: ["IN_TRANSIT", "COMPLETED"] } },
+    where: { tenantId: actor.tenantId, status: "IN_TRANSIT" },
     select: { 
       id: true, 
       destination: true, 

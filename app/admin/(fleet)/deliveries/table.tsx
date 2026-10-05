@@ -68,6 +68,9 @@ type ShortageReconciliationMode = "IN_TRUCK" | "SHORTAGE_DEDUCT";
 function DeliveryRowActions({ row }: { row: SaleRow }) {
   const router = useRouter();
 
+  const isTransportFinalized =
+    row.transportStatus === "COMPLETED" || row.transportStatus === "CANCELLED";
+
   // Dialog open state
   const [openReceive, setOpenReceive] = useState(false);
 
@@ -91,6 +94,10 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
     : row.litersDespatched;
 
   const handleOpenReceive = () => {
+    if (isTransportFinalized) {
+      toast.error("Cannot edit delivery because the transport is finalized and marked as completed.");
+      return;
+    }
     setLitersReceived(row.litersReceived?.toString() || "");
     const initialMode: ShortageReconciliationMode =
       row.litersReturned > 0 ? "IN_TRUCK" : "SHORTAGE_DEDUCT";
@@ -101,6 +108,10 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
 
   const handleReceive = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isTransportFinalized) {
+      setReceiveError("Cannot edit delivery because the transport is finalized and marked as completed.");
+      return;
+    }
     if (
       litersReceived.trim() === "" ||
       isNaN(Number(litersReceived)) ||
@@ -154,15 +165,22 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
             <span className="sr-only">Open actions</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
           {row.isExternalClient && (
-            <DropdownMenuItem onClick={handleOpenReceive}>
+            <DropdownMenuItem
+              onClick={handleOpenReceive}
+              disabled={isTransportFinalized}
+              className={isTransportFinalized ? "opacity-50 cursor-not-allowed" : ""}
+            >
               {isAlreadyReceived ? (
                 <Pencil className="w-4 h-4 mr-2 text-muted-foreground" />
               ) : (
                 <PackageCheck className="w-4 h-4 mr-2 text-emerald-600" />
               )}
               <span>{isAlreadyReceived ? "Edit Receipt" : "Receive Delivery"}</span>
+              {isTransportFinalized && (
+                <span className="ml-auto text-[10px] text-muted-foreground font-medium">Locked</span>
+              )}
             </DropdownMenuItem>
           )}
 
@@ -186,9 +204,9 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
 
       {/* Receive / Edit Sales Delivery Dialog */}
       <Dialog
-        open={openReceive}
+        open={openReceive && !isTransportFinalized}
         onOpenChange={(val) => {
-          if (!isReceiving) setOpenReceive(val);
+          if (!isReceiving && !isTransportFinalized) setOpenReceive(val);
         }}
       >
         <DialogContent

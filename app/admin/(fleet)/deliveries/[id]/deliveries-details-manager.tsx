@@ -56,6 +56,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatHumanReadableDate, formatDestination, formatTruckLabel } from "@/lib/utils";
+import { Alert, AlertTitle } from "@/components/ui/alert";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -147,6 +148,8 @@ export function SalesDetailsManager({
     0
   );
   const maxAvailableVolume = carried > 0 ? Math.max(0, carried - otherDistributed - loggedLosses) : null;
+  const isTransportFinalized =
+    delivery.transport?.status === "COMPLETED" || delivery.transport?.status === "CANCELLED";
 
   const litersDespatched = Number(delivery.litersDespatched || 0);
   const litersReceived = delivery.litersReceived !== null ? Number(delivery.litersReceived) : null;
@@ -194,6 +197,10 @@ export function SalesDetailsManager({
   );
 
   const handleEditSale = async () => {
+    if (isTransportFinalized) {
+      setError("Cannot edit sales delivery because the transport is finalized and marked as completed.");
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
 
@@ -241,6 +248,10 @@ export function SalesDetailsManager({
   };
 
   const handleReturnToTruck = async () => {
+    if (isTransportFinalized) {
+      setReturnError("Cannot return volume because the transport is finalized and marked as completed.");
+      return;
+    }
     const qty = Number(returnAmount);
     if (isNaN(qty) || qty < 0) {
       setReturnError("Please enter a valid volume (0 or greater).");
@@ -433,7 +444,7 @@ export function SalesDetailsManager({
               </Link>
             </Button>
           )}
-          {litersReceived !== null && (unreceived > 0 || litersReturned > 0) && delivery.transport?.status !== "COMPLETED" && delivery.transport?.status !== "CANCELLED" && (
+          {litersReceived !== null && (unreceived > 0 || litersReturned > 0) && !isTransportFinalized && (
             <Button
               variant={litersReturned > 0 ? "secondary" : "outline"}
               size="sm"
@@ -451,9 +462,16 @@ export function SalesDetailsManager({
               {litersReturned > 0 ? `${litersReturned.toLocaleString()} ${volumeUnit} in Truck` : "Return to Truck"}
             </Button>
           )}
-          <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setOpenEditDialog(true)}>
-            <Pencil className="size-4" />
-          </Button>
+          {!isTransportFinalized ? (
+            <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setOpenEditDialog(true)} title="Edit Delivery">
+              <Pencil className="size-4" />
+            </Button>
+          ) : (
+            <Badge variant="outline" className="h-9 px-3 gap-1.5 bg-muted/40 text-muted-foreground border-dashed">
+              <Lock className="size-3.5 text-muted-foreground" />
+              Transport Finalized
+            </Badge>
+          )}
           <Button variant="outline" size="sm" asChild>
             <Link href={`/admin/deliveries/${delivery.id}/waybill`}>
               <Printer className="w-4 h-4 mr-2" />
@@ -468,6 +486,15 @@ export function SalesDetailsManager({
           </Button>
         </div>
       </div>
+
+      {isTransportFinalized && (
+        <Alert className="border-border/60 bg-muted/40 text-foreground py-2.5">
+          <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
+          <AlertTitle className="text-xs font-semibold mb-0">
+            Transport Finalized ({delivery.transport?.status}) — This delivery is locked from edits.
+          </AlertTitle>
+        </Alert>
+      )}
 
       <TooltipProvider delayDuration={200}>
         <Card className="p-0 shadow-xs border-border/40">
@@ -788,9 +815,9 @@ export function SalesDetailsManager({
       </div>
 
       <Dialog
-        open={openEditDialog}
+        open={openEditDialog && !isTransportFinalized}
         onOpenChange={(open: boolean) => {
-          if (!isSubmitting) {
+          if (!isSubmitting && !isTransportFinalized) {
             setOpenEditDialog(open);
             if (open) {
               setEditLitersDespatched(delivery.litersDespatched?.toString() || "");

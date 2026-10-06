@@ -42,6 +42,7 @@ const NAV: NavItemConfig[] = [
   { href: "/admin/station/stations", key: "stations", title: "Stations", module: "stations" as ModuleKey, icon: "FuelStationIcon", permission: PERMISSIONS.TENANT_STATIONS_READ.key },
   { href: "/admin/station/waybills", key: "waybills", title: "Waybills", module: "operations" as ModuleKey, icon: "TruckDeliveryIcon", permission: PERMISSIONS.TENANT_WAYBILLS_READ.key },
   { href: "/admin/station/expenses", key: "expenses", title: "Expenses", module: "operations" as ModuleKey, icon: "ReceiptDollarIcon", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },
+  { href: "/admin/station/payroll", key: "payroll", title: "Payroll", module: "operations" as ModuleKey, icon: "Wallet01Icon", permission: PERMISSIONS.TENANT_EXPENSES_READ.key },
   { href: "/admin/station/prices", key: "prices", title: "Prices", module: "operations" as ModuleKey, icon: "AnalyticsUpIcon", permission: PERMISSIONS.TENANT_PRICES_READ.key },
   {
     key: "reports",

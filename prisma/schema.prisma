@@ -206,6 +206,9 @@ model Tenant {
   notificationSettings NotificationChannelSetting[]
   notificationMessages NotificationMessage[]
   notificationDeliveries NotificationDelivery[]
+  payrollProfiles      PayrollProfile[]
+  payrollRuns          PayrollRun[]
+  payslips             Payslip[]
 
   @@index([status])
   @@index([trialEndsAt])
@@ -332,6 +335,10 @@ model TenantUser {
   stockMovements          StockMovement[]
   createdNotifications    NotificationMessage[]
   managedClientFuelOrders ClientFuelOrder[] @relation("FuelOrderManager")
+  
+  payrollProfile          PayrollProfile?
+  approvedPayrollRuns     PayrollRun[]      @relation("PayrollRunApprover")
+  payslips                Payslip[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -788,6 +795,7 @@ enum ExpenseCategory {
   MAINTENANCE
   UTILITIES
   STATIONERY
+  PAYROLL
   OTHER
 }
 
@@ -849,6 +857,8 @@ model Station {
   deliveries      Delivery[]       @relation("StationSales")
   transactions    Transaction[]
   dippingSessions DippingSession[]
+  payrollRuns     PayrollRun[]
+
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1313,6 +1323,7 @@ model Expense {
 
   createdAt    DateTime      @default(now())
   transactions Transaction[]
+  payslip      Payslip?
 
   @@index([tenantId])
   @@index([stationId])
@@ -2099,4 +2110,124 @@ model NotificationDelivery {
   @@index([messageId])
   @@index([userId, channel, readAt])
   @@map("notification_deliveries")
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACTOR
+}
+
+enum SalaryType {
+  MONTHLY
+  WEEKLY
+  HOURLY
+}
+
+enum PayrollRunStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+enum PayslipItemType {
+  ALLOWANCE
+  DEDUCTION
+}
+
+model PayrollProfile {
+  id             String         @id @default(uuid())
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId         String         @unique
+  user           TenantUser     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employmentType EmploymentType @default(FULL_TIME)
+  salaryType     SalaryType     @default(MONTHLY)
+  baseSalary     Decimal        @db.Decimal(12, 2)
+  paymentDay     Int?           // e.g., 25 for 25th of the month
+  
+  // Bank details for payroll deposits
+  bankName       String?
+  accountNumber  String?
+  accountName    String?
+  
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([tenantId])
+  @@map("payroll_profiles")
+}
+
+model PayrollRun {
+  id           String           @id @default(uuid())
+  tenantId     String
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stationId    String?
+  station      Station?         @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  
+  periodStart  DateTime
+  periodEnd    DateTime
+  status       PayrollRunStatus @default(DRAFT)
+  
+  approvedById String?
+  approvedBy   TenantUser?      @relation("PayrollRunApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  
+  totalAmount  Decimal          @db.Decimal(12, 2)
+  
+  payslips     Payslip[]
+  
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([tenantId])
+  @@index([stationId])
+  @@map("payroll_runs")
+}
+
+model Payslip {
+  id              String       @id @default(uuid())
+  tenantId        String
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  payrollRunId    String
+  payrollRun      PayrollRun   @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  
+  userId          String
+  user            TenantUser   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  
+  baseAmount      Decimal      @db.Decimal(12, 2)
+  totalAllowances Decimal      @db.Decimal(12, 2)
+  totalDeductions Decimal      @db.Decimal(12, 2)
+  netPay          Decimal      @db.Decimal(12, 2)
+  
+  receiptUrl      String?      // Proof of payment
+  
+  // Link to the generated expense
+  expenseId       String?      @unique
+  expense         Expense?     @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+  
+  items           PayslipItem[]
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([tenantId])
+  @@index([payrollRunId])
+  @@index([userId])
+  @@map("payslips")
+}
+
+model PayslipItem {
+  id          String          @id @default(uuid())
+  payslipId   String
+  payslip     Payslip         @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  
+  type        PayslipItemType
+  description String
+  amount      Decimal         @db.Decimal(12, 2)
+  
+  createdAt   DateTime        @default(now())
+
+  @@index([payslipId])
+  @@map("payslip_items")
 }

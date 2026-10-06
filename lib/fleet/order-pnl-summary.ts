@@ -163,7 +163,7 @@ export type OrderPnlResult = {
  *  purchase / loading / depot→primary = qty × per-litre rates
  *  fleet = (qty / liters carried) × maintenance (fallback: trip despatched qty)
  *
- * Total cost = purchase + loading + depot→primary + delivery transport + fleet.
+ * Total cost = loading + depot→primary + delivery transport + fleet.
  * Profit/Loss = sales revenue − total cost.
  * Shortage is shown separately and is not subtracted from total cost (revenue
  * is already based on received volume).
@@ -238,7 +238,7 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
       const saleLoading = saleQty * loadingCostPerLitre;
       const saleOrderCost = salePurchase + saleLoading;
       const saleTotalCost =
-        salePurchase + saleLoading + depotToPrimaryShare + subsequentCost + fleetShare;
+        saleLoading + depotToPrimaryShare + subsequentCost + fleetShare;
 
       totalOrderLossLiters += saleLossLiters;
       totalOrderLossAmount += saleLossAmount;
@@ -365,7 +365,6 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
   });
 
   const totalCost =
-    purchaseCost +
     totalLoadingCost +
     totalDepotToPrimaryCost +
     totalDeliveryTransportCost +

@@ -119,6 +119,29 @@ export default async function StockReportPage() {
     })),
   );
 
+  const expenseCycles = allocations
+    .filter((a) => a.status !== "CANCELLED" && a.deliveredAt && a.litersReceived != null && Number(a.litersReceived) > 0)
+    .map((a) => {
+      const draw = drawdown.get(a.id);
+      const end = draw?.isFullySold && draw.fullySoldAt ? endOfDay(draw.fullySoldAt) : endOfDay(new Date());
+      return { id: a.id, stationId: a.stationId, start: a.deliveredAt!, end };
+    });
+
+  const expenseShare = new Map<string, number>();
+  for (const expense of expenseRows) {
+    const overlapping = expenseCycles.filter(
+      (cycle) =>
+        cycle.stationId === expense.stationId &&
+        expense.createdAt >= cycle.start &&
+        expense.createdAt <= cycle.end,
+    );
+    if (overlapping.length === 0) continue;
+    const share = Number(expense.amount) / overlapping.length;
+    for (const cycle of overlapping) {
+      expenseShare.set(cycle.id, (expenseShare.get(cycle.id) ?? 0) + share);
+    }
+  }
+
   // Each row is one station delivery. Sold litres are shared FIFO across
   // deliveries of the same product, so one sale cannot drain every open waybill.
   const rows = allocations.map((a, index) => {
@@ -164,15 +187,12 @@ export default async function StockReportPage() {
           reconciledDate = null;
         }
 
-        const expenseEndDate = isFullySold && finalSalesDate ? endOfDay(finalSalesDate) : endOfDay(new Date());
-
-        totalExpense = expenseRows.reduce((sum, expense) => {
-          if (expense.stationId !== a.stationId) return sum;
-          if (expense.createdAt < a.deliveredAt!) return sum;
-          if (expense.createdAt > expenseEndDate) return sum;
-          return sum + Number(expense.amount);
-        }, 0);
-        pnl = reconciledDeposit - stockValue - totalExpense;
+        totalExpense = expenseShare.get(a.id) ?? 0;
+        // Profit is only closed once the load is sold out (reconciled date).
+        // Until then the column stays awaiting, so an open load is not a loss.
+        if (isFullySold) {
+          pnl = reconciledDeposit - stockValue - totalExpense;
+        }
       }
 
       const effectiveQty = a.status === "CANCELLED" ? 0 : (reconciledQty ?? deliveryQty);

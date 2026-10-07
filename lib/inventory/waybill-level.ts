@@ -22,11 +22,14 @@ export type WaybillLevelSale = {
   logDate: Date;
   litersSold: number;
   pricePerLiter: number;
+  /** Cash, transfer, credit, and debt repayments actually collected for this sale. */
+  collected?: number;
 };
 
 export type WaybillDrawdown = {
   soldQty: number;
   deposit: number;
+  collected: number;
   fullySoldAt: Date | null;
   isFullySold: boolean;
 };
@@ -47,6 +50,7 @@ export function allocateWaybillDrawdown(
     capacity: number;
     sold: number;
     deposit: number;
+    collected: number;
     fullySoldAt: Date | null;
   };
 
@@ -66,6 +70,7 @@ export function allocateWaybillDrawdown(
       capacity,
       sold: 0,
       deposit: 0,
+      collected: 0,
       fullySoldAt: null,
     };
     const key = `${allocation.stationId}:${allocation.productType}`;
@@ -86,9 +91,11 @@ export function allocateWaybillDrawdown(
     const list = groups.get(key);
     if (!list || list.length === 0) continue;
 
-    let liters = Number(sale.litersSold);
+    const saleLiters = Number(sale.litersSold);
+    let liters = saleLiters;
     if (!(liters > 0)) continue;
     const price = Number(sale.pricePerLiter) || 0;
+    const saleCollected = sale.collected == null ? saleLiters * price : Number(sale.collected) || 0;
     const saleDay = startOfDay(sale.logDate).getTime();
     let idx = cursor.get(key) ?? 0;
 
@@ -103,6 +110,7 @@ export function allocateWaybillDrawdown(
       const take = Math.min(room, liters);
       bucket.sold += take;
       bucket.deposit += take * price;
+      bucket.collected += saleLiters > 0 ? saleCollected * (take / saleLiters) : 0;
       liters -= take;
       if (bucket.capacity - bucket.sold <= EPS) {
         bucket.sold = bucket.capacity;
@@ -121,6 +129,7 @@ export function allocateWaybillDrawdown(
       result.set(bucket.id, {
         soldQty,
         deposit: bucket.deposit,
+        collected: bucket.collected,
         fullySoldAt: bucket.fullySoldAt,
         isFullySold: bucket.capacity - soldQty <= EPS,
       });

@@ -349,16 +349,21 @@ export function StockReportManager({
         accessorKey: "pnl",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Profit/Loss" />,
         meta: { label: "Profit/Loss" },
-        cell: ({ row }) => (
-          <span
-            className={cn(
-              "font-mono font-semibold tabular-nums",
-              (row.original.pnl ?? 0) < 0 ? "text-red-500" : "text-green-600"
-            )}
-          >
-            {fmtMoney(row.original.pnl)}
-          </span>
-        ),
+        cell: ({ row }) => {
+          if (!row.original.reconciledDate || row.original.pnl == null) {
+            return <span className="text-xs font-medium text-amber-500">Awaiting</span>;
+          }
+          return (
+            <span
+              className={cn(
+                "font-mono font-semibold tabular-nums",
+                row.original.pnl < 0 ? "text-red-500" : "text-green-600"
+              )}
+            >
+              {fmtMoney(row.original.pnl)}
+            </span>
+          );
+        },
         footer: ({ table }) => {
           const total = table
             .getFilteredRowModel()

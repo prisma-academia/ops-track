@@ -53,6 +53,9 @@ interface DeliveryPnlRow {
   transportTotal: number;
   totalOrderCost?: number;
   cycleRevenue: number;
+  amountCollected?: number;
+  balanceDue?: number;
+  collectionStatus?: "balanced" | "debt" | "none";
   cycleExpenses: number;
   netProfit: number;
   margin: number;
@@ -131,6 +134,9 @@ export function DeliveryPnlManager({
     let totalReceived = 0;
     let totalSold = 0;
     let totalRemaining = 0;
+    let totalOrderCost = 0;
+    let totalCollected = 0;
+    let totalOutstanding = 0;
     let totalRevenue = 0; // Received amount
     let totalExpectedRevenue = 0; // Expected amount (if sold)
     let totalExpenses = 0; // Cycle Expense
@@ -143,6 +149,9 @@ export function DeliveryPnlManager({
       totalReceived += rec;
       totalSold += sold;
       totalRemaining += remaining;
+      totalOrderCost += (r.deliveryCost ?? 0) + (r.transportTotal ?? 0);
+      totalCollected += r.amountCollected ?? 0;
+      totalOutstanding += r.balanceDue ?? 0;
       totalRevenue += r.cycleRevenue ?? 0;
       totalExpectedRevenue += r.expectedRevenueIfSold ?? 0;
       totalExpenses += r.cycleExpenses ?? 0;
@@ -150,10 +159,12 @@ export function DeliveryPnlManager({
     });
 
     return {
-      count: filteredRows.length,
       totalReceived,
       totalSold,
       totalRemaining,
+      totalOrderCost,
+      totalCollected,
+      totalOutstanding,
       totalRevenue,
       totalExpectedRevenue,
       totalExpenses,
@@ -165,18 +176,18 @@ export function DeliveryPnlManager({
     () =>
       buildPctStats([
         {
-          key: "deliveries",
-          label: "Delivery Count",
-          value: metrics.count,
-          color: "#0d9488",
-          format: (n) => `${n.toLocaleString()} deliveries`,
-        },
-        {
           key: "received",
           label: "Received Volume",
           value: metrics.totalReceived,
           color: "#3b82f6",
           format: (n) => fmtQty(n),
+        },
+        {
+          key: "orderCost",
+          label: "Order Cost",
+          value: metrics.totalOrderCost,
+          color: "#64748b",
+          format: (n) => fmtMoney(n),
         },
         {
           key: "sold",
@@ -191,6 +202,20 @@ export function DeliveryPnlManager({
           value: metrics.totalRemaining,
           color: "#10b981",
           format: (n) => fmtQty(n),
+        },
+        {
+          key: "collected",
+          label: "Received Payment",
+          value: metrics.totalCollected,
+          color: "#0d9488",
+          format: (n) => fmtMoney(n),
+        },
+        {
+          key: "outstanding",
+          label: "Outstanding",
+          value: metrics.totalOutstanding,
+          color: "#f43f5e",
+          format: (n) => fmtMoney(n),
         },
       ]),
     [metrics]
@@ -224,7 +249,7 @@ export function DeliveryPnlManager({
           key: "expenses",
           label: "Cycle Expense",
           value: metrics.totalExpenses,
-          color: "#f43f5e",
+          color: "#eab308",
           format: (n) => fmtMoney(n),
         },
       ]),
@@ -331,9 +356,9 @@ export function DeliveryPnlManager({
             <span className="font-mono tabular-nums text-muted-foreground">
               {fmtMoney(row.original.transportTotal)}
             </span>
-            <span className="font-mono text-[11px] tabular-nums text-muted-foreground/70">
+            {/* <span className="font-mono text-[11px] tabular-nums text-muted-foreground/70">
               {fmtMoney(row.original.deliveryRate)}/L
-            </span>
+            </span> */}
           </div>
         ),
         footer: ({ table }) =>
@@ -371,11 +396,38 @@ export function DeliveryPnlManager({
           ),
       },
       {
+        accessorKey: "collectionStatus",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Received Status" />,
+        meta: { label: "Received Status" },
+        cell: ({ row }) => {
+          const status = row.original.collectionStatus ?? "none";
+          const due = row.original.balanceDue ?? 0;
+          if (status === "none") {
+            return <span className="text-muted-foreground">—</span>;
+          }
+          if (status === "balanced") {
+            return (
+              <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                Balanced
+              </span>
+            );
+          }
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span className="w-fit rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
+                Remaining debt
+              </span>
+              <span className="font-mono text-[11px] tabular-nums text-rose-600">{fmtMoney(due)}</span>
+            </div>
+          );
+        },
+      },
+      {
         accessorKey: "cycleExpenses",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Cycle Expenses" />,
         meta: { label: "Cycle Expenses" },
         cell: ({ row }) => (
-          <span className="font-mono tabular-nums text-rose-600">
+          <span className="font-mono tabular-nums text-amber-500">
             {fmtMoney(row.original.cycleExpenses)}
           </span>
         ),
@@ -404,7 +456,7 @@ export function DeliveryPnlManager({
         footer: ({ table }) => {
           const total = table
             .getFilteredRowModel()
-            .rows.reduce((sum, row) => sum + row.original.netProfit, 0);
+            .rows.reduce((sum, row) => sum + (row.original.netProfit ?? 0), 0);
           return (
             <span className={cn("font-mono", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
               {fmtMoney(total)}

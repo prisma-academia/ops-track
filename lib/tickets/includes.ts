@@ -30,7 +30,12 @@ export const TICKET_INCLUDE = {
   approvedBy: {
     select: ticketPersonSelect,
   },
-  varianceLog: true,
+  varianceLog: {
+    include: {
+      tank: { select: { id: true, name: true, productType: true } },
+      waybill: { select: { id: true, number: true, productType: true } },
+    },
+  },
   pump: { select: { id: true, name: true, status: true } },
   nozzle: { select: { id: true, name: true, status: true } },
   parent: { select: { id: true, title: true, category: true, status: true } },

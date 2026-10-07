@@ -7,6 +7,8 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { StockMovementService } from "@/lib/inventory/stock-movement-service";
 import { recomputeTransportLoss } from "@/lib/fleet/transport-volume";
+import { dispatchAlertNotifications } from "@/lib/alerts/dispatch-alerts";
+
 const CreateWaybillDippingSchema = z.object({
   dippings: z.array(z.object({
     tankId: z.string().min(1),
@@ -218,6 +220,23 @@ export async function POST(
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
+
+    // Fire-and-forget: dispatch alert notifications for WAYBILL_SHORTAGE.
+    // This runs AFTER the transaction commits so it can never cause a rollback.
+    // If this fails for any reason it is caught silently — the dipping record is safe.
+    if (result.variance > 0) {
+      void dispatchAlertNotifications({
+        tenantId: actor.tenantId,
+        stationId: allocation.stationId,
+        triggerType: "WAYBILL_SHORTAGE",
+        varianceAmount: result.variance,
+        title: "Waybill Shortage Detected",
+        message: `A shortage of ${result.variance.toFixed(2)}L was recorded on waybill allocation ${waybillAllocationId}.`,
+        referenceId: waybillAllocationId,
+      }).catch((err) => {
+        console.error("[alert-dispatch] WAYBILL_SHORTAGE dispatch failed:", err);
+      });
+    }
 
     return ok({ dippings: result.createdDippings, completed: result.completed, variance: result.variance });
   } catch (e) {

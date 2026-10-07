@@ -519,20 +519,6 @@ export function InventoryAlertsManager({
               >
                 <Printer className="size-4" />
               </Button>
-
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={toggleFullscreen}
-                title={isFullscreen ? "Exit fullscreen" : "Fullscreen view"}
-                className="h-10 w-10"
-              >
-                {isFullscreen ? (
-                  <Minimize2 className="size-4" />
-                ) : (
-                  <Maximize2 className="size-4" />
-                )}
-              </Button>
             </div>
           </div>
         </div>

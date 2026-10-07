@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import {
   Activity01Icon,
   Activity02Icon,
+  Alert01Icon,
   Analytics01Icon,
   AnalyticsUpIcon,
   BankIcon,
@@ -190,6 +191,7 @@ export const iconMap: Record<string, React.ComponentType<{ size?: number; classN
   ShieldCheckIcon: createHugeIcon(ShieldCheckIcon),
   Activity01Icon: createHugeIcon(Activity01Icon),
   Activity02Icon: createHugeIcon(Activity02Icon),
+  Alert01Icon: createHugeIcon(Alert01Icon),
   TableIcon: createHugeIcon(TableIcon),
   Notification01Icon: createHugeIcon(Notification01Icon),
   Ticket01Icon: createHugeIcon(Ticket01Icon),

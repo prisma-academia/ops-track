@@ -96,19 +96,26 @@ export async function formatStationRows(rawRows: any[]) {
     let pmsLiters = 0;
     let agoLiters = 0;
     let lpgLiters = 0;
-    const lastClosingStock = { PMS: 0, AGO: 0, LPG: 0 };
+    const lastClosingStock = { PMS: 0, AGO: 0, DPK: 0, LPG: 0 };
+    let lastClosingStockTotal = 0;
+    const tankProducts = new Set<"PMS" | "AGO" | "DPK" | "LPG">();
 
     s.tanks.forEach((t: any) => {
       if (t.productType === "PMS") pmsLiters += Number(t.currentLiters);
       if (t.productType === "AGO") agoLiters += Number(t.currentLiters);
       if (t.productType === "LPG") lpgLiters += Number(t.currentLiters);
-      
-      const lastSession = t.dippingSessions?.[0];
-      if (lastSession && lastSession.closings?.[0]) {
-        const prod = t.productType as "PMS" | "AGO" | "LPG";
-        if (lastClosingStock[prod] !== undefined) {
-          lastClosingStock[prod] += Number(lastSession.closings[0].closingLiters);
-        }
+
+      const prod = t.productType as "PMS" | "AGO" | "DPK" | "LPG";
+      if (lastClosingStock[prod] !== undefined) {
+        tankProducts.add(prod);
+      }
+
+      const closingLiters = t.dippingSessions?.[0]?.closings?.[0]
+        ? Number(t.dippingSessions[0].closings[0].closingLiters)
+        : 0;
+      lastClosingStockTotal += closingLiters;
+      if (lastClosingStock[prod] !== undefined) {
+        lastClosingStock[prod] += closingLiters;
       }
     });
 
@@ -116,6 +123,10 @@ export async function formatStationRows(rawRows: any[]) {
     let lastSalesDate: string | null = null;
     let lastSalesAmount = 0;
     const lastSalesProducts: { PMS: number; AGO: number; LPG: number } = { PMS: 0, AGO: 0, LPG: 0 };
+    const lastSalesLiters: Partial<Record<"PMS" | "AGO" | "DPK" | "LPG", number>> = {};
+    for (const prod of tankProducts) {
+      lastSalesLiters[prod] = 0;
+    }
 
     if (salesLogs.length > 0 && salesLogs[0].logDate) {
       const latestDateObj = new Date(salesLogs[0].logDate);
@@ -134,9 +145,12 @@ export async function formatStationRows(rawRows: any[]) {
             ? posTransfer
             : Number(log.litersSold || 0) * Number(log.pricePerLiter || 0);
         lastSalesAmount += val;
-        const prod = log.productType as "PMS" | "AGO" | "LPG";
-        if (prod && lastSalesProducts[prod] !== undefined) {
+        const prod = log.productType as "PMS" | "AGO" | "DPK" | "LPG";
+        if (prod === "PMS" || prod === "AGO" || prod === "LPG") {
           lastSalesProducts[prod] += val;
+        }
+        if (prod === "PMS" || prod === "AGO" || prod === "DPK" || prod === "LPG") {
+          lastSalesLiters[prod] = (lastSalesLiters[prod] || 0) + Number(log.litersSold || 0);
         }
       }
     }
@@ -157,10 +171,12 @@ export async function formatStationRows(rawRows: any[]) {
       lastSalesAmount,
       lastSalesDate,
       lastSalesProducts,
+      lastSalesLiters,
       lastWaybillDate,
       derivedBalance: balanceByStation[s.id] || 0,
       todaySales,
       lastClosingStock,
+      lastClosingStockTotal,
     };
   });
 }

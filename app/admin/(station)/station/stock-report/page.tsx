@@ -1,7 +1,20 @@
 import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { allocateWaybillDrawdown } from "@/lib/inventory/waybill-level";
 import { StockReportManager } from "./stock-report-manager";
+
+function startOfDay(d: Date) {
+  const next = new Date(d);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function endOfDay(d: Date) {
+  const next = new Date(d);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
 
 export default async function StockReportPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_STOCK_REPORTS_READ.key);
@@ -46,9 +59,69 @@ export default async function StockReportPage() {
     orderBy: { name: "asc" },
   });
 
-  // Build flat rows — each row is one WaybillAllocation (one station delivery)
-  const rows = await Promise.all(
-    allocations.map(async (a, index) => {
+  const stationIds = [...new Set(allocations.map((a) => a.stationId))];
+  const minDeliveredAt = allocations.reduce<Date | null>((min, a) => {
+    if (!a.deliveredAt) return min;
+    return !min || a.deliveredAt < min ? a.deliveredAt : min;
+  }, null);
+
+  const [salesLogs, expenseRows] =
+    stationIds.length > 0
+      ? await Promise.all([
+          prisma.salesLog.findMany({
+            where: {
+              tenantId: actor.tenantId,
+              stationId: { in: stationIds },
+              status: "APPROVED",
+              isDebtRepayment: false,
+              ...(minDeliveredAt ? { logDate: { gte: startOfDay(minDeliveredAt) } } : {}),
+            },
+            orderBy: { logDate: "asc" },
+            select: {
+              stationId: true,
+              productType: true,
+              logDate: true,
+              litersSold: true,
+              pricePerLiter: true,
+            },
+          }),
+          prisma.expense.findMany({
+            where: {
+              tenantId: actor.tenantId,
+              stationId: { in: stationIds },
+              ...(minDeliveredAt ? { createdAt: { gte: minDeliveredAt } } : {}),
+            },
+            select: {
+              stationId: true,
+              createdAt: true,
+              amount: true,
+            },
+          }),
+        ])
+      : [[], []];
+
+  const drawdown = allocateWaybillDrawdown(
+    allocations.map((a) => ({
+      id: a.id,
+      stationId: a.stationId,
+      productType: a.waybill.productType,
+      deliveredAt: a.deliveredAt,
+      litersReceived: a.litersReceived != null ? Number(a.litersReceived) : null,
+      status: a.status,
+      createdAt: a.createdAt,
+    })),
+    salesLogs.map((log) => ({
+      stationId: log.stationId,
+      productType: log.productType,
+      logDate: log.logDate,
+      litersSold: Number(log.litersSold),
+      pricePerLiter: Number(log.pricePerLiter),
+    })),
+  );
+
+  // Each row is one station delivery. Sold litres are shared FIFO across
+  // deliveries of the same product, so one sale cannot drain every open waybill.
+  const rows = allocations.map((a, index) => {
       const deliveryQty = Number(a.litersToDispense);
       const productPrice = Number(a.costPerLiter);
       const transportationCost = Number(a.transportationCost);
@@ -78,77 +151,31 @@ export default async function StockReportPage() {
       let soldQty = 0;
       let isFullySold = false;
 
-      // New logic for calculating Reconciled Date, Deposit, Total Expense, and PNL
-      if (a.deliveredAt && reconciledQty !== null && reconciledQty > 0) {
-        // Fetch approved deliveries logs from the delivery date onwards for this station & product
-        const salesLogs = await prisma.salesLog.findMany({
-          where: {
-            stationId: a.stationId,
-            productType: a.waybill.productType,
-            status: "APPROVED",
-            logDate: {
-              gte: a.deliveredAt,
-            },
-          },
-          orderBy: { logDate: "asc" },
-        });
+      if (a.status !== "CANCELLED" && a.deliveredAt && reconciledQty !== null && reconciledQty > 0) {
+        const draw = drawdown.get(a.id);
+        soldQty = draw?.soldQty ?? 0;
+        isFullySold = draw?.isFullySold ?? false;
+        reconciledDeposit = draw?.deposit ?? 0;
 
-        let accumulatedLiters = 0;
-        let depositSum = 0;
-        let finalSalesDate: Date | null = null;
-
-        for (const log of salesLogs) {
-          const liters = Number(log.litersSold);
-          const price = Number(log.pricePerLiter);
-
-          if (accumulatedLiters + liters >= reconciledQty) {
-            // We reached the quantity
-            const neededLiters = reconciledQty - accumulatedLiters;
-            depositSum += neededLiters * price;
-            accumulatedLiters += neededLiters;
-            finalSalesDate = log.logDate;
-            isFullySold = true;
-            break;
-          } else {
-            depositSum += liters * price;
-            accumulatedLiters += liters;
-            finalSalesDate = log.logDate;
-          }
-        }
-
-        soldQty = accumulatedLiters;
-        reconciledDeposit = depositSum;
-
+        const finalSalesDate = draw?.fullySoldAt ?? null;
         if (isFullySold && finalSalesDate) {
           reconciledDate = finalSalesDate.toISOString();
         } else {
           reconciledDate = null;
         }
 
-        const expenseEndDate = (isFullySold && finalSalesDate) 
-          ? new Date(finalSalesDate.getTime()) 
-          : new Date();
-        expenseEndDate.setHours(23, 59, 59, 999);
+        const expenseEndDate = isFullySold && finalSalesDate ? endOfDay(finalSalesDate) : endOfDay(new Date());
 
-        // Fetch total expense for this station between deliveredAt and reconciledDate
-        const expenses = await prisma.expense.aggregate({
-          where: {
-            stationId: a.stationId,
-            createdAt: {
-              gte: a.deliveredAt,
-              lte: expenseEndDate,
-            },
-          },
-          _sum: {
-            amount: true,
-          },
-        });
-        
-        totalExpense = Number(expenses._sum.amount || 0);
+        totalExpense = expenseRows.reduce((sum, expense) => {
+          if (expense.stationId !== a.stationId) return sum;
+          if (expense.createdAt < a.deliveredAt!) return sum;
+          if (expense.createdAt > expenseEndDate) return sum;
+          return sum + Number(expense.amount);
+        }, 0);
         pnl = reconciledDeposit - stockValue - totalExpense;
       }
 
-      const effectiveQty = reconciledQty ?? deliveryQty;
+      const effectiveQty = a.status === "CANCELLED" ? 0 : (reconciledQty ?? deliveryQty);
       const remainingQty = Math.max(0, effectiveQty - soldQty);
       const remainingPct = effectiveQty > 0 ? (remainingQty / effectiveQty) * 100 : 0;
       const remainingStockValue = productPrice ? remainingQty * productPrice : null;
@@ -183,8 +210,7 @@ export default async function StockReportPage() {
         remainingStockValue,
         isFullySold,
       };
-    })
-  );
+  });
 
   const serialized = JSON.parse(JSON.stringify(rows));
   const serializedStations = JSON.parse(JSON.stringify(stations));

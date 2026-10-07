@@ -9,6 +9,12 @@ import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 import { useSearchParams } from "next/navigation";
 
+const PRODUCT_ORDER = ["PMS", "AGO", "DPK", "LPG"] as const;
+
+function formatLiters(value: number) {
+  return `${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} L`;
+}
+
 export type StationRow = {
   id: string;
   code: string;
@@ -17,10 +23,12 @@ export type StationRow = {
   lga?: string | null;
   ward?: string | null;
   todaySales: { PMS: number; AGO: number; LPG: number };
-  lastClosingStock: { PMS: number; AGO: number; LPG: number };
+  lastClosingStock: { PMS: number; AGO: number; DPK?: number; LPG: number };
+  lastClosingStockTotal: number;
   lastSalesAmount: number;
   lastSalesDate?: string | null;
   lastSalesProducts?: { PMS: number; AGO: number; LPG: number };
+  lastSalesLiters?: Partial<Record<"PMS" | "AGO" | "DPK" | "LPG", number>>;
   lastWaybillDate: string | null;
   derivedBalance: number;
 };
@@ -62,20 +70,20 @@ const columns: ColumnDef<StationRow>[] = [
     cell: ({ row }) => {
       const amount = row.original.lastSalesAmount;
       const dateStr = row.original.lastSalesDate;
+      const liters = row.original.lastSalesLiters ?? {};
+      const parts = PRODUCT_ORDER.filter((product) => product in liters).map(
+        (product) => `${product}: ${formatLiters(liters[product] ?? 0)}`,
+      );
+
       if (!amount && !dateStr) {
-        return <span className="text-muted-foreground text-xs">—</span>;
+        return <span className="text-xs font-medium">{parts.length ? parts.join(" | ") : "0 L"}</span>;
       }
 
       const date = dateStr ? new Date(dateStr) : null;
       const formattedDate = date
         ? date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
         : null;
-
-      const products = row.original.lastSalesProducts;
-      const parts = [];
-      if (products?.PMS) parts.push(`PMS: ₦${products.PMS.toLocaleString()}`);
-      if (products?.AGO) parts.push(`AGO: ₦${products.AGO.toLocaleString()}`);
-      if (products?.LPG) parts.push(`LPG: ₦${products.LPG.toLocaleString()}`);
+      const litersLabel = parts.length ? parts.join(" | ") : "0 L";
 
       return (
         <div className="flex flex-col py-1">
@@ -84,11 +92,9 @@ const columns: ColumnDef<StationRow>[] = [
           </span>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {formattedDate && <span>{formattedDate}</span>}
-            {parts.length > 0 && (
-              <span className="text-[11px] text-muted-foreground/80 truncate max-w-[180px]" title={parts.join(" | ")}>
-                • {parts.join(" | ")}
-              </span>
-            )}
+            <span className="text-[11px] text-muted-foreground/80 truncate max-w-[220px]" title={litersLabel}>
+              {formattedDate ? "• " : ""}{litersLabel}
+            </span>
           </div>
         </div>
       );
@@ -98,14 +104,8 @@ const columns: ColumnDef<StationRow>[] = [
     accessorKey: "lastClosingStock",
     header: "Last Closing Stock",
     cell: ({ row }) => {
-      const stock = row.original.lastClosingStock;
-      const parts = [];
-      if (stock.PMS) parts.push(`PMS: ${stock.PMS.toLocaleString()} L`);
-      if (stock.AGO) parts.push(`AGO: ${stock.AGO.toLocaleString()} L`);
-      if (stock.LPG) parts.push(`LPG: ${stock.LPG.toLocaleString()} L`);
-      return parts.length ? (
-        <span className="text-xs font-medium">{parts.join(" | ")}</span>
-      ) : "—";
+      const total = row.original.lastClosingStockTotal ?? 0;
+      return <span className="text-xs font-medium">{formatLiters(total)}</span>;
     }
   },
 

@@ -320,28 +320,6 @@ export function StockReportManager({
           ),
       },
       {
-        id: "variance",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Variance (L)" />,
-        meta: { label: "Variance (L)" },
-        accessorFn: (row) =>
-          (row.reconciledQty ?? row.deliveryQty) - (row.deliveryQty ?? 0),
-        cell: ({ row }) => {
-          const variance =
-            (row.original.reconciledQty ?? row.original.deliveryQty) -
-            (row.original.deliveryQty ?? 0);
-          return (
-            <span
-              className={cn(
-                "font-mono tabular-nums",
-                variance < 0 ? "font-semibold text-red-500" : ""
-              )}
-            >
-              {fmtQty(variance)}
-            </span>
-          );
-        },
-      },
-      {
         accessorKey: "reconciledDate",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Reconciled Date" />,
         meta: { label: "Reconciled Date" },

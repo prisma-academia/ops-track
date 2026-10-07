@@ -208,7 +208,7 @@ export default async function DeliveryPnlPage() {
       const cycleRevenue = draw?.deposit ?? 0;
       const amountCollected = draw?.collected ?? 0;
       const balanceDue = Math.max(0, cycleRevenue - amountCollected);
-      const collectionStatus =
+      const collectionStatus: "none" | "balanced" | "debt" =
         cycleRevenue <= 0.009 ? "none" : balanceDue <= 0.009 ? "balanced" : "debt";
       const remainingQty = Math.max(0, purchaseQty - soldQty);
       const avgSellingPrice = soldQty > 0 ? cycleRevenue / soldQty : costPerLiter * 1.15;

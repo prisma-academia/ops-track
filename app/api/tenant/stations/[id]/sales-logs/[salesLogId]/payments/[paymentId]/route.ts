@@ -6,7 +6,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { sendPushNotification } from "@/lib/notifications";
-import { rollupSalesLogStatus, salesPaymentInclude } from "@/lib/sales/payments";
+import { firstBankIds, rollupSalesLogStatus, salesPaymentInclude, sumsFromPayments } from "@/lib/sales/payments";
 import { StockMovementService } from "@/lib/inventory/stock-movement-service";
 import { reconcileTankCurrentLiters } from "@/lib/inventory/tank-balance";
 
@@ -207,6 +207,85 @@ export async function PATCH(
       payment: updatedPayment,
       salesLog,
     });
+  } catch (e) {
+    return handleError(e);
+  }
+}
+
+/** Remove one rejected payment. Approved and pending payments stay on the sale. */
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string; salesLogId: string; paymentId: string }> }
+) {
+  try {
+    await requireCsrf(request);
+    const { id: stationId, salesLogId, paymentId } = await params;
+    const actor = await requireTenantActor(PERMISSIONS.TENANT_SHIFTS_WRITE.key, "STATION");
+    const meta = requestMeta(request);
+
+    const station = await prisma.station.findUnique({ where: { id: stationId } });
+    if (!station || station.tenantId !== actor.tenantId) {
+      throw new DomainError(404, "not_found", "Station not found.");
+    }
+
+    const payment = await prisma.salesPayment.findFirst({
+      where: { id: paymentId, salesLogId, tenantId: actor.tenantId },
+      include: { salesLog: true },
+    });
+    if (!payment || payment.salesLog.stationId !== stationId) {
+      throw new DomainError(404, "not_found", "Payment not found.");
+    }
+    if (payment.status !== "REJECTED") {
+      throw new DomainError(
+        400,
+        "cannot_delete",
+        "Only a rejected payment can be deleted. Use correct to replace a payment that still needs review.",
+      );
+    }
+
+    const remaining = await prisma.salesPayment.findMany({
+      where: { salesLogId, tenantId: actor.tenantId, id: { not: paymentId } },
+    });
+    const asInputs = remaining.map((p) => ({
+      method: p.method,
+      amount: Number(p.amount),
+      bankAccountId: p.bankAccountId,
+      receiptUrl: p.receiptUrl,
+    }));
+    const sums = sumsFromPayments(asInputs);
+    const banks = firstBankIds(asInputs);
+    const status = rollupSalesLogStatus(remaining);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.salesPayment.delete({ where: { id: paymentId } });
+      await tx.salesLog.update({
+        where: { id: salesLogId },
+        data: {
+          amountPos: sums.amountPos,
+          amountTransfer: sums.amountTransfer,
+          posBankAccountId: banks.posBankAccountId,
+          transferBankAccountId: banks.transferBankAccountId,
+          posReceiptUrl: banks.posReceiptUrl,
+          transferReceiptUrl: banks.transferReceiptUrl,
+          status,
+          reason: status === "REJECTED" ? payment.salesLog.reason : null,
+        },
+      });
+    });
+
+    await audit({
+      actorType: "TENANT_USER",
+      tenantId: actor.tenantId,
+      actorId: actor.userId,
+      action: "sales.payment.delete",
+      targetType: "SalesPayment",
+      targetId: paymentId,
+      before: { salesLogId, method: payment.method, amount: Number(payment.amount), status: payment.status },
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+    });
+
+    return ok({ deleted: true, salesLogId, status });
   } catch (e) {
     return handleError(e);
   }

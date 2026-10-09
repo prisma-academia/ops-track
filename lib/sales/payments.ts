@@ -72,13 +72,6 @@ export function validatePaymentInputs(payments: PaymentInput[]) {
         `${p.method === "POS" ? "POS" : "Transfer"} bank account is required.`,
       );
     }
-    if (p.method === "TRANSFER" && !p.receiptUrl?.trim()) {
-      throw new DomainError(
-        400,
-        "invalid_input",
-        "Transfer receipt image is required when a transfer amount is entered.",
-      );
-    }
   }
 
   return active;

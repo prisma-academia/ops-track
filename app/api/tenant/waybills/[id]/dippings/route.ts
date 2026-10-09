@@ -42,12 +42,23 @@ export async function POST(
     }
 
     const uniqueTankIds = Array.from(new Set(body.dippings.map((d) => d.tankId)));
+    const existingDipTanks = body.completeWithShortage
+      ? await prisma.waybillDipping.findMany({
+          where: { waybillAllocationId: allocation.id, tenantId: actor.tenantId },
+          select: { tankId: true },
+        })
+      : [];
+    const tankIdsToCheck = Array.from(new Set([
+      ...uniqueTankIds,
+      ...existingDipTanks.map((d) => d.tankId),
+    ]));
     const tanks = await prisma.tank.findMany({
-      where: { id: { in: uniqueTankIds } },
+      where: { id: { in: tankIdsToCheck.length > 0 ? tankIdsToCheck : uniqueTankIds } },
     });
 
     if (body.dippings.length > 0) {
-      if (tanks.length !== uniqueTankIds.length || tanks.some(t => t.stationId !== allocation.stationId || t.tenantId !== actor.tenantId)) {
+      const bodyTanks = tanks.filter((t) => uniqueTankIds.includes(t.id));
+      if (bodyTanks.length !== uniqueTankIds.length || bodyTanks.some(t => t.stationId !== allocation.stationId || t.tenantId !== actor.tenantId)) {
         throw new DomainError(404, "not_found", "One or more tanks not found or belong to a different station.");
       }
 
@@ -68,31 +79,31 @@ export async function POST(
         );
       }
 
-      // Check for unapproved sales for all selected tanks
-      for (const tankId of uniqueTankIds) {
-        const lastSessionForBlock = await prisma.dippingSession.findFirst({
-          where: { tankId, tenantId: actor.tenantId },
-          orderBy: { openedAt: "desc" },
-          include: { closings: true },
+    }
+
+    for (const tankId of tankIdsToCheck) {
+      const lastSessionForBlock = await prisma.dippingSession.findFirst({
+        where: { tankId, tenantId: actor.tenantId },
+        orderBy: { openedAt: "desc" },
+        include: { closings: true },
+      });
+
+      if (lastSessionForBlock && lastSessionForBlock.closings.length > 0) {
+        const closingIds = lastSessionForBlock.closings.map(c => c.id);
+        const pendingSales = await prisma.salesLog.findFirst({
+          where: {
+            dippingClosingId: { in: closingIds },
+            status: { notIn: ["APPROVED"] },
+          },
         });
 
-        if (lastSessionForBlock && lastSessionForBlock.closings.length > 0) {
-          const closingIds = lastSessionForBlock.closings.map(c => c.id);
-          const pendingSales = await prisma.salesLog.findFirst({
-            where: {
-              dippingClosingId: { in: closingIds },
-              status: { notIn: ["APPROVED"] },
-            },
-          });
-
-          if (pendingSales) {
-            const tank = tanks.find(t => t.id === tankId);
-            throw new DomainError(
-              400,
-              "pending_sales_exists",
-              `Cannot discharge into tank "${tank?.name}": There are unapproved or rejected sales from its previous dipping session. Please approve or resolve them first.`
-            );
-          }
+        if (pendingSales) {
+          const tank = tanks.find(t => t.id === tankId);
+          throw new DomainError(
+            400,
+            "pending_sales_exists",
+            `Cannot discharge into tank "${tank?.name ?? "selected tank"}": There are unapproved or rejected sales from its previous dipping session. Please approve or resolve them first. Remaining space does not include those sales.`
+          );
         }
       }
     }

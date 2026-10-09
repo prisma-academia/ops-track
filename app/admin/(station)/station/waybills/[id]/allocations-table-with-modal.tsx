@@ -34,7 +34,63 @@ type TankOption = {
   capacity: number | string;
   currentLiters: number | string;
   hasOpenDipping?: boolean;
+  salesLocked?: boolean;
+  pendingEstimateLiters?: number;
 };
+
+type SessionLite = {
+  tankId: string;
+  status: string;
+  openedAt: string;
+  closings?: { id: string }[];
+};
+
+type SaleLite = {
+  status?: string;
+  dippingClosingId?: string | null;
+  litersSold?: number | string;
+  productType?: string;
+};
+
+function salesLockByTank(sessions: SessionLite[], sales: SaleLite[], tanks: { id: string; productType: string }[]) {
+  const latest = new Map<string, SessionLite>();
+  for (const session of sessions) {
+    const prev = latest.get(session.tankId);
+    if (!prev || new Date(session.openedAt).getTime() > new Date(prev.openedAt).getTime()) {
+      latest.set(session.tankId, session);
+    }
+  }
+  const locked = new Set<string>();
+  for (const [tankId, session] of latest) {
+    const closingIds = new Set((session.closings ?? []).map((c) => c.id));
+    if (closingIds.size === 0) continue;
+    const blocked = sales.some(
+      (log) =>
+        !!log.dippingClosingId &&
+        closingIds.has(log.dippingClosingId) &&
+        log.status !== "APPROVED"
+    );
+    if (blocked) locked.add(tankId);
+  }
+
+  const pendingByProduct = new Map<string, number>();
+  for (const log of sales) {
+    if (log.status !== "PENDING" && log.status !== "PARTIAL") continue;
+    if (!log.productType) continue;
+    pendingByProduct.set(log.productType, (pendingByProduct.get(log.productType) || 0) + Number(log.litersSold || 0));
+  }
+  const tanksByProduct = new Map<string, number>();
+  for (const tank of tanks) {
+    tanksByProduct.set(tank.productType, (tanksByProduct.get(tank.productType) || 0) + 1);
+  }
+  const estimate = new Map<string, number>();
+  for (const tank of tanks) {
+    const total = pendingByProduct.get(tank.productType) || 0;
+    const count = tanksByProduct.get(tank.productType) || 1;
+    estimate.set(tank.id, total > 0 ? total / count : 0);
+  }
+  return { locked, estimate };
+}
 
 type RecordedDip = {
   tankId: string;
@@ -173,21 +229,28 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
     Promise.all([
       apiGet(`/api/tenant/stations/${allocation.stationId}/tanks`),
       apiGet(`/api/tenant/stations/${allocation.stationId}/dipping-sessions`),
+      apiGet(`/api/tenant/stations/${allocation.stationId}/sales-logs`),
     ])
-      .then(([tanksRes, sessionsRes]) => {
+      .then(([tanksRes, sessionsRes, salesRes]) => {
+        const sessionsPayload = (!sessionsRes.error && sessionsRes.data
+          ? sessionsRes.data
+          : { sessions: [] }) as { sessions?: SessionLite[] } | SessionLite[];
+        const sessions = Array.isArray(sessionsPayload) ? sessionsPayload : sessionsPayload.sessions ?? [];
         const openTankIds = new Set<string>();
-        if (!sessionsRes.error && sessionsRes.data) {
-          const payload = sessionsRes.data as { sessions?: { tankId: string; status: string }[] };
-          const list = Array.isArray(payload) ? payload : payload.sessions ?? [];
-          for (const session of list) {
-            if (session.status === "OPEN") openTankIds.add(session.tankId);
-          }
+        for (const session of sessions) {
+          if (session.status === "OPEN") openTankIds.add(session.tankId);
         }
+        const sales = (!salesRes.error && Array.isArray(salesRes.data) ? salesRes.data : []) as SaleLite[];
         if (!tanksRes.error && tanksRes.data) {
           const compatibleTanks = (tanksRes.data as TankOption[])
-            .filter((t) => t.productType === allocation.productType)
-            .map((t) => ({ ...t, hasOpenDipping: openTankIds.has(t.id) }));
-          setTanks(compatibleTanks);
+            .filter((t) => t.productType === allocation.productType);
+          const { locked, estimate } = salesLockByTank(sessions, sales, compatibleTanks);
+          setTanks(compatibleTanks.map((t) => ({
+            ...t,
+            hasOpenDipping: openTankIds.has(t.id),
+            salesLocked: locked.has(t.id),
+            pendingEstimateLiters: estimate.get(t.id) || 0,
+          })));
         }
       })
       .finally(() => setLoadingTanks(false));
@@ -207,6 +270,10 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
     }
     if (selectedTank.hasOpenDipping) {
       toast.error(`Close the open dipping on tank "${selectedTank.name}" before recording a waybill drop.`);
+      return false;
+    }
+    if (selectedTank.salesLocked) {
+      toast.error(`Cannot discharge into "${selectedTank.name}" until sales from the last dipping are approved. Remaining space does not include those sales.`);
       return false;
     }
     if (!afterLiters) {
@@ -291,6 +358,11 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
     }
     if (receivedSoFar <= 0 && recordedDips.length === 0) {
       toast.error("Record at least one tank dipping before completing.");
+      return;
+    }
+    const lockedRecorded = recordedDips.filter((dip) => tanks.find((t) => t.id === dip.tankId)?.salesLocked);
+    if (selectedTank?.salesLocked || lockedRecorded.length > 0) {
+      toast.error("This receipt cannot be completed until sales from the last dipping are approved. Remaining space does not include those sales.");
       return;
     }
     setCompleting(true);
@@ -453,7 +525,13 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
                                     <span className="font-medium">{tank.name}</span>
                                     <span className="text-xs text-muted-foreground">
                                       Cap {capacity.toLocaleString()} L · Now {current.toLocaleString()} L · Space {space.toLocaleString()} L
-                                      {full ? " · Full" : tank.hasOpenDipping ? " · Open dipping — close first" : ""}
+                                      {full
+                                        ? " · Full"
+                                        : tank.salesLocked
+                                          ? " · Sales not approved — cannot discharge"
+                                          : tank.hasOpenDipping
+                                            ? " · Open dipping — close first"
+                                            : ""}
                                     </span>
                                   </div>
                                 </CommandItem>
@@ -544,7 +622,18 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
                         </div>
                       </div>
                     )}
-                    {selectedTank && availableSpace < remainingDispatch && (
+                    {selectedTank?.salesLocked && (
+                      <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+                        <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                        <span>
+                          This waybill cannot be completed until sales from the last dipping on {selectedTank.name} are approved. Remaining space ({availableSpace.toLocaleString()} L) is the last dip and does not deduct those sales.
+                          {(selectedTank.pendingEstimateLiters ?? 0) > 0
+                            ? ` Sales awaiting approval (estimate): ${Number(selectedTank.pendingEstimateLiters).toLocaleString()} L.`
+                            : ""}
+                        </span>
+                      </div>
+                    )}
+                    {selectedTank && !selectedTank.salesLocked && availableSpace < remainingDispatch && (
                       <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
                         <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
                         <span>
@@ -562,14 +651,14 @@ export function LogDippingModal({ allocation, onSuccess }: { allocation: any; on
                 <Button
                   type="button"
                   variant={remainingDispatch > 0 ? "outline" : "default"}
-                  disabled={loading || completing}
+                  disabled={loading || completing || Boolean(selectedTank?.salesLocked) || recordedDips.some((dip) => tanks.find((t) => t.id === dip.tankId)?.salesLocked)}
                   onClick={() => setConfirmCompleteOpen(true)}
                 >
                   Complete with variance
                 </Button>
               )}
               {remainingDispatch > 0 && (
-                <Button type="submit" disabled={loading || completing || !tankId || !afterLiters || afterExceedsCapacity || dippingReceivedLiters > availableSpace || Boolean(selectedTank?.hasOpenDipping)}>
+                <Button type="submit" disabled={loading || completing || !tankId || !afterLiters || afterExceedsCapacity || dippingReceivedLiters > availableSpace || Boolean(selectedTank?.hasOpenDipping) || Boolean(selectedTank?.salesLocked)}>
                   {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
                   Save dipping
                 </Button>

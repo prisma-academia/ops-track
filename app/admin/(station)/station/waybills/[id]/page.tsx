@@ -88,7 +88,7 @@ export default async function WaybillDetailsPage({
     waybillVerified: a.waybillVerified,
     arrivalPictures: Array.isArray(a.arrivalPictures) ? (a.arrivalPictures as string[]) : [],
     litersToDispense: Number(a.litersToDispense),
-    litersReceived: a.litersReceived ? Number(a.litersReceived) : null,
+    litersReceived: a.litersReceived != null ? Number(a.litersReceived) : null,
     costPerLiter: Number(a.costPerLiter),
     transportationCost: Number(a.transportationCost),
     arrivalTime: a.arrivalTime ? a.arrivalTime.toISOString() : null,

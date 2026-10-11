@@ -76,7 +76,7 @@ export default async function WaybillsPage() {
   });
 
   const rows = waybills.map((w) => {
-    const totalReceived = w.allocations.reduce((acc, a) => acc + (a.litersReceived ? Number(a.litersReceived) : 0), 0);
+    const totalReceived = w.allocations.reduce((acc, a) => acc + (a.litersReceived != null ? Number(a.litersReceived) : 0), 0);
     const anyDelivered = w.allocations.some(a => ["DELIVERED", "COMPLETED"].includes(a.status));
     const allDelivered = w.allocations.length > 0 && w.allocations.every(a => ["DELIVERED", "COMPLETED"].includes(a.status));
     

@@ -750,9 +750,9 @@ export function AllocationsTableWithModal({
 
   // Summaries
   const totalExpected = allocations.reduce((acc, a) => acc + Number(a.litersToDispense), 0);
-  const totalReceived = allocations.reduce((acc, a) => acc + (a.litersReceived ? Number(a.litersReceived) : 0), 0);
+  const totalReceived = allocations.reduce((acc, a) => acc + (a.litersReceived != null ? Number(a.litersReceived) : 0), 0);
   const totalVariance = allocations.reduce((acc, a) => {
-    if (a.litersReceived) {
+    if (a.litersReceived != null) {
       return acc + (Number(a.litersReceived) - Number(a.litersToDispense));
     }
     return acc;
@@ -777,7 +777,7 @@ export function AllocationsTableWithModal({
           <TableBody>
             {allocations.map((a) => {
               const expected = Number(a.litersToDispense);
-              const received = a.litersReceived ? Number(a.litersReceived) : null;
+              const received = a.litersReceived != null ? Number(a.litersReceived) : null;
               const variance = received !== null ? received - expected : null;
 
               return (

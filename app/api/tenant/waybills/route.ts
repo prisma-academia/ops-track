@@ -173,7 +173,7 @@ export async function GET(request: Request) {
         number: a.waybill.number,
         productType: a.waybill.productType,
         litersLoaded: Number(a.litersToDispense),
-        litersReceived: a.litersReceived ? Number(a.litersReceived) : null,
+        litersReceived: a.litersReceived != null ? Number(a.litersReceived) : null,
         truckPlate: tInfo.truckPlate,
         driverName: tInfo.driverName,
         driverPhone: a.waybill.driverPhone,

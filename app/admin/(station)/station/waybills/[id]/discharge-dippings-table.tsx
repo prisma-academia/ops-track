@@ -135,8 +135,8 @@ export function DischargeDippingsTable({
       return;
     }
 
-    if (numAfter < numBefore) {
-      toast.error("After liters cannot be less than before liters.");
+    if (numAfter <= numBefore) {
+      toast.error("After liters must be greater than before liters.");
       return;
     }
 
@@ -208,7 +208,7 @@ export function DischargeDippingsTable({
   };
 
   const totalDischarged = dippings.reduce((acc, dip) => {
-    return acc + (dip.afterLiters ? Number(dip.afterLiters) - Number(dip.beforeLiters) : 0);
+    return acc + (dip.afterLiters != null ? Number(dip.afterLiters) - Number(dip.beforeLiters) : 0);
   }, 0);
 
   const variance = totalDischarged - litersLoaded;
@@ -242,11 +242,14 @@ export function DischargeDippingsTable({
               <TableHead className="text-right font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Before</TableHead>
               <TableHead className="text-right font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">After</TableHead>
               <TableHead className="text-right font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Net</TableHead>
+              {canEdit && (
+                <TableHead className="text-right font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Actions</TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
             {dippings.map((dip) => {
-              const net = dip.afterLiters ? Number(dip.afterLiters) - Number(dip.beforeLiters) : 0;
+              const net = dip.afterLiters != null ? Number(dip.afterLiters) - Number(dip.beforeLiters) : 0;
               return (
                 <TableRow key={dip.id} className="text-sm">
                   {/* <TableCell className="font-semibold">{dip.tank.station.name}</TableCell> */}
@@ -263,7 +266,7 @@ export function DischargeDippingsTable({
                     {Number(dip.beforeLiters).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {dip.afterLiters ? (
+                    {dip.afterLiters != null ? (
                       Number(dip.afterLiters).toLocaleString()
                     ) : (
                       <span className="text-muted-foreground italic">Pending</span>
@@ -272,13 +275,26 @@ export function DischargeDippingsTable({
                   <TableCell className="text-right tabular-nums font-semibold">
                     {net.toLocaleString()}
                   </TableCell>
+                  {canEdit && (
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEditModal(dip)}
+                      >
+                        <Edit3 className="size-3.5 mr-1.5" />
+                        Edit
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}
           </TableBody>
           <TableFooter className="bg-transparent border-t">
             <TableRow className="hover:bg-transparent border-b-0">
-              <TableCell colSpan={6} className="text-right text-muted-foreground pb-1">
+              <TableCell colSpan={canEdit ? 7 : 6} className="text-right text-muted-foreground pb-1">
                 Total Loaded Quantity
               </TableCell>
               <TableCell className="text-right tabular-nums font-medium pb-1">
@@ -286,7 +302,7 @@ export function DischargeDippingsTable({
               </TableCell>
             </TableRow>
             <TableRow className="hover:bg-transparent border-b-0">
-              <TableCell colSpan={6} className="text-right text-muted-foreground py-1">
+              <TableCell colSpan={canEdit ? 7 : 6} className="text-right text-muted-foreground py-1">
                 Discharged
               </TableCell>
               <TableCell className="text-right tabular-nums font-bold text-foreground py-1">
@@ -294,7 +310,7 @@ export function DischargeDippingsTable({
               </TableCell>
             </TableRow>
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={6} className="text-right text-muted-foreground pt-1">
+              <TableCell colSpan={canEdit ? 7 : 6} className="text-right text-muted-foreground pt-1">
                 Variance
               </TableCell>
               <TableCell

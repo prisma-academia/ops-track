@@ -111,6 +111,13 @@ export async function POST(
     // Validate capacity limits before entering transaction
     for (const dip of body.dippings) {
       if (dip.afterLiters !== null && dip.afterLiters !== undefined) {
+        if (dip.afterLiters <= dip.beforeLiters) {
+          throw new DomainError(
+            400,
+            "invalid_liters",
+            "After liters must be greater than before liters. A dip that does not raise the tank cannot be recorded."
+          );
+        }
         const tank = tanks.find(t => t.id === dip.tankId)!;
         if (dip.afterLiters > Number(tank.capacity)) {
           throw new DomainError(400, "capacity_exceeded", `After volume (${dip.afterLiters} L) exceeds tank "${tank.name}" capacity of ${Number(tank.capacity).toLocaleString()} L.`);
@@ -169,6 +176,14 @@ export async function POST(
 
       const currentReceived = Number(allocation.litersReceived ?? 0) + totalNetDischarged;
       const shouldComplete = body.completeWithShortage === true;
+
+      if (shouldComplete && currentReceived <= 0) {
+        throw new DomainError(
+          400,
+          "invalid_liters",
+          "Cannot complete this waybill until a discharge dip raises the tank level."
+        );
+      }
 
       const updateData: any = {};
       if (totalNetDischarged > 0 || body.dippings.some(d => d.afterLiters !== null && d.afterLiters !== undefined)) {

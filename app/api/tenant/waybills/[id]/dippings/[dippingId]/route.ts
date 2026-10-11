@@ -41,8 +41,8 @@ export async function PATCH(
     const body = UpdateWaybillDippingSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    if (body.afterLiters < body.beforeLiters) {
-      throw new DomainError(400, "invalid_liters", "After liters must be greater than or equal to before liters.");
+    if (body.afterLiters <= body.beforeLiters) {
+      throw new DomainError(400, "invalid_liters", "After liters must be greater than before liters.");
     }
 
     const dipping = await prisma.waybillDipping.findUnique({

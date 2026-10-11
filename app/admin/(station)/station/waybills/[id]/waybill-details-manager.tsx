@@ -120,9 +120,10 @@ export function WaybillDetailsManager({
     0
   );
   const totalReceived = waybill.allocations.reduce(
-    (acc, a) => acc + (a.litersReceived ? Number(a.litersReceived) : 0),
+    (acc, a) => acc + (a.litersReceived != null ? Number(a.litersReceived) : 0),
     0
   );
+  const hasReceivedFigure = waybill.allocations.some((a) => a.litersReceived != null);
   const anyDelivered = waybill.allocations.some((a) =>
     ["DELIVERED", "COMPLETED"].includes(a.status)
   );
@@ -133,7 +134,7 @@ export function WaybillDetailsManager({
   const variance = anyDelivered ? totalReceived - totalAllocated : null;
 
   const totalDischarged = waybill.dippings.reduce((acc, dip) => {
-    return acc + (dip.afterLiters ? Number(dip.afterLiters) - Number(dip.beforeLiters) : 0);
+    return acc + (dip.afterLiters != null ? Number(dip.afterLiters) - Number(dip.beforeLiters) : 0);
   }, 0);
 
   const assignedStationName =
@@ -169,23 +170,23 @@ export function WaybillDetailsManager({
     },
     {
       title: "Confirmed Received",
-      value: totalReceived > 0 ? `${totalReceived.toLocaleString()} L` : "Pending",
+      value: hasReceivedFigure ? `${totalReceived.toLocaleString()} L` : "Pending",
       fullValue:
-        totalReceived > 0
+        hasReceivedFigure
           ? `Confirmed delivered: ${totalReceived.toLocaleString()} L · Physical discharge logged: ${totalDischarged.toLocaleString()} L`
           : totalDischarged > 0
           ? `Physical discharge logged: ${totalDischarged.toLocaleString()} L (Awaiting delivery confirmation)`
           : "Awaiting station delivery confirmation",
       icon: Droplet,
       valueColor:
-        totalReceived > 0
+        hasReceivedFigure
           ? "text-emerald-600 dark:text-emerald-400"
           : "text-amber-600 dark:text-amber-400",
       iconColor:
-        totalReceived > 0
+        hasReceivedFigure
           ? "text-emerald-600 dark:text-emerald-400"
           : "text-amber-600 dark:text-amber-400",
-      bgColor: totalReceived > 0 ? "bg-emerald-500/10" : "bg-amber-500/10",
+      bgColor: hasReceivedFigure ? "bg-emerald-500/10" : "bg-amber-500/10",
     },
     {
       title: "Overall Variance",
@@ -342,7 +343,7 @@ export function WaybillDetailsManager({
       <div className="space-y-6">
         {waybill.allocations.map((a, index) => {
           const expected = Number(a.litersToDispense);
-          const received = a.litersReceived ? Number(a.litersReceived) : null;
+          const received = a.litersReceived != null ? Number(a.litersReceived) : null;
           const allocationVariance = received !== null ? received - expected : null;
           const isDelivered = a.status === "DELIVERED" || a.status === "COMPLETED";
           const verifiedCount = [a.truckNumberVerified, a.driverVerified, a.waybillVerified].filter(Boolean).length;

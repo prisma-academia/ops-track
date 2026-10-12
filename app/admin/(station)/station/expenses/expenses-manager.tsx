@@ -45,6 +45,7 @@ import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 import { FilePreviewButton } from "@/components/file-viewer-modal";
 import { apiPost } from "@/lib/client/api";
 import { toast } from "sonner";
+import { TableInsightCards, type TableInsightStat } from "@/components/tables";
 
 interface ExpenseUser {
   id: string;
@@ -106,11 +107,13 @@ export function ExpensesManager({
   initialMeta,
   stations,
   bankAccounts,
+  insightStats,
 }: {
   initialExpenses: ExpenseRow[];
   initialMeta: any;
   stations: { id: string; name: string; code: string }[];
   bankAccounts: BankAccountOption[];
+  insightStats: TableInsightStat[];
 }) {
   const router = useRouter();
   const [activeDialog, setActiveDialog] = useState<"details" | "create" | null>(null);
@@ -165,7 +168,7 @@ export function ExpensesManager({
     setOpenBankSelect(false);
   };
 
-  const activeExpenses = expenses.length > 0 ? expenses : initialExpenses;
+  const activeExpenses = expenses;
 
   const currentSelectedExpense = selectedExpense
     ? activeExpenses.find((e) => e.id === selectedExpense.id) || selectedExpense
@@ -411,6 +414,7 @@ export function ExpensesManager({
 
   return (
     <div className="space-y-6">
+      <TableInsightCards stats={insightStats} breakdownTitle="Expense mix" />
       <DataTable
         columns={columns}
         data={activeExpenses}
@@ -454,13 +458,19 @@ export function ExpensesManager({
                 type: "select",
                 paramName: "category",
                 label: "Category",
-                options: Object.entries(CATEGORY_MAP).map(([value, label]) => ({ value, label })),
+                options: [
+                  { value: "ALL", label: "All Categories" },
+                  ...Object.entries(CATEGORY_MAP).map(([value, label]) => ({ value, label })),
+                ],
               },
               {
                 type: "select",
                 paramName: "paymentMethod",
                 label: "Payment Method",
-                options: Object.entries(PAYMENT_METHOD_MAP).map(([value, label]) => ({ value, label })),
+                options: [
+                  { value: "ALL", label: "All Methods" },
+                  ...Object.entries(PAYMENT_METHOD_MAP).map(([value, label]) => ({ value, label })),
+                ],
               },
               {
                 type: "number-range",

@@ -450,6 +450,8 @@ export function SalesPnlManager({
         accessorKey: "sn",
         header: ({ column }) => <DataTableColumnHeader column={column} title="S/N" />,
         meta: { label: "S/N" },
+        enableHiding: false,
+        footer: () => "Total",
         cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.sn}</span>,
       },
       {
@@ -522,6 +524,10 @@ export function SalesPnlManager({
         cell: ({ row }) => (
           <span className="font-mono tabular-nums">{fmtLiters(row.original.litersSold)}</span>
         ),
+        footer: ({ table }) =>
+          fmtLiters(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.litersSold, 0)
+          ),
       },
       {
         accessorKey: "sellingPrice",
@@ -548,6 +554,10 @@ export function SalesPnlManager({
         cell: ({ row }) => (
           <span className="font-mono font-medium tabular-nums">{fmtMoney(row.original.revenue)}</span>
         ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.revenue, 0)
+          ),
       },
       {
         accessorKey: "fuelCost",
@@ -558,6 +568,10 @@ export function SalesPnlManager({
             {fmtMoney(row.original.fuelCost)}
           </span>
         ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.fuelCost, 0)
+          ),
       },
       {
         accessorKey: "expenses",
@@ -568,6 +582,10 @@ export function SalesPnlManager({
             {fmtMoney(row.original.expenses)}
           </span>
         ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.expenses, 0)
+          ),
       },
       {
         accessorKey: "netProfit",
@@ -586,6 +604,21 @@ export function SalesPnlManager({
             </span>
           );
         },
+        footer: ({ table }) => {
+          const total = table
+            .getFilteredRowModel()
+            .rows.reduce((sum, row) => sum + row.original.netProfit, 0);
+          return (
+            <span
+              className={cn(
+                "font-mono",
+                total >= 0 ? "text-emerald-600 dark:text-emerald-500" : "text-destructive"
+              )}
+            >
+              {fmtMoney(total)}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "marginPct",
@@ -599,6 +632,13 @@ export function SalesPnlManager({
               {row.original.marginPct.toFixed(1)}%
             </Badge>
           );
+        },
+        footer: ({ table }) => {
+          const rows = table.getFilteredRowModel().rows;
+          const revenue = rows.reduce((sum, row) => sum + row.original.revenue, 0);
+          const net = rows.reduce((sum, row) => sum + row.original.netProfit, 0);
+          const margin = revenue > 0 ? (net / revenue) * 100 : 0;
+          return `${margin >= 0 ? "+" : ""}${margin.toFixed(1)}%`;
         },
       },
     ],

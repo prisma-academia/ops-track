@@ -26,10 +26,33 @@ export async function GET(request: Request) {
     const category = url.searchParams.get("category") || undefined;
     const paymentMethod = url.searchParams.get("paymentMethod") || undefined;
     const status = url.searchParams.get("status") || undefined;
-    const amountMin = url.searchParams.get("amountMin") ? Number(url.searchParams.get("amountMin")) : undefined;
-    const amountMax = url.searchParams.get("amountMax") ? Number(url.searchParams.get("amountMax")) : undefined;
-    const dateStart = url.searchParams.get("dateStart") ? new Date(url.searchParams.get("dateStart") as string) : undefined;
-    const dateEnd = url.searchParams.get("dateEnd") ? new Date(url.searchParams.get("dateEnd") as string) : undefined;
+    const amountMinRaw = url.searchParams.get("amountMin");
+    const amountMaxRaw = url.searchParams.get("amountMax");
+    const amountMin = amountMinRaw ? Number(amountMinRaw) : undefined;
+    const amountMax = amountMaxRaw ? Number(amountMaxRaw) : undefined;
+    const dateStart = url.searchParams.get("dateStart")
+      ? new Date(url.searchParams.get("dateStart") as string)
+      : undefined;
+    const dateEnd = url.searchParams.get("dateEnd")
+      ? new Date(url.searchParams.get("dateEnd") as string)
+      : undefined;
+    if (dateStart) dateStart.setHours(0, 0, 0, 0);
+    if (dateEnd) dateEnd.setHours(23, 59, 59, 999);
+
+    const amountFilter =
+      (amountMin !== undefined && !Number.isNaN(amountMin)) ||
+      (amountMax !== undefined && !Number.isNaN(amountMax))
+        ? {
+            amount: {
+              ...(amountMin !== undefined && !Number.isNaN(amountMin) ? { gte: amountMin } : {}),
+              ...(amountMax !== undefined && !Number.isNaN(amountMax) ? { lte: amountMax } : {}),
+            },
+          }
+        : {};
+    const dateFilter =
+      dateStart || dateEnd
+        ? { createdAt: { ...(dateStart ? { gte: dateStart } : {}), ...(dateEnd ? { lte: dateEnd } : {}) } }
+        : {};
 
     const include = {
       station: {
@@ -70,12 +93,13 @@ export async function GET(request: Request) {
 
     const where: any = {
       tenantId: actor.tenantId,
+      context: "STATION",
       ...(stationId ? { stationId } : {}),
-      ...(category ? { category: category as any } : {}),
-      ...(paymentMethod ? { paymentMethod: paymentMethod as any } : {}),
+      ...(category && category !== "ALL" ? { category: category as any } : {}),
+      ...(paymentMethod && paymentMethod !== "ALL" ? { paymentMethod: paymentMethod as any } : {}),
       ...(status && status !== "ALL" ? { status: status as any } : {}),
-      ...(amountMin !== undefined || amountMax !== undefined ? { amount: { gte: amountMin, lte: amountMax } } : {}),
-      ...(dateStart || dateEnd ? { createdAt: { gte: dateStart, lte: dateEnd } } : {}),
+      ...amountFilter,
+      ...dateFilter,
     };
 
     if (useOffset) {

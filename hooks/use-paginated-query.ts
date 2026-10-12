@@ -99,16 +99,33 @@ export function usePaginatedQuery<T>({
     }
   }, [baseUrl, serializedParams]);
 
+  const prevParamsRef = useRef(serializedParams);
+
   useEffect(() => {
     if (!enabled) return;
-    // Skip duplicate initial fetch if initialData was provided and params haven't changed
-    if (isFirstMountRef.current && initialData && initialData.length > 0) {
+
+    const filtersChanged = prevParamsRef.current !== serializedParams;
+    if (filtersChanged) {
+      prevParamsRef.current = serializedParams;
+      if (page !== 1) {
+        setPageState(1);
+        return;
+      }
+    }
+
+    // Skip duplicate initial fetch if initialData was provided and no URL filters
+    if (
+      isFirstMountRef.current &&
+      initialData &&
+      initialData.length > 0 &&
+      serializedParams === "{}"
+    ) {
       isFirstMountRef.current = false;
       return;
     }
     isFirstMountRef.current = false;
     fetchPage(page, pageSize);
-  }, [fetchPage, page, pageSize, enabled]);
+  }, [fetchPage, page, pageSize, enabled, serializedParams]);
 
   const setPage = (newPage: number) => {
     setPageState(newPage);

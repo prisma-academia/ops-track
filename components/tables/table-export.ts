@@ -1,4 +1,4 @@
-import type { Column, Table } from "@tanstack/react-table";
+import { flexRender, type Column, type Table } from "@tanstack/react-table";
 import type { PrintCompanyInfo } from "@/components/print/print-company-context";
 
 export type { PrintCompanyInfo };
@@ -121,6 +121,29 @@ function formatCellValue(value: unknown): string {
   return String(value);
 }
 
+function extractExportText(value: unknown): string {
+  if (value == null || typeof value === "boolean") return "";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.map(extractExportText).join("");
+  if (typeof value === "object" && "props" in value) {
+    return extractExportText((value as { props?: { children?: unknown } }).props?.children);
+  }
+  return formatCellValue(value);
+}
+
+function getExportFooterRow<TData>(table: Table<TData>, columns: Column<TData, unknown>[]) {
+  const group = table.getFooterGroups()[0];
+  if (!group) return null;
+  const hasFooter = group.headers.some((header) => header.column.columnDef.footer);
+  if (!hasFooter) return null;
+
+  return columns.map((column) => {
+    const header = group.headers.find((item) => item.column.id === column.id);
+    if (!header || header.isPlaceholder || !header.column.columnDef.footer) return "";
+    return extractExportText(flexRender(header.column.columnDef.footer, header.getContext()));
+  });
+}
+
 /** Header row + one row per currently *filtered* record (ignores pagination). */
 function getExportRows<TData>(table: Table<TData>) {
   const columns = getExportColumns(table);
@@ -128,7 +151,8 @@ function getExportRows<TData>(table: Table<TData>) {
   const rows = table
     .getFilteredRowModel()
     .rows.map((row) => columns.map((column) => formatCellValue(row.getValue(column.id))));
-  return { headers, rows };
+  const footer = getExportFooterRow(table, columns);
+  return { headers, rows, footer };
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -143,9 +167,9 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export function exportTableToCsv<TData>(table: Table<TData>, filename = "table-export.csv") {
-  const { headers, rows } = getExportRows(table);
+  const { headers, rows, footer } = getExportRows(table);
   const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
-  const csv = [headers, ...rows]
+  const csv = [headers, ...rows, ...(footer ? [footer] : [])]
     .map((line) => line.map(escape).join(","))
     .join("\r\n");
 
@@ -154,12 +178,15 @@ export function exportTableToCsv<TData>(table: Table<TData>, filename = "table-e
 }
 
 export function exportTableToExcel<TData>(table: Table<TData>, filename = "table-export.xls") {
-  const { headers, rows } = getExportRows(table);
+  const { headers, rows, footer } = getExportRows(table);
   const escapeHtml = (value: string) =>
     value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   // REMINDER: Excel happily opens an HTML <table> saved with an .xls
   // extension/MIME type — avoids pulling in a spreadsheet-writing library.
+  const footerHtml = footer
+    ? `<tfoot><tr>${footer.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}</tr></tfoot>`
+    : "";
   const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8" /></head>
@@ -169,6 +196,7 @@ export function exportTableToExcel<TData>(table: Table<TData>, filename = "table
 <tbody>${rows
     .map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`)
     .join("")}</tbody>
+${footerHtml}
 </table>
 </body>
 </html>`;
@@ -409,6 +437,8 @@ export function printElement(
     font-size: 10.5px !important;
   }
   thead { display: table-header-group !important; }
+  tfoot { display: table-footer-group !important; }
+  tfoot td, tfoot th { font-weight: 700 !important; background: #f4f4f5 !important; }
   tr { break-inside: avoid !important; page-break-inside: avoid !important; }
   .print-footer {
     margin-top: 8px;

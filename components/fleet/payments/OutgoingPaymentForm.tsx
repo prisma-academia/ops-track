@@ -4,10 +4,10 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -26,7 +26,17 @@ import {
   FileText,
   ExternalLink,
   Eye,
+  Route,
+  Split,
+  UserRound,
+  Truck,
+  ClipboardList,
+  Landmark,
+  Hash,
+  Banknote,
+  AlignLeft,
 } from "lucide-react";
+import { FieldIcon, IconSelectItems, PAYMENT_METHOD_OPTIONS } from "@/components/fleet/payments/payment-method-options";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   BuildingIcon,
@@ -526,7 +536,9 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                   aria-expanded={transportOpen}
                   className="w-full justify-between font-normal text-left h-auto py-2"
                 >
-                  <span className="truncate pr-4">
+                  <span className="flex min-w-0 items-center gap-2 pr-4">
+                    <FieldIcon icon={Route} />
+                    <span className="truncate">
                     {formData.transportId
                       ? (() => {
                           const t = metadata?.transports?.find((x: any) => x.id === formData.transportId);
@@ -535,6 +547,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                           return `${ref} • ${transporter} • ${truck} • ${destination}`;
                         })()
                       : "Select Transport Trip..."}
+                    </span>
                   </span>
                   <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -605,7 +618,9 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                   disabled={!formData.transportId}
                   className="w-full justify-between font-normal text-left h-auto py-2"
                 >
-                  <span className="truncate pr-4">
+                  <span className="flex min-w-0 items-center gap-2 pr-4">
+                    <FieldIcon icon={Split} />
+                    <span className="truncate">
                     {feeLeg
                       ? (() => {
                           const selected = availableFeeLegs.find(
@@ -624,6 +639,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                       : formData.transportId
                         ? "Select fee leg..."
                         : "Select transport first"}
+                    </span>
                   </span>
                   <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -691,9 +707,14 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                   aria-expanded={transporterOpen}
                   className="w-full justify-between font-normal"
                 >
-                  {formData.transporterId
-                    ? metadata?.transporters?.find((t: any) => t.id === formData.transporterId)?.name
-                    : "Select Transporter..."}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <FieldIcon icon={UserRound} />
+                    <span className="truncate">
+                      {formData.transporterId
+                        ? metadata?.transporters?.find((t: any) => t.id === formData.transporterId)?.name
+                        : "Select Transporter..."}
+                    </span>
+                  </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -741,12 +762,17 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                       aria-expanded={truckOpen}
                       className="w-full justify-between font-normal"
                     >
-                      {formData.truckId
-                        ? (() => {
-                            const t = metadata?.trucks?.find((t: any) => t.id === formData.truckId);
-                            return t ? `${t.name} - ${t.truckNumber || t.plateNumber}` : "Select Truck...";
-                          })()
-                        : "Select Truck..."}
+                      <span className="flex min-w-0 items-center gap-2">
+                        <FieldIcon icon={Truck} />
+                        <span className="truncate">
+                          {formData.truckId
+                            ? (() => {
+                                const t = metadata?.trucks?.find((t: any) => t.id === formData.truckId);
+                                return t ? `${t.name} - ${t.truckNumber || t.plateNumber}` : "Select Truck...";
+                              })()
+                            : "Select Truck..."}
+                        </span>
+                      </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
@@ -787,12 +813,17 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                       aria-expanded={orderOpen}
                       className="w-full justify-between font-normal"
                     >
-                      {formData.orderId
-                        ? (() => {
-                            const o = metadata?.orders?.find((o: any) => o.id === formData.orderId);
-                            return o ? (o.reference || o.id.substring(0,8)) : "Select Order...";
-                          })()
-                        : "Select Order..."}
+                      <span className="flex min-w-0 items-center gap-2">
+                        <FieldIcon icon={ClipboardList} />
+                        <span className="truncate">
+                          {formData.orderId
+                            ? (() => {
+                                const o = metadata?.orders?.find((o: any) => o.id === formData.orderId);
+                                return o ? (o.reference || o.id.substring(0,8)) : "Select Order...";
+                              })()
+                            : "Select Order..."}
+                        </span>
+                      </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
@@ -840,6 +871,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
             value={formData.amount}
             onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
             placeholder="e.g. 50000"
+            prefixIcon={<FieldIcon icon={Banknote} />}
             prefixText="₦"
           />
         </div>
@@ -855,10 +887,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
               <SelectValue placeholder="Select Payment Method" />
             </SelectTrigger>
             <SelectContent position="popper">
-              <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
-              <SelectItem value="CASH">Cash</SelectItem>
-              <SelectItem value="POS">POS</SelectItem>
-              <SelectItem value="CHEQUE">Cheque</SelectItem>
+              <IconSelectItems options={PAYMENT_METHOD_OPTIONS.filter((option) => option.value !== "DEPOSIT")} />
             </SelectContent>
           </Select>
         </div>
@@ -874,7 +903,9 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                   aria-expanded={bankOpen}
                   className="h-9 w-full justify-between font-normal"
                 >
-                  <span className="min-w-0 flex-1 truncate text-left">
+                  <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                    <FieldIcon icon={Landmark} />
+                    <span className="truncate">
                     {formData.bankAccountId
                       ? (() => {
                           const account = metadata?.bankAccounts?.find((a: any) => a.id === formData.bankAccountId);
@@ -883,6 +914,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                             : "Select Bank Account...";
                         })()
                       : "Select Bank Account..."}
+                    </span>
                   </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -925,23 +957,33 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
 
         <div className="space-y-2">
           <Label>Transaction Reference</Label>
-          <Input 
-            type="text"
-            value={formData.reference}
-            onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
-            placeholder="e.g. TXN-12345 (Optional)"
-          />
+          <InputGroup>
+            <InputGroupAddon>
+              <FieldIcon icon={Hash} />
+            </InputGroupAddon>
+            <InputGroupInput
+              type="text"
+              value={formData.reference}
+              onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
+              placeholder="e.g. TXN-12345 (Optional)"
+            />
+          </InputGroup>
         </div>
 
         <div className="space-y-2 md:col-span-2">
           <Label>Description / Purpose {category !== "TRANSPORT_FEE" ? "*" : ""}</Label>
-          <Input 
-            list="expense-descriptions"
-            required={category !== "TRANSPORT_FEE"}
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Select or type a purpose..."
-          />
+          <InputGroup>
+            <InputGroupAddon>
+              <FieldIcon icon={AlignLeft} />
+            </InputGroupAddon>
+            <InputGroupInput
+              list="expense-descriptions"
+              required={category !== "TRANSPORT_FEE"}
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Select or type a purpose..."
+            />
+          </InputGroup>
           <datalist id="expense-descriptions">
             <option value="Fuel Purchase" />
             <option value="Vehicle Maintenance & Repair" />

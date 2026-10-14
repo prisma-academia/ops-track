@@ -34,7 +34,10 @@ export function TableInsightCards({
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <Card className="border-border/40 p-0 shadow-xs">
-        <CardContent className="grid grid-cols-2 gap-x-6 gap-y-3 p-4">
+        <CardContent className="p-4">
+        <p className="mb-3 text-md font-semibold text-card-foreground">Overview</p>
+
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
           {resolvedLeftStats.map((item) => (
             <div key={item.key} className="flex min-w-0 items-center gap-2">
               <span
@@ -49,6 +52,7 @@ export function TableInsightCards({
               </div>
             </div>
           ))}
+          </div>
         </CardContent>
       </Card>
 

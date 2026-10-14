@@ -5,26 +5,29 @@
  * Fuel cost (COGS): resolved from waybill allocations per sale logDate.
  */
 
+/** Prisma `Decimal` and JSON-serialized numeric fields */
+export type DecimalLike = number | string | null | { toString(): string };
+
 export type StationPnlAllocationInput = {
   stationId: string;
-  costPerLiter: number | string | null;
-  litersToDispense: number | string;
-  litersReceived: number | string | null;
-  transportationCost: number | string | null;
-  deliveredAt: Date | string;
+  costPerLiter: DecimalLike;
+  litersToDispense: DecimalLike;
+  litersReceived: DecimalLike;
+  transportationCost: DecimalLike;
+  deliveredAt: Date | string | null;
   waybill: { productType: string };
 };
 
 export type StationPnlSaleInput = {
   stationId: string;
   productType: string;
-  litersSold: number | string | null;
-  pricePerLiter: number | string | null;
+  litersSold: DecimalLike;
+  pricePerLiter: DecimalLike;
   logDate: Date | string;
 };
 
 export type StationPnlExpenseInput = {
-  amount: number | string | null;
+  amount: DecimalLike;
   createdAt: Date | string;
 };
 
@@ -58,8 +61,8 @@ export type ResolveCostOptions = {
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export function saleRevenueFromLog(log: {
-  litersSold: number | string | null;
-  pricePerLiter: number | string | null;
+  litersSold: DecimalLike;
+  pricePerLiter: DecimalLike;
 }): number {
   const vol = Number(log.litersSold || 0);
   const price = Number(log.pricePerLiter || 0);
@@ -70,7 +73,8 @@ export function sortAllocationsNewestFirst(
   allocations: StationPnlAllocationInput[]
 ): StationPnlAllocationInput[] {
   return [...allocations].sort(
-    (a, b) => new Date(b.deliveredAt).getTime() - new Date(a.deliveredAt).getTime()
+    (a, b) =>
+      new Date(b.deliveredAt ?? 0).getTime() - new Date(a.deliveredAt ?? 0).getTime()
   );
 }
 
@@ -93,6 +97,7 @@ export function resolveStationCostPerLiter(
     (a) =>
       a.stationId === stationId &&
       a.waybill.productType === productType &&
+      a.deliveredAt != null &&
       new Date(a.deliveredAt).getTime() <= saleTime &&
       Number(a.costPerLiter || 0) > 0
   );

@@ -142,16 +142,16 @@ export default async function ExpensesPage(props: {
 
   const pendingAmount = Number(statusGroups.find((g) => g.status === "PENDING")?._sum.amount ?? 0);
   const approvedAmount = Number(statusGroups.find((g) => g.status === "APPROVED")?._sum.amount ?? 0);
+  const rejectedAmount = Number(statusGroups.find((g) => g.status === "REJECTED")?._sum.amount ?? 0);
   const totalAmount = statusGroups.reduce((sum, g) => sum + Number(g._sum.amount ?? 0), 0);
   const cashTotal = Number(methodGroups.find((g) => g.paymentMethod === "CASH")?._sum.amount ?? 0);
 
   const insightStats = buildPctStats([
-    { key: "records", label: "Records", value: totalCount, color: "#475569" },
     {
       key: "total",
       label: "Total Expenses",
       value: totalAmount,
-      color: "#f43f5e",
+      color: "#475569",
       format: (n) => fmtMoney(n),
     },
     {
@@ -169,10 +169,10 @@ export default async function ExpensesPage(props: {
       format: (n) => fmtMoney(n),
     },
     {
-      key: "cash",
-      label: "Cash",
-      value: cashTotal,
-      color: "#6366f1",
+      key: "rejected",
+      label: "Rejected",
+      value: rejectedAmount,
+      color: "#be123c",
       format: (n) => fmtMoney(n),
     },
   ]);

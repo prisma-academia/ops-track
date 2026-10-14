@@ -70,12 +70,6 @@ export function DashboardClient({ topStats, monthlyData, productVolumeTotals, pe
       percentageChange: topStats.totalStations.percentageChange,
     },
     {
-      title: "Total Users",
-      icon: UserGroupIcon,
-      formattedValue: topStats.totalUsers.value.toLocaleString(),
-      percentageChange: topStats.totalUsers.percentageChange,
-    },
-    {
       title: "Total Revenue",
       icon: CreditCardPosIcon,
       formattedValue: formatCurrency(topStats.totalRevenue.value),
@@ -118,7 +112,7 @@ export function DashboardClient({ topStats, monthlyData, productVolumeTotals, pe
   return (
     <div className="space-y-6">
       {/* Top Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {statsCardsData.map((item, index) => (
           <DashboardOverviewCardV3
             key={index}

@@ -358,10 +358,10 @@ export function DataTableFilterDrawer({ filters }: DataTableFilterDrawerProps) {
         </div>
 
         <SheetFooter className="border-t pt-4">
-          <Button variant="outline" onClick={handleReset} className="w-full">
+          <Button key="reset-filters" variant="outline" onClick={handleReset} className="w-full">
             Reset Filters
           </Button>
-          <Button onClick={handleApply} className="w-full">
+          <Button key="apply-filters" onClick={handleApply} className="w-full">
             Apply Filters
           </Button>
         </SheetFooter>

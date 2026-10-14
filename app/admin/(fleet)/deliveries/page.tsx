@@ -6,7 +6,6 @@ import { SalesTable } from "./table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Banknote, Droplets, ReceiptText, Landmark } from "lucide-react";
 import { cn, formatShortCurrency, formatDestination, formatTruckLabel } from "@/lib/utils";
-import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 
 export default async function SalesPage({
   searchParams,
@@ -242,41 +241,37 @@ export default async function SalesPage({
           hasNextPage: page < totalPages,
           hasPreviousPage: page > 1,
         }}
-        filterNode={
-          <DataTableFilterDrawer
-            filters={[
-              {
-                type: "combobox",
-                paramName: "customerStationId",
-                label: "Customer / Station",
-                options: csOptions,
-              },
-              {
-                type: "select",
-                paramName: "status",
-                label: "Status",
-                options: [
-                  { value: "UNPAID", label: "Unpaid" },
-                  { value: "PART_PAID", label: "Part Paid" },
-                  { value: "CLEARED", label: "Cleared" },
-                  { value: "OVERDUE", label: "Overdue" },
-                ],
-              },
-              {
-                type: "number-range",
-                label: "Volume Range (Liters)",
-                fromParam: "minVol",
-                toParam: "maxVol",
-              },
-              {
-                type: "date-range",
-                label: "Date Range",
-                fromParam: "from",
-                toParam: "to",
-              },
-            ]}
-          />
-        }
+        filterConfigs={[
+          {
+            type: "combobox",
+            paramName: "customerStationId",
+            label: "Customer / Station",
+            options: csOptions,
+          },
+          {
+            type: "select",
+            paramName: "status",
+            label: "Status",
+            options: [
+              { value: "UNPAID", label: "Unpaid" },
+              { value: "PART_PAID", label: "Part Paid" },
+              { value: "CLEARED", label: "Cleared" },
+              { value: "OVERDUE", label: "Overdue" },
+            ],
+          },
+          {
+            type: "number-range",
+            label: "Volume Range (Liters)",
+            fromParam: "minVol",
+            toParam: "maxVol",
+          },
+          {
+            type: "date-range",
+            label: "Date Range",
+            fromParam: "from",
+            toParam: "to",
+          },
+        ]}
       />
     </div>
   );

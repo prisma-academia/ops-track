@@ -149,6 +149,17 @@ export type OrderPnlResult = {
   transports: OrderPnlTransportRow[];
 };
 
+/** Sum delivery-level P&L rows (Fleet overview + reports). */
+export function aggregateDeliveryPnlRows(rows: OrderPnlDeliveryRow[]) {
+  return {
+    salesRevenue: rows.reduce((sum, row) => sum + row.salesRevenue, 0),
+    totalCost: rows.reduce((sum, row) => sum + row.totalCost, 0),
+    pnl: rows.reduce((sum, row) => sum + row.pnl, 0),
+    lossAmount: rows.reduce((sum, row) => sum + row.lossAmount, 0),
+    litersSold: rows.reduce((sum, row) => sum + row.litersSold, 0),
+  };
+}
+
 /**
  * Computes an order's full profit & loss breakdown.
  *

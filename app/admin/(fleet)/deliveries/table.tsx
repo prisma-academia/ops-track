@@ -2,6 +2,10 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
+import {
+  DataTableFilterDrawer,
+  type FilterConfig,
+} from "@/components/data-table-filter-drawer";
 import { BadgeDollarSign, Droplet, FileText, MoreHorizontal, PackageCheck, Pencil, Printer, Truck, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -533,7 +537,22 @@ const columns: ColumnDef<SaleRow>[] = [
   }
 ];
 
-export function SalesTable({ data, filterNode, serverPagination }: { data: SaleRow[], filterNode?: React.ReactNode, serverPagination?: any }) {
+export function SalesTable({
+  data,
+  filterNode,
+  filterConfigs,
+  serverPagination,
+}: {
+  data: SaleRow[];
+  filterNode?: React.ReactNode;
+  filterConfigs?: FilterConfig[];
+  serverPagination?: any;
+}) {
+  const resolvedFilterNode =
+    filterNode ??
+    (filterConfigs && filterConfigs.length > 0 ? (
+      <DataTableFilterDrawer filters={filterConfigs} />
+    ) : undefined);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -557,7 +576,7 @@ export function SalesTable({ data, filterNode, serverPagination }: { data: SaleR
       rowHref={(s) => `/admin/deliveries/${s.id}`}
       filterColumnId="customerName"
       searchPlaceholder="Search by customer/station…"
-      filterNode={filterNode}
+      filterNode={resolvedFilterNode}
       {...(serverPagination ? {
         serverPagination: {
           ...serverPagination,

@@ -167,9 +167,13 @@ export function DataTable<TData, TValue>({
             )}
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-            {filterNode}
-            {effectiveSearchKey && (
-              <InputGroup className="max-w-xs">
+            {filterNode != null ? (
+              <div key="data-table-filter-node" className="shrink-0">
+                {filterNode}
+              </div>
+            ) : null}
+            {effectiveSearchKey ? (
+              <InputGroup key="data-table-search" className="max-w-xs">
                 <InputGroupInput
                   placeholder={searchPlaceholder}
                   value={searchValue !== undefined ? searchValue : ((table.getColumn(effectiveSearchKey)?.getFilterValue() as string) ?? "")}
@@ -186,8 +190,12 @@ export function DataTable<TData, TValue>({
                   <Search size={16} />
                 </InputGroupAddon>
               </InputGroup>
-            )}
-            {headerAction}
+            ) : null}
+            {headerAction != null ? (
+              <div key="data-table-header-action" className="shrink-0">
+                {headerAction}
+              </div>
+            ) : null}
           </div>
         </div>
       )}

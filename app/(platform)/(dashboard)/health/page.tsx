@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { PageHeader, Card } from "@/components/shell";
 import { CheckCircle2, XCircle, Loader2, Database, HardDrive, Mail, Activity } from "lucide-react";
+import { DatabaseBackupButton } from "@/components/platform/database-backup-button";
 
 type HealthStatus = {
   database: boolean;
   s3: boolean;
   smtp: boolean;
   redis: boolean;
+  capabilities?: { databaseBackup?: boolean };
 };
 
 export default function HealthPage() {
@@ -74,6 +76,9 @@ export default function HealthPage() {
             <p className="text-sm text-muted-foreground">
               Main PostgreSQL database connection.
             </p>
+            {!loading && status?.capabilities?.databaseBackup ? (
+              <DatabaseBackupButton className="mt-1" />
+            ) : null}
           </Card>
 
           <Card className="p-6 flex flex-col gap-4 items-start">

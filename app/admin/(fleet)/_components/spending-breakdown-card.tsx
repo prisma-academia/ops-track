@@ -1,35 +1,27 @@
 "use client";
 
+import { useMemo } from "react";
+import { LabelList, Pie, PieChart } from "recharts";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn, formatShortCurrency } from "@/lib/utils";
-import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts";
+import { formatShortCurrency } from "@/lib/utils";
 import type { SpendingBreakdownPoint } from "../types";
-
-const BAR_COLORS = [
-  "#10b981",
-  "#14b8a6",
-  "#3b82f6",
-  "#8b5cf6",
-  "#f59e0b",
-];
-
-const INDICATOR_COLORS = [
-  "bg-emerald-500",
-  "bg-teal-500",
-  "bg-blue-500",
-  "bg-violet-500",
-  "bg-amber-500",
-];
 
 function formatFullCurrency(value: number) {
   return `₦${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function segmentKey(index: number) {
+  return `segment-${index}`;
 }
 
 export function SpendingBreakdownCard({
@@ -40,18 +32,34 @@ export function SpendingBreakdownCard({
   periodLabel: string;
 }) {
   const total = segments.reduce((sum, item) => sum + item.amount, 0);
-  const chartData = segments.map((item, index) => ({
-    ...item,
-    fill: BAR_COLORS[index % BAR_COLORS.length],
-  }));
 
-  const chartConfig = segments.reduce((acc, item, index) => {
-    acc[item.label] = {
-      label: item.label,
-      color: BAR_COLORS[index % BAR_COLORS.length],
+  const chartConfig = useMemo(() => {
+    const config: ChartConfig = {
+      amount: { label: "Amount" },
     };
-    return acc;
-  }, { amount: { label: "Amount" } } as ChartConfig);
+    segments.forEach((item, index) => {
+      const key = segmentKey(index);
+      config[key] = {
+        label: item.label,
+        color: `var(--chart-${(index % 5) + 1})`,
+      };
+    });
+    return config;
+  }, [segments]);
+
+  const chartData = useMemo(
+    () =>
+      segments.map((item, index) => {
+        const key = segmentKey(index);
+        return {
+          key,
+          label: item.label,
+          amount: item.amount,
+          fill: `var(--color-${key})`,
+        };
+      }),
+    [segments],
+  );
 
   return (
     <Card className="h-full border-border/40 shadow-xs py-0 gap-0">
@@ -67,7 +75,9 @@ export function SpendingBreakdownCard({
         ) : (
           <div className="space-y-5">
             <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total spent</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Total spent
+              </p>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <p className="mt-1 text-xl font-semibold tabular-nums cursor-default">
@@ -80,56 +90,46 @@ export function SpendingBreakdownCard({
               </Tooltip>
             </div>
 
-            <ChartContainer config={chartConfig} className="h-[180px] w-full">
-              <BarChart accessibilityLayer data={chartData}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(144, 164, 174, 0.3)" />
-                <XAxis
-                  dataKey="label"
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                  fontSize={11}
-                  interval={0}
-                  tickFormatter={(value: string) =>
-                    value.length > 10 ? `${value.slice(0, 10)}…` : value
+            <ChartContainer
+              config={chartConfig}
+              className="mx-auto aspect-square max-h-[260px] w-full [&_.recharts-text]:fill-background"
+            >
+              <PieChart>
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      nameKey="key"
+                      formatter={(value) => formatFullCurrency(Number(value))}
+                    />
                   }
                 />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                  fontSize={11}
-                  tickFormatter={(value: number) => formatShortCurrency(value)}
+                <Pie data={chartData} dataKey="amount" nameKey="key">
+                  <LabelList
+                    dataKey="key"
+                    className="fill-background"
+                    stroke="none"
+                    fontSize={11}
+                    formatter={(value) =>
+                      chartConfig[value as keyof typeof chartConfig]?.label
+                    }
+                  />
+                </Pie>
+                <ChartLegend
+                  content={<ChartLegendContent nameKey="key" />}
+                  className="-translate-y-2 flex-wrap gap-2 *:basis-1/3 *:justify-center"
                 />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent hideLabel />}
-                />
-                <Bar dataKey="amount" radius={[6, 6, 0, 0]} barSize={28}>
-                  {chartData.map((item) => (
-                    <Cell key={item.label} fill={item.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
+              </PieChart>
             </ChartContainer>
 
-            <div className="space-y-2.5">
+            <div className="space-y-2 border-t border-border/40 pt-3">
               {segments.map((item, index) => {
                 const pct = total > 0 ? (item.amount / total) * 100 : 0;
                 return (
-                  <div key={item.label} className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span
-                        className={cn(
-                          "size-2.5 shrink-0 rounded-full",
-                          INDICATOR_COLORS[index % INDICATOR_COLORS.length]
-                        )}
-                      />
-                      <span className="truncate text-sm font-medium text-foreground">{item.label}</span>
-                    </div>
+                  <div key={item.label} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="truncate font-medium text-foreground">{item.label}</span>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="shrink-0 text-sm font-semibold tabular-nums cursor-default">
+                        <span className="shrink-0 font-semibold tabular-nums cursor-default">
                           {formatShortCurrency(item.amount)}
                           <span className="ml-1.5 text-xs font-medium text-muted-foreground">
                             {pct.toFixed(1)}%

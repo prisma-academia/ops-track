@@ -56,6 +56,8 @@ export interface SalesOverviewChartCardProps {
   expense?: number;
   profit?: number;
   loss?: number;
+  /** When `showLoss` is true, label for the loss/fuel-cost tile (default: "Loss"). */
+  lossLabel?: string;
   showLoss?: boolean;
   /** @deprecated Prefer numeric `revenue`. Kept for station dashboard compatibility. */
   revenueValue?: string;
@@ -74,6 +76,7 @@ export function SalesOverviewChartCard({
   expense,
   profit,
   loss,
+  lossLabel = "Loss",
   showLoss = true,
 }: SalesOverviewChartCardProps) {
   const [hoveredCategory, setHoveredCategory] = React.useState<string | null>(null);
@@ -114,7 +117,7 @@ export function SalesOverviewChartCard({
       ? [
           {
             key: "loss",
-            title: "Loss",
+            title: lossLabel,
             value: totalLossVal,
             dotColor: "bg-red-500",
             activeBorder: "border-red-500 ring-red-500/30",

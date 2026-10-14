@@ -25,7 +25,7 @@ export type TopStats = {
   totalUsers: TopStatMetric;
   totalRevenue: TopStatMetric;
   totalExpenses: TopStatMetric;
-  totalLoss: TopStatMetric;
+  totalFuelCost: TopStatMetric;
   netProfit: TopStatMetric;
   activeDeliveries: TopStatMetric;
 };
@@ -34,7 +34,7 @@ export type MonthlyData = {
   month: string;
   revenue: number;
   expenses: number;
-  loss?: number;
+  fuelCost?: number;
 };
 
 export type ProductVolumeTotals = {
@@ -88,10 +88,10 @@ export function DashboardClient({ topStats, monthlyData, productVolumeTotals, pe
       percentageChange: topStats.totalExpenses.percentageChange,
     },
     {
-      title: "Total Loss",
+      title: "Fuel Cost",
       icon: AlertCircleIcon,
-      formattedValue: formatCurrency(topStats.totalLoss.value),
-      percentageChange: topStats.totalLoss.percentageChange,
+      formattedValue: formatCurrency(topStats.totalFuelCost.value),
+      percentageChange: topStats.totalFuelCost.percentageChange,
     },
     {
       title: "Net Profit",
@@ -105,7 +105,7 @@ export function DashboardClient({ topStats, monthlyData, productVolumeTotals, pe
     name: m.month,
     earning: m.revenue,
     expense: m.expenses,
-    loss: m.loss ?? 0,
+    loss: m.fuelCost ?? 0,
   }))
 
   const volumeSegments: SegmentBreakdownPoint[] = [
@@ -141,7 +141,8 @@ export function DashboardClient({ topStats, monthlyData, productVolumeTotals, pe
             chartData={salesChartData}
             revenue={topStats.totalRevenue.value}
             expense={topStats.totalExpenses.value}
-            loss={topStats.totalLoss.value}
+            loss={topStats.totalFuelCost.value}
+            lossLabel="Fuel Cost"
             profit={topStats.netProfit.value}
           />
         </div>

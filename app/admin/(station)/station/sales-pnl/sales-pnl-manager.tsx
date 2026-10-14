@@ -66,6 +66,10 @@ import {
   type DataTableFilterField,
 } from "@/components/tables";
 import { cn } from "@/lib/utils";
+import {
+  resolveStationCostPerLiter,
+  sortAllocationsNewestFirst,
+} from "@/lib/station/pnl";
 
 // --- Types ---
 export interface Station {
@@ -196,59 +200,24 @@ export function SalesPnlManager({
   const [isExpenseSheetOpen, setIsExpenseSheetOpen] = React.useState(false);
 
   // Pre-index allocations for fast cost resolution
-  const sortedAllocations = React.useMemo(() => {
-    return [...allocations].sort(
-      (a, b) => new Date(b.deliveredAt).getTime() - new Date(a.deliveredAt).getTime()
-    );
-  }, [allocations]);
+  const sortedAllocations = React.useMemo(
+    () => sortAllocationsNewestFirst(allocations),
+    [allocations]
+  );
 
   const resolveCostPerLiter = React.useCallback(
-    (stationId: string, productType: string, saleDate: Date, sellingPrice: number) => {
-      if (useBenchmarkCost) {
-        const parsed = parseFloat(benchmarkCost);
-        return isNaN(parsed) ? 0 : parsed;
-      }
-
-      const saleTime = saleDate.getTime();
-
-      // 1. Look for allocation on same station & product delivered on or before sale
-      const match = sortedAllocations.find(
-        (a) =>
-          a.stationId === stationId &&
-          a.waybill.productType === productType &&
-          new Date(a.deliveredAt).getTime() <= saleTime &&
-          Number(a.costPerLiter || 0) > 0
-      );
-      if (match) {
-        const baseCost = Number(match.costPerLiter);
-        const transportTotal = Number(match.transportationCost || 0);
-        const qty = Number(match.litersReceived || match.litersToDispense || 1);
-        const unitTransport = qty > 0 ? transportTotal / qty : 0;
-        return baseCost + unitTransport;
-      }
-
-      // 2. Look for any allocation for same station & product
-      const nearestMatch = sortedAllocations.find(
-        (a) =>
-          a.stationId === stationId &&
-          a.waybill.productType === productType &&
-          Number(a.costPerLiter || 0) > 0
-      );
-      if (nearestMatch) {
-        return Number(nearestMatch.costPerLiter);
-      }
-
-      // 3. Fallback across all stations for that product
-      const tenantMatch = sortedAllocations.find(
-        (a) => a.waybill.productType === productType && Number(a.costPerLiter || 0) > 0
-      );
-      if (tenantMatch) {
-        return Number(tenantMatch.costPerLiter);
-      }
-
-      // 4. Default estimation: standard 92% of selling price if no waybill data yet
-      return sellingPrice > 0 ? sellingPrice * 0.92 : 0;
-    },
+    (stationId: string, productType: string, saleDate: Date, sellingPrice: number) =>
+      resolveStationCostPerLiter(
+        sortedAllocations,
+        stationId,
+        productType,
+        saleDate,
+        sellingPrice,
+        {
+          useBenchmarkCost,
+          benchmarkCost: parseFloat(benchmarkCost),
+        }
+      ),
     [sortedAllocations, useBenchmarkCost, benchmarkCost]
   );
 

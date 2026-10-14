@@ -31,6 +31,8 @@ import {
   Banknote,
 } from "lucide-react";
 import { FieldIcon, IconSelectItems, PAYMENT_METHOD_OPTIONS, PAYMENT_TYPE_OPTIONS } from "@/components/fleet/payments/payment-method-options";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowDownLeft01Icon } from "@hugeicons/core-free-icons";
 import { FilePreviewTrigger } from "@/components/file-viewer-modal";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { apiPost } from "@/lib/client/api";
@@ -251,27 +253,41 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
     <>
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2">
-        <Card>
-          <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b">
+        <Card className="overflow-hidden">
+          <CardHeader
+            className={cn(
+              "flex flex-col md:flex-row md:items-center justify-between gap-4 border-b",
+              "bg-gradient-to-r from-emerald-500/12 via-emerald-500/5 to-transparent border-emerald-500/20",
+            )}
+          >
             <div className="flex items-center gap-4">
-              <Button variant="outline" size="icon" asChild className="h-10 w-10 shrink-0">
+              <Button
+                variant="outline"
+                size="icon"
+                asChild
+                className="h-10 w-10 shrink-0 border-emerald-500/20 bg-background/80"
+              >
                 <Link href="/admin/payments">
                   <ArrowLeft className="h-4 w-4" />
                 </Link>
               </Button>
+              <span
+                className="flex size-11 shrink-0 items-center justify-center rounded-full bg-background/80 text-emerald-600 shadow-sm ring-1 ring-emerald-500/25 dark:text-emerald-400"
+                aria-hidden
+              >
+                <HugeiconsIcon icon={ArrowDownLeft01Icon} size={22} strokeWidth={2} />
+              </span>
               <div>
-                <CardTitle className="text-xl">Log Incoming Payment</CardTitle>
-                <CardDescription>Record a payment received from a customer or station.</CardDescription>
+                <CardTitle className="text-xl text-emerald-950 dark:text-emerald-50">Log Incoming Payment</CardTitle>
+                <CardDescription className="text-emerald-900/65 dark:text-emerald-100/70">
+                  Record a payment received from a customer or station.
+                </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-500">
-              {/* SECTION: General Details */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">General Details</h3>
-                </div>
                 <div className="grid grid-cols-1 gap-6">
                   <div className="space-y-2 flex flex-col justify-end">
                   <Label>Client / Station Name *</Label>
@@ -431,11 +447,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
       </div>
     </div>
 
-    {/* SECTION: Financial Details */}
     <div className="space-y-4">
-      <div className="flex items-center gap-2 pb-2 border-b">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Financial Details</h3>
-      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <div className="flex justify-between items-center">
@@ -578,11 +590,7 @@ export default function IncomingPaymentForm({ metadata, loading }: { metadata: a
       </div>
     </div>
 
-    {/* SECTION: Proof of Payment */}
     <div className="space-y-4">
-      <div className="flex items-center gap-2 pb-2 border-b">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Proof of Payment</h3>
-      </div>
       <div className="space-y-2">
         <Label>Attach Proof</Label>
           <div className="relative">

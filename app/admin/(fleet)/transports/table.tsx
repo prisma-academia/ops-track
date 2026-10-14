@@ -31,41 +31,18 @@ const columns: ColumnDef<TransportRow>[] = [
     accessorKey: "destination", 
     header: "Destination",
     cell: ({ row }) => {
-      const dest = formatDestination(row.original.destination);
+      const rawDestination = row.original.destination;
+      const dest = formatDestination(rawDestination);
       const source = row.original.sourceDepot || "Depot";
+      const isPrimary = /\(\s*primary\s+destination\s*\)/i.test(rawDestination || "");
+      const routeLabel = `${source} to ${dest}${isPrimary ? " (Primary)" : ""}`;
 
       const transporter = row.original.transporterName?.trim();
       const hasValidTransporter =
         transporter &&
         transporter.toLowerCase() !== "unknown" &&
         transporter.toLowerCase() !== "unassigned";
-
-      const truck = row.original.truckName?.trim();
-      const hasValidTruck =
-        truck &&
-        truck.toLowerCase() !== "unknown" &&
-        truck.toLowerCase() !== "unassigned";
-
-      const driver = row.original.driverName?.trim();
-      const hasValidDriver =
-        driver &&
-        driver.toLowerCase() !== "unknown" &&
-        driver.toLowerCase() !== "unassigned";
-
-      const parts: string[] = [];
-      if (hasValidTransporter) {
-        parts.push(transporter);
-      }
-      if (hasValidTruck) {
-        parts.push(truck);
-      } else if (!hasValidTransporter) {
-        parts.push("Unassigned Transporter / Truck");
-      }
-      if (hasValidDriver) {
-        parts.push(driver);
-      }
-
-      const subtitle = parts.join(" • ");
+      const title = hasValidTransporter ? transporter : "Unassigned Transporter";
 
       return (
         <div className="flex items-center gap-3 py-1">
@@ -78,9 +55,9 @@ const columns: ColumnDef<TransportRow>[] = [
               className="object-contain"
             />
           </div>
-          <div className="flex flex-col">
-            <span className="font-semibold text-foreground">{source} to {dest}</span>
-            <span className="text-xs text-muted-foreground">{subtitle}</span>
+          <div className="flex flex-col min-w-0">
+            <span className="font-semibold text-foreground truncate">{title}</span>
+            <span className="text-xs text-muted-foreground truncate">{routeLabel}</span>
           </div>
         </div>
       );

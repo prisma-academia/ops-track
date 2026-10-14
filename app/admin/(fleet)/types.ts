@@ -31,6 +31,13 @@ export interface ClientPerformanceData {
   amount: number
 }
 
+export interface SupplierPerformanceData {
+  name: string
+  volume: number
+  trips: number
+  amount: number
+}
+
 export interface StationPerformanceData {
   name: string
   volume: number
@@ -131,6 +138,7 @@ export interface FleetOverviewData {
   counts: FleetCounts
   comparativeVolume: ComparativeVolumePoint[]
   transporterPerformance: TransporterPerformanceData[]
+  supplierPerformance: SupplierPerformanceData[]
   stationPerformance: StationPerformanceData[]
   clientPerformance: ClientPerformanceData[]
   transportStatus: TransportStatusData[]

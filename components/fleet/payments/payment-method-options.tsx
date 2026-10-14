@@ -29,6 +29,16 @@ export const PAYMENT_METHOD_OPTIONS: FieldOption[] = [
   { value: "DEPOSIT", label: "Apply Deposit", icon: Wallet },
 ];
 
+/** Fleet log-outgoing payment (no cash or supplier deposit). */
+export const OUTGOING_PAYMENT_METHOD_OPTIONS = PAYMENT_METHOD_OPTIONS.filter(
+  (o) => o.value !== "CASH" && o.value !== "DEPOSIT",
+);
+
+/** Supplier outgoing payment (deposit allowed; no cash). */
+export const SUPPLIER_OUTGOING_PAYMENT_METHOD_OPTIONS = PAYMENT_METHOD_OPTIONS.filter(
+  (o) => o.value !== "CASH",
+);
+
 export const PAYMENT_TYPE_OPTIONS: FieldOption[] = [
   { value: "ADVANCE_DEPOSIT", label: "Advance Deposit", icon: Wallet },
   { value: "PART_PAYMENT", label: "Part Payment", icon: PieChart },

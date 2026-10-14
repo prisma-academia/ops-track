@@ -36,9 +36,15 @@ import {
   Banknote,
   AlignLeft,
 } from "lucide-react";
-import { FieldIcon, IconSelectItems, PAYMENT_METHOD_OPTIONS } from "@/components/fleet/payments/payment-method-options";
+import {
+  FieldIcon,
+  IconSelectItems,
+  OUTGOING_PAYMENT_METHOD_OPTIONS,
+  PAYMENT_TYPE_OPTIONS,
+} from "@/components/fleet/payments/payment-method-options";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  ArrowUpRight01Icon,
   BuildingIcon,
   TankerTruckIcon,
   Route03Icon,
@@ -56,7 +62,21 @@ import {
 } from "@/lib/fleet/transport-fees";
 import { PaymentConfirmDialog, type PaymentSummaryRow } from "@/components/fleet/payments/payment-dialogs";
 
-type ExpenseCategory = "PERSONAL_EXPENSE" | "FLEET_EXPENSE" | "TRANSPORT_FEE";
+type ExpenseCategory =
+  | "PERSONAL_EXPENSE"
+  | "FLEET_EXPENSE"
+  | "SUPPLIER_PAYMENT"
+  | "TRANSPORT_FEE";
+
+function inferSupplierPaymentType(order: any | null, amount: string) {
+  if (!order) return "ADVANCE_DEPOSIT";
+  const outstanding = Number(order.balance || 0);
+  const alreadyPaid = Number(order.paymentPaid || 0);
+  const amt = Number(amount);
+  if (amt > 0 && amt < outstanding) return "PART_PAYMENT";
+  if (alreadyPaid > 0) return "DEBT_CLEARANCE";
+  return "FULL_SETTLEMENT";
+}
 
 function SummaryRow({
   label,
@@ -96,6 +116,12 @@ const CATEGORY_OPTIONS: Array<{
     title: "Fleet-Related Expense",
     description: "Fuel, maintenance, tickets, or other trip-related costs.",
     icon: TankerTruckIcon,
+  },
+  {
+    value: "SUPPLIER_PAYMENT",
+    title: "Supplier Payment",
+    description: "Pay a product supplier for fleet orders or advance deposit.",
+    icon: BuildingIcon,
   },
   {
     value: "TRANSPORT_FEE",
@@ -157,17 +183,35 @@ function getTransportLabelParts(t: any) {
   return { ref, transporter, truck, destination, volume };
 }
 
-export default function OutgoingPaymentForm({ metadata, loading }: { metadata: any, loading: boolean }) {
+export type OutgoingPaymentSupplierLink = {
+  supplierId: string;
+  supplierOrderId?: string;
+};
+
+export default function OutgoingPaymentForm({
+  metadata,
+  loading,
+  initialSupplierLink,
+}: {
+  metadata: any;
+  loading: boolean;
+  initialSupplierLink?: OutgoingPaymentSupplierLink;
+}) {
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
 
-  const [category, setCategory] = useState<ExpenseCategory | "">("");
+  const [category, setCategory] = useState<ExpenseCategory | "">(
+    initialSupplierLink?.supplierId ? "SUPPLIER_PAYMENT" : "",
+  );
   const [categoryOpen, setCategoryOpen] = useState(false);
+  const [categoryFormLoading, setCategoryFormLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [transportOpen, setTransportOpen] = useState(false);
   const [transporterOpen, setTransporterOpen] = useState(false);
   const [truckOpen, setTruckOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
+  const [supplierOpen, setSupplierOpen] = useState(false);
+  const [supplierOrderOpen, setSupplierOrderOpen] = useState(false);
   const [bankOpen, setBankOpen] = useState(false);
   const [feeLegOpen, setFeeLegOpen] = useState(false);
   const [feeLeg, setFeeLeg] = useState<TransportFeeLeg | "">("");
@@ -190,6 +234,9 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
     orderId: "",
     transportId: "",
     bankAccountId: "",
+    supplierId: initialSupplierLink?.supplierId ?? "",
+    supplierOrderId: initialSupplierLink?.supplierOrderId || "none",
+    paymentType: "ADVANCE_DEPOSIT",
   });
 
   const maxSizeMB = 5;
@@ -306,6 +353,53 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
     }
   }, [category, formData.transportId, metadata]);
 
+  const supplierOrders = (metadata?.orders || []).filter(
+    (o: any) =>
+      !formData.supplierId ||
+      o.supplierId === formData.supplierId ||
+      metadata?.suppliers?.find((s: any) => s.id === formData.supplierId)?.name === o.supplier,
+  );
+
+  const selectedSupplierOrder =
+    formData.supplierOrderId && formData.supplierOrderId !== "none"
+      ? metadata?.orders?.find((o: any) => o.id === formData.supplierOrderId)
+      : null;
+
+  const selectedSupplier = metadata?.suppliers?.find(
+    (s: any) => s.id === formData.supplierId,
+  );
+
+  useEffect(() => {
+    if (category !== "SUPPLIER_PAYMENT") return;
+    const nextType = inferSupplierPaymentType(selectedSupplierOrder ?? null, formData.amount);
+    setFormData((prev) =>
+      prev.paymentType === nextType ? prev : { ...prev, paymentType: nextType },
+    );
+  }, [category, formData.supplierOrderId, formData.amount, selectedSupplierOrder]);
+
+  useEffect(() => {
+    if (!category) {
+      setCategoryFormLoading(false);
+      return;
+    }
+    if (loading) return;
+    const timer = window.setTimeout(() => setCategoryFormLoading(false), 400);
+    return () => window.clearTimeout(timer);
+  }, [category, loading]);
+
+  const showPaymentForm = Boolean(category) && !categoryFormLoading && !loading;
+
+  const handleSelectCategory = (value: ExpenseCategory) => {
+    setCategory(value);
+    setCategoryOpen(false);
+    setCategoryFormLoading(true);
+  };
+
+  const handleClearCategory = () => {
+    setCategory("");
+    setCategoryFormLoading(false);
+  };
+
   const validateBeforeConfirm = (): boolean => {
     if (!category) {
       toast.error("Please select an expense category.");
@@ -314,6 +408,33 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
     if (category === "TRANSPORT_FEE" && !feeLeg) {
       toast.error("Select a transport fee leg.");
       return false;
+    }
+    if (category === "SUPPLIER_PAYMENT") {
+      if (!formData.supplierId) {
+        toast.error("Select a supplier.");
+        return false;
+      }
+      if (!formData.amount || Number(formData.amount) <= 0) {
+        toast.error("Enter a valid amount.");
+        return false;
+      }
+      if (
+        selectedSupplierOrder &&
+        Number(formData.amount) > Number(selectedSupplierOrder.balance || 0)
+      ) {
+        toast.error(
+          `Amount cannot exceed remaining ₦${Number(selectedSupplierOrder.balance).toLocaleString()}`,
+        );
+        return false;
+      }
+      if (
+        formData.paymentMethod === "DEPOSIT" &&
+        selectedSupplier &&
+        Number(formData.amount) > Number(selectedSupplier.depositBalance || 0)
+      ) {
+        toast.error("Insufficient supplier deposit balance.");
+        return false;
+      }
     }
     return true;
   };
@@ -345,6 +466,23 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
         payload.truckId = formData.truckId || undefined;
         payload.orderId = formData.orderId || undefined;
         payload.transportId = formData.transportId || undefined;
+      } else if (category === "SUPPLIER_PAYMENT") {
+        endpoint = `/api/tenant/fleet/payments/outflow/supplier`;
+        payload = {
+          supplierId: formData.supplierId,
+          orderId:
+            formData.supplierOrderId === "none" ? undefined : formData.supplierOrderId,
+          amount: Number(formData.amount),
+          paymentType: formData.paymentType,
+          paymentMethod: formData.paymentMethod,
+          reference: formData.reference || undefined,
+          receiptUrl: formData.receiptUrl || undefined,
+          description: formData.description || undefined,
+          bankAccountId:
+            formData.paymentMethod !== "CASH" && formData.paymentMethod !== "DEPOSIT"
+              ? formData.bankAccountId
+              : undefined,
+        };
       } else if (category === "TRANSPORT_FEE") {
         endpoint = `/api/tenant/fleet/payments/outflow/transport`;
         payload = {
@@ -385,8 +523,6 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
     }
   };
 
-  if (loading) return <div className="p-8 text-center text-muted-foreground"><SpinnerEllipsis /></div>;
-
   const selectedDeliveries = selectedTransport?.deliveries || [];
 
   const selectedBank = formData.bankAccountId
@@ -399,6 +535,21 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
 
   const confirmRows: PaymentSummaryRow[] = [
     { label: "Category", value: categoryMeta?.title || "—", emphasis: true },
+    ...(category === "SUPPLIER_PAYMENT"
+      ? [
+          { label: "Supplier", value: selectedSupplier?.name || "—" },
+          {
+            label: "Order",
+            value: selectedSupplierOrder?.reference || "Advance / no order",
+          },
+          {
+            label: "Payment type",
+            value:
+              PAYMENT_TYPE_OPTIONS.find((p) => p.value === formData.paymentType)?.label ||
+              formData.paymentType,
+          },
+        ]
+      : []),
     ...(category === "TRANSPORT_FEE"
       ? [
           { label: "Transport Trip", value: selectedTransport?.order?.reference || selectedTransport?.destination || "—" },
@@ -419,31 +570,48 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
 
   return (
     <>
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <div className="lg:col-span-2">
-        <Card>
-          <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b">
+    <div
+      className={cn(
+        "grid grid-cols-1 gap-6",
+        showPaymentForm && "lg:grid-cols-3",
+      )}
+    >
+      <div className={cn(showPaymentForm ? "lg:col-span-2" : "max-w-2xl")}>
+        <Card className="overflow-hidden">
+          <CardHeader
+            className={cn(
+              "flex flex-col md:flex-row md:items-center justify-between gap-4 border-b",
+              "bg-gradient-to-r from-rose-500/12 via-rose-500/5 to-transparent border-rose-500/20",
+            )}
+          >
             <div className="flex items-center gap-4">
-              <Button variant="outline" size="icon" asChild className="h-10 w-10 shrink-0">
+              <Button
+                variant="outline"
+                size="icon"
+                asChild
+                className="h-10 w-10 shrink-0 border-rose-500/20 bg-background/80"
+              >
                 <Link href="/admin/payments">
                   <ArrowLeft className="h-4 w-4" />
                 </Link>
               </Button>
+              <span
+                className="flex size-11 shrink-0 items-center justify-center rounded-full bg-background/80 text-rose-600 shadow-sm ring-1 ring-rose-500/25 dark:text-rose-400"
+                aria-hidden
+              >
+                <HugeiconsIcon icon={ArrowUpRight01Icon} size={22} strokeWidth={2} />
+              </span>
               <div>
-                <CardTitle className="text-xl">Log Outgoing Payment</CardTitle>
-                <CardDescription>Record transport fee payouts and operational expenses.</CardDescription>
+                <CardTitle className="text-xl text-rose-950 dark:text-rose-50">Log Outgoing Payment</CardTitle>
+                <CardDescription className="text-rose-900/65 dark:text-rose-100/70">
+                  Record transport fee payouts and operational expenses.
+                </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in duration-500">
-              {/* SECTION: Expense Details */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 border-b">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Expense Details</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2 md:col-span-2">
+          <CardContent>
+            <div className="space-y-4">
+              <div className="space-y-2">
                   <Label>Expense Category *</Label>
                   <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
                     <PopoverTrigger asChild className="w-full">
@@ -485,10 +653,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                                 <CommandItem
                                   key={opt.value}
                                   value={`${opt.title} ${opt.description}`}
-                                  onSelect={() => {
-                                    setCategory(opt.value);
-                                    setCategoryOpen(false);
-                                  }}
+                                  onSelect={() => handleSelectCategory(opt.value)}
                                   className="flex items-center gap-3 p-3 cursor-pointer"
                                 >
                                   <div
@@ -523,7 +688,138 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
                       </Command>
                     </PopoverContent>
                   </Popover>
-                </div>
+                {category && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0 text-xs text-muted-foreground"
+                    onClick={handleClearCategory}
+                  >
+                    Change category
+                  </Button>
+                )}
+              </div>
+
+            {category && (categoryFormLoading || loading) && (
+              <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
+                <Loader2 className="size-8 animate-spin" />
+                <p className="text-sm">Loading payment form…</p>
+              </div>
+            )}
+
+            {showPaymentForm && (
+            <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-300">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        {category === "SUPPLIER_PAYMENT" && (
+          <>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Supplier *</Label>
+              <Popover open={supplierOpen} onOpenChange={setSupplierOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between font-normal">
+                    {selectedSupplier?.name || "Select supplier..."}
+                    <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search supplier..." />
+                    <CommandList>
+                      <CommandEmpty>No supplier found.</CommandEmpty>
+                      <CommandGroup>
+                        {(metadata?.suppliers || []).map((s: any) => (
+                          <CommandItem
+                            key={s.id}
+                            value={s.name}
+                            onSelect={() => {
+                              setFormData({
+                                ...formData,
+                                supplierId: s.id,
+                                supplierOrderId: "none",
+                              });
+                              setSupplierOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.supplierId === s.id ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                            {s.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Procurement order (optional)</Label>
+              <Popover open={supplierOrderOpen} onOpenChange={setSupplierOrderOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between font-normal"
+                    disabled={!formData.supplierId}
+                  >
+                    {selectedSupplierOrder
+                      ? `${selectedSupplierOrder.reference || selectedSupplierOrder.id.slice(0, 8)} • ₦${Number(selectedSupplierOrder.balance || 0).toLocaleString()} due`
+                      : "Advance / no order"}
+                    <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search order..." />
+                    <CommandList>
+                      <CommandEmpty>No order found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="none"
+                          onSelect={() => {
+                            setFormData({ ...formData, supplierOrderId: "none" });
+                            setSupplierOrderOpen(false);
+                          }}
+                        >
+                          Advance / no order
+                        </CommandItem>
+                        {supplierOrders.map((o: any) => (
+                          <CommandItem
+                            key={o.id}
+                            value={`${o.reference || o.id} ${o.supplier || ""}`}
+                            onSelect={() => {
+                              setFormData({ ...formData, supplierOrderId: o.id });
+                              setSupplierOrderOpen(false);
+                            }}
+                          >
+                            {o.reference || o.id.slice(0, 8)} — ₦{Number(o.balance || 0).toLocaleString()} due
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label>Payment type</Label>
+              <Select
+                value={formData.paymentType}
+                onValueChange={(v) => setFormData({ ...formData, paymentType: v })}
+              >
+                <SelectTrigger className="w-full" >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <IconSelectItems options={PAYMENT_TYPE_OPTIONS} />
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
 
         {(category === "TRANSPORT_FEE" || category === "FLEET_EXPENSE") && (
           <div className="space-y-2 flex flex-col justify-end md:col-span-2">
@@ -855,15 +1151,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
             )}
           </>
         )}
-      </div>
-    </div>
 
-    {/* SECTION: Financial Details */}
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 pb-2 border-b">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Financial Details</h3>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <Label>Amount Paid (₦) *</Label>
           <FormattedNumberInput 
@@ -887,7 +1175,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
               <SelectValue placeholder="Select Payment Method" />
             </SelectTrigger>
             <SelectContent position="popper">
-              <IconSelectItems options={PAYMENT_METHOD_OPTIONS.filter((option) => option.value !== "DEPOSIT")} />
+              <IconSelectItems options={OUTGOING_PAYMENT_METHOD_OPTIONS} />
             </SelectContent>
           </Select>
         </div>
@@ -997,15 +1285,8 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
             <option value="Transport Fee Payout" />
           </datalist>
         </div>
-      </div>
-    </div>
 
-    {/* SECTION: Proof of Payment */}
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 pb-2 border-b">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Proof of Payment</h3>
-      </div>
-      <div className="space-y-2">
+        <div className="space-y-2 md:col-span-2">
         <Label>Attach Proof</Label>
           <div className="relative">
             <div
@@ -1098,9 +1379,9 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
             </div>
           )}
         </div>
-      </div>
+        </div>
 
-      <div className="flex justify-end pt-4 border-t border-border/30">
+      <div className="flex justify-end pt-2">
             <Button 
               type="submit" 
               disabled={submitting}
@@ -1120,10 +1401,13 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
             </Button>
           </div>
         </form>
+            )}
+            </div>
       </CardContent>
     </Card>
   </div>
 
+  {showPaymentForm && (
   <div className="lg:col-span-1">
     <div className="sticky top-6 rounded-lg border border-border/60 bg-card overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
@@ -1241,6 +1525,7 @@ export default function OutgoingPaymentForm({ metadata, loading }: { metadata: a
       </div>
     </div>
   </div>
+  )}
 </div>
 
 <PaymentConfirmDialog

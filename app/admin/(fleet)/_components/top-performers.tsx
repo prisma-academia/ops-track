@@ -5,6 +5,13 @@ import { PerformanceList } from "./performance-list"
 import { StationPerformanceList } from "./station-performance-list"
 
 export function TopPerformers({ data }: { data: FleetOverviewData }) {
+  const mappedSuppliers = data.supplierPerformance.map((s) => ({
+    name: s.name,
+    subtitle: `${s.trips} orders`,
+    value: s.volume,
+    amount: s.amount,
+  }))
+
   const mappedTransporters = data.transporterPerformance.map((t) => ({
     name: t.transporter,
     subtitle: `${t.trips} trips`,
@@ -20,11 +27,12 @@ export function TopPerformers({ data }: { data: FleetOverviewData }) {
   }))
 
   return (
-    <Tabs defaultValue="transporters" className="w-full">
+    <Tabs defaultValue="suppliers" className="w-full">
       <DashboardCard
         title="Top Performers"
         action={
-          <TabsList className="grid grid-cols-3">
+          <TabsList className="grid grid-cols-4">
+            <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
             <TabsTrigger value="transporters">Transporters</TabsTrigger>
             <TabsTrigger value="stations">Stations</TabsTrigger>
             <TabsTrigger value="clients">B2B Clients</TabsTrigger>
@@ -32,6 +40,9 @@ export function TopPerformers({ data }: { data: FleetOverviewData }) {
         }
         contentClassName="min-h-[24rem]"
       >
+        <TabsContent value="suppliers" className="mt-0">
+          <PerformanceList data={mappedSuppliers} iconUrl="/assets/icons/fuel-station.png" />
+        </TabsContent>
         <TabsContent value="transporters" className="mt-0">
           <PerformanceList data={mappedTransporters} iconUrl="/assets/icons/gas-truck.png" />
         </TabsContent>

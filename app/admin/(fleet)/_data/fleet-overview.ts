@@ -114,7 +114,7 @@ async function getStationSnapshots(
 }
 
 import { fleetLedgerWhere } from "@/lib/finance/fleet-ledger"
-import { formatTransactionCategoryLabel } from "@/lib/finance/transaction-labels"
+import { formatFleetSpendingCategoryLabel } from "@/lib/finance/transaction-labels"
 import {
   deliveryVolumeSold,
   sumDeliveryTotalExpected,
@@ -297,6 +297,7 @@ export async function getFleetOverviewData(
       where: { tenantId, createdAt: { gte: periodFrom, lte: periodTo } },
       select: {
         createdAt: true,
+        supplier: true,
         litersOrdered: true,
         pricePerLitre: true,
         loadingCostPerLitre: true,
@@ -612,7 +613,7 @@ export async function getFleetOverviewData(
 
   const spendingBreakdown = spendingRaw
     .map((row) => ({
-      label: formatTransactionCategoryLabel(row.category ?? "OTHER"),
+      label: formatFleetSpendingCategoryLabel(row.category ?? "OTHER"),
       amount: Math.abs(Number(row._sum.amount) || 0),
     }))
     .filter((row) => row.amount > 0)
@@ -649,6 +650,38 @@ export async function getFleetOverviewData(
       volume: t.volume,
       trips: t.trips,
       amount: t.amount,
+    }))
+
+  const supplierMap = new Map<
+    string,
+    { name: string; volume: number; trips: number; amount: number }
+  >()
+  for (const order of currentOrders) {
+    const name = order.supplier?.trim()
+    if (!name) continue
+    const volume = Number(order.litersOrdered) || 0
+    const amount =
+      volume *
+      ((Number(order.pricePerLitre) || 0) + (Number(order.loadingCostPerLitre) || 0))
+    const key = name.toUpperCase()
+    const existing = supplierMap.get(key)
+    if (existing) {
+      existing.volume += volume
+      existing.trips += 1
+      existing.amount += amount
+    } else {
+      supplierMap.set(key, { name, volume, trips: 1, amount })
+    }
+  }
+
+  const supplierPerformance = Array.from(supplierMap.values())
+    .sort((a, b) => b.volume - a.volume)
+    .slice(0, 3)
+    .map((s) => ({
+      name: s.name,
+      volume: s.volume,
+      trips: s.trips,
+      amount: s.amount,
     }))
 
   const topStationIds = stationGroupRaw
@@ -870,6 +903,7 @@ export async function getFleetOverviewData(
     },
     comparativeVolume,
     transporterPerformance,
+    supplierPerformance,
     stationPerformance,
     clientPerformance,
     transportStatus,

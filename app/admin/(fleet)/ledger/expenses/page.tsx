@@ -6,9 +6,14 @@ import type { FilterConfig } from "@/components/data-table-filter-drawer";
 import {
   buildExpenseInsightStats,
 } from "../_components/ledger-insight-stats";
+import {
+  FLEET_EXPENSE_LEDGER_CATEGORIES,
+  fleetExpenseLedgerWhere,
+} from "@/lib/finance/fleet-ledger";
+import { formatTransactionCategoryLabel } from "@/lib/finance/transaction-labels";
+
 const PAYMENT_METHODS = ["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"];
 const TRANSACTION_TYPES = ["INFLOW", "OUTFLOW"];
-const TRANSACTION_CATEGORIES = ["TRANSPORT_PAYMENT", "CLIENT_PAYMENT", "EXPENSE", "OTHER"];
 
 export default async function ExpensesLedgerPage(props: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -29,44 +34,53 @@ export default async function ExpensesLedgerPage(props: {
   const dateFrom = searchParams.dateFrom as string;
   const dateTo = searchParams.dateTo as string;
 
-  const where: any = {
+  const categoryIsValid =
+    categoryFilter &&
+    FLEET_EXPENSE_LEDGER_CATEGORIES.includes(
+      categoryFilter as (typeof FLEET_EXPENSE_LEDGER_CATEGORIES)[number],
+    );
+
+  const where = fleetExpenseLedgerWhere({
     tenantId: actor.tenantId,
-    category: categoryFilter ? categoryFilter : "EXPENSE",
+    ...(categoryIsValid ? { category: categoryFilter } : {}),
     ...(search
       ? {
           OR: [
             { description: { contains: search, mode: "insensitive" as const } },
+            { paymentPurpose: { contains: search, mode: "insensitive" as const } },
           ],
         }
       : {}),
-  };
+  });
 
   if (transporterId) {
-    where.transporterId = transporterId;
+    (where as { transporterId?: string }).transporterId = transporterId;
   }
 
   if (typeFilter) {
-    where.type = typeFilter;
+    (where as { type?: string }).type = typeFilter;
   }
 
   if (method) {
-    where.paymentMethod = method;
+    (where as { paymentMethod?: string }).paymentMethod = method;
   }
 
   if (minAmount || maxAmount) {
-    where.amount = {};
-    if (minAmount) where.amount.gte = parseFloat(minAmount);
-    if (maxAmount) where.amount.lte = parseFloat(maxAmount);
+    const amount: { gte?: number; lte?: number } = {};
+    if (minAmount) amount.gte = parseFloat(minAmount);
+    if (maxAmount) amount.lte = parseFloat(maxAmount);
+    (where as { amount?: typeof amount }).amount = amount;
   }
 
   if (dateFrom || dateTo) {
-    where.createdAt = {};
-    if (dateFrom) where.createdAt.gte = new Date(dateFrom);
+    const createdAt: { gte?: Date; lte?: Date } = {};
+    if (dateFrom) createdAt.gte = new Date(dateFrom);
     if (dateTo) {
       const to = new Date(dateTo);
       to.setHours(23, 59, 59, 999);
-      where.createdAt.lte = to;
+      createdAt.lte = to;
     }
+    (where as { createdAt?: typeof createdAt }).createdAt = createdAt;
   }
 
   const [totalCount, rows, aggregate, cashAgg, transferAgg, transporters] = await Promise.all([
@@ -80,6 +94,7 @@ export default async function ExpensesLedgerPage(props: {
         transporter: true,
         truck: true,
         order: true,
+        supplier: { select: { id: true, name: true } },
       },
     }),
     prisma.transaction.aggregate({ where, _sum: { amount: true } }),
@@ -107,11 +122,16 @@ export default async function ExpensesLedgerPage(props: {
   });
   const totalPages = Math.ceil(totalCount / pageSize);
 
+  const categoryFilterOptions = FLEET_EXPENSE_LEDGER_CATEGORIES.map((c) => ({
+    value: c,
+    label: formatTransactionCategoryLabel(c),
+  }));
+
   const filters: FilterConfig[] = [
     { type: "date-range", label: "Date Range", fromParam: "dateFrom", toParam: "dateTo" },
     { type: "combobox", label: "Transporter", paramName: "transporter", options: transporters.map(t => ({ value: t.id, label: t.name })) },
     { type: "select", label: "Type", paramName: "type", options: TRANSACTION_TYPES.map(t => ({ value: t, label: t.replace(/_/g, " ") })) },
-    { type: "select", label: "Category", paramName: "category", options: TRANSACTION_CATEGORIES.map(c => ({ value: c, label: c.replace(/_/g, " ") })) },
+    { type: "select", label: "Category", paramName: "category", options: categoryFilterOptions },
     { type: "select", label: "Payment Method", paramName: "method", options: PAYMENT_METHODS.map(m => ({ value: m, label: m.replace(/_/g, " ") })) },
     { type: "number-range", label: "Amount Range", fromParam: "minAmount", toParam: "maxAmount" },
   ];
@@ -120,7 +140,7 @@ export default async function ExpensesLedgerPage(props: {
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold tracking-tight">Expenses Ledger</h1>
-        <p className="text-muted-foreground">Fleet maintenance, operational costs &amp; deductions.</p>
+        <p className="text-muted-foreground">Fleet maintenance, supplier payments, operational costs &amp; other outflows.</p>
       </div>
 
       <ExpensesTable 

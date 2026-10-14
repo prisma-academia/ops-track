@@ -64,7 +64,7 @@ export default async function SupplierDetailPage({
     .substring(0, 2)
     .toUpperCase();
 
-  const payUrl = `/admin/payments/new/outgoing/supplier?supplierId=${supplier.id}`;
+  const payUrl = `/admin/payments/new/outgoing?supplierId=${supplier.id}`;
 
   return (
     <div className="space-y-6">

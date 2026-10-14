@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownLeft, ArrowRight, ArrowUpRight } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  Wallet01Icon,
+  BankIcon,
+  CreditCardIcon,
+  ArrowDownLeft01Icon,
+  ArrowRight01Icon,
+  ArrowUpRight01Icon,
+} from "@hugeicons/core-free-icons";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,68 +22,88 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-const OPTIONS = [
-  {
-    href: "/admin/payments/new/incoming",
-    title: "Incoming Payment",
-    description: "Record a payment received from a customer or station.",
-    icon: ArrowDownLeft,
-    tone: "text-emerald-600 bg-emerald-500/10 group-hover:bg-emerald-500/15",
-  },
+const ACTIONS = [
   {
     href: "/admin/payments/new/outgoing",
-    title: "Outgoing Payment",
-    description: "Record a transport fee payout or fleet expense.",
-    icon: ArrowUpRight,
-    tone: "text-red-600 bg-red-500/10 group-hover:bg-red-500/15",
+    label: "Pay",
+    sublabel: "Outgoing",
+    icon: ArrowUpRight01Icon,
+    className:
+      "bg-rose-500/10 text-rose-700 hover:bg-rose-500/15 dark:text-rose-400 ring-rose-500/20",
   },
   {
-    href: "/admin/payments/new/outgoing/supplier",
-    title: "Supplier Payment",
-    description: "Pay a product supplier for fleet orders or advance deposit.",
-    icon: ArrowUpRight,
-    tone: "text-orange-600 bg-orange-500/10 group-hover:bg-orange-500/15",
+    href: "/admin/payments/new/incoming",
+    label: "Receive",
+    sublabel: "Incoming",
+    icon: ArrowDownLeft01Icon,
+    className:
+      "bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-400 ring-emerald-500/20",
   },
-];
+] as const;
 
 export function LogPaymentModal() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
+  const navigate = (href: string) => {
+    setOpen(false);
+    router.push(href);
+  };
+
   return (
     <>
       <Button onClick={() => setOpen(true)}>Log Payment</Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader className="text-center sm:text-center">
             <DialogTitle>Log Payment</DialogTitle>
-            <DialogDescription>Choose the type of payment you want to record.</DialogDescription>
+            <DialogDescription>Record money leaving or entering the business.</DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-2">
-            {OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              return (
-                <button
-                  key={opt.href}
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    router.push(opt.href);
-                  }}
-                  className="group flex w-full items-center gap-3 rounded-lg border border-border/60 p-3 text-left transition-colors hover:border-border hover:bg-muted/40"
-                >
-                  <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", opt.tone)}>
-                    <Icon className="size-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium leading-none">{opt.title}</p>
-                    <p className="mt-1 text-xs text-muted-foreground leading-snug">{opt.description}</p>
-                  </div>
-                  <ArrowRight className="size-4 shrink-0 text-muted-foreground opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0" />
-                </button>
-              );
-            })}
+          <div
+            className="relative flex w-full items-center justify-center rounded-2xl bg-gradient-to-b from-primary/8 via-muted/50 to-muted/30 px-6 py-10"
+            aria-hidden
+          >
+            <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent" />
+            <div className="relative flex items-end justify-center gap-3">
+              <div className="flex size-11 items-center justify-center rounded-xl bg-background/80 text-muted-foreground shadow-sm ring-1 ring-border/50 backdrop-blur-sm">
+                <HugeiconsIcon icon={BankIcon} size={22} strokeWidth={1.75} />
+              </div>
+              <div className="flex size-16 items-center justify-center rounded-2xl bg-background text-primary shadow-md ring-1 ring-border/60">
+                <HugeiconsIcon icon={Wallet01Icon} size={32} strokeWidth={1.75} />
+              </div>
+              <div className="flex size-11 items-center justify-center rounded-xl bg-background/80 text-muted-foreground shadow-sm ring-1 ring-border/50 backdrop-blur-sm">
+                <HugeiconsIcon icon={CreditCardIcon} size={22} strokeWidth={1.75} />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            {ACTIONS.map((action) => (
+              <button
+                key={action.href}
+                type="button"
+                onClick={() => navigate(action.href)}
+                className={cn(
+                  "group flex w-full min-w-0 items-center gap-2 rounded-2xl px-3 py-3.5 ring-1 ring-inset transition-colors",
+                  action.className,
+                )}
+              >
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-background/70 shadow-sm ring-1 ring-border/40">
+                  <HugeiconsIcon icon={action.icon} size={20} strokeWidth={2} />
+                </span>
+                <span className="min-w-0 flex-1 text-left leading-tight">
+                  <span className="block text-sm font-semibold">{action.label}</span>
+                  <span className="block text-xs font-medium opacity-80">{action.sublabel}</span>
+                </span>
+                <HugeiconsIcon
+                  icon={ArrowRight01Icon}
+                  size={18}
+                  strokeWidth={2}
+                  className="shrink-0 opacity-50 transition-transform group-hover:translate-x-0.5 group-hover:opacity-80"
+                />
+              </button>
+            ))}
           </div>
         </DialogContent>
       </Dialog>

@@ -8,6 +8,7 @@ import { DataTableColumnHeader } from "@/components/tables";
 import { LedgerReportTable } from "../_components/ledger-report-table";
 import type { TableInsightStat } from "@/components/tables";
 import type { FilterConfig } from "@/components/data-table-filter-drawer";
+import { formatTransactionCategoryLabel } from "@/lib/finance/transaction-labels";
 
 export type ExpensesLedgerRow = {
   id: string;
@@ -40,7 +41,7 @@ export const expensesColumns: ColumnDef<ExpensesLedgerRow>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Category" />,
     meta: { label: "Category" },
     cell: ({ row }) => {
-      const cat = row.original.category?.replace(/_/g, " ") || "-";
+      const cat = formatTransactionCategoryLabel(row.original.category || "EXPENSE");
       return <Badge variant="secondary">{cat}</Badge>;
     },
     filterFn: (row, id, value) => {

@@ -21,7 +21,23 @@ export function formatTransactionCategoryLabel(category: string): string {
   return category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Shorter labels for fleet dashboard Spending Overview (pie + legend). */
+const FLEET_SPENDING_CATEGORY_LABELS: Partial<Record<string, string>> = {
+  SUPPLIER_PAYMENT: "Supplier",
+  TRANSPORT_PAYMENT: "Transport",
+};
+
+export function formatFleetSpendingCategoryLabel(category: string): string {
+  return (
+    FLEET_SPENDING_CATEGORY_LABELS[category] ??
+    formatTransactionCategoryLabel(category)
+  );
+}
+
+const SUPPLIER_PAYMENT_CATEGORIES = new Set(["SUPPLIER_PAYMENT", "PRODUCT_SUPPLY"]);
+
 export function resolveTransactionCounterpartyName(transaction: {
+  category?: string | null;
   supplier?: { name: string } | null;
   customer?: { name: string } | null;
   station?: { name: string; code?: string | null } | null;
@@ -52,6 +68,12 @@ export function resolveTransactionCounterpartyName(transaction: {
   description?: string | null;
   paymentPurpose?: string | null;
 }): string | null {
+  if (transaction.category && SUPPLIER_PAYMENT_CATEGORIES.has(transaction.category)) {
+    if (transaction.supplier?.name) return transaction.supplier.name;
+    if (transaction.order?.supplier) return transaction.order.supplier;
+    if (transaction.transport?.order?.supplier) return transaction.transport.order.supplier;
+  }
+
   if (transaction.supplier?.name) return transaction.supplier.name;
   if (transaction.customer?.name) return transaction.customer.name;
   if (transaction.organization?.name) return transaction.organization.name;
@@ -69,13 +91,13 @@ export function resolveTransactionCounterpartyName(transaction: {
   if (transaction.transporter?.name) return transaction.transporter.name;
   if (transaction.transport?.transporter?.name) return transaction.transport.transporter.name;
   if (transaction.transport?.oneTimeTransporterName) {
-    return `${transaction.transport.oneTimeTransporterName} (One-Time)`;
+    return transaction.transport.oneTimeTransporterName;
   }
   if (transaction.delivery?.transport?.transporter?.name) {
     return transaction.delivery.transport.transporter.name;
   }
   if (transaction.delivery?.transport?.oneTimeTransporterName) {
-    return `${transaction.delivery.transport.oneTimeTransporterName} (One-Time)`;
+    return transaction.delivery.transport.oneTimeTransporterName;
   }
   if (transaction.order?.supplier) return transaction.order.supplier;
   if (transaction.transport?.order?.supplier) return transaction.transport.order.supplier;

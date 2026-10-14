@@ -91,7 +91,7 @@ export function SupplierOrdersTable({
           row.original.balance > 0 ? (
             <Button variant="outline" size="sm" asChild>
               <Link
-                href={`/admin/payments/new/outgoing/supplier?supplierId=${supplierId}&orderId=${row.original.id}`}
+                href={`/admin/payments/new/outgoing?supplierId=${supplierId}&orderId=${row.original.id}`}
               >
                 Pay
               </Link>

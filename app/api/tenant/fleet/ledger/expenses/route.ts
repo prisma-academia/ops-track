@@ -3,6 +3,7 @@ import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
+import { fleetExpenseLedgerWhere } from "@/lib/finance/fleet-ledger";
 
 export async function GET(request: Request) {
   try {
@@ -11,10 +12,9 @@ export async function GET(request: Request) {
     const { cursor, take } = parsePagination(url.searchParams);
 
     const rows = await prisma.transaction.findMany({
-      where: {
+      where: fleetExpenseLedgerWhere({
         tenantId: actor.tenantId,
-        category: "EXPENSE",
-      },
+      }),
       orderBy: { createdAt: "desc" },
       take,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),

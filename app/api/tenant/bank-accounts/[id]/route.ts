@@ -11,6 +11,8 @@ const UpdateBankAccountSchema = z.object({
   accountName: z.string().min(2).max(255).optional(),
   accountNumber: z.string().min(2).max(50).optional(),
   bankName: z.string().min(2).max(255).optional(),
+  bankSlug: z.string().max(120).optional().nullable(),
+  bankCode: z.string().max(32).optional().nullable(),
   isActive: z.boolean().optional(),
 });
 
@@ -105,6 +107,8 @@ export async function PATCH(
           accountNumber: body.accountNumber.trim(),
         }),
         ...(body.bankName && { bankName: body.bankName.trim() }),
+        ...(body.bankSlug !== undefined && { bankSlug: body.bankSlug?.trim() || null }),
+        ...(body.bankCode !== undefined && { bankCode: body.bankCode?.trim() || null }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
       },
     });

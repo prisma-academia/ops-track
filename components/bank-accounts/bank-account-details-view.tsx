@@ -14,7 +14,6 @@ import {
   Building2,
   Copy,
   Check,
-  Landmark,
   Wifi,
   ReceiptText,
 } from "lucide-react";
@@ -25,6 +24,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { apiDelete } from "@/lib/client/api";
+import { BankLogo } from "@/components/bank-accounts/bank-logo";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,6 +64,8 @@ type BankAccountDetails = {
     accountName: string;
     accountNumber: string;
     bankName: string;
+    bankSlug?: string | null;
+    bankCode?: string | null;
     scope: "STATION" | "FLEET";
     isActive: boolean;
     stationAssignments?: {
@@ -288,6 +290,7 @@ export function BankAccountDetailsView({
           </Button>
           <div>
             <div className="flex items-center gap-2">
+              <BankLogo slug={account.bankSlug} bankName={account.bankName} size={28} />
               <h1 className="text-xl font-bold tracking-tight">{account.bankName} Account</h1>
               <Badge variant="outline" className="text-xs font-semibold uppercase">
                 {account.scope}
@@ -412,7 +415,7 @@ export function BankAccountDetailsView({
                 {/* Top of Card: Bank Name & Wireless Contactless Icon */}
                 <div className="relative z-10 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Landmark className="size-4 sm:size-5 text-amber-300 shrink-0" />
+                    <BankLogo slug={account.bankSlug} bankName={account.bankName} size={22} className="rounded-sm" />
                     <span className="font-bold tracking-wider text-sm sm:text-base text-zinc-100 uppercase truncate max-w-[200px]">
                       {account.bankName}
                     </span>
@@ -505,6 +508,8 @@ export function BankAccountDetailsView({
           accountName: account.accountName,
           accountNumber: account.accountNumber,
           bankName: account.bankName,
+          bankSlug: account.bankSlug,
+          bankCode: account.bankCode,
           isActive: account.isActive,
         }}
         fixedScope={account.scope}

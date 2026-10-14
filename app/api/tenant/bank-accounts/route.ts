@@ -14,6 +14,8 @@ const CreateBankAccountSchema = z.object({
   accountName: z.string().min(2).max(255),
   accountNumber: z.string().min(2).max(50),
   bankName: z.string().min(2).max(255),
+  bankSlug: z.string().max(120).optional().nullable(),
+  bankCode: z.string().max(32).optional().nullable(),
   isActive: z.boolean().default(true),
   organizationId: z.string().optional().nullable(),
 });
@@ -154,6 +156,8 @@ export async function POST(request: Request) {
         accountName: cleanAccountName,
         accountNumber: cleanAccountNumber,
         bankName: cleanBankName,
+        bankSlug: body.bankSlug?.trim() || null,
+        bankCode: body.bankCode?.trim() || null,
         isActive: body.isActive,
         organizationId,
       },
@@ -169,6 +173,8 @@ export async function POST(request: Request) {
       after: {
         accountNumber: bankAccount.accountNumber,
         bankName: bankAccount.bankName,
+        bankSlug: bankAccount.bankSlug,
+        bankCode: bankAccount.bankCode,
         scope: bankAccount.scope,
         organizationId,
       } as object,

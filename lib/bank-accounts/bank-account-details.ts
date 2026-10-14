@@ -279,6 +279,8 @@ export async function getBankAccountDetailsData({
       accountName: account.accountName,
       accountNumber: account.accountNumber,
       bankName: account.bankName,
+      bankSlug: account.bankSlug,
+      bankCode: account.bankCode,
       scope: account.scope,
       isActive: account.isActive,
       stationAssignments: account.stationAssignments ?? [],

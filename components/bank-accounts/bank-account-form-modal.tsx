@@ -33,7 +33,7 @@ interface BankAccountFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  initialData?: (Partial<FormValues> & { id?: string }) | null;
+  initialData?: (Partial<FormValues> & { id?: string; bankSlug?: string | null; bankCode?: string | null }) | null;
   fixedScope?: "STATION" | "FLEET";
   hasTransactions?: boolean;
 }
@@ -47,10 +47,11 @@ export function BankAccountFormModal({
   hasTransactions = false,
 }: BankAccountFormModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [banks, setBanks] = useState<{ name: string; code: string }[]>([]);
+  const [banks, setBanks] = useState<{ name: string; code: string; slug: string }[]>([]);
   const [isFetchingBanks, setIsFetchingBanks] = useState(false);
   const [openBankSelect, setOpenBankSelect] = useState(false);
   const [selectedBankCode, setSelectedBankCode] = useState<string>("");
+  const [selectedBankSlug, setSelectedBankSlug] = useState<string>("");
 
   const [isVerifying, setIsVerifying] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
@@ -85,7 +86,8 @@ export function BankAccountFormModal({
       setIsVerified(!!initialData?.accountName);
       setVerificationError(null);
       setIsManualEntry(false);
-      setSelectedBankCode("");
+      setSelectedBankCode(initialData?.bankCode || "");
+      setSelectedBankSlug(initialData?.bankSlug || "");
     }
   }, [isOpen, initialData, fixedScope, reset]);
 
@@ -99,8 +101,11 @@ export function BankAccountFormModal({
           if (res?.data) {
             setBanks(res.data);
             if (initialData?.bankName) {
-              const b = res.data.find((x: { name: string; code: string }) => x.name.toLowerCase() === initialData.bankName?.toLowerCase());
-              if (b) setSelectedBankCode(b.code);
+              const b = res.data.find((x: { name: string; code: string; slug?: string }) => x.name.toLowerCase() === initialData.bankName?.toLowerCase());
+              if (b) {
+                setSelectedBankCode(b.code);
+                if (b.slug) setSelectedBankSlug(b.slug);
+              }
             }
           }
         })
@@ -113,7 +118,10 @@ export function BankAccountFormModal({
   useEffect(() => {
     if (isOpen && initialData?.bankName && banks.length > 0 && !selectedBankCode) {
       const b = banks.find((x) => x.name.toLowerCase() === initialData.bankName?.toLowerCase());
-      if (b) setSelectedBankCode(b.code);
+      if (b) {
+        setSelectedBankCode(b.code);
+        if (b.slug) setSelectedBankSlug(b.slug);
+      }
     }
   }, [isOpen, initialData, banks, selectedBankCode]);
 
@@ -159,14 +167,17 @@ export function BankAccountFormModal({
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
     try {
+      const payload = {
+        ...data,
+        bankSlug: selectedBankSlug || null,
+        bankCode: selectedBankCode || null,
+        ...(initialData && hasTransactions ? { accountNumber: initialData.accountNumber } : {}),
+      };
       if (initialData) {
-        const payload = hasTransactions
-          ? { ...data, accountNumber: initialData.accountNumber }
-          : data;
         const res = await apiPatch(`/api/tenant/bank-accounts/${initialData.id}`, payload);
         if (res.error) throw new Error(res.error.message);
       } else {
-        const res = await apiPost(`/api/tenant/bank-accounts`, data);
+        const res = await apiPost(`/api/tenant/bank-accounts`, payload);
         if (res.error) throw new Error(res.error.message);
       }
 
@@ -250,6 +261,7 @@ export function BankAccountFormModal({
                           onSelect={() => {
                             setValue("bankName", bank.name, { shouldValidate: true });
                             setSelectedBankCode(bank.code);
+                            setSelectedBankSlug(bank.slug);
                             setIsVerified(false);
                             setVerificationError(null);
                             if (!isManualEntry) {

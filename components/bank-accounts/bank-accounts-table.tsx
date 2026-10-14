@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, Building2 } from "lucide-react";
 import { BankAccountFormModal } from "./bank-account-form-modal";
+import { BankLogo } from "./bank-logo";
 
 export type BankAccountRow = {
   id: string;
@@ -16,6 +17,8 @@ export type BankAccountRow = {
   accountName: string;
   accountNumber: string;
   bankName: string;
+  bankSlug?: string | null;
+  bankCode?: string | null;
   isActive: boolean;
   stationAssignments?: { stationId: string; station: { id: string; name: string; code: string } }[];
 };
@@ -57,7 +60,12 @@ export function BankAccountsTable({
     {
       accessorKey: "bankName",
       header: "Bank Name",
-      cell: ({ row }) => <span className="font-semibold">{row.original.bankName}</span>,
+      cell: ({ row }) => (
+        <span className="flex items-center gap-2.5 font-semibold">
+          <BankLogo slug={row.original.bankSlug} bankName={row.original.bankName} size={28} />
+          {row.original.bankName}
+        </span>
+      ),
     },
     {
       accessorKey: "accountName",

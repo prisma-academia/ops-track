@@ -61,6 +61,8 @@ import {
   type TransportFeeTransaction,
   type TransportFeeTransport,
 } from "@/lib/fleet/transport-fees";
+import type { OrderPnLSummary } from "@/lib/fleet/financials";
+import { OrderFinancialSummary } from "./order-financial-summary";
 
 const EditOrderSchema = z.object({
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
@@ -90,7 +92,7 @@ export function OrderDetailsManager({
 }: {
   order: any;
   lookups: { suppliers: LookupItem[]; depots: LookupItem[] };
-  pnl?: any;
+  pnl?: OrderPnLSummary | null;
   originToDepotFee?: number;
 }) {
   const router = useRouter();
@@ -115,15 +117,6 @@ export function OrderDetailsManager({
   const totalProductCost = Number(order.pricePerLitre) * Number(order.litersOrdered);
   const totalLoadingCost = Number(order.loadingCostPerLitre) * Number(order.litersOrdered);
   const totalProcurementCost = totalProductCost + totalLoadingCost;
-  const combinedCostPerLitre = Number(order.pricePerLitre) + Number(order.loadingCostPerLitre);
-  const supplierPaymentPaid = Number(order.paymentPaid || 0);
-  const supplierPaymentRemaining = Math.max(0, totalProcurementCost - supplierPaymentPaid);
-  const supplierPaymentStatus = order.paymentStatus || "UNPAID";
-  const paySupplierQuery = new URLSearchParams({
-    ...(order.supplierId ? { supplierId: order.supplierId } : {}),
-    orderId: order.id,
-  }).toString();
-
   // Edit Form
   const { register, handleSubmit, formState, setValue, watch, reset, control } = useForm({
     resolver: zodResolver(EditOrderSchema),
@@ -323,16 +316,6 @@ export function OrderDetailsManager({
 
                 <div className="flex items-start gap-3">
                   <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                    <Building2 size={14} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Supplier</p>
-                    <p className="font-medium text-foreground text-sm">{order.supplier || "Not specified"}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
                     <MapPin size={14} />
                   </div>
                   <div>
@@ -394,8 +377,33 @@ export function OrderDetailsManager({
                 </div>
               </div>
             </div>
-            
 
+            <div className="mt-2 pt-4 border-t border-border/40 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded-lg bg-muted/30 px-4 py-3 text-center sm:text-left">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Total Product
+                </p>
+                <p className="font-mono font-semibold text-foreground mt-1">
+                  ₦{totalProductCost.toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg bg-muted/30 px-4 py-3 text-center sm:text-left">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Total Loading
+                </p>
+                <p className="font-mono font-semibold text-foreground mt-1">
+                  ₦{totalLoadingCost.toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg bg-primary/5 border border-primary/15 px-4 py-3 text-center sm:text-left">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Total
+                </p>
+                <p className="font-mono font-bold text-primary mt-1">
+                  ₦{totalProcurementCost.toLocaleString()}
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -409,40 +417,7 @@ export function OrderDetailsManager({
           </CardHeader>
           <CardContent className="flex-1">
             <div className="flex flex-col gap-y-4 w-full">
-                  <div className="flex justify-between border-b pb-1">
-                    <span className="text-muted-foreground">Total Product:</span>
-                    <span className="font-mono font-medium">₦{totalProductCost.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b pb-1">
-                    <span className="text-muted-foreground">Total Loading:</span>
-                    <span className="font-mono font-medium">₦{totalLoadingCost.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between pb-3 border-b">
-                    <span className="font-bold text-foreground text-sm">Total:</span>
-                    <span className="font-mono font-bold text-primary text-base">₦{totalProcurementCost.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b pb-1 text-sm">
-                    <span className="text-muted-foreground">Paid to supplier:</span>
-                    <span className="font-mono font-medium text-emerald-600">₦{supplierPaymentPaid.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b pb-1 text-sm">
-                    <span className="text-muted-foreground">Remaining:</span>
-                    <span className={cn("font-mono font-medium", supplierPaymentRemaining > 0 && "text-rose-600")}>
-                      ₦{supplierPaymentRemaining.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between pb-3 border-b text-sm">
-                    <span className="text-muted-foreground">Payment status:</span>
-                    <span className="font-medium">{supplierPaymentStatus.replace(/_/g, " ")}</span>
-                  </div>
-
-                  {(order.supplierId || order.supplier) && (
-                    <Button variant="outline" asChild className="w-full justify-center gap-2">
-                      <Link href={`/admin/payments/new/outgoing/supplier?${paySupplierQuery}`}>
-                        Record supplier payment
-                      </Link>
-                    </Button>
-                  )}
+                  <OrderFinancialSummary pnl={pnl} />
 
                   <Button size={"icon-lg"}
                     asChild

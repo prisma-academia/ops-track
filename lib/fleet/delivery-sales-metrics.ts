@@ -1,4 +1,41 @@
+import { subDays } from "date-fns";
+
 /** Aligns fleet overview with Sales Deliveries stats (Volume Sold / Total Expected). */
+
+/** Default reporting window when no date filter is set (matches fleet overview date picker). */
+export function getDefaultFleetSalesDateRange(): { from: Date; to: Date } {
+  const from = subDays(new Date(), 30);
+  from.setHours(0, 0, 0, 0);
+  const to = new Date();
+  to.setHours(23, 59, 59, 999);
+  return { from, to };
+}
+
+export function resolveDeliveryCreatedAtFilter(
+  fromParam?: string,
+  toParam?: string
+): { gte: Date; lte: Date } {
+  if (fromParam || toParam) {
+    const range: { gte?: Date; lte?: Date } = {};
+    if (fromParam) {
+      const from = new Date(fromParam);
+      from.setHours(0, 0, 0, 0);
+      range.gte = from;
+    }
+    if (toParam) {
+      const to = new Date(toParam);
+      to.setHours(23, 59, 59, 999);
+      range.lte = to;
+    }
+    const fallback = getDefaultFleetSalesDateRange();
+    return {
+      gte: range.gte ?? fallback.from,
+      lte: range.lte ?? fallback.to,
+    };
+  }
+  const { from, to } = getDefaultFleetSalesDateRange();
+  return { gte: from, lte: to };
+}
 
 export function deliveryVolumeSold(delivery: { litersDespatched: unknown }): number {
   return Number(delivery.litersDespatched) || 0;

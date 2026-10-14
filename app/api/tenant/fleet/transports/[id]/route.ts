@@ -9,6 +9,7 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 import { assertOrderLinkCapacity, asOrderLookupClient } from "@/lib/fleet/transport-order";
 import { PRODUCT_LOSS_TYPE_VALUES, isNotesRequiredForLossType } from "@/lib/fleet/loss-types";
 import { deliveryShortfall } from "@/lib/fleet/transport-volume";
+import { isCompleteTransportLoadLoss } from "@/lib/fleet/transport-loss";
 
 const UpdateTransportSchema = z.object({
   orderId: z.string().nullable().optional(),
@@ -153,8 +154,38 @@ export async function PATCH(
     });
     const loggedLostTotal = Number(loggedBefore._sum.lostQuantity ?? 0) + (body.lossLog?.lostQuantity ?? 0);
 
-    const finalStatus = body.status ?? existing.status;
-    const isFinal = finalStatus === "COMPLETED" || finalStatus === "CANCELLED";
+    let finalStatus = body.status ?? existing.status;
+
+    const totalDespatchedForLoss = (existing.deliveries || []).reduce(
+      (sum, d) => sum + Number(d.litersDespatched || 0),
+      0
+    );
+    const loadedForLoss = Math.max(litersCarried, totalDespatchedForLoss);
+    const distributedForLoss = (existing.deliveries || []).reduce(
+      (sum, d) =>
+        sum +
+        Math.max(
+          0,
+          Number(d.litersDespatched || 0) - Number(d.litersReturned || 0)
+        ),
+      0
+    );
+
+    if (
+      isCompleteTransportLoadLoss({
+        litersCarried,
+        effectiveLoadedVolume: loadedForLoss,
+        distributedVolume: distributedForLoss,
+        loggedLostVolume: loggedLostTotal,
+      })
+    ) {
+      if (finalStatus === "COMPLETED" || body.lossLog) {
+        finalStatus = "LOSS";
+      }
+    }
+
+    const isFinal =
+      finalStatus === "COMPLETED" || finalStatus === "CANCELLED" || finalStatus === "LOSS";
 
     // Open trips: pending deliveries are not losses. Final trips: the finalize log already covers shortfalls.
     const shortfallAll = isFinal
@@ -165,7 +196,9 @@ export async function PATCH(
       : existing.deliveries.reduce((s, d) => s + (d.shortageDeducted === false ? 0 : deliveryShortfall(d)), 0);
 
     const keepStored =
-      (existing.status === "COMPLETED" || existing.status === "CANCELLED") &&
+      (existing.status === "COMPLETED" ||
+        existing.status === "CANCELLED" ||
+        existing.status === "LOSS") &&
       !body.lossLog &&
       body.addMaintenanceCost === undefined;
 
@@ -186,7 +219,9 @@ export async function PATCH(
         litersLost: currentLitersLost,
         totalDeduction,
         netTransportFeePaid,
-        ...(body.status !== undefined && { status: body.status }),
+        ...((body.status !== undefined || (body.lossLog && finalStatus === "LOSS")) && {
+          status: finalStatus,
+        }),
         ...(body.lossLog && {
           lossLogs: {
             create: {

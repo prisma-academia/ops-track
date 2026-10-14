@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { LabelList, Pie, PieChart } from "recharts";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
   ChartLegend,
@@ -26,10 +26,8 @@ function segmentKey(index: number) {
 
 export function SpendingBreakdownCard({
   segments,
-  periodLabel,
 }: {
   segments: SpendingBreakdownPoint[];
-  periodLabel: string;
 }) {
   const total = segments.reduce((sum, item) => sum + item.amount, 0);
 
@@ -65,7 +63,6 @@ export function SpendingBreakdownCard({
     <Card className="h-full border-border/40 shadow-xs py-0 gap-0">
       <CardHeader className="border-b border-border/40 px-6 py-4">
         <CardTitle className="text-base font-semibold">Spending Overview</CardTitle>
-        <CardDescription>Where money is mostly spending · {periodLabel}</CardDescription>
       </CardHeader>
       <CardContent className="px-6 py-5">
         {segments.length === 0 ? (
@@ -74,22 +71,6 @@ export function SpendingBreakdownCard({
           </div>
         ) : (
           <div className="space-y-5">
-            <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Total spent
-              </p>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <p className="mt-1 text-xl font-semibold tabular-nums cursor-default">
-                    {formatShortCurrency(total)}
-                  </p>
-                </TooltipTrigger>
-                <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
-                  {formatFullCurrency(total)}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-
             <ChartContainer
               config={chartConfig}
               className="mx-auto aspect-square max-h-[260px] w-full [&_.recharts-text]:fill-background"

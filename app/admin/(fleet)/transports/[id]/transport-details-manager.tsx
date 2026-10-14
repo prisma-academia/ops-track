@@ -25,6 +25,10 @@ import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Droplet } from "lucide-react";
 import { TransportFeeBreakdown, getTransactionFeeLegLabel } from "@/components/fleet/transport-fee-breakdown";
 import { PRODUCT_LOSS_TYPES, getLossTypeLabel, getProductLossType, isNotesRequiredForLossType } from "@/lib/fleet/loss-types";
+import {
+  formatTransportStatusLabel,
+  isCompleteTransportLoadLoss,
+} from "@/lib/fleet/transport-loss";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { FilePreviewButton } from "@/components/file-viewer-modal";
 import { Pie, PieChart } from "recharts";
@@ -64,6 +68,12 @@ export function TransportDetailsManager({
   const [lostQuantity, setLostQuantity] = useState("");
   const [expensesIncurred, setExpensesIncurred] = useState("");
   const [lossComment, setLossComment] = useState("");
+
+  // Finalize-as-complete-loss (without pre-logging incident)
+  const [finalizeCompleteLoss, setFinalizeCompleteLoss] = useState(false);
+  const [finalizeLossType, setFinalizeLossType] = useState("THEFT");
+  const [finalizeLossComment, setFinalizeLossComment] = useState("");
+  const [finalizeLossExpenses, setFinalizeLossExpenses] = useState("");
 
   // Delete Loss Log state
   const [deleteLossTarget, setDeleteLossTarget] = useState<any | null>(null);
@@ -143,6 +153,29 @@ export function TransportDetailsManager({
   const exceedsRemaining = incidentQuantity > remainingVolume + 0.001;
   const volumeDeduction = incidentQuantity * ratePerLiter;
 
+  const isCompleteLoadLoss = isCompleteTransportLoadLoss({
+    litersCarried: carriedVolume,
+    effectiveLoadedVolume,
+    distributedVolume,
+    loggedLostVolume,
+  });
+
+  const primaryLossLog =
+    lossLogs.length > 0
+      ? [...lossLogs].sort(
+          (a: { createdAt: string }, b: { createdAt: string }) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0]
+      : null;
+
+  const completeLossFinancialTotal =
+    loggedLostVolume * ratePerLiter +
+    lossLogs.reduce(
+      (sum: number, log: { expensesIncurred?: number | string | null }) =>
+        sum + Number(log.expensesIncurred || 0),
+      0
+    );
+
   const handleLogIncident = async () => {
     setIsSubmitting(true);
     setError(null);
@@ -181,6 +214,10 @@ export function TransportDetailsManager({
       return;
     }
 
+    const willCompleteLoadLoss =
+      distributedVolume < 0.001 &&
+      quantity + loggedLostVolume >= effectiveLoadedVolume - 0.001;
+
     const payload: {
       lossLog: {
         lossType: string;
@@ -189,6 +226,7 @@ export function TransportDetailsManager({
         comment?: string;
       };
       addMaintenanceCost: number;
+      status?: string;
     } = {
       lossLog: {
         lossType,
@@ -198,6 +236,10 @@ export function TransportDetailsManager({
       },
       addMaintenanceCost: expenses,
     };
+
+    if (willCompleteLoadLoss) {
+      payload.status = "LOSS";
+    }
 
     const res = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, payload);
     setIsSubmitting(false);
@@ -211,6 +253,11 @@ export function TransportDetailsManager({
       setExpensesIncurred("");
       setLossComment("");
       setOpenIncidentDialog(false);
+      if (willCompleteLoadLoss) {
+        toast.success("Complete load loss recorded. Trip marked as Complete Loss.");
+      } else {
+        toast.success("Product loss incident logged.");
+      }
       router.refresh();
     }
   };
@@ -255,7 +302,10 @@ export function TransportDetailsManager({
   // Total physical shortage across drops and truck volume
   const trueVariance = deliveryShortage + unaccountedTruckShortage;
   const hasActualShortage = !isAwaitingReception && trueVariance > 0.001;
-  const canFinalize = transport.status !== "COMPLETED" && transport.status !== "CANCELLED";
+  const canFinalize =
+    transport.status !== "COMPLETED" &&
+    transport.status !== "CANCELLED" &&
+    transport.status !== "LOSS";
 
   const defaultSellingPrice = transport.deliveries?.length
     ? Math.max(...transport.deliveries.map((d: any) => Number(d.amountPerLiter) || 0))
@@ -287,8 +337,24 @@ export function TransportDetailsManager({
 
   const handleOpenFinalizeDialog = () => {
     setError(null);
+    setFinalizeCompleteLoss(false);
+    setFinalizeLossType("THEFT");
+    setFinalizeLossComment("");
+    setFinalizeLossExpenses("");
     setOpenFinalizeDialog(true);
   };
+
+  const completeLossLitersToLog = Math.max(
+    0,
+    effectiveLoadedVolume - distributedVolume - loggedLostVolume
+  );
+  const canOfferCompleteLossFinalize =
+    distributedVolume < 0.001 && !isAwaitingReception;
+  const closingAsCompleteLoss = isCompleteLoadLoss || finalizeCompleteLoss;
+  const finalizeLossTypeMeta = getProductLossType(finalizeLossType);
+  const finalizeLossExpensesNum = Number(finalizeLossExpenses || 0);
+  const previewCompleteLossTotal =
+    completeLossLitersToLog * ratePerLiter + finalizeLossExpensesNum;
 
   // Only deliveries awaiting reception OR having a shortage
   const awaitingOrShortageDeliveries = (transport.deliveries || []).filter((del: any) => {
@@ -332,7 +398,8 @@ export function TransportDetailsManager({
       : defaultSellingPrice;
 
   const hasRemainingFuel = modalRemainingInTruck > 0.001;
-  const canFinalizeNow = !isAwaitingReception && !hasRemainingFuel;
+  const canFinalizeNow =
+    !isAwaitingReception && (!hasRemainingFuel || (finalizeCompleteLoss && canOfferCompleteLossFinalize));
 
   const handleFinalizeWithShortage = async () => {
     if (isAwaitingReception) {
@@ -340,23 +407,55 @@ export function TransportDetailsManager({
       return;
     }
 
-    if (modalRemainingInTruck > 0.001) {
-      setError(`Cannot finalize transport while fuel remains in truck (${modalRemainingInTruck.toLocaleString()} L). Assign remaining volume to a destination or log as an incident loss first.`);
+    if (finalizeCompleteLoss && distributedVolume > 0.001) {
+      setError("Complete loss close is only available when no fuel was dispatched to destinations.");
       return;
     }
 
-    if (!window.confirm("Are you sure you want to finalize this transport? This action will mark the transport as COMPLETED and cannot be undone.")) return;
-    
+    if (finalizeCompleteLoss && !isCompleteLoadLoss) {
+      if (completeLossLitersToLog <= 0.001) {
+        setError("No remaining volume to record as a complete loss.");
+        return;
+      }
+      if (isNotesRequiredForLossType(finalizeLossType) && !finalizeLossComment.trim()) {
+        setError("Describe what happened — notes are required for this loss type.");
+        return;
+      }
+    }
+
+    if (!closingAsCompleteLoss && modalRemainingInTruck > 0.001) {
+      setError(`Cannot finalize transport while fuel remains in truck (${modalRemainingInTruck.toLocaleString()} L). Assign remaining volume to a destination, log an incident loss, or close as complete load loss.`);
+      return;
+    }
+
+    const confirmMessage = closingAsCompleteLoss
+      ? "Mark this transport as a Complete Loss? The full load will be closed as a loss incident and cannot be undone."
+      : "Are you sure you want to finalize this transport? This action will mark the transport as completed and cannot be undone.";
+    if (!window.confirm(confirmMessage)) return;
+
     setIsFinalizing(true);
     setError(null);
 
     try {
-      // Finalize transport directly
       const payload: Record<string, any> = {
-        status: "COMPLETED",
+        status: closingAsCompleteLoss ? "LOSS" : "COMPLETED",
       };
 
-      if (modalTransitShortage > 0.001) {
+      if (closingAsCompleteLoss && !isCompleteLoadLoss) {
+        payload.lossLog = {
+          lossType: finalizeLossType,
+          lostQuantity: completeLossLitersToLog,
+          expensesIncurred: finalizeLossExpensesNum,
+          comment:
+            finalizeLossComment.trim() ||
+            `Complete load loss finalized on trip close (${getLossTypeLabel(finalizeLossType)}).`,
+        };
+        if (finalizeLossExpensesNum > 0) {
+          payload.addMaintenanceCost = finalizeLossExpensesNum;
+        }
+      }
+
+      if (!closingAsCompleteLoss && modalTransitShortage > 0.001) {
         const driverDeduction = modalTransitShortage * ratePerLiter;
         payload.lossLog = {
           lossType: "SHORTAGE",
@@ -373,7 +472,11 @@ export function TransportDetailsManager({
         setError(res.error.message);
       } else {
         setOpenFinalizeDialog(false);
-        toast.success("Transport finalized and marked as completed.");
+        toast.success(
+          closingAsCompleteLoss
+            ? "Transport closed as Complete Loss."
+            : "Transport finalized and marked as completed."
+        );
         router.refresh();
       }
     } catch (err: any) {
@@ -394,8 +497,19 @@ export function TransportDetailsManager({
           <div>
             <h2 className="text-xl font-bold uppercase tracking-widest flex items-center gap-2 text-foreground">
               Trip to {formatDestination(transport.destination)}
-              <Badge variant={transport.status === "COMPLETED" ? "default" : transport.status === "LOSS" ? "destructive" : transport.status === "CANCELLED" ? "secondary" : "outline"}>
-                {transport.status}
+              <Badge
+                variant={
+                  transport.status === "LOSS"
+                    ? "destructive"
+                    : transport.status === "COMPLETED"
+                      ? "default"
+                      : transport.status === "CANCELLED"
+                        ? "secondary"
+                        : "outline"
+                }
+                className={transport.status === "LOSS" ? "bg-rose-600 text-white hover:bg-rose-600" : ""}
+              >
+                {formatTransportStatusLabel(transport.status)}
               </Badge>
             </h2>
             <p className="text-xs text-muted-foreground mt-1">
@@ -1103,23 +1217,133 @@ export function TransportDetailsManager({
       </Dialog>
 
       {/* Finalize Transport Dialog */}
-      <Dialog open={openFinalizeDialog} onOpenChange={setOpenFinalizeDialog}>
+      <Dialog
+        open={openFinalizeDialog}
+        onOpenChange={(open) => {
+          setOpenFinalizeDialog(open);
+          if (!open) {
+            setFinalizeCompleteLoss(false);
+            setError(null);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[650px] lg:max-w-[650px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-emerald-600" />
-              Finalize Transport
+              {closingAsCompleteLoss ? (
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              ) : (
+                <CheckCircle className="h-5 w-5 text-emerald-600" />
+              )}
+              {closingAsCompleteLoss ? "Complete Loss" : "Finalize Transport"}
             </DialogTitle>
             <DialogDescription>
-              {isAwaitingReception
-                ? "This transport has deliveries awaiting reception. All destination stations and clients must confirm receipt before you can finalize and reconcile variance."
-                : "Review and reconcile the delivery volume before marking this transport as complete."}
+              {closingAsCompleteLoss
+                ? "This trip lost the full loaded volume. Confirm to close it as a complete loss (not a successful completion)."
+                : isAwaitingReception
+                  ? "This transport has deliveries awaiting reception. All destination stations and clients must confirm receipt before you can finalize and reconcile variance."
+                  : "Review and reconcile the delivery volume before marking this transport as complete."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5 py-2">
             {/* Top Status Alert with Title Only (No Description) */}
-            {isAwaitingReception ? (
+            {isCompleteLoadLoss ? (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3.5 py-3 space-y-2">
+                <div className="flex items-center gap-2.5">
+                  <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                  <h4 className="font-semibold text-destructive text-sm">Complete Loss</h4>
+                </div>
+                <p className="text-sm text-destructive/90">
+                  The full load ({loggedLostVolume.toLocaleString()} L) is recorded as lost
+                  {primaryLossLog ? (
+                    <>
+                      {" "}
+                      — <span className="font-semibold">{getLossTypeLabel(primaryLossLog.lossType)}</span>
+                    </>
+                  ) : null}
+                  .
+                </p>
+                <p className="text-sm font-mono font-semibold text-destructive">
+                  Total loss impact: ₦{completeLossFinancialTotal.toLocaleString()}
+                  <span className="text-xs font-normal text-muted-foreground ml-2">
+                    (volume + incident expenses)
+                  </span>
+                </p>
+              </div>
+            ) : canOfferCompleteLossFinalize ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3.5 py-3 space-y-3">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="finalize-complete-loss"
+                    checked={finalizeCompleteLoss}
+                    onCheckedChange={(checked) => setFinalizeCompleteLoss(checked === true)}
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="finalize-complete-loss" className="text-sm font-semibold text-destructive cursor-pointer">
+                      Close trip as complete load loss
+                    </Label>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Use this when the entire load is gone. You do not need to log the litres in Product Loss first — we will record{" "}
+                      <span className="font-mono font-medium">{completeLossLitersToLog.toLocaleString()} L</span> on confirm.
+                    </p>
+                  </div>
+                </div>
+                {finalizeCompleteLoss && (
+                  <div className="space-y-3 pt-2 border-t border-destructive/20">
+                    <div className="space-y-2">
+                      <Label>Loss type</Label>
+                      <Select value={finalizeLossType} onValueChange={setFinalizeLossType}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue>{finalizeLossTypeMeta?.label ?? "Select type"}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          {PRODUCT_LOSS_TYPES.filter((type) => type.value !== "SHORTAGE").map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>
+                        Notes{finalizeLossTypeMeta?.notesRequired ? "*" : ""}
+                      </Label>
+                      <Textarea
+                        value={finalizeLossComment}
+                        onChange={(e) => setFinalizeLossComment(e.target.value)}
+                        placeholder={finalizeLossTypeMeta?.notesPlaceholder ?? "What happened to the load?"}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{finalizeLossTypeMeta?.expenseLabel ?? "Incident expenses (₦)"}</Label>
+                      <FormattedNumberInput
+                        min="0"
+                        value={finalizeLossExpenses}
+                        onChange={(e) => setFinalizeLossExpenses(e.target.value)}
+                        placeholder="0"
+                        prefixText="₦"
+                      />
+                    </div>
+                    <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm space-y-1">
+                      <p className="font-medium text-destructive">Complete loss summary</p>
+                      <p>
+                        <span className="text-muted-foreground">Volume:</span>{" "}
+                        <span className="font-mono font-semibold">{completeLossLitersToLog.toLocaleString()} L</span>
+                        {" · "}
+                        <span className="text-muted-foreground">Type:</span>{" "}
+                        <span className="font-semibold">{getLossTypeLabel(finalizeLossType)}</span>
+                      </p>
+                      <p className="font-mono font-semibold text-destructive">
+                        Total impact: ₦{previewCompleteLossTotal.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : isAwaitingReception ? (
               <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 px-3.5 py-2.5 flex items-center gap-2.5">
                 <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
                 <h4 className="font-semibold text-amber-900 dark:text-amber-200 text-sm">
@@ -1327,10 +1551,16 @@ export function TransportDetailsManager({
               <Button
                 onClick={handleFinalizeWithShortage}
                 disabled={!canFinalizeNow || isFinalizing}
-                className={modalTransitShortage > 0 ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+                className={
+                  closingAsCompleteLoss || modalTransitShortage > 0
+                    ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    : ""
+                }
               >
                 {isFinalizing ? (
                   <SpinnerEllipsis />
+                ) : closingAsCompleteLoss ? (
+                  "Confirm Complete Loss"
                 ) : modalTransitShortage > 0 ? (
                   "Confirm Shortage & Finalize"
                 ) : (

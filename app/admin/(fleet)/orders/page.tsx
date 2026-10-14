@@ -127,13 +127,6 @@ export default async function OrdersPage({
 
   const statCards = [
     {
-      title: "Total Orders",
-      value: totalCount.toString(),
-      fullValue: null,
-      icon: Box,
-      iconColor: "text-teal-600",
-    },
-    {
       title: "Total Volume",
       value: `${totalVolume.toLocaleString()} L`,
       fullValue: `${totalVolume.toLocaleString()} Liters`,

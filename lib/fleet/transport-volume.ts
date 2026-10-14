@@ -96,7 +96,13 @@ export async function getAvailableVolume(
 export async function recomputeTransportLoss(db: Db, transportId: string) {
   const transport = await db.transport.findUnique({ where: { id: transportId } });
   if (!transport) return null;
-  if (transport.status === "COMPLETED" || transport.status === "CANCELLED") return transport;
+  if (
+    transport.status === "COMPLETED" ||
+    transport.status === "CANCELLED" ||
+    transport.status === "LOSS"
+  ) {
+    return transport;
+  }
 
   const deliveries = await db.delivery.findMany({
     where: { transportId },

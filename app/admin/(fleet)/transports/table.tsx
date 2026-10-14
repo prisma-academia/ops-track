@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { formatDestination } from "@/lib/utils";
+import { formatTransportStatusLabel } from "@/lib/fleet/transport-loss";
 
 export type TransportRow = {
   id: string;
@@ -99,10 +100,19 @@ const columns: ColumnDef<TransportRow>[] = [
       if (status === "PENDING") variant = "warning";
       if (status === "IN_TRANSIT") variant = "secondary";
       if (status === "COMPLETED") variant = "default";
-      if (status === "CANCELLED" || status === "REJECTED") variant = "destructive";
+      if (status === "LOSS" || status === "CANCELLED" || status === "REJECTED") variant = "destructive";
       return (
-        <Badge variant={variant === "warning" ? "default" : variant} className={variant === "warning" ? "bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300" : ""}>
-          {status}
+        <Badge
+          variant={variant === "warning" ? "default" : variant}
+          className={
+            variant === "warning"
+              ? "bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300"
+              : status === "LOSS"
+                ? "bg-rose-600 text-white hover:bg-rose-600 dark:bg-rose-700"
+                : ""
+          }
+        >
+          {formatTransportStatusLabel(status)}
         </Badge>
       );
     }

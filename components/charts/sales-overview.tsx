@@ -59,6 +59,8 @@ export interface SalesOverviewChartCardProps {
   /** When `showLoss` is true, label for the loss/fuel-cost tile (default: "Loss"). */
   lossLabel?: string;
   expenseLabel?: string;
+  revenueLabel?: string;
+  profitLabel?: string;
   expenseTone?: "default" | "outflow";
   showLoss?: boolean;
   /** @deprecated Prefer numeric `revenue`. Kept for station dashboard compatibility. */
@@ -80,21 +82,16 @@ export function SalesOverviewChartCard({
   loss,
   lossLabel = "Loss",
   expenseLabel = "Expense",
+  revenueLabel = "Revenue",
+  profitLabel = "Profit",
   expenseTone = "default",
   showLoss = true,
 }: SalesOverviewChartCardProps) {
-  const expenseStyles =
-    expenseTone === "outflow"
-      ? {
-          dotColor: "bg-rose-500",
-          activeBorder: "border-rose-500 ring-rose-500/30",
-          chartColor: "#f43f5e",
-        }
-      : {
-          dotColor: "bg-yellow-500",
-          activeBorder: "border-yellow-500 ring-yellow-500/30",
-          chartColor: "#eab308",
-        };
+  const expenseStyles = {
+    dotColor: "bg-yellow-500",
+    activeBorder: "border-yellow-500 ring-yellow-500/30",
+    chartColor: expenseTone === "outflow" ? "#eab308" : "var(--color-expense)",
+  };
   const [hoveredCategory, setHoveredCategory] = React.useState<string | null>(null);
 
   const stackedData = chartData.map((point) => ({
@@ -117,17 +114,24 @@ export function SalesOverviewChartCard({
   const categories = [
     {
       key: "earning",
-      title: "Revenue",
+      title: revenueLabel,
       value: totalRevenueVal,
       dotColor: "bg-sky-400/50",
       activeBorder: "border-sky-400/60 ring-sky-400/30",
     },
     {
       key: "profit",
-      title: "Profit",
+      title: profitLabel,
       value: totalProfitVal,
       dotColor: "bg-sky-400",
       activeBorder: "border-sky-400 ring-sky-400/30",
+    },
+    {
+      key: "expense",
+      title: expenseLabel,
+      value: totalExpenseVal,
+      dotColor: expenseStyles.dotColor,
+      activeBorder: expenseStyles.activeBorder,
     },
     ...(showLoss
       ? [
@@ -140,13 +144,6 @@ export function SalesOverviewChartCard({
           },
         ]
       : []),
-    {
-      key: "expense",
-      title: expenseLabel,
-      value: totalExpenseVal,
-      dotColor: expenseStyles.dotColor,
-      activeBorder: expenseStyles.activeBorder,
-    },
   ];
 
   return (
@@ -223,7 +220,11 @@ export function SalesOverviewChartCard({
             <Bar
               dataKey="expense"
               stackId="costs"
-              fill={expenseTone === "outflow" ? expenseStyles.chartColor : "var(--color-expense)"}
+              fill={
+                expenseTone === "outflow"
+                  ? expenseStyles.chartColor
+                  : "var(--color-expense)"
+              }
               radius={[0, 0, 4, 4]}
               barSize={16}
               opacity={
@@ -264,9 +265,13 @@ export default function SalesOverviewChart({ data }: { data: FleetOverviewData }
       revenue={data.salesOverview.revenue}
       expense={data.salesOverview.expense}
       profit={data.salesOverview.profit}
-      expenseLabel="Outflow"
+      revenueLabel="Net Revenue"
+      profitLabel="Net Profit"
+      expenseLabel="Expenses"
       expenseTone="outflow"
-      showLoss={false}
+      loss={data.salesOverview.loss}
+      lossLabel="Shortage Loss"
+      showLoss={true}
     />
   );
 }

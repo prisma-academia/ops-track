@@ -1,19 +1,12 @@
 import type { FleetOverviewData } from "../../types"
-
-import { LitersOrdered } from "./liters-ordered"
-import { LitresSold } from "./litres-sold"
-import { ShortageLoss } from "./shortage-loss"
-import { OutstandingSales } from "./outstanding-sales"
-import { OutstandingTransport } from "./outstanding-transport"
+import { FleetStatGroupCard } from "./fleet-stat-group-card"
 
 export function Overview({ data }: { data: FleetOverviewData }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:col-span-full">
-      <LitersOrdered data={data} />
-      <LitresSold data={data} />
-      <ShortageLoss data={data} />
-      <OutstandingSales data={data} />
-      <OutstandingTransport data={data} />
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:col-span-full">
+      {data.statGroups.map((group) => (
+        <FleetStatGroupCard key={group.id} group={group} />
+      ))}
     </div>
   )
 }

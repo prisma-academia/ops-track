@@ -6,10 +6,7 @@ import { SalesTable } from "./table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Banknote, Droplets, ReceiptText, Landmark } from "lucide-react";
 import { cn, formatShortCurrency, formatDestination, formatTruckLabel } from "@/lib/utils";
-import {
-  sumDeliveryTotalExpected,
-  sumDeliveryVolumeSold,
-} from "@/lib/fleet/delivery-sales-metrics";
+import { resolveDeliveryCreatedAtFilter } from "@/lib/fleet/delivery-sales-metrics";
 
 export default async function SalesPage({
   searchParams,
@@ -38,12 +35,7 @@ export default async function SalesPage({
       ...(maxVol ? { lte: Number(maxVol) } : {}),
     };
   }
-  if (from || to) {
-    where.createdAt = {
-      ...(from ? { gte: new Date(from) } : {}),
-      ...(to ? { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) } : {}),
-    };
-  }
+  where.createdAt = resolveDeliveryCreatedAtFilter(from, to);
 
   const [customers, stations] = await Promise.all([
     prisma.customer.findMany({ where: { tenantId: actor.tenantId }, select: { id: true, name: true } }),
@@ -54,23 +46,15 @@ export default async function SalesPage({
     ...stations.map(s => ({ value: `s-${s.id}`, label: `Station: ${s.name}` }))
   ];
 
-  // Aggregates: always computed on ALL data regardless of filters/pagination
-  const allSales = await prisma.delivery.findMany({
-    where: { tenantId: actor.tenantId },
-    select: {
-      litersDespatched: true,
-      totalExpectedAmount: true,
-      paymentReceived: true,
-    },
-  });
-
-  const totalVolume = sumDeliveryVolumeSold(allSales);
-  const totalExpected = sumDeliveryTotalExpected(allSales);
-  const totalCollected = allSales.reduce((sum, d) => sum + Number(d.paymentReceived), 0);
-  const outstanding = Math.max(0, totalExpected - totalCollected);
-
-  // Filtered + paginated data
-  const [totalCount, Deliveries] = await Promise.all([
+  const [statsAgg, totalCount, Deliveries] = await Promise.all([
+    prisma.delivery.aggregate({
+      where,
+      _sum: {
+        litersDespatched: true,
+        totalExpectedAmount: true,
+        paymentReceived: true,
+      },
+    }),
     prisma.delivery.count({ where }),
     prisma.delivery.findMany({
       where,
@@ -104,6 +88,11 @@ export default async function SalesPage({
       },
     }),
   ]);
+
+  const totalVolume = Number(statsAgg._sum.litersDespatched) || 0;
+  const totalExpected = Number(statsAgg._sum.totalExpectedAmount) || 0;
+  const totalCollected = Number(statsAgg._sum.paymentReceived) || 0;
+  const outstanding = Math.max(0, totalExpected - totalCollected);
 
   const rows = Deliveries.map((delivery) => {
     const litersDespatched = Number(delivery.litersDespatched);

@@ -23,7 +23,6 @@ export function TopPerformers({ data }: { data: FleetOverviewData }) {
     <Tabs defaultValue="transporters" className="w-full">
       <DashboardCard
         title="Top Performers"
-        period={data.period}
         action={
           <TabsList className="grid grid-cols-3">
             <TabsTrigger value="transporters">Transporters</TabsTrigger>

@@ -90,7 +90,30 @@ export interface SalesOverviewData {
   profit: number
 }
 
+export type FleetStatAccent = "blue" | "emerald" | "violet" | "amber"
+
+export type FleetStatHeaderIcon = "volume" | "sales" | "supplier" | "transport"
+
+export type FleetStatMetricIcon = "ordered" | "sold" | "expected" | "collected" | "paid"
+
+export interface FleetStatMetric {
+  label: string
+  value: string
+  tooltip?: string
+  icon?: FleetStatMetricIcon
+}
+
+export interface FleetStatGroup {
+  id: string
+  title: string
+  accent: FleetStatAccent
+  headerIcon: FleetStatHeaderIcon
+  hint?: string
+  metrics: FleetStatMetric[]
+}
+
 export interface FleetOverviewData {
+  statGroups: FleetStatGroup[]
   kpi: {
     litersOrdered: KpiMetric
     litresSold: KpiMetric

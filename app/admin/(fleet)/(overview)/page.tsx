@@ -3,6 +3,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions"
 import { parseOverviewPeriod } from "@/lib/overview-period"
 import { prisma } from "@/lib/db/client"
 import { format } from "date-fns"
+import { getDefaultFleetSalesDateRange } from "@/lib/fleet/delivery-sales-metrics"
 
 import { getFleetOverviewData } from "../_data/fleet-overview"
 
@@ -30,7 +31,7 @@ export default async function FleetOverviewPage({
   })
   const userName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "User"
 
-  let customRange: { from: Date; to: Date } | undefined
+  let customRange: { from: Date; to: Date }
   if (typeof fromParam === "string" && fromParam.trim()) {
     const parsedFrom = new Date(fromParam)
     if (!isNaN(parsedFrom.getTime())) {
@@ -44,7 +45,11 @@ export default async function FleetOverviewPage({
       }
       parsedTo.setHours(23, 59, 59, 999)
       customRange = { from: parsedFrom, to: parsedTo }
+    } else {
+      customRange = getDefaultFleetSalesDateRange()
     }
+  } else {
+    customRange = getDefaultFleetSalesDateRange()
   }
 
   const data = await getFleetOverviewData(actor.tenantId, period, customRange)
@@ -52,7 +57,7 @@ export default async function FleetOverviewPage({
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <CardTitle className="text-xl font-bold tracking-tight">
               Hi, Welcome back! {userName}
@@ -78,7 +83,7 @@ export default async function FleetOverviewPage({
           </div>
         </div>
         <div className="col-span-full">
-          <PerformersSection data={data} period={period} />
+          <PerformersSection data={data} />
         </div>
       </section>
     </div>

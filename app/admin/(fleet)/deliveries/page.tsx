@@ -6,6 +6,10 @@ import { SalesTable } from "./table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Banknote, Droplets, ReceiptText, Landmark } from "lucide-react";
 import { cn, formatShortCurrency, formatDestination, formatTruckLabel } from "@/lib/utils";
+import {
+  sumDeliveryTotalExpected,
+  sumDeliveryVolumeSold,
+} from "@/lib/fleet/delivery-sales-metrics";
 
 export default async function SalesPage({
   searchParams,
@@ -60,8 +64,8 @@ export default async function SalesPage({
     },
   });
 
-  const totalVolume = allSales.reduce((sum, d) => sum + Number(d.litersDespatched), 0);
-  const totalExpected = allSales.reduce((sum, d) => sum + Number(d.totalExpectedAmount), 0);
+  const totalVolume = sumDeliveryVolumeSold(allSales);
+  const totalExpected = sumDeliveryTotalExpected(allSales);
   const totalCollected = allSales.reduce((sum, d) => sum + Number(d.paymentReceived), 0);
   const outstanding = Math.max(0, totalExpected - totalCollected);
 

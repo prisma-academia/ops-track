@@ -10,7 +10,7 @@ export function OutstandingFleet({ data }: { data: FleetOverviewData }) {
         subtitle: data.kpi.outstandingFleet.subtitle,
         subtitleClassName: data.kpi.outstandingFleet.subtitleClassName,
       }}
-      title="Outstanding Fleet"
+      title="Outstanding Transport"
       icon={TruckDeliveryIcon}
       period="All-time balance"
     />

@@ -98,26 +98,20 @@ export function SpendingBreakdownCard({
                 <ChartTooltip
                   content={
                     <ChartTooltipContent
-                      nameKey="key"
+                      nameKey="label"
                       formatter={(value) => formatFullCurrency(Number(value))}
                     />
                   }
                 />
-                <Pie data={chartData} dataKey="amount" nameKey="key">
+                <Pie data={chartData} dataKey="amount" nameKey="label">
                   <LabelList
-                    dataKey="key"
+                    dataKey="label"
                     className="fill-background"
                     stroke="none"
                     fontSize={11}
-                    formatter={(value) =>
-                      chartConfig[value as keyof typeof chartConfig]?.label
-                    }
                   />
                 </Pie>
-                <ChartLegend
-                  content={<ChartLegendContent nameKey="key" />}
-                  className="-translate-y-2 flex-wrap gap-2 *:basis-1/3 *:justify-center"
-                />
+                <ChartLegend content={<ChartLegendContent nameKey="label" />} />
               </PieChart>
             </ChartContainer>
 

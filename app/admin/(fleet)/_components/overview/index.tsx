@@ -4,7 +4,7 @@ import { LitersOrdered } from "./liters-ordered"
 import { LitresSold } from "./litres-sold"
 import { ShortageLoss } from "./shortage-loss"
 import { OutstandingSales } from "./outstanding-sales"
-import { OutstandingFleet } from "./outstanding-fleet"
+import { OutstandingTransport } from "./outstanding-transport"
 
 export function Overview({ data }: { data: FleetOverviewData }) {
   return (
@@ -13,7 +13,7 @@ export function Overview({ data }: { data: FleetOverviewData }) {
       <LitresSold data={data} />
       <ShortageLoss data={data} />
       <OutstandingSales data={data} />
-      <OutstandingFleet data={data} />
+      <OutstandingTransport data={data} />
     </div>
   )
 }

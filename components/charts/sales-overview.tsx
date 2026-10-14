@@ -58,6 +58,8 @@ export interface SalesOverviewChartCardProps {
   loss?: number;
   /** When `showLoss` is true, label for the loss/fuel-cost tile (default: "Loss"). */
   lossLabel?: string;
+  expenseLabel?: string;
+  expenseTone?: "default" | "outflow";
   showLoss?: boolean;
   /** @deprecated Prefer numeric `revenue`. Kept for station dashboard compatibility. */
   revenueValue?: string;
@@ -77,8 +79,22 @@ export function SalesOverviewChartCard({
   profit,
   loss,
   lossLabel = "Loss",
+  expenseLabel = "Expense",
+  expenseTone = "default",
   showLoss = true,
 }: SalesOverviewChartCardProps) {
+  const expenseStyles =
+    expenseTone === "outflow"
+      ? {
+          dotColor: "bg-rose-500",
+          activeBorder: "border-rose-500 ring-rose-500/30",
+          chartColor: "#f43f5e",
+        }
+      : {
+          dotColor: "bg-yellow-500",
+          activeBorder: "border-yellow-500 ring-yellow-500/30",
+          chartColor: "#eab308",
+        };
   const [hoveredCategory, setHoveredCategory] = React.useState<string | null>(null);
 
   const stackedData = chartData.map((point) => ({
@@ -126,10 +142,10 @@ export function SalesOverviewChartCard({
       : []),
     {
       key: "expense",
-      title: "Expense",
+      title: expenseLabel,
       value: totalExpenseVal,
-      dotColor: "bg-yellow-500",
-      activeBorder: "border-yellow-500 ring-yellow-500/30",
+      dotColor: expenseStyles.dotColor,
+      activeBorder: expenseStyles.activeBorder,
     },
   ];
 
@@ -207,7 +223,7 @@ export function SalesOverviewChartCard({
             <Bar
               dataKey="expense"
               stackId="costs"
-              fill="var(--color-expense)"
+              fill={expenseTone === "outflow" ? expenseStyles.chartColor : "var(--color-expense)"}
               radius={[0, 0, 4, 4]}
               barSize={16}
               opacity={
@@ -248,6 +264,8 @@ export default function SalesOverviewChart({ data }: { data: FleetOverviewData }
       revenue={data.salesOverview.revenue}
       expense={data.salesOverview.expense}
       profit={data.salesOverview.profit}
+      expenseLabel="Outflow"
+      expenseTone="outflow"
       showLoss={false}
     />
   );

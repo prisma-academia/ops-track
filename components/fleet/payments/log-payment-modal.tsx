@@ -29,6 +29,13 @@ const OPTIONS = [
     icon: ArrowUpRight,
     tone: "text-red-600 bg-red-500/10 group-hover:bg-red-500/15",
   },
+  {
+    href: "/admin/payments/new/outgoing/supplier",
+    title: "Supplier Payment",
+    description: "Pay a product supplier for fleet orders or advance deposit.",
+    icon: ArrowUpRight,
+    tone: "text-orange-600 bg-orange-500/10 group-hover:bg-orange-500/15",
+  },
 ];
 
 export function LogPaymentModal() {

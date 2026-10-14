@@ -50,8 +50,13 @@ export default async function OrderDetailPage({
   }
 
   const [suppliers, depots, tenant] = await Promise.all([
-    prisma.supplier.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.supplier.findMany({
+      where: { tenantId: actor.tenantId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
     prisma.depot.findMany({
+      where: { tenantId: actor.tenantId },
       select: { id: true, name: true, latitude: true, longitude: true },
       orderBy: { name: "asc" },
     }),

@@ -96,6 +96,7 @@ export default async function PaymentsPage({
       include: {
         bankAccount: true,
         customer: { select: { name: true } },
+        supplier: { select: { name: true } },
         station: { select: { name: true, code: true } },
         transporter: { select: { name: true } },
         organization: { select: { name: true } },

@@ -116,6 +116,13 @@ export function OrderDetailsManager({
   const totalLoadingCost = Number(order.loadingCostPerLitre) * Number(order.litersOrdered);
   const totalProcurementCost = totalProductCost + totalLoadingCost;
   const combinedCostPerLitre = Number(order.pricePerLitre) + Number(order.loadingCostPerLitre);
+  const supplierPaymentPaid = Number(order.paymentPaid || 0);
+  const supplierPaymentRemaining = Math.max(0, totalProcurementCost - supplierPaymentPaid);
+  const supplierPaymentStatus = order.paymentStatus || "UNPAID";
+  const paySupplierQuery = new URLSearchParams({
+    ...(order.supplierId ? { supplierId: order.supplierId } : {}),
+    orderId: order.id,
+  }).toString();
 
   // Edit Form
   const { register, handleSubmit, formState, setValue, watch, reset, control } = useForm({
@@ -414,6 +421,28 @@ export function OrderDetailsManager({
                     <span className="font-bold text-foreground text-sm">Total:</span>
                     <span className="font-mono font-bold text-primary text-base">₦{totalProcurementCost.toLocaleString()}</span>
                   </div>
+                  <div className="flex justify-between border-b pb-1 text-sm">
+                    <span className="text-muted-foreground">Paid to supplier:</span>
+                    <span className="font-mono font-medium text-emerald-600">₦{supplierPaymentPaid.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between border-b pb-1 text-sm">
+                    <span className="text-muted-foreground">Remaining:</span>
+                    <span className={cn("font-mono font-medium", supplierPaymentRemaining > 0 && "text-rose-600")}>
+                      ₦{supplierPaymentRemaining.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between pb-3 border-b text-sm">
+                    <span className="text-muted-foreground">Payment status:</span>
+                    <span className="font-medium">{supplierPaymentStatus.replace(/_/g, " ")}</span>
+                  </div>
+
+                  {(order.supplierId || order.supplier) && (
+                    <Button variant="outline" asChild className="w-full justify-center gap-2">
+                      <Link href={`/admin/payments/new/outgoing/supplier?${paySupplierQuery}`}>
+                        Record supplier payment
+                      </Link>
+                    </Button>
+                  )}
 
                   <Button size={"icon-lg"}
                     asChild

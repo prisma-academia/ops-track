@@ -10,9 +10,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const suppliers = await prisma.supplier.findMany({ orderBy: { name: "asc" } });
-    const depots = await prisma.depot.findMany({ orderBy: { name: "asc" } });
-    const transportCompanies = await prisma.transporter.findMany({ orderBy: { name: "asc" } });
+    const suppliers = await prisma.supplier.findMany({
+      where: { tenantId: actor.tenantId },
+      orderBy: { name: "asc" },
+    });
+    const depots = await prisma.depot.findMany({
+      where: { tenantId: actor.tenantId },
+      orderBy: { name: "asc" },
+    });
+    const transportCompanies = await prisma.transporter.findMany({
+      where: { tenantId: actor.tenantId },
+      orderBy: { name: "asc" },
+    });
 
     return NextResponse.json({ suppliers, depots, transportCompanies });
   } catch (err: any) {
@@ -41,14 +50,14 @@ export async function POST(req: Request) {
 
     if (type === "supplier") {
       const created = await prisma.supplier.upsert({
-        where: { name: normalizedName },
+        where: { tenantId_name: { tenantId: actor.tenantId, name: normalizedName } },
         update: {},
-        create: { name: normalizedName }
+        create: { tenantId: actor.tenantId, name: normalizedName },
       });
       return NextResponse.json({ data: created });
     } else if (type === "depot") {
       let created = await prisma.depot.findFirst({
-        where: { name: normalizedName }
+        where: { tenantId: actor.tenantId, name: normalizedName },
       });
       if (!created) {
         created = await prisma.depot.create({
@@ -58,7 +67,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ data: created });
     } else if (type === "transportCompany") {
       let created = await prisma.transporter.findFirst({
-        where: { name: name.trim() }
+        where: { tenantId: actor.tenantId, name: name.trim() },
       });
       if (!created) {
         created = await prisma.transporter.create({

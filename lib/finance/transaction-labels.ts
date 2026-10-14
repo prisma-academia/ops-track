@@ -1,6 +1,7 @@
 const TRANSACTION_CATEGORY_LABELS: Record<string, string> = {
   TRANSPORT_PAYMENT: "Transport Payment",
   CLIENT_PAYMENT: "Client Payment",
+  SUPPLIER_PAYMENT: "Supplier Payment",
   PRODUCT_SUPPLY: "Product Supply",
   STATION_SALE: "Station Sale",
   STATION_EXPENSE: "Station Expense",
@@ -21,6 +22,7 @@ export function formatTransactionCategoryLabel(category: string): string {
 }
 
 export function resolveTransactionCounterpartyName(transaction: {
+  supplier?: { name: string } | null;
   customer?: { name: string } | null;
   station?: { name: string; code?: string | null } | null;
   transporter?: { name: string } | null;
@@ -50,6 +52,7 @@ export function resolveTransactionCounterpartyName(transaction: {
   description?: string | null;
   paymentPurpose?: string | null;
 }): string | null {
+  if (transaction.supplier?.name) return transaction.supplier.name;
   if (transaction.customer?.name) return transaction.customer.name;
   if (transaction.organization?.name) return transaction.organization.name;
   if (transaction.station?.name) {

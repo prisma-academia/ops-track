@@ -129,6 +129,13 @@ const FLEET_NAV = [
         permission: PERMISSIONS.TENANT_FLEET_CUSTOMERS_READ.key,
       },
       {
+        href: "/admin/suppliers",
+        key: "suppliers",
+        title: "Suppliers",
+        icon: "TruckDeliveryIcon",
+        permission: PERMISSIONS.TENANT_FLEET_SUPPLIERS_READ.key,
+      },
+      {
         href: "/admin/transporters",
         key: "transporters",
         title: "Transporters",

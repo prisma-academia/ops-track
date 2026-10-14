@@ -6,6 +6,7 @@ import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
+import { upsertSupplierByName, serializeOrderPayables } from "@/lib/fleet/suppliers";
 
 const toUppercaseOrNull = (val: string | null | undefined) => {
   if (val == null) return null;
@@ -19,6 +20,7 @@ const CreateOrderSchema = z.object({
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
   litersOrdered: z.number().positive(),
   supplier: z.string().optional().nullable().transform(toUppercaseOrNull),
+  supplierId: z.string().optional().nullable(),
   sourceDepot: z.string().optional().nullable().transform(toUppercaseOrNull),
   pricePerLitre: z.number().min(0).default(0),
   loadingCostPerLitre: z.number().min(0).default(0),
@@ -44,7 +46,15 @@ export async function GET(request: Request) {
       },
     });
 
-    return ok(rows, buildPageMeta(rows, take));
+    const serialized = rows.map((o) => ({
+      ...o,
+      ...serializeOrderPayables(o),
+      litersOrdered: Number(o.litersOrdered),
+      pricePerLitre: Number(o.pricePerLitre),
+      loadingCostPerLitre: Number(o.loadingCostPerLitre),
+    }));
+
+    return ok(serialized, buildPageMeta(rows, take));
   } catch (e) {
     return handleError(e);
   }
@@ -57,17 +67,33 @@ export async function POST(request: Request) {
     const body = CreateOrderSchema.parse(await request.json());
     const meta = requestMeta(request);
 
-    const order = await prisma.order.create({
-      data: {
-        tenantId: actor.tenantId,
-        reference: body.reference ?? null,
-        productType: body.productType,
-        litersOrdered: body.litersOrdered,
-        supplier: body.supplier ?? null,
-        sourceDepot: body.sourceDepot ?? null,
-        pricePerLitre: body.pricePerLitre,
-        loadingCostPerLitre: body.loadingCostPerLitre,
-      },
+    const order = await prisma.$transaction(async (tx) => {
+      let supplierId = body.supplierId ?? null;
+      let supplierName = body.supplier ?? null;
+      if (!supplierId && supplierName) {
+        const supplier = await upsertSupplierByName(tx, actor.tenantId, supplierName);
+        supplierId = supplier?.id ?? null;
+        supplierName = supplier?.name ?? supplierName;
+      } else if (supplierId) {
+        const supplier = await tx.supplier.findFirst({
+          where: { id: supplierId, tenantId: actor.tenantId },
+        });
+        if (supplier) supplierName = supplier.name;
+      }
+
+      return tx.order.create({
+        data: {
+          tenantId: actor.tenantId,
+          reference: body.reference ?? null,
+          productType: body.productType,
+          litersOrdered: body.litersOrdered,
+          supplier: supplierName,
+          supplierId,
+          sourceDepot: body.sourceDepot ?? null,
+          pricePerLitre: body.pricePerLitre,
+          loadingCostPerLitre: body.loadingCostPerLitre,
+        },
+      });
     });
 
     await audit({

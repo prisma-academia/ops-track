@@ -81,6 +81,8 @@ export const PERMISSIONS = {
   TENANT_FLEET_LEDGER_WRITE: { key: "tenant.fleet.ledger:write", module: "tenant.fleet.ledger", description: "Manage fleet ledger" },
   TENANT_FLEET_CUSTOMERS_READ: { key: "tenant.fleet.customers:read", module: "tenant.fleet.customers", description: "View fleet customers" },
   TENANT_FLEET_CUSTOMERS_WRITE: { key: "tenant.fleet.customers:write", module: "tenant.fleet.customers", description: "Manage fleet customers" },
+  TENANT_FLEET_SUPPLIERS_READ: { key: "tenant.fleet.suppliers:read", module: "tenant.fleet.suppliers", description: "View fleet suppliers" },
+  TENANT_FLEET_SUPPLIERS_WRITE: { key: "tenant.fleet.suppliers:write", module: "tenant.fleet.suppliers", description: "Manage fleet suppliers" },
   TENANT_FLEET_BANK_ACCOUNTS_READ: { key: "tenant.fleet.bank-accounts:read", module: "tenant.fleet.bank-accounts", description: "View fleet bank accounts" },
   TENANT_FLEET_BANK_ACCOUNTS_WRITE: { key: "tenant.fleet.bank-accounts:write", module: "tenant.fleet.bank-accounts", description: "Manage fleet bank accounts" },
   TENANT_FLEET_ACTIVITY_READ: { key: "tenant.fleet.activity:read", module: "tenant.fleet.activity", description: "View fleet activity log" },

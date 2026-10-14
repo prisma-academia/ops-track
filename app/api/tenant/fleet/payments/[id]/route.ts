@@ -6,6 +6,10 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { isStationLedgerTransaction } from "@/lib/finance/fleet-ledger";
+import {
+  orderPaymentStatusFromPaid,
+  orderTotalPayable,
+} from "@/lib/fleet/order-payables";
 
 const MetadataSchema = z.object({
   description: z.string().optional().nullable(),
@@ -98,6 +102,8 @@ export async function DELETE(
         delivery: true,
         customer: true,
         transport: true,
+        order: true,
+        supplier: true,
       },
     });
 
@@ -207,6 +213,65 @@ export async function DELETE(
           }
         }
         // EXPENSE: no linked aggregates to reverse.
+
+        if (
+          transaction.category === "SUPPLIER_PAYMENT" &&
+          transaction.supplierId
+        ) {
+          if (transaction.paymentMethod === "DEPOSIT") {
+            await tx.supplier.update({
+              where: { id: transaction.supplierId },
+              data: { depositBalance: { increment: amount } },
+            });
+          }
+
+          if (
+            transaction.paymentType === "ADVANCE_DEPOSIT" &&
+            !transaction.orderId &&
+            transaction.paymentMethod !== "DEPOSIT"
+          ) {
+            const supplier = await tx.supplier.findUnique({
+              where: { id: transaction.supplierId },
+            });
+            if (supplier && Number(supplier.depositBalance) < amount) {
+              throw new DomainError(
+                400,
+                "deposit_spent",
+                "Cannot delete — supplier deposit has already been applied to orders. " +
+                  `Current balance: ₦${Number(supplier.depositBalance).toLocaleString()}, ` +
+                  `payment amount: ₦${amount.toLocaleString()}.`,
+              );
+            }
+            await tx.supplier.update({
+              where: { id: transaction.supplierId },
+              data: { depositBalance: { decrement: amount } },
+            });
+          }
+
+          if (transaction.orderId) {
+            const currentOrder = await tx.order.findUnique({
+              where: { id: transaction.orderId },
+            });
+            if (currentOrder) {
+              const newPaymentPaid = Math.max(
+                0,
+                Number(currentOrder.paymentPaid) - amount,
+              );
+              const totalPayable = orderTotalPayable(currentOrder);
+              const paymentStatus = orderPaymentStatusFromPaid(
+                totalPayable,
+                newPaymentPaid,
+              );
+              await tx.order.update({
+                where: { id: transaction.orderId },
+                data: {
+                  paymentPaid: newPaymentPaid,
+                  paymentStatus,
+                },
+              });
+            }
+          }
+        }
       }
 
       // ── Delete the transaction ────────────────────────────

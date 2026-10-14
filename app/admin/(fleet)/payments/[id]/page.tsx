@@ -42,6 +42,7 @@ export default async function PaymentDetailsPage({
         },
       },
       customer: true,
+      supplier: true,
       station: true,
       transporter: true,
       truck: true,
@@ -258,6 +259,13 @@ export default async function PaymentDetailsPage({
       label: "Transporter",
       name: tripFinancials.transporterName,
       address: tripFinancials.truckPlate ? `Truck: ${tripFinancials.truckPlate}` : null,
+    };
+  } else if (transaction.supplier) {
+    receiver = {
+      label: "Supplier",
+      name: transaction.supplier.name,
+      contactPerson: transaction.supplier.contactPerson,
+      phone: transaction.supplier.contactPhone || transaction.supplier.phone,
     };
   } else if (transaction.order?.supplier) {
     receiver = {

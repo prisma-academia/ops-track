@@ -3,6 +3,7 @@ import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { parseTenantSettings } from "@/lib/tenant/settings";
+import { serializeOrderPayables } from "@/lib/fleet/suppliers";
 
 export async function GET(request: Request) {
   try {
@@ -13,6 +14,7 @@ export async function GET(request: Request) {
 
     const [
       customers,
+      suppliers,
       transporters,
       trucks,
       orders,
@@ -23,13 +25,32 @@ export async function GET(request: Request) {
       tenant,
     ] = await Promise.all([
       prisma.customer.findMany({ where: { tenantId: actor.tenantId } }),
+      prisma.supplier.findMany({
+        where: { tenantId: actor.tenantId },
+        orderBy: { name: "asc" },
+      }),
       prisma.transporter.findMany({
         where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true },
       }),
       prisma.truck.findMany({
         where: { tenantId: actor.tenantId, status: "ACTIVE", isActive: true },
       }),
-      prisma.order.findMany({ where: { tenantId: actor.tenantId } }),
+      prisma.order.findMany({
+        where: { tenantId: actor.tenantId },
+        select: {
+          id: true,
+          reference: true,
+          supplier: true,
+          supplierId: true,
+          productType: true,
+          litersOrdered: true,
+          pricePerLitre: true,
+          loadingCostPerLitre: true,
+          paymentPaid: true,
+          paymentStatus: true,
+          createdAt: true,
+        },
+      }),
       prisma.transport.findMany({
         where: { tenantId: actor.tenantId },
         include: {
@@ -63,11 +84,29 @@ export async function GET(request: Request) {
 
     const settings = parseTenantSettings(tenant?.settingsJson);
 
+    const ordersWithPayables = orders.map((o) => ({
+      ...o,
+      litersOrdered: Number(o.litersOrdered),
+      pricePerLitre: Number(o.pricePerLitre),
+      loadingCostPerLitre: Number(o.loadingCostPerLitre),
+      ...serializeOrderPayables({
+        ...o,
+        paymentPaid: o.paymentPaid,
+      }),
+    }));
+
+    const suppliersSerialized = suppliers.map((s) => ({
+      ...s,
+      depositBalance: Number(s.depositBalance),
+      outstandingBalance: Number(s.outstandingBalance),
+    }));
+
     return ok({
       customers,
+      suppliers: suppliersSerialized,
       transporters,
       trucks,
-      orders,
+      orders: ordersWithPayables,
       transports,
       sales,
       stations,

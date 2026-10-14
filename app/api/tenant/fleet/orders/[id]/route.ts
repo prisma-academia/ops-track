@@ -5,12 +5,14 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { upsertSupplierByName } from "@/lib/fleet/suppliers";
 
 const UpdateOrderSchema = z.object({
   status: z.enum(["DRAFT", "PENDING", "CONFIRMED", "ASSIGNED", "IN_TRANSIT", "DELIVERED", "COMPLETED", "CANCELLED", "REJECTED"]).optional(),
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]).optional(),
   litersOrdered: z.number().positive().optional(),
   supplier: z.string().optional().nullable(),
+  supplierId: z.string().optional().nullable(),
   sourceDepot: z.string().optional().nullable(),
   pricePerLitre: z.number().min(0).optional(),
   loadingCostPerLitre: z.number().min(0).optional(),
@@ -40,18 +42,47 @@ export async function PATCH(
       newReference = existing.reference.replace(`-${existing.productType}-`, `-${body.productType}-`);
     }
 
-    const order = await prisma.order.update({
-      where: { id },
-      data: {
-        ...(body.status && { status: body.status }),
-        ...(body.productType && { productType: body.productType }),
-        ...(newReference !== existing.reference && { reference: newReference }),
-        ...(body.litersOrdered && { litersOrdered: body.litersOrdered }),
-        ...(body.supplier !== undefined && { supplier: body.supplier }),
-        ...(body.sourceDepot !== undefined && { sourceDepot: body.sourceDepot }),
-        ...(body.pricePerLitre !== undefined && { pricePerLitre: body.pricePerLitre }),
-        ...(body.loadingCostPerLitre !== undefined && { loadingCostPerLitre: body.loadingCostPerLitre }),
-      },
+    const order = await prisma.$transaction(async (tx) => {
+      let supplierId =
+        body.supplierId !== undefined ? body.supplierId : existing.supplierId;
+      let supplierName =
+        body.supplier !== undefined ? body.supplier : existing.supplier;
+
+      if (body.supplierId) {
+        const supplier = await tx.supplier.findFirst({
+          where: { id: body.supplierId, tenantId: actor.tenantId },
+        });
+        if (supplier) {
+          supplierId = supplier.id;
+          supplierName = supplier.name;
+        }
+      } else if (body.supplier !== undefined && body.supplier) {
+        const supplier = await upsertSupplierByName(
+          tx,
+          actor.tenantId,
+          body.supplier,
+        );
+        supplierId = supplier?.id ?? null;
+        supplierName = supplier?.name ?? body.supplier;
+      }
+
+      return tx.order.update({
+        where: { id },
+        data: {
+          ...(body.status && { status: body.status }),
+          ...(body.productType && { productType: body.productType }),
+          ...(newReference !== existing.reference && { reference: newReference }),
+          ...(body.litersOrdered && { litersOrdered: body.litersOrdered }),
+          ...(body.supplier !== undefined || body.supplierId !== undefined
+            ? { supplier: supplierName, supplierId }
+            : {}),
+          ...(body.sourceDepot !== undefined && { sourceDepot: body.sourceDepot }),
+          ...(body.pricePerLitre !== undefined && { pricePerLitre: body.pricePerLitre }),
+          ...(body.loadingCostPerLitre !== undefined && {
+            loadingCostPerLitre: body.loadingCostPerLitre,
+          }),
+        },
+      });
     });
 
     await audit({

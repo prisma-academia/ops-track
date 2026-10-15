@@ -11,7 +11,7 @@ export function ShortageLoss({ data }: { data: FleetOverviewData }) {
         subtitle: data.kpi.shortage.subtitle,
         subtitleClassName: data.kpi.shortage.subtitleClassName,
       }}
-      title="Shortage & Loss"
+      title="Loss"
       icon={Alert02Icon}
       period={data.period || "Last 30 days"}
     />

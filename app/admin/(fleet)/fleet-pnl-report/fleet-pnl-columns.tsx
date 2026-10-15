@@ -142,8 +142,8 @@ function pnlColumn(): ColumnDef<FleetPnlTableRow> {
 function lossDeductionColumn(): ColumnDef<FleetPnlTableRow> {
   return {
     accessorKey: "totalLossDeduction",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Loss Deduction" />,
-    meta: { label: "Loss Deduction" },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Loss" />,
+    meta: { label: "Loss" },
     cell: ({ row }) => (
       <span
         className={cn(

@@ -138,7 +138,7 @@ export const AssetTank: React.FC<AssetTankProps> = ({
 
   const fleetStats: StatRow[] = [
     { icon: Cylinder, label: "Capacity", value: fmtVolume(maxCapacity, unit) },
-    { icon: Package, label: "Loaded amount", value: fmtVolume(safeLitres, unit), valueClass: textThemeColor },
+    { icon: Package, label: "Remaining in tank", value: fmtVolume(safeLitres, unit), valueClass: textThemeColor },
     { icon: Droplets, label: "Water level", value: fmtVolume(0, unit) },
   ];
 

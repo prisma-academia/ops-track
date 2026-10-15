@@ -176,8 +176,8 @@ export function aggregateDeliveryPnlRows(rows: OrderPnlDeliveryRow[]) {
  *
  * Total cost = purchase + loading + depot→primary + delivery transport + fleet.
  * Profit/Loss = sales revenue − total cost.
- * Shortage is shown separately and is not subtracted from total cost (revenue
- * is already based on received volume).
+ * Logged transport loss (incidents on the transport detail page) is shown
+ * separately and is not subtracted again from total cost.
  */
 export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
   const litersOrdered = toNum(order.litersOrdered);
@@ -207,7 +207,6 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
     const fleetExpenses = toNum(transport.maintenanceCost);
     const ratePerLiter = toNum(transport.ratePerLiter);
     const litersCarried = toNum(transport.litersCarried);
-    let transportStationLossAmount = 0;
 
     let transportTotalQty = 0;
     let transportTotalRev = 0;
@@ -240,11 +239,6 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
           ? toNum(delivery.litersReceived)
           : null;
 
-      // Only count loss when received volume is explicitly logged and is less than despatched.
-      const saleLossLiters =
-        litersReceived !== null && saleQty > litersReceived ? saleQty - litersReceived : 0;
-      const saleLossAmount = saleLossLiters * sellingPrice;
-
       const salePurchase = saleQty * pricePerLitre;
       const saleLoading = saleQty * loadingCostPerLitre;
       const saleOrderCost = salePurchase + saleLoading;
@@ -254,10 +248,6 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
         depotToPrimaryShare +
         subsequentCost +
         fleetShare;
-
-      totalOrderLossLiters += saleLossLiters;
-      totalOrderLossAmount += saleLossAmount;
-      transportStationLossAmount += saleLossAmount;
 
       const saleRev = toNum(delivery.totalExpectedAmount);
       const salePaid = resolveDeliveryPaymentReceived(delivery);
@@ -278,8 +268,8 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
         soldTo: delivery.customer?.name || delivery.station?.name || "Unknown",
         litersSold: saleQty,
         litersReceived,
-        lossLiters: saleLossLiters,
-        lossAmount: saleLossAmount,
+        lossLiters: 0,
+        lossAmount: 0,
         sellingPrice,
         purchaseCost: salePurchase,
         loadingCost: saleLoading,
@@ -298,10 +288,7 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
       };
     });
 
-    const transportIncidentLogs = (transport.lossLogs ?? []).filter((log) => {
-      if (log.lossType !== "SHORTAGE") return true;
-      return transportStationLossAmount === 0;
-    });
+    const transportIncidentLogs = transport.lossLogs ?? [];
 
     const incidentLossLiters = transportIncidentLogs.reduce(
       (sum, log) => sum + toNum(log.lostQuantity),
@@ -312,31 +299,18 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
       0
     );
 
-    const fallbackLitersLost =
-      transportIncidentLogs.length === 0
-        ? Math.max(
-            0,
-            toNum(transport.litersLost) -
-              transport.deliveries.reduce((s, d) => {
-                const sq = toNum(d.litersDespatched);
-                const rq =
-                  d.litersReceived !== null && d.litersReceived !== undefined
-                    ? toNum(d.litersReceived)
-                    : sq;
-                return s + Math.max(0, sq - rq);
-              }, 0)
-          )
-        : 0;
+    const totalIncidentLiters = incidentLossLiters;
+    const totalIncidentAmount =
+      totalIncidentLiters * pricePerLitre +
+      totalIncidentLiters * loadingCostPerLitre +
+      incidentLossExpenses;
 
-    const totalIncidentLiters = incidentLossLiters + fallbackLitersLost;
-    const totalIncidentAmount = totalIncidentLiters * pricePerLitre + incidentLossExpenses;
-
-    const lossDeduction = transportStationLossAmount + totalIncidentAmount;
+    const lossDeduction = totalIncidentAmount;
 
     const transportDepotToPrimaryCost = depotToPrimaryCost;
     const transportTotalCost = depotToPrimaryCost + allocatedDeliveryTransport;
 
-    totalFleetExpenses += fleetExpenses + incidentLossExpenses;
+    totalFleetExpenses += fleetExpenses;
     totalLossDeduction += lossDeduction;
     totalOrderLossLiters += totalIncidentLiters;
     totalOrderLossAmount += totalIncidentAmount;
@@ -392,7 +366,7 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
     0
   );
   const qtyBalance = litersOrdered - totalAmountSoldQty;
-  const effectiveLossLiters = totalOrderLossLiters > 0 ? totalOrderLossLiters : Math.max(0, qtyBalance);
+  const effectiveLossLiters = totalOrderLossLiters;
 
   const summary: OrderPnlSummary = {
     id: order.id,

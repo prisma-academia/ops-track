@@ -270,7 +270,7 @@ export default function SalesOverviewChart({ data }: { data: FleetOverviewData }
       expenseLabel="Expenses"
       expenseTone="outflow"
       loss={data.salesOverview.loss}
-      lossLabel="Shortage Loss"
+      lossLabel="Loss"
       showLoss={true}
     />
   );

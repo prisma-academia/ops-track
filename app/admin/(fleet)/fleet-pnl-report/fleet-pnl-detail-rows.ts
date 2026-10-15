@@ -91,7 +91,7 @@ export function buildFleetPnlDetailRows(
         deliveryTransportCost: 0,
         totalTransportCost: 0,
         totalFleetExpenses: expenses,
-        totalLossDeduction: pCost + expenses,
+        totalLossDeduction: tCost,
         totalCost: tCost,
         totalAmountSoldQty: 0,
         amountSoldRev: 0,

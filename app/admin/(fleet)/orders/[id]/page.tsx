@@ -3,7 +3,7 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { redirect } from "next/navigation";
 import { OrderDetailsManager } from "./order-details-manager";
-import { calculateOrderPnL } from "@/lib/fleet/financials";
+import { calculateOrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
 import { parseTenantSettings } from "@/lib/tenant/settings";
 
 export default async function OrderDetailPage({
@@ -24,10 +24,22 @@ export default async function OrderDetailPage({
           transporter: { select: { id: true, name: true } },
           truck: { select: { id: true, name: true, plateNumber: true } },
           driver: { select: { id: true, firstName: true, lastName: true } },
+          lossLogs: true,
           deliveries: {
             include: {
               customer: { select: { id: true, name: true } },
-              station: { select: { id: true, name: true } },
+              station: {
+                select: {
+                  id: true,
+                  name: true,
+                  latitude: true,
+                  longitude: true,
+                },
+              },
+              transactions: {
+                where: { type: "INFLOW" },
+                select: { type: true, amount: true },
+              },
             },
           },
           transactions: {
@@ -67,14 +79,21 @@ export default async function OrderDetailPage({
   ]);
 
   const serializedOrder = JSON.parse(JSON.stringify(order));
-  const pnl = await calculateOrderPnL(order.id);
+  const serializedDepots = JSON.parse(JSON.stringify(depots)) as {
+    id: string;
+    name: string;
+    latitude: number | null;
+    longitude: number | null;
+  }[];
+  const { summary: pnlSummary } = calculateOrderPnlSummary(order);
+  const serializedPnlSummary = JSON.parse(JSON.stringify(pnlSummary));
   const originToDepotFee = parseTenantSettings(tenant?.settingsJson).originToDepotFee;
 
   return (
     <OrderDetailsManager
       order={serializedOrder}
-      lookups={{ suppliers, depots }}
-      pnl={pnl}
+      lookups={{ suppliers, depots: serializedDepots }}
+      pnlSummary={serializedPnlSummary}
       originToDepotFee={originToDepotFee}
     />
   );

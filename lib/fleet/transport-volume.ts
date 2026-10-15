@@ -21,6 +21,29 @@ export function deliveryCommitted(d: VolumeDelivery): number {
   return Math.max(0, num(d.litersDespatched) - num(d.litersReturned));
 }
 
+/**
+ * Litres no longer on the truck for this delivery: confirmed reception uses
+ * received volume (so fuel returned to the truck can be re-delivered on a
+ * later drop); pending drops use committed dispatch volume.
+ */
+export function volumeAccountedOutOfTruck(d: VolumeDelivery): number {
+  if (d.litersReceived !== null && d.litersReceived !== undefined) {
+    return num(d.litersReceived);
+  }
+  return deliveryCommitted(d);
+}
+
+/** Physical litres still on the truck (load − logged loss − delivered / in-transit). */
+export function computeRemainingInTransport(args: {
+  litersCarried: unknown;
+  deliveries: VolumeDelivery[];
+  loggedLost: number;
+}): number {
+  const carried = num(args.litersCarried);
+  const out = args.deliveries.reduce((sum, d) => sum + volumeAccountedOutOfTruck(d), 0);
+  return Math.max(0, carried - num(args.loggedLost) - out);
+}
+
 /** Litres a station/client did not receive and that were NOT returned to the truck. */
 export function deliveryShortfall(d: VolumeDelivery): number {
   if (d.litersReceived === null || d.litersReceived === undefined) return 0;

@@ -3,6 +3,10 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { stationIncludeQuery, formatStationRows } from "@/lib/station-format";
 import { resolveActiveOrgId } from "@/lib/auth/org-scope";
+import {
+  emptyStationProductStats,
+  mergeSalesGroupBy,
+} from "@/lib/station/station-product-stat-groups";
 import { StationsManager, type StationStatsData } from "./stations-manager";
 
 function calcChange(curr: number, prev: number): number {
@@ -33,7 +37,7 @@ export default async function StationsPage() {
   const prevToDate = new Date(fromDate.getTime() - 1);
   const prevFromDate = new Date(prevToDate.getTime() - periodMs);
 
-  const [totalCount, rawRows, stationsSimple, tanks, salesAgg, prevSalesAgg, waybillAllocations] =
+  const [totalCount, rawRows, stationsSimple, tanks, salesAgg, prevSalesAgg, salesByProductRows, waybillAllocations] =
     await Promise.all([
       prisma.station.count({ where: whereClause }),
       prisma.station.findMany({
@@ -79,6 +83,16 @@ export default async function StationsPage() {
           ...(activeOrgId ? { station: { organizationId: activeOrgId } } : {}),
         },
         _sum: { amountPos: true, amountTransfer: true },
+      }),
+      prisma.salesLog.groupBy({
+        by: ["productType"],
+        where: {
+          tenantId: actor.tenantId,
+          status: "APPROVED",
+          logDate: { gte: fromDate, lte: toDate },
+          ...(activeOrgId ? { station: { organizationId: activeOrgId } } : {}),
+        },
+        _sum: { amountPos: true, amountTransfer: true, litersSold: true },
       }),
       prisma.waybillAllocation.findMany({
         where: {
@@ -132,7 +146,14 @@ export default async function StationsPage() {
   const soldPct =
     totalWaybillVolume > 0 ? Math.min(100, Math.max(0, (soldLiters / totalWaybillVolume) * 100)) : 0;
 
+  const productStats = emptyStationProductStats();
+  productStats.stockLiters = { ...stockByProduct };
+  const salesByProduct = mergeSalesGroupBy(salesByProductRows);
+  productStats.salesRevenue = salesByProduct.salesRevenue;
+  productStats.outstockLiters = salesByProduct.outstockLiters;
+
   const initialStats: StationStatsData = {
+    productStats,
     stockLevel: {
       totalLiters: totalStockLiters,
       totalCapacity: totalTankCapacity,

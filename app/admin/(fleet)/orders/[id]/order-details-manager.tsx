@@ -61,7 +61,7 @@ import {
   type TransportFeeTransaction,
   type TransportFeeTransport,
 } from "@/lib/fleet/transport-fees";
-import type { OrderPnLSummary } from "@/lib/fleet/financials";
+import type { OrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
 import { OrderFinancialSummary } from "./order-financial-summary";
 
 const EditOrderSchema = z.object({
@@ -74,11 +74,12 @@ const EditOrderSchema = z.object({
 });
 
 type LookupItem = { id: string; name: string };
+type DepotLookup = LookupItem & { latitude: number | null; longitude: number | null };
 
-const LeafletMap = dynamic(() => import("./leaflet-map"), {
+const OrderTransportsMap = dynamic(() => import("./order-transports-map"), {
   ssr: false,
   loading: () => (
-    <div className="h-full w-full flex items-center justify-center bg-stone-100">
+    <div className="h-[320px] w-full flex items-center justify-center bg-stone-100 rounded-xl border">
       <SpinnerEllipsis />
     </div>
   ),
@@ -87,12 +88,12 @@ const LeafletMap = dynamic(() => import("./leaflet-map"), {
 export function OrderDetailsManager({
   order,
   lookups,
-  pnl,
+  pnlSummary,
   originToDepotFee = 0,
 }: {
   order: any;
-  lookups: { suppliers: LookupItem[]; depots: LookupItem[] };
-  pnl?: OrderPnLSummary | null;
+  lookups: { suppliers: LookupItem[]; depots: DepotLookup[] };
+  pnlSummary?: OrderPnlSummary | null;
   originToDepotFee?: number;
 }) {
   const router = useRouter();
@@ -289,7 +290,8 @@ export function OrderDetailsManager({
 
       {/* ---------------- ORDER SPECS GRID ---------------- */}
       <div className="grid gap-6 lg:grid-cols-3 items-start">
-        <Card className="lg:col-span-2 flex flex-col border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+        <div className="lg:col-span-2 flex flex-col gap-6">
+        <Card className="flex flex-col border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
           <CardHeader className="pb-3 border-b border-border/30">
             <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
               <span className="flex items-center gap-2">
@@ -407,37 +409,7 @@ export function OrderDetailsManager({
           </CardContent>
         </Card>
 
-        {/* Transports Summary */}
-        <Card className="lg:col-span-1 flex flex-col border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
-          <CardHeader className="pb-3 border-b border-border/30">
-            <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Calculator size={16} className="text-primary" />
-              Financial Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1">
-            <div className="flex flex-col gap-y-4 w-full">
-                  <OrderFinancialSummary pnl={pnl} />
-
-                  <Button size={"icon-lg"}
-                    asChild
-                    className="w-full justify-center mt-2 gap-2"
-                  >
-                  <Link href={`/admin/fleet-pnl-report/${order.id}`}>
-                    <Calculator className="h-4 w-4" /> Profit &amp; Loss
-                  </Link>
-                  </Button>
-             
-                </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ---------------- NEW LAYOUT (DISPATCH CARDS & MAP) ---------------- */}
-      <div className="grid grid-cols-1 lg:grid-cols-7 gap-6 mt-6">
-        {/* LEFT COLUMN: Dispatch Cards & Invitations */}
-        <div className="lg:col-span-4 space-y-6">
-          
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold flex items-center gap-2">
               <Truck className="h-5 w-5 text-primary" />
@@ -450,7 +422,6 @@ export function OrderDetailsManager({
               </Link>
             </Button>
           </div>
-
 
           {transports.length === 0 ? (
             <Card className="border-dashed border-2 bg-muted/20">
@@ -479,14 +450,38 @@ export function OrderDetailsManager({
             </div>
           )}
         </div>
+        </div>
 
-        {/* RIGHT COLUMN: Map */}
-        <div className="lg:col-span-3">
-          <Card className="sticky top-6 overflow-hidden border-stone-200 shadow-sm h-[500px] flex flex-col py-0">
-            <div className="flex-1 relative bg-stone-100 z-0">
-              <LeafletMap transports={transports} />
-            </div>
-          </Card>
+        <div className="lg:col-span-1 flex flex-col gap-6">
+        <Card className="flex flex-col border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
+          <CardHeader className="pb-3 border-b border-border/30">
+            <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Calculator size={16} className="text-primary" />
+              Financial Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1">
+            <div className="flex flex-col gap-y-4 w-full">
+                  <OrderFinancialSummary summary={pnlSummary} />
+
+                  <Button size={"icon-lg"}
+                    asChild
+                    className="w-full justify-center mt-2 gap-2"
+                  >
+                  <Link href={`/admin/fleet-pnl-report/${order.id}`}>
+                    <Calculator className="h-4 w-4" /> Profit &amp; Loss
+                  </Link>
+                  </Button>
+             
+                </div>
+          </CardContent>
+        </Card>
+
+        <OrderTransportsMap
+          sourceDepot={order.sourceDepot}
+          depots={lookups.depots}
+          transports={transports}
+        />
         </div>
       </div>
 

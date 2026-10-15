@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/chart";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { OrderPnLSummary } from "@/lib/fleet/financials";
+import type { OrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
 
 const SEGMENTS = [
   { key: "cost", label: "Cost", color: "#8b5cf6", dot: "bg-violet-500" },
@@ -23,13 +23,14 @@ function formatNaira(value: number) {
   return `₦${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
-export function OrderFinancialSummary({ pnl }: { pnl?: OrderPnLSummary | null }) {
-  const cost = pnl ? pnl.totalCogs + pnl.totalLoadingCost : 0;
-  const expenses = pnl
-    ? pnl.totalTransportFeesPaid + pnl.totalTripExpenses + pnl.totalOrderExpenses
+export function OrderFinancialSummary({ summary }: { summary?: OrderPnlSummary | null }) {
+  // orderCost = product + loading on full ordered volume (matches Procurement Info total)
+  const cost = summary?.orderCost ?? 0;
+  const expenses = summary
+    ? summary.totalTransportCost + summary.totalFleetExpenses
     : 0;
-  const netProfit = pnl?.netProfit ?? 0;
-  const revenue = pnl?.totalRevenue ?? 0;
+  const netProfit = summary?.pnl ?? 0;
+  const revenue = summary?.amountSoldRev ?? 0;
 
   const chartConfig = useMemo(
     () =>
@@ -70,7 +71,7 @@ export function OrderFinancialSummary({ pnl }: { pnl?: OrderPnLSummary | null })
     return { ...seg, value };
   });
 
-  if (!pnl) {
+  if (!summary) {
     return (
       <p className="text-sm text-muted-foreground py-8 text-center">
         Financial breakdown unavailable.

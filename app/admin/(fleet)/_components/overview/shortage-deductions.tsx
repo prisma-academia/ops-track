@@ -11,7 +11,7 @@ export function ShortageDeductions({ data }: { data: FleetOverviewData }) {
         subtitle: data.kpi.shortageDeductions.subtitle,
         subtitleClassName: data.kpi.shortageDeductions.subtitleClassName,
       }}
-      title="Shortage Deductions"
+      title="Loss"
       icon={Alert02Icon}
       period={data.period || "Last 30 days"}
     />

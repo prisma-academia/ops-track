@@ -41,12 +41,15 @@ function inRange(date: Date, from: Date, to: Date): boolean {
 function transportLossLogAmount(l: {
   lostQuantity: unknown
   expensesIncurred: unknown
-  transport?: { order?: { pricePerLitre: unknown } | null } | null
+  transport?: {
+    order?: { pricePerLitre: unknown; loadingCostPerLitre?: unknown } | null
+  } | null
 }): number {
   const price = Number(l.transport?.order?.pricePerLitre) || 0
+  const loading = Number(l.transport?.order?.loadingCostPerLitre) || 0
   const qty = Number(l.lostQuantity) || 0
   const expIncurred = Number(l.expensesIncurred) || 0
-  return qty * price + expIncurred
+  return qty * (price + loading) + expIncurred
 }
 
 async function getStationSnapshots(
@@ -282,7 +285,11 @@ export async function getFleetOverviewData(
         lossType: true,
         lostQuantity: true,
         expensesIncurred: true,
-        transport: { select: { order: { select: { pricePerLitre: true } } } },
+        transport: {
+          select: {
+            order: { select: { pricePerLitre: true, loadingCostPerLitre: true } },
+          },
+        },
       },
     }),
     prisma.transportLossLog.findMany({
@@ -290,7 +297,11 @@ export async function getFleetOverviewData(
       select: {
         lostQuantity: true,
         expensesIncurred: true,
-        transport: { select: { order: { select: { pricePerLitre: true } } } },
+        transport: {
+          select: {
+            order: { select: { pricePerLitre: true, loadingCostPerLitre: true } },
+          },
+        },
       },
     }),
     prisma.order.findMany({
@@ -362,15 +373,6 @@ export async function getFleetOverviewData(
   )
   const prevFees = prevTransports.reduce(
     (sum, t) => sum + (Number(t.netTransportFeePaid) || 0),
-    0
-  )
-
-  const currentDeductions = currentTransports.reduce(
-    (sum, t) => sum + (Number(t.totalDeduction) || 0),
-    0
-  )
-  const prevDeductions = prevTransports.reduce(
-    (sum, t) => sum + (Number(t.totalDeduction) || 0),
     0
   )
 
@@ -498,9 +500,9 @@ export async function getFleetOverviewData(
       .filter((t) => inRange(t.createdAt, bucket.from, bucket.to))
       .reduce((sum, t) => sum + Math.abs(Number(t.amount) || 0), 0)
     const profit = bucketPnl.reduce((sum, row) => sum + row.pnl, 0)
-    const loss = currentTransports
-      .filter((t) => inRange(t.createdAt, bucket.from, bucket.to))
-      .reduce((sum, t) => sum + (Number(t.totalDeduction) || 0), 0)
+    const loss = currentLossLogs
+      .filter((l) => inRange(l.createdAt, bucket.from, bucket.to))
+      .reduce((sum, l) => sum + transportLossLogAmount(l), 0)
 
     return {
       name: bucket.label,
@@ -892,7 +894,7 @@ export async function getFleetOverviewData(
       points: salesOverviewPoints,
       revenue: currentSalesRevenue,
       expense: currentExpenses,
-      loss: currentDeductions,
+      loss: currentLogLossAmount,
       profit: profitOnVolumeSold,
     },
     counts: {

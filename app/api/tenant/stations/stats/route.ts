@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db/client";
 import { ok } from "@/lib/api/respond";
 import { handleError } from "@/lib/api/errors";
 import { ProductType } from "@/lib/generated/prisma/client";
+import {
+  emptyStationProductStats,
+  mergeSalesGroupBy,
+} from "@/lib/station/station-product-stat-groups";
 
 function calcChange(curr: number, prev: number): number {
   if (prev === 0) return curr > 0 ? 1 : 0;
@@ -125,7 +129,7 @@ export async function GET(request: Request) {
       logDate: { gte: prevFromDate, lte: prevToDate },
     };
 
-    const [salesAgg, prevSalesAgg] = await Promise.all([
+    const [salesAgg, prevSalesAgg, salesByProductRows] = await Promise.all([
       prisma.salesLog.aggregate({
         where: salesWhere,
         _sum: { amountPos: true, amountTransfer: true, litersSold: true },
@@ -134,6 +138,11 @@ export async function GET(request: Request) {
       prisma.salesLog.aggregate({
         where: prevSalesWhere,
         _sum: { amountPos: true, amountTransfer: true },
+      }),
+      prisma.salesLog.groupBy({
+        by: ["productType"],
+        where: salesWhere,
+        _sum: { amountPos: true, amountTransfer: true, litersSold: true },
       }),
     ]);
 
@@ -184,8 +193,15 @@ export async function GET(request: Request) {
       ? Math.min(100, Math.max(0, (soldLiters / totalWaybillVolume) * 100))
       : 0;
 
+    const productStats = emptyStationProductStats();
+    productStats.stockLiters = { ...stockByProduct };
+    const salesByProduct = mergeSalesGroupBy(salesByProductRows);
+    productStats.salesRevenue = salesByProduct.salesRevenue;
+    productStats.outstockLiters = salesByProduct.outstockLiters;
+
     return ok({
       stations,
+      productStats,
       stockLevel: {
         totalLiters: totalStockLiters,
         totalCapacity: totalTankCapacity,

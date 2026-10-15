@@ -147,7 +147,7 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
       item("Depot → Primary", fmtMoney(summary.totalDepotToPrimaryCost ?? 0)),
       item("Delivery Transport", fmtMoney(summary.totalDeliveryTransportCost ?? 0)),
       item("Fleet Cost", fmtMoney(summary.totalFleetExpenses)),
-      item("Loss Deduction", fmtMoney(summary.totalLossDeduction)),
+      item("Loss", fmtMoney(summary.totalLossDeduction)),
       item("Total Cost", fmtMoney(summary.totalCost)),
       item("Sales Revenue", fmtMoney(summary.amountSoldRev)),
       item("Sales Collected", fmtMoney(summary.amountPaid)),
@@ -441,7 +441,7 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
                 </p>
               </div>
               <div className="space-y-1 text-right">
-                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Loss Deduction</p>
+                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Loss</p>
                 <p className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">
                   {fmtMoney(lossAmount)}
                 </p>

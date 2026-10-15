@@ -4,18 +4,17 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
-import { Plus, CheckCircle2, X } from "lucide-react";
-import {
-  FuelStationIcon,
-  CreditCardPosIcon,
-  DeliveryTruck01Icon,
-} from "@hugeicons/core-free-icons";
-
-import { DashboardOverviewCardV3 } from "@/components/dashboards/dashboard-card";
+import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StationsTable, type StationRow } from "./table";
 import { cn } from "@/lib/utils";
+import { FleetStatGroupCard } from "@/app/admin/(fleet)/_components/overview/fleet-stat-group-card";
+import {
+  buildStationProductStatGroups,
+  type StationProductStats,
+} from "@/lib/station/station-product-stat-groups";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export interface StationSimple {
   id: string;
@@ -24,6 +23,7 @@ export interface StationSimple {
 }
 
 export interface StationStatsData {
+  productStats: StationProductStats;
   stockLevel: {
     totalLiters: number;
     totalCapacity: number;
@@ -52,16 +52,6 @@ interface StationsManagerProps {
   initialStats: StationStatsData;
   initialRows: StationRow[];
   initialMeta: any;
-}
-
-function fmtQty(n: number | null | undefined) {
-  if (n === null || n === undefined || isNaN(n)) return "0";
-  return n.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
-
-function fmtMoney(n: number | null | undefined) {
-  if (n === null || n === undefined || isNaN(n)) return "₦0";
-  return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function StationsManager({
@@ -134,6 +124,7 @@ export function StationsManager({
         const json = await res.json();
         if (json.data) {
           setStats({
+            productStats: json.data.productStats,
             stockLevel: json.data.stockLevel,
             sales: json.data.sales,
             remainingAndSold: json.data.remainingAndSold,
@@ -191,6 +182,9 @@ export function StationsManager({
       ? "This Month"
       : `${format(dateRange.from, "LLL dd")} - ${format(dateRange.to, "LLL dd")}`;
 
+  const statsHint = `${stationScopeLabel} · ${periodLabel}`;
+  const productStatGroups = buildStationProductStatGroups(stats.productStats, statsHint);
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -211,65 +205,18 @@ export function StationsManager({
         </div>
       </div>
 
-      {/* 3 Dashboard-Style Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Card 1: Stock Level */}
-        <DashboardOverviewCardV3
-          title="Stock Level"
-          icon={FuelStationIcon}
-          period={stationScopeLabel}
-          className={cn(isLoadingStats && "opacity-75 transition-opacity")}
-          data={{
-            formattedValue: `${fmtQty(stats.stockLevel.totalLiters)} L`,
-            subtitle: `PMS: ${fmtQty(stats.stockLevel.byProduct.PMS)} L • AGO: ${fmtQty(
-              stats.stockLevel.byProduct.AGO
-            )} L • LPG: ${fmtQty(stats.stockLevel.byProduct.LPG)} L`,
-          }}
-          action={
-            <div className="text-[11px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
-              {stats.stockLevel.tankCount} Tanks
-            </div>
-          }
-        />
-
-        {/* Card 2: Sales */}
-        <DashboardOverviewCardV3
-          title="Sales"
-          icon={CreditCardPosIcon}
-          period={periodLabel}
-          className={cn(isLoadingStats && "opacity-75 transition-opacity")}
-          data={{
-            formattedValue: fmtMoney(stats.sales.totalRevenue),
-            percentageChange: stats.sales.percentageChange,
-            subtitle: `${fmtQty(stats.sales.totalLitersSold)} L sold • ${stats.sales.transactionCount} entries`,
-          }}
-          action={
-            productType !== "ALL" ? (
-              <div className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                {productType}
-              </div>
-            ) : undefined
-          }
-        />
-
-        {/* Card 3: Remaining and Sold */}
-        <DashboardOverviewCardV3
-          title="Remaining & Sold"
-          icon={DeliveryTruck01Icon}
-          period={`${stats.remainingAndSold.activeBatches} Waybill Allocations`}
-          className={cn(isLoadingStats && "opacity-75 transition-opacity")}
-          data={{
-            formattedValue: `${fmtQty(stats.remainingAndSold.remainingLiters)} L Left`,
-            subtitle: `Sold: ${fmtQty(stats.remainingAndSold.soldLiters)} L (${stats.remainingAndSold.soldPct.toFixed(1)}%) • Remaining: ${stats.remainingAndSold.remainingPct.toFixed(1)}%`,
-          }}
-          action={
-            <div className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
-              <CheckCircle2 className="h-3 w-3" />
-              <span>{stats.remainingAndSold.remainingPct.toFixed(0)}% Stock Level</span>
-            </div>
-          }
-        />
-      </div>
+      <TooltipProvider delayDuration={200}>
+        <div
+          className={cn(
+            "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4",
+            isLoadingStats && "opacity-75 transition-opacity"
+          )}
+        >
+          {productStatGroups.map((group) => (
+            <FleetStatGroupCard key={group.id} group={group} />
+          ))}
+        </div>
+      </TooltipProvider>
 
       {/* Active Filter Chips (if any filters applied from the table filter drawer) */}
       {hasActiveFilters && (

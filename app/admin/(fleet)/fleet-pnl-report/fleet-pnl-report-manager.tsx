@@ -91,37 +91,26 @@ export function FleetPnlReportManager({
   }, [initialOrders, selectedTruckIds, dateRange]);
 
   const metrics = React.useMemo(() => {
-    let totalRevenue = 0;
-    let totalCollected = 0;
-    let totalExpense = 0;
-    let totalTransportCost = 0;
-    let totalFleetExpenses = 0;
-    let debtOutstanding = 0;
-    let profitable = 0;
-    let lossMaking = 0;
+    let totalCost = 0;
+    let salesRevenue = 0;
+    let salesCollected = 0;
+    let debtRemaining = 0;
+    let profitAndLoss = 0;
 
     filteredRows.forEach((r) => {
-      totalRevenue += r.amountSoldRev;
-      totalCollected += r.amountPaid;
-      totalExpense += r.totalCost;
-      totalTransportCost += r.totalTransportCost;
-      totalFleetExpenses += r.totalFleetExpenses;
-      debtOutstanding += r.debtRemaining;
-      if (r.pnl >= 0) profitable += 1;
-      else lossMaking += 1;
+      totalCost += r.totalCost;
+      salesRevenue += r.amountSoldRev;
+      salesCollected += r.amountPaid;
+      debtRemaining += r.debtRemaining;
+      profitAndLoss += r.pnl;
     });
 
     return {
-      totalRevenue,
-      totalCollected,
-      totalExpense,
-      totalTransportCost,
-      totalFleetExpenses,
-      netProfit: totalRevenue - totalExpense,
-      debtOutstanding,
-      profitable,
-      lossMaking,
-      count: filteredRows.length,
+      totalCost,
+      salesRevenue,
+      salesCollected,
+      debtRemaining,
+      profitAndLoss,
     };
   }, [filteredRows]);
 
@@ -129,31 +118,38 @@ export function FleetPnlReportManager({
     () =>
       buildPctStats([
         {
-          key: "revenue",
-          label: "Revenue",
-          value: metrics.totalRevenue,
+          key: "totalCost",
+          label: "Total Cost",
+          value: metrics.totalCost,
+          color: "#64748b",
+          format: (n) => fmtMoney(n),
+        },
+        {
+          key: "salesRevenue",
+          label: "Sales Revenue",
+          value: metrics.salesRevenue,
+          color: "#6366f1",
+          format: (n) => fmtMoney(n),
+        },
+        {
+          key: "salesCollected",
+          label: "Sales Collected",
+          value: metrics.salesCollected,
           color: "#10b981",
           format: (n) => fmtMoney(n),
         },
         {
-          key: "expense",
-          label: "Expenses",
-          value: metrics.totalExpense,
-          color: "#f43f5e",
+          key: "debtRemaining",
+          label: "Debt Remaining",
+          value: metrics.debtRemaining,
+          color: "#d97706",
           format: (n) => fmtMoney(n),
         },
         {
-          key: "profit",
-          label: "Net Profit",
-          value: Math.abs(metrics.netProfit),
-          color: metrics.netProfit >= 0 ? "#6366f1" : "#e11d48",
-          format: () => fmtMoney(metrics.netProfit),
-        },
-        {
-          key: "debt",
-          label: "Debt Outstanding",
-          value: metrics.debtOutstanding,
-          color: "#d97706",
+          key: "profitAndLoss",
+          label: "Profit and Loss",
+          value: metrics.profitAndLoss,
+          color: metrics.profitAndLoss >= 0 ? "#059669" : "#e11d48",
           format: (n) => fmtMoney(n),
         },
       ]),

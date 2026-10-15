@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Calendar, Wallet, Receipt, TrendingUp, TrendingDown, MapPin } from "lucide-react";
+import { ChevronLeft, Calendar, Wallet, Receipt, Banknote, AlertCircle, TrendingUp, TrendingDown, MapPin } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
@@ -174,15 +174,23 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
       iconColor: "text-indigo-600",
     },
     {
-      title: "Amount Paid",
+      title: "Sales Collected",
       value: fmtMoney(summary.amountPaid),
       fullValue: fmtMoney(summary.amountPaid),
-      icon: Wallet,
+      icon: Banknote,
       valueColor: "text-emerald-600",
       iconColor: "text-emerald-600",
     },
     {
-      title: "Profit & Loss",
+      title: "Debt Remaining",
+      value: fmtMoney(summary.debtRemaining),
+      fullValue: fmtMoney(summary.debtRemaining),
+      icon: AlertCircle,
+      valueColor: summary.debtRemaining > 0 ? "text-amber-600" : "text-emerald-600",
+      iconColor: summary.debtRemaining > 0 ? "text-amber-600" : "text-emerald-600",
+    },
+    {
+      title: "Profit and Loss",
       value: fmtMoney(summary.pnl),
       fullValue: fmtMoney(summary.pnl),
       valueColor: summary.pnl >= 0 ? "text-emerald-600" : "text-rose-600",
@@ -242,16 +250,24 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
       <TooltipProvider delayDuration={200}>
         <Card className="p-0 shadow-xs border-border/40 print:shadow-none print:border-none print:bg-transparent">
           <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0 print:gap-4 print:justify-between">
-            {statCards.map((item, index) => (
+            {statCards.map((item, index) => {
+              const isLast = index === statCards.length - 1;
+              const mdLastRowStart = Math.floor((statCards.length - 1) / 2) * 2;
+              const isMdRowEnd = (index + 1) % 2 === 0 || isLast;
+
+              return (
               <div
-                key={index}
+                key={item.title}
                 className={cn(
-                  "w-full lg:w-1/4 md:w-1/2 border-border print:border-none print:w-auto",
-                  index === statCards.length - 1 ? "border-b-0" : "border-b",
-                  (index + 1) % 2 === 0 ? "md:border-e-0" : "md:border-e",
-                  index >= 2 ? "md:border-b-0" : "md:border-b",
+                  isLast && statCards.length % 2 === 1
+                    ? "w-full md:w-full lg:w-1/5"
+                    : "w-full md:w-1/2 lg:w-1/5",
+                  "border-border print:border-none print:w-auto",
+                  isLast ? "border-b-0" : "border-b",
+                  isMdRowEnd ? "md:border-e-0" : "md:border-e",
+                  index >= mdLastRowStart ? "md:border-b-0" : "md:border-b",
                   "lg:border-b-0",
-                  index === statCards.length - 1 ? "lg:border-e-0" : "lg:border-e"
+                  isLast ? "lg:border-e-0" : "lg:border-e"
                 )}
               >
                 {item.fullValue ? (
@@ -297,7 +313,8 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       </TooltipProvider>

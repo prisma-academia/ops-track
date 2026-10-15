@@ -353,11 +353,6 @@ export function TransportDetailsManager({
     setOpenFinalizeDialog(true);
   };
 
-  const totalSoldLiters = normalizedDeliveries.reduce((sum, del) => {
-    if (del.litersReceived === null || del.litersReceived === undefined) return sum;
-    return sum + Number(del.litersReceived);
-  }, 0);
-
   const productLossLogs = [...lossLogs]
     .filter((log: { lossType?: string }) => log.lossType !== "SHORTAGE")
     .sort(
@@ -414,6 +409,49 @@ export function TransportDetailsManager({
         ? modalTransitShortage * ratePerLiter
         : modalShortageDeductionAmount
       : 0;
+
+  const modalDeliveryVariance = normalizedDeliveries.reduce(
+    (sum, item) => sum + deliveryShortfall(item),
+    0
+  );
+
+  const finalizeVolumeStatCards = [
+    {
+      key: "remaining",
+      title: "Remaining",
+      value: `${modalRemainingInTruck.toLocaleString()} L`,
+      tooltip: `${modalRemainingInTruck.toLocaleString()} L on truck`,
+      subtitle:
+        modalRemainingInTruck > 0.001
+          ? "Must be zero to close"
+          : "Tank empty",
+      dotColor: "bg-amber-500",
+    },
+    {
+      key: "shortage",
+      title: "Shortage",
+      value: `${modalTransitShortage.toLocaleString()} L`,
+      tooltip: `${modalTransitShortage.toLocaleString()} L chargeable shortfall`,
+      subtitle:
+        modalTransitShortage > 0.001
+          ? `₦${modalShortageFeeDeduction.toLocaleString()} from transport fee`
+          : modalDeliveryVariance > 0.001
+            ? `${modalDeliveryVariance.toLocaleString()} L delivery variance (not deducted)`
+            : "No chargeable shortfall",
+      dotColor: "bg-yellow-500",
+    },
+    {
+      key: "loss",
+      title: "Loss",
+      value: `${loggedIncidentLiters.toLocaleString()} L`,
+      tooltip: `${loggedIncidentLiters.toLocaleString()} L product loss logged`,
+      subtitle:
+        loggedIncidentLiters > 0
+          ? `₦${(loggedIncidentProductValue + loggedIncidentExpenses).toLocaleString()} impact`
+          : "No product-loss incidents",
+      dotColor: "bg-red-500",
+    },
+  ];
 
   const finalizeChecks = [
     {
@@ -1284,6 +1322,36 @@ export function TransportDetailsManager({
               </div>
             )}
 
+            <TooltipProvider delayDuration={200}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {finalizeVolumeStatCards.map((stat) => (
+                  <Tooltip key={stat.key}>
+                    <TooltipTrigger asChild>
+                      <div
+                        className={cn(
+                          "relative flex flex-col justify-between p-3.5 rounded-xl border text-left transition-all duration-200 cursor-default select-none border-border/60 bg-muted/20"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium text-muted-foreground">{stat.title}</span>
+                          <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", stat.dotColor)} />
+                        </div>
+                        <div className="mt-2 text-base font-bold text-foreground tracking-tight font-mono">
+                          {stat.value}
+                        </div>
+                        {stat.subtitle ? (
+                          <p className="text-[11px] text-muted-foreground mt-1.5 leading-snug">{stat.subtitle}</p>
+                        ) : null}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                      {stat.tooltip}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
+            </TooltipProvider>
+
             <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Readiness checks
@@ -1304,176 +1372,6 @@ export function TransportDetailsManager({
                 ))}
               </ul>
             </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                {
-                  label: "Loaded",
-                  value: `${carriedVolume.toLocaleString()} L`,
-                  sub: "Trip load",
-                },
-                {
-                  label: "Sold / delivered",
-                  value: `${totalSoldLiters.toLocaleString()} L`,
-                  sub: "Confirmed received",
-                },
-                {
-                  label: "Shortage deduction",
-                  value: `${modalTransitShortage.toLocaleString()} L`,
-                  sub:
-                    modalTransitShortage > 0.001
-                      ? `₦${modalShortageFeeDeduction.toLocaleString()} from transport fee`
-                      : "No chargeable shortfall",
-                  accent: modalTransitShortage > 0.001,
-                },
-                {
-                  label: "On truck",
-                  value: `${modalRemainingInTruck.toLocaleString()} L`,
-                  sub: modalRemainingInTruck > 0.001 ? "Must be zero to close" : "Tank empty",
-                  accent: modalRemainingInTruck > 0.001,
-                },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-xl border bg-card px-3 py-3 shadow-xs"
-                >
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {stat.label}
-                  </p>
-                  <p
-                    className={cn(
-                      "text-lg font-bold font-mono mt-1",
-                      stat.accent ? "text-rose-600 dark:text-rose-400" : "text-foreground"
-                    )}
-                  >
-                    {stat.value}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{stat.sub}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="rounded-xl border overflow-hidden">
-              <div className="px-4 py-2.5 border-b bg-muted/40">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Product loss log
-                </p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Incidents recorded on this trip (accident, theft, etc.) — log more from Product Loss on the trip page.
-                </p>
-              </div>
-              {productLossLogs.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-center text-muted-foreground">
-                  No product-loss incidents logged.
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Volume</TableHead>
-                      <TableHead className="text-right">Expenses</TableHead>
-                      <TableHead>Notes</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {productLossLogs.map((log: { id: string; lossType: string; lostQuantity?: number; expensesIncurred?: number; comment?: string | null }) => (
-                      <TableRow key={log.id}>
-                        <TableCell className="font-medium text-sm">
-                          {getLossTypeLabel(log.lossType)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          {Number(log.lostQuantity || 0).toLocaleString()} L
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          ₦{Number(log.expensesIncurred || 0).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[12rem] truncate">
-                          {log.comment || "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-              {productLossLogs.length > 0 && (
-                <div className="px-4 py-2.5 border-t bg-muted/20 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                  <span>
-                    <span className="font-medium text-foreground">Total lost:</span>{" "}
-                    {loggedIncidentLiters.toLocaleString()} L
-                  </span>
-                  <span>
-                    <span className="font-medium text-foreground">Product value:</span>{" "}
-                    ₦{loggedIncidentProductValue.toLocaleString()}
-                  </span>
-                  <span>
-                    <span className="font-medium text-foreground">Incident expenses:</span>{" "}
-                    ₦{loggedIncidentExpenses.toLocaleString()}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {(transport.deliveries || []).length > 0 && (
-              <div className="rounded-xl border overflow-hidden">
-                <div className="px-4 py-2.5 border-b bg-muted/40">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Distribution summary
-                  </p>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Recipient</TableHead>
-                      <TableHead className="text-right">Dispatched</TableHead>
-                      <TableHead className="text-right">Received</TableHead>
-                      <TableHead className="text-right">Shortfall</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(transport.deliveries || []).map((del: any) => {
-                      const dispatched = Number(del.litersDespatched || del.litersSold || 0);
-                      const pending =
-                        del.litersReceived === null || del.litersReceived === undefined;
-                      const received = pending ? null : Number(del.litersReceived);
-                      const returned = Number(del.litersReturned || 0);
-                      const shortfall =
-                        received !== null
-                          ? Math.max(0, dispatched - returned - received)
-                          : null;
-                      const name =
-                        del.customer?.name || del.station?.name || del.destination || "Destination";
-                      return (
-                        <TableRow key={del.id}>
-                          <TableCell className="text-sm font-medium truncate max-w-[10rem]">
-                            {name}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {dispatched.toLocaleString()} L
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {pending ? (
-                              <span className="text-amber-600 text-xs">Pending</span>
-                            ) : (
-                              `${received!.toLocaleString()} L`
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {shortfall === null ? (
-                              "—"
-                            ) : shortfall > 0 ? (
-                              <span className="text-rose-600">{shortfall.toLocaleString()} L</span>
-                            ) : (
-                              <span className="text-emerald-600">0 L</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
 
             <div className="rounded-xl border border-dashed px-4 py-3 text-xs text-muted-foreground leading-relaxed">
               <span className="font-semibold text-foreground">Driver transport fee (reference):</span>{" "}

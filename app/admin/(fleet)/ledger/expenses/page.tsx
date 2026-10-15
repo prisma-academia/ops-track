@@ -8,8 +8,10 @@ import {
 } from "../_components/ledger-insight-stats";
 import {
   FLEET_EXPENSE_LEDGER_CATEGORIES,
+  type FleetExpenseLedgerCategory,
   fleetExpenseLedgerWhere,
 } from "@/lib/finance/fleet-ledger";
+import type { PaymentMethod, TransactionType } from "@/lib/generated/prisma/client";
 import { formatTransactionCategoryLabel } from "@/lib/finance/transaction-labels";
 
 const PAYMENT_METHODS = ["CASH", "POS", "BANK_TRANSFER", "CHEQUE", "DEPOSIT"];
@@ -34,15 +36,15 @@ export default async function ExpensesLedgerPage(props: {
   const dateFrom = searchParams.dateFrom as string;
   const dateTo = searchParams.dateTo as string;
 
-  const categoryIsValid =
+  const expenseCategory: FleetExpenseLedgerCategory | undefined =
     categoryFilter &&
-    FLEET_EXPENSE_LEDGER_CATEGORIES.includes(
-      categoryFilter as (typeof FLEET_EXPENSE_LEDGER_CATEGORIES)[number],
-    );
+    FLEET_EXPENSE_LEDGER_CATEGORIES.includes(categoryFilter as FleetExpenseLedgerCategory)
+      ? (categoryFilter as FleetExpenseLedgerCategory)
+      : undefined;
 
   const where = fleetExpenseLedgerWhere({
     tenantId: actor.tenantId,
-    ...(categoryIsValid ? { category: categoryFilter } : {}),
+    ...(expenseCategory ? { category: expenseCategory } : {}),
     ...(search
       ? {
           OR: [
@@ -57,12 +59,18 @@ export default async function ExpensesLedgerPage(props: {
     (where as { transporterId?: string }).transporterId = transporterId;
   }
 
-  if (typeFilter) {
-    (where as { type?: string }).type = typeFilter;
+  if (typeFilter === "INFLOW" || typeFilter === "OUTFLOW") {
+    where.type = typeFilter as TransactionType;
   }
 
-  if (method) {
-    (where as { paymentMethod?: string }).paymentMethod = method;
+  if (
+    method === "CASH" ||
+    method === "POS" ||
+    method === "BANK_TRANSFER" ||
+    method === "CHEQUE" ||
+    method === "DEPOSIT"
+  ) {
+    where.paymentMethod = method as PaymentMethod;
   }
 
   if (minAmount || maxAmount) {

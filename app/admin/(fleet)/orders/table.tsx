@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 export type OrderRow = {
   id: string;
   reference: string;
+  sourceDepot: string | null;
+  supplier: string | null;
   productType: string;
   litersOrdered: number;
   litersLifted: number;
@@ -30,6 +32,12 @@ const columns: ColumnDef<OrderRow>[] = [
     header: "Order Reference",
     cell: ({ row }) => {
       const ref = row.original.reference;
+      const depot = row.original.sourceDepot?.trim();
+      const supplier = row.original.supplier?.trim();
+      const subtitle =
+        depot && supplier
+          ? `${depot} • ${supplier}`
+          : depot || supplier || "—";
       return (
         <div className="flex items-center gap-3 py-1">
           <div className="size-10 flex items-center justify-center shrink-0 text-primary bg-primary/10 rounded-md">
@@ -37,7 +45,7 @@ const columns: ColumnDef<OrderRow>[] = [
           </div>
           <div className="flex flex-col">
             <span className="font-semibold text-foreground">{ref}</span>
-            <span className="text-xs text-muted-foreground">{row.original.productType}</span>
+            <span className="text-xs text-muted-foreground uppercase">{subtitle}</span>
           </div>
         </div>
       );

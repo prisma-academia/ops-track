@@ -11,6 +11,10 @@ import { Truck } from "lucide-react";
 export type SupplierRow = {
   id: string;
   name: string;
+  supplierType?: "LOCAL" | "DEPOT" | null;
+  amountPaid?: number;
+  saleProfit?: number;
+  companyLoss?: number;
   email?: string | null;
   phone?: string | null;
   contactPerson?: string | null;
@@ -79,6 +83,59 @@ export function SuppliersTable({
             </div>
           );
         },
+      },
+      {
+        accessorKey: "supplierType",
+        header: "Type",
+        cell: ({ row }) => {
+          const type = row.original.supplierType;
+          if (!type) {
+            return (
+              <span className="text-xs font-medium text-amber-600">Not set</span>
+            );
+          }
+          return (
+            <span className="text-xs font-medium text-foreground">
+              {type === "LOCAL" ? "Local" : "Depot"}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "amountPaid",
+        header: "Paid",
+        cell: ({ row }) => (
+          <span className="text-sm font-mono tabular-nums">
+            {formatNaira(Number(row.original.amountPaid ?? 0))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "saleProfit",
+        header: "Sale profit",
+        cell: ({ row }) => {
+          const v = Number(row.original.saleProfit ?? 0);
+          return (
+            <span
+              className={
+                v >= 0
+                  ? "text-sm font-mono tabular-nums text-emerald-600"
+                  : "text-sm font-mono tabular-nums text-rose-600"
+              }
+            >
+              {formatNaira(v)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "companyLoss",
+        header: "Company loss",
+        cell: ({ row }) => (
+          <span className="text-sm font-mono tabular-nums text-rose-600">
+            {formatNaira(Number(row.original.companyLoss ?? 0))}
+          </span>
+        ),
       },
       {
         accessorKey: "contactPerson",

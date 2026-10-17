@@ -24,6 +24,8 @@ import {
 } from "../fleet-pnl-columns";
 import { buildFleetPnlDetailRows } from "../fleet-pnl-detail-rows";
 import type { OrderPnlTransportRow } from "@/lib/fleet/order-pnl-summary";
+import type { FleetSettings } from "@/lib/fleet/fleet-settings";
+import { defaultFleetSettings } from "@/lib/fleet/fleet-settings";
 
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
@@ -102,9 +104,14 @@ interface TransportData {
 interface Props {
   summary: OrderSummary;
   transports: TransportData[];
+  fleetSettings?: FleetSettings;
 }
 
-export function OrderPnlDetailsManager({ summary, transports }: Props) {
+export function OrderPnlDetailsManager({
+  summary,
+  transports,
+  fleetSettings = defaultFleetSettings(),
+}: Props) {
   const volumeUnit = summary.productType === "LPG" ? "KG" : "L";
   const hasLossDeduction = summary.totalLossDeduction > 0;
   const soldPrice =
@@ -116,8 +123,9 @@ export function OrderPnlDetailsManager({ summary, transports }: Props) {
       : summary.totalLossDeduction;
 
   const breakdownRows = useMemo<FleetPnlTableRow[]>(
-    () => buildFleetPnlDetailRows(summary, transports as OrderPnlTransportRow[]),
-    [transports, summary]
+    () =>
+      buildFleetPnlDetailRows(summary, transports as OrderPnlTransportRow[], fleetSettings),
+    [transports, summary, fleetSettings]
   );
 
   const columns = useMemo(() => getFleetPnlDetailsColumns(), []);

@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Banknote, Droplets, ReceiptText, Landmark } from "lucide-react";
 import { cn, formatShortCurrency, formatDestination, formatTruckLabel } from "@/lib/utils";
 import { resolveDeliveryCreatedAtFilter } from "@/lib/fleet/delivery-sales-metrics";
+import { resolveShortageParty } from "@/lib/fleet/loss-attribution";
 
 export default async function SalesPage({
   searchParams,
@@ -77,7 +78,14 @@ export default async function SalesPage({
             oneTimeTransporterName: true,
             transporter: { select: { id: true, name: true } },
             truck: { select: { id: true, name: true, plateNumber: true, truckNumber: true } },
-            order: { select: { id: true, reference: true, sourceDepot: true } },
+            order: {
+              select: {
+                id: true,
+                reference: true,
+                sourceDepot: true,
+                supplierRecord: { select: { supplierType: true } },
+              },
+            },
           },
         },
         _count: {
@@ -151,6 +159,9 @@ export default async function SalesPage({
       transportId: delivery.transportId,
       transportStatus: delivery.transport ? delivery.transport.status : null,
       transportRate,
+      shortageParty: resolveShortageParty(
+        delivery.transport?.order?.supplierRecord?.supplierType ?? null
+      ),
     };
   });
 

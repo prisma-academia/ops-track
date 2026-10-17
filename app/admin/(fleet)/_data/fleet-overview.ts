@@ -38,15 +38,40 @@ function inRange(date: Date, from: Date, to: Date): boolean {
   return date >= from && date <= to
 }
 
-function transportLossLogAmount(l: {
-  lostQuantity: unknown
-  expensesIncurred: unknown
-  transport?: {
-    order?: { pricePerLitre: unknown; loadingCostPerLitre?: unknown } | null
-  } | null
-}): number {
+function transportLossLogAmount(
+  l: {
+    lossType?: string
+    economicImpact?: string | null
+    lostQuantity: unknown
+    expensesIncurred: unknown
+    transport?: {
+      order?: { pricePerLitre: unknown; loadingCostPerLitre?: unknown } | null
+    } | null
+  },
+  fleet: import("@/lib/fleet/fleet-settings").FleetSettings
+): number {
   const price = Number(l.transport?.order?.pricePerLitre) || 0
   const loading = Number(l.transport?.order?.loadingCostPerLitre) || 0
+  const orderRates = { pricePerLitre: price, loadingCostPerLitre: loading }
+  if (fleet.useAttributionPnL) {
+    if (
+      !isCompanyPnlLossLog(
+        { lossType: l.lossType ?? "", economicImpact: l.economicImpact },
+        fleet
+      )
+    ) {
+      return 0
+    }
+    return companyLossAmountFromLog(
+      {
+        lossType: l.lossType ?? "OTHERS",
+        lostQuantity: l.lostQuantity,
+        expensesIncurred: l.expensesIncurred,
+        economicImpact: l.economicImpact,
+      },
+      orderRates
+    )
+  }
   const qty = Number(l.lostQuantity) || 0
   const expIncurred = Number(l.expensesIncurred) || 0
   return qty * (price + loading) + expIncurred
@@ -125,6 +150,8 @@ import {
   sumFleetOutflows,
 } from "@/lib/fleet/delivery-sales-metrics"
 import { calculateOrderPnlSummary } from "@/lib/fleet/order-pnl-summary"
+import { getOrderPnlOptions, isCompanyPnlLossLog } from "@/lib/fleet/pnl-context"
+import { companyLossAmountFromLog } from "@/lib/fleet/loss-attribution"
 import {
   getExpectedFeeForLeg,
   getRemainingForLeg,
@@ -283,6 +310,7 @@ export async function getFleetOverviewData(
       select: {
         createdAt: true,
         lossType: true,
+        economicImpact: true,
         lostQuantity: true,
         expensesIncurred: true,
         transport: {
@@ -295,6 +323,8 @@ export async function getFleetOverviewData(
     prisma.transportLossLog.findMany({
       where: { tenantId, createdAt: { gte: prevFrom, lte: prevTo } },
       select: {
+        lossType: true,
+        economicImpact: true,
         lostQuantity: true,
         expensesIncurred: true,
         transport: {
@@ -346,6 +376,7 @@ export async function getFleetOverviewData(
         },
       },
       include: {
+        supplierRecord: { select: { supplierType: true } },
         transports: {
           include: {
             transporter: { select: { name: true } },
@@ -366,6 +397,10 @@ export async function getFleetOverviewData(
       },
     }),
   ])
+
+  const tenantSettings = parseTenantSettings(tenantRecord?.settingsJson)
+  const pnlOptions = getOrderPnlOptions(tenantSettings)
+  const fleetSettings = tenantSettings.fleet
 
   const currentFees = currentTransports.reduce(
     (sum, t) => sum + (Number(t.netTransportFeePaid) || 0),
@@ -403,7 +438,9 @@ export async function getFleetOverviewData(
   const currentExpenses = sumFleetOutflows(currentOutflows)
 
   const deliveryPnlRows = pnlOrders
-    .flatMap((order) => calculateOrderPnlSummary(order).transports.flatMap((t) => t.deliveries))
+    .flatMap((order) =>
+      calculateOrderPnlSummary(order, pnlOptions).transports.flatMap((t) => t.deliveries)
+    )
     .filter((row) => inRange(new Date(row.createdAt), periodFrom, periodTo))
   const profitOnVolumeSold = deliveryPnlRows.reduce((sum, row) => sum + row.pnl, 0)
 
@@ -418,7 +455,7 @@ export async function getFleetOverviewData(
     .filter((t) => t.category === "SUPPLIER_PAYMENT" || t.category === "PRODUCT_SUPPLY")
     .reduce((sum, t) => sum + Math.abs(Number(t.amount) || 0), 0)
 
-  const originToDepotFee = parseTenantSettings(tenantRecord?.settingsJson).originToDepotFee
+  const originToDepotFee = tenantSettings.originToDepotFee
 
   const transportExpected = periodTransportsForFees.reduce(
     (sum, transport) =>
@@ -435,12 +472,12 @@ export async function getFleetOverviewData(
   // Transport incident logs (operational visibility; not subtracted again from P&L)
   const currentLogLossLiters = currentLossLogs.reduce((sum, l) => sum + (Number(l.lostQuantity) || 0), 0)
   const currentLogLossAmount = currentLossLogs.reduce(
-    (sum, l) => sum + transportLossLogAmount(l),
+    (sum, l) => sum + transportLossLogAmount(l, fleetSettings),
     0
   )
   const prevLogLossLiters = prevLossLogs.reduce((sum, l) => sum + (Number(l.lostQuantity) || 0), 0)
   const prevLogLossAmount = prevLossLogs.reduce(
-    (sum, l) => sum + transportLossLogAmount(l),
+    (sum, l) => sum + transportLossLogAmount(l, fleetSettings),
     0
   )
 
@@ -502,7 +539,7 @@ export async function getFleetOverviewData(
     const profit = bucketPnl.reduce((sum, row) => sum + row.pnl, 0)
     const loss = currentLossLogs
       .filter((l) => inRange(l.createdAt, bucket.from, bucket.to))
-      .reduce((sum, l) => sum + transportLossLogAmount(l), 0)
+      .reduce((sum, l) => sum + transportLossLogAmount(l, fleetSettings), 0)
 
     return {
       name: bucket.label,

@@ -110,6 +110,8 @@ export default async function OrdersPage({
     return {
       id: o.id,
       reference: o.reference || "-",
+      sourceDepot: o.sourceDepot,
+      supplier: o.supplier,
       productType: o.productType,
       litersOrdered,
       litersLifted,

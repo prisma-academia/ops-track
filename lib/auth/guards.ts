@@ -148,6 +148,15 @@ export function withPlatformContext<T>(fn: () => Promise<T> | T): Promise<T> | T
   return runWithContext({ mode: "platform", tenantId: null }, fn);
 }
 
+export function assertTenantOwner(
+  actor: TenantActor,
+  message = "Only the workspace owner can perform this action."
+) {
+  if (!actor.isOwner) {
+    throw new AuthError(403, message);
+  }
+}
+
 export async function resolvedHostMode(): Promise<{ mode: string; tenantId: string | null }> {
   const h = await headers();
   return {

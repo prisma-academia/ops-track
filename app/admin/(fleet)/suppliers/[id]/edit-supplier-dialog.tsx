@@ -12,6 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -33,6 +40,7 @@ import nigerianLocations from "@/constant/nigerian-locations.json";
 
 const Schema = z.object({
   name: z.string().min(2, "Company name is required").max(100),
+  supplierType: z.enum(["LOCAL", "DEPOT"]).optional().nullable(),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   phone: z.string().optional().or(z.literal("")),
   address: z.string().optional().or(z.literal("")),
@@ -45,7 +53,10 @@ const Schema = z.object({
 
 export type SupplierEditValues = z.infer<typeof Schema>;
 
-export type SupplierEditInitial = SupplierEditValues & { id: string };
+export type SupplierEditInitial = SupplierEditValues & {
+  id: string;
+  supplierType?: "LOCAL" | "DEPOT" | null;
+};
 
 export function EditSupplierDialog({
   open,
@@ -72,6 +83,7 @@ export function EditSupplierDialog({
       contactPerson: supplier.contactPerson ?? "",
       contactPhone: supplier.contactPhone ?? "",
       contactPosition: supplier.contactPosition ?? "",
+      supplierType: supplier.supplierType ?? null,
     },
   });
 
@@ -90,6 +102,7 @@ export function EditSupplierDialog({
         contactPerson: supplier.contactPerson ?? "",
         contactPhone: supplier.contactPhone ?? "",
         contactPosition: supplier.contactPosition ?? "",
+        supplierType: supplier.supplierType ?? null,
       });
     }
   }, [open, supplier, reset]);
@@ -127,6 +140,25 @@ export function EditSupplierDialog({
               {formState.errors.name && (
                 <p className="text-xs text-destructive">{formState.errors.name.message}</p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Supplier type</Label>
+              <Select
+                value={watch("supplierType") ?? "unset"}
+                onValueChange={(v) =>
+                  setValue("supplierType", v === "unset" ? null : (v as "LOCAL" | "DEPOT"))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Not set" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unset">Not set</SelectItem>
+                  <SelectItem value="DEPOT">Depot</SelectItem>
+                  <SelectItem value="LOCAL">Local</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

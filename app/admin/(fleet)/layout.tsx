@@ -117,7 +117,7 @@ const FLEET_NAV = [
       {
         href: "/admin/organizations",
         key: "organizations",
-        title: "Managed Stations",
+        title: "Organizations",
         icon: "FuelStationIcon",
         permission: PERMISSIONS.TENANT_FLEET_ORGANIZATIONS_READ.key,
       },
@@ -125,15 +125,22 @@ const FLEET_NAV = [
         href: "/admin/customers",
         key: "clients",
         title: "B2B Clients",
-        icon: "UserGroupIcon",
+        icon: "Contact01Icon",
         permission: PERMISSIONS.TENANT_FLEET_CUSTOMERS_READ.key,
       },
       {
         href: "/admin/suppliers",
         key: "suppliers",
         title: "Suppliers",
-        icon: "TruckDeliveryIcon",
+        icon: "DistributionIcon",
         permission: PERMISSIONS.TENANT_FLEET_SUPPLIERS_READ.key,
+      },
+      {
+        href: "/admin/depots",
+        key: "depots",
+        title: "Depots",
+        icon: "Factory01Icon",
+        permission: PERMISSIONS.TENANT_FLEET_READ.key,
       },
       {
         href: "/admin/transporters",

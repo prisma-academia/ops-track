@@ -1,3 +1,7 @@
+/**
+ * @deprecated Use `calculateOrderPnlSummary` and `lib/fleet/loss-attribution` instead.
+ * Kept for backward compatibility only.
+ */
 import { prisma } from "@/lib/db/client";
 
 export type LegPnL = {

@@ -6,7 +6,7 @@ export default function CustomersLoading() {
   return (
     <div className="space-y-6">
       <DataTableToolbar
-        title="Customers"
+        title="B2B Clients"
         description="B2B and corporate client accounts."
         action={<Skeleton className="h-9 w-28 rounded-md" />}
       />

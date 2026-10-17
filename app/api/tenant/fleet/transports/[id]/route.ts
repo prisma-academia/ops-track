@@ -10,6 +10,8 @@ import { assertOrderLinkCapacity, asOrderLookupClient } from "@/lib/fleet/transp
 import { PRODUCT_LOSS_TYPE_VALUES, isNotesRequiredForLossType } from "@/lib/fleet/loss-types";
 import { deliveryShortfall } from "@/lib/fleet/transport-volume";
 import { isCompleteTransportLoadLoss } from "@/lib/fleet/transport-loss";
+import { economicImpactForManualLossLog } from "@/lib/fleet/loss-attribution";
+import { parseTenantSettings } from "@/lib/tenant/settings";
 
 const UpdateTransportSchema = z.object({
   orderId: z.string().nullable().optional(),
@@ -210,6 +212,12 @@ export async function PATCH(
       ? Number(existing.netTransportFeePaid)
       : Math.max(0, baseRate - totalDeduction);
 
+    const tenantRecord = await prisma.tenant.findUnique({
+      where: { id: actor.tenantId },
+      select: { settingsJson: true },
+    });
+    const fleetSettings = parseTenantSettings(tenantRecord?.settingsJson).fleet;
+
     const transport = await prisma.transport.update({
       where: { id },
       data: {
@@ -230,6 +238,11 @@ export async function PATCH(
               lostQuantity: body.lossLog.lostQuantity,
               expensesIncurred: body.lossLog.expensesIncurred,
               comment: body.lossLog.comment ? body.lossLog.comment.replace(/[\u20A6]/g, "NGN ") : null,
+              economicImpact: economicImpactForManualLossLog(
+                body.lossLog.lossType,
+                fleetSettings
+              ),
+              source: "MANUAL_LOG",
             }
           }
         })

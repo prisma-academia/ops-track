@@ -71,7 +71,7 @@ export default async function CustomersPage() {
   return (
     <div>
       <DataTableToolbar 
-        title="Customers" 
+        title="B2B Clients" 
         action={
           <Link
             href="/admin/customers/create"

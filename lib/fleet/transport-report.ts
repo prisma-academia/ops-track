@@ -108,7 +108,8 @@ export function summarizeTransportFinances(transport: {
 
   const fleetTripExpense = fleetExpense + tripExpense;
   const transportExpense = expectedFee > 0 ? expectedFee : paidTransport;
-  const totalExpense = transportExpense + fleetTripExpense + lossDeduction;
+  // Recoverable transporter shortage / deductions are not company operating expense.
+  const totalExpense = transportExpense + fleetTripExpense;
 
   return {
     expectedFee,

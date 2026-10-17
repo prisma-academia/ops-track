@@ -14,7 +14,8 @@
     "db:studio": "prisma studio",
     "db:seed": "prisma db push && prisma db seed",
     "db:backup": "tsx scripts/backup-db.ts",
-    "cron:backup": "tsx scripts/cron-backup.ts"
+    "cron:backup": "tsx scripts/cron-backup.ts",
+    "test:fleet": "tsx --test lib/fleet/loss-attribution.test.ts lib/fleet/order-pnl-summary.test.ts lib/fleet/order-payables.test.ts lib/fleet/transport-deductions.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1047.0",

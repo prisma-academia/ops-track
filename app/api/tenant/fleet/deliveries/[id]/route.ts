@@ -5,7 +5,9 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { getAvailableVolume, recomputeTransportLoss } from "@/lib/fleet/transport-volume";
+import { deliveryShortfall, getAvailableVolume, recomputeTransportLoss } from "@/lib/fleet/transport-volume";
+import { resolveShortageParty } from "@/lib/fleet/loss-attribution";
+import { parseTenantSettings } from "@/lib/tenant/settings";
 
 const UpdateSaleSchema = z.object({
   litersReceived: z.number().min(0).optional().nullable(),
@@ -78,6 +80,39 @@ export async function PATCH(
             select: { id: true, status: true },
           })
         : null);
+
+    const nextReceived =
+      body.litersReceived !== undefined
+        ? body.litersReceived
+        : existing.litersReceived !== null
+          ? Number(existing.litersReceived)
+          : null;
+    const nextReturned = body.litersReturned ?? Number(existing.litersReturned);
+    const nextShortageDeducted = body.shortageDeducted ?? existing.shortageDeducted;
+    if (nextReceived !== null && nextShortageDeducted) {
+      const shortfall = deliveryShortfall({
+        litersDespatched: body.litersDespatched ?? existing.litersDespatched,
+        litersReceived: nextReceived,
+        litersReturned: nextReturned,
+        shortageDeducted: nextShortageDeducted,
+      });
+      if (shortfall > 0 && existing.transportId) {
+        const linked = await prisma.transport.findFirst({
+          where: { id: existing.transportId, tenantId: actor.tenantId },
+          include: {
+            order: { include: { supplierRecord: { select: { supplierType: true } } } },
+          },
+        });
+        const party = resolveShortageParty(linked?.order?.supplierRecord?.supplierType);
+        if (party === "UNCONFIGURED") {
+          throw new DomainError(
+            400,
+            "supplier_type_required",
+            "Set the supplier type (Local or Depot) on this order's supplier before charging a shortage."
+          );
+        }
+      }
+    }
 
     if (
       parentTransport?.status === "COMPLETED" ||
@@ -187,7 +222,12 @@ export async function PATCH(
 
     // Cross-model reconciliation: recompute derived loss for open transports only.
     if (Delivery.transportId) {
-      await recomputeTransportLoss(prisma, Delivery.transportId);
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: actor.tenantId },
+        select: { settingsJson: true },
+      });
+      const fleet = parseTenantSettings(tenant?.settingsJson).fleet;
+      await recomputeTransportLoss(prisma, Delivery.transportId, fleet);
     }
 
     // Sync with WaybillAllocation if it's a station delivery

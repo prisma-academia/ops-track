@@ -12,6 +12,8 @@ export type SupplierOrderRow = {
   reference: string | null;
   productType: string;
   litersOrdered: number;
+  supplierShortageLiters?: number;
+  billableLiters?: number;
   totalPayable: number;
   paymentPaid: number;
   balance: number;
@@ -32,9 +34,11 @@ function statusVariant(status: string) {
 export function SupplierOrdersTable({
   data,
   supplierId,
+  showLocalPayableColumns = false,
 }: {
   data: SupplierOrderRow[];
   supplierId: string;
+  showLocalPayableColumns?: boolean;
 }) {
   const columns = useMemo<ColumnDef<SupplierOrderRow>[]>(
     () => [
@@ -53,9 +57,25 @@ export function SupplierOrdersTable({
       },
       {
         accessorKey: "litersOrdered",
-        header: "Liters",
+        header: "Ordered (L)",
         cell: ({ row }) => row.original.litersOrdered.toLocaleString(),
       },
+      ...(showLocalPayableColumns
+        ? [
+            {
+              accessorKey: "supplierShortageLiters",
+              header: "Shortage credit (L)",
+              cell: ({ row }: { row: { original: SupplierOrderRow } }) =>
+                (row.original.supplierShortageLiters ?? 0).toLocaleString(),
+            } as ColumnDef<SupplierOrderRow>,
+            {
+              accessorKey: "billableLiters",
+              header: "Billable (L)",
+              cell: ({ row }: { row: { original: SupplierOrderRow } }) =>
+                (row.original.billableLiters ?? row.original.litersOrdered).toLocaleString(),
+            } as ColumnDef<SupplierOrderRow>,
+          ]
+        : []),
       {
         accessorKey: "totalPayable",
         header: "Total",
@@ -99,7 +119,7 @@ export function SupplierOrdersTable({
           ) : null,
       },
     ],
-    [supplierId],
+    [supplierId, showLocalPayableColumns],
   );
 
   return (

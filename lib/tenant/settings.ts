@@ -1,4 +1,12 @@
 import { z } from "zod";
+import {
+  DEFAULT_COMPANY_LOSS_TYPES,
+  fleetSettingsSchema,
+  type FleetSettings,
+} from "@/lib/fleet/fleet-settings";
+
+export type { FleetSettings };
+export { fleetSettingsSchema };
 
 /**
  * Typed schema for `Tenant.settingsJson` (PRD §5.8). Stored in the existing
@@ -57,6 +65,13 @@ export const tenantSettingsSchema = z.object({
   maintenanceMode: z.boolean().default(false),
   /** Custom message shown when maintenanceMode is true */
   maintenanceMessage: z.string().max(500).default("This workspace is temporarily unavailable. Please contact support."),
+  fleet: fleetSettingsSchema.default({
+    shortageDeductionBasis: "LANDED_COST",
+    companyLossTypes: [...DEFAULT_COMPANY_LOSS_TYPES],
+    defaultSupplierShortageParty: "TRANSPORTER",
+    requireSupplierTypeForOrders: false,
+    useAttributionPnL: false,
+  }),
 });
 
 
@@ -64,10 +79,19 @@ export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 
 /** Parse stored settings, applying defaults and never throwing. */
 export function parseTenantSettings(json: unknown): TenantSettings {
-  const result = tenantSettingsSchema.safeParse(
-    json && typeof json === "object" ? json : {},
-  );
+  const raw = json && typeof json === "object" ? (json as Record<string, unknown>) : {};
+  const withFleet = {
+    ...raw,
+    fleet: fleetSettingsSchema.safeParse(raw.fleet ?? {}).success
+      ? raw.fleet
+      : {},
+  };
+  const result = tenantSettingsSchema.safeParse(withFleet);
   if (result.success) return result.data;
   // Legacy / malformed: return schema defaults.
   return tenantSettingsSchema.parse({});
+}
+
+export function getFleetSettings(settings: TenantSettings): FleetSettings {
+  return settings.fleet;
 }

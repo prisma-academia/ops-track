@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
-import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
+import { requireTenantActor, assertTenantOwner, PERMISSIONS } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
@@ -84,6 +84,13 @@ export async function PATCH(request: Request) {
     const body = PatchBody.parse(await request.json());
     const meta = requestMeta(request);
 
+    if (body.settings?.fleet !== undefined) {
+      assertTenantOwner(
+        actor,
+        "Only the workspace owner can change fleet accounting settings."
+      );
+    }
+
     const before = await prisma.tenant.findUnique({
       where: { id: actor.tenantId },
     });
@@ -91,9 +98,18 @@ export async function PATCH(request: Request) {
 
     const current = parseTenantSettings(before.settingsJson);
     // Merge patch over current, then re-validate the full object.
+    const patch = body.settings ?? {};
     const merged = tenantSettingsSchema.parse({
       ...current,
-      ...(body.settings ?? {}),
+      ...patch,
+      ...(patch.fleet
+        ? {
+            fleet: {
+              ...current.fleet,
+              ...patch.fleet,
+            },
+          }
+        : {}),
     });
 
     const updated = await prisma.tenant.update({

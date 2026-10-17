@@ -9,6 +9,13 @@ import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Save, ChevronsUpDown } from "lucide-react";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
@@ -25,6 +32,7 @@ import nigerianLocations from "@/constant/nigerian-locations.json";
 
 const Schema = z.object({
   name: z.string().min(2, "Company name is required").max(100),
+  supplierType: z.enum(["LOCAL", "DEPOT"]),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   phone: z.string().optional().or(z.literal("")),
   address: z.string().optional().or(z.literal("")),
@@ -48,6 +56,7 @@ export function CreateSupplierForm() {
     resolver: zodResolver(Schema),
     defaultValues: {
       name: "",
+      supplierType: "DEPOT" as "LOCAL" | "DEPOT",
       email: "",
       phone: "",
       address: "",
@@ -123,6 +132,22 @@ export function CreateSupplierForm() {
                 className={formState.errors.name ? "border-destructive" : ""}
               />
               {formState.errors.name && <p className="text-xs text-destructive">{formState.errors.name.message as string}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Supplier type*</Label>
+              <Select
+                value={watch("supplierType")}
+                onValueChange={(v) => setValue("supplierType", v as "LOCAL" | "DEPOT")}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DEPOT">Depot (shortage → transporter)</SelectItem>
+                  <SelectItem value="LOCAL">Local (shortage → supplier credit)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

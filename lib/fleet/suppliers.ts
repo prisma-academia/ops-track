@@ -47,6 +47,10 @@ export function formatSupplierRow<
     ...rest,
     outstandingBalance,
     depositBalance: supplier.depositBalance.toNumber(),
+    supplierType:
+      "supplierType" in supplier && supplier.supplierType != null
+        ? supplier.supplierType
+        : null,
   };
 }
 

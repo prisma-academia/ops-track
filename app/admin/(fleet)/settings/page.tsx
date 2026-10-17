@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
@@ -14,6 +14,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { POPULAR_CURRENCIES, POPULAR_TIMEZONES, POPULAR_LOCALES } from "@/components/ui/settings-data";
+import { Suspense } from "react";
+import { SettingsPageTabs } from "./settings-page-tabs";
+import { FleetSettingsSection } from "./fleet-settings-section";
 
 function textOrFallback(value: string | null | undefined) {
   const trimmed = value?.trim();
@@ -35,8 +38,17 @@ function InfoField({
   );
 }
 
-export default async function TenantSettingsProfilePage() {
+export default async function TenantSettingsProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_SETTINGS_READ.key);
+  const canManageFleetAccounting = actor.isOwner;
+  if (tab === "fleet" && !canManageFleetAccounting) {
+    redirect("/admin/settings");
+  }
   const tenant = await prisma.tenant.findUnique({
     where: { id: actor.tenantId },
   });
@@ -69,56 +81,55 @@ export default async function TenantSettingsProfilePage() {
     .filter(Boolean)
     .join(", ");
 
-  return (
-    <div className="w-full pb-10">
-      <section className="bg-background border rounded-xl overflow-hidden mb-6 shadow-sm">
-        <AspectRatio ratio={5 / 1} className="bg-stone-200 dark:bg-stone-800">
-          {backgroundUrl ? (
-            <img
-              src={backgroundUrl}
-              className="h-full w-full object-cover"
-              alt="Profile Background"
-            />
-          ) : (
-            <div className="h-full w-full bg-slate-800" />
-          )}
-        </AspectRatio>
-        <div className="relative w-full flex flex-col items-center gap-4 p-6 md:flex-row md:items-end md:-mt-12">
-          <Avatar className="size-32 border-4 border-background shadow-md">
-            <AvatarImage
-              src={logoUrl || ""}
-              alt={tenant.name}
-              className="object-cover bg-white"
-            />
-            <AvatarFallback className="text-3xl bg-primary/10 text-primary">
-              {tenant.name.substring(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          
-          <div className="flex-1 text-center md:text-start md:pb-2">
-            <h1 className="text-2xl font-bold line-clamp-1">{tenant.name}</h1>
-            <p className="text-muted-foreground line-clamp-1 flex items-center justify-center md:justify-start gap-1">
-              <MapPin className="size-3.5" />
-              {location || "No location set"}
-            </p>
-          </div>
-          
-          <div className="md:pb-2">
-            <Link
-              href="/admin/settings/edit"
-              className={cn(
-                buttonVariants({ variant: "outline" }),
-                "gap-2"
-              )}
-            >
-              <UserPen className="size-4" />
-              Edit Settings
-            </Link>
-          </div>
-        </div>
-      </section>
+  const profileHeader = (
+    <>
+      <AspectRatio ratio={5 / 1} className="bg-stone-200 dark:bg-stone-800">
+        {backgroundUrl ? (
+          <img
+            src={backgroundUrl}
+            className="h-full w-full object-cover"
+            alt="Profile Background"
+          />
+        ) : (
+          <div className="h-full w-full bg-slate-800" />
+        )}
+      </AspectRatio>
+      <div className="relative flex w-full flex-col items-center gap-4 p-6 md:-mt-12 md:flex-row md:items-end">
+        <Avatar className="size-32 border-4 border-background shadow-md">
+          <AvatarImage
+            src={logoUrl || ""}
+            alt={tenant.name}
+            className="object-cover bg-white"
+          />
+          <AvatarFallback className="bg-primary/10 text-3xl text-primary">
+            {tenant.name.substring(0, 2).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="flex-1 text-center md:pb-2 md:text-start">
+          <h1 className="line-clamp-1 text-2xl font-bold">{tenant.name}</h1>
+          <p className="flex items-center justify-center gap-1 text-muted-foreground line-clamp-1 md:justify-start">
+            <MapPin className="size-3.5" />
+            {location || "No location set"}
+          </p>
+        </div>
+
+        <div className="md:pb-2">
+          <Link
+            href="/admin/settings/edit"
+            className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
+          >
+            <UserPen className="size-4" />
+            Edit Settings
+          </Link>
+        </div>
+      </div>
+    </>
+  );
+
+  const generalProfile = (
+    <>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-1 space-y-6">
           <Card>
             <CardHeader>
@@ -275,6 +286,31 @@ export default async function TenantSettingsProfilePage() {
           </Card>
         </div>
       </div>
+    </>
+  );
+
+  return (
+    <div className="w-full pb-10">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          {canManageFleetAccounting
+            ? "Company profile, branding, and fleet accounting rules (owner only)."
+            : "Company profile and branding."}
+        </p>
+      </div>
+      <Suspense fallback={<div className="text-sm text-muted-foreground">Loading settings…</div>}>
+        <SettingsPageTabs
+          header={profileHeader}
+          general={generalProfile}
+          showFleetTab={canManageFleetAccounting}
+          fleet={
+            canManageFleetAccounting ? (
+              <FleetSettingsSection initialFleet={settings.fleet} />
+            ) : null
+          }
+        />
+      </Suspense>
     </div>
   );
 }

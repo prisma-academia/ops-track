@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
-import { handleError } from "@/lib/api/errors";
+import { handleError, DomainError } from "@/lib/api/errors";
+import { parseTenantSettings } from "@/lib/tenant/settings";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta } from "@/lib/api/pagination";
 import { upsertSupplierByName, serializeOrderPayables } from "@/lib/fleet/suppliers";
@@ -68,6 +69,12 @@ export async function POST(request: Request) {
     const meta = requestMeta(request);
 
     const order = await prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.findUnique({
+        where: { id: actor.tenantId },
+        select: { settingsJson: true },
+      });
+      const fleet = parseTenantSettings(tenant?.settingsJson).fleet;
+
       let supplierId = body.supplierId ?? null;
       let supplierName = body.supplier ?? null;
       if (!supplierId && supplierName) {
@@ -78,7 +85,24 @@ export async function POST(request: Request) {
         const supplier = await tx.supplier.findFirst({
           where: { id: supplierId, tenantId: actor.tenantId },
         });
-        if (supplier) supplierName = supplier.name;
+        if (!supplier) {
+          throw new DomainError(404, "not_found", "Supplier not found.");
+        }
+        supplierName = supplier.name;
+      }
+
+      if (supplierId) {
+        const supplier = await tx.supplier.findFirst({
+          where: { id: supplierId, tenantId: actor.tenantId },
+          select: { supplierType: true },
+        });
+        if (fleet.requireSupplierTypeForOrders && !supplier?.supplierType) {
+          throw new DomainError(
+            400,
+            "supplier_type_required",
+            "Set the supplier type (Local or Depot) before creating orders for this supplier."
+          );
+        }
       }
 
       return tx.order.create({

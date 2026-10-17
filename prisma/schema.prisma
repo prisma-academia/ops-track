@@ -1345,11 +1345,30 @@ model WaybillDipping {
   @@map("waybill_dippings")
 }
 
+enum SupplierType {
+  LOCAL
+  DEPOT
+}
+
+enum LossEconomicImpact {
+  COMPANY_PNL
+  TRANSPORTER_RECOVERY
+  SUPPLIER_CREDIT
+  INFORMATIONAL
+}
+
+enum LossLogSource {
+  MANUAL_LOG
+  DELIVERY_VARIANCE
+  SYSTEM_RECOMPUTE
+}
+
 model Supplier {
-  id                  String   @id @default(uuid())
+  id                  String        @id @default(uuid())
   tenantId            String
-  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant              Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name                String
+  supplierType        SupplierType?
   email               String?
   phone               String?
   address             String?
@@ -1572,6 +1591,7 @@ model Order {
   sourceDepot         String?
   pricePerLitre       Decimal     @default(0.00) @db.Decimal(12, 2)
   loadingCostPerLitre Decimal     @default(0.00) @db.Decimal(12, 2)
+  supplierShortageLiters Decimal  @default(0.00) @db.Decimal(12, 2)
   paymentPaid         Decimal     @default(0.00) @db.Decimal(12, 2)
   paymentStatus       SaleStatus  @default(UNPAID)
   status              OrderStatus @default(PENDING)
@@ -1656,6 +1676,8 @@ model TransportLossLog {
   lostQuantity     Decimal  @db.Decimal(12, 2)
   expensesIncurred Decimal  @db.Decimal(12, 2)
   comment          String?  @db.Text
+  economicImpact   LossEconomicImpact?
+  source           LossLogSource?
 
   createdAt DateTime @default(now())
 

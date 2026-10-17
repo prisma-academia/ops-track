@@ -5,6 +5,10 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { parseTenantSettings } from "@/lib/tenant/settings";
+import { resolveShortageParty } from "@/lib/fleet/loss-attribution";
+import { recomputeTransportLoss } from "@/lib/fleet/transport-volume";
+import { syncOrderSupplierShortage } from "@/lib/fleet/supplier-shortage";
 
 const DeductShortageSchema = z.object({
   variance: z.number().min(0),
@@ -25,36 +29,85 @@ export async function POST(
 
     const Delivery = await prisma.delivery.findFirst({
       where: { id, tenantId: actor.tenantId },
-      include: { transport: true }
+      include: {
+        transport: {
+          include: {
+            order: {
+              include: { supplierRecord: { select: { supplierType: true } } },
+            },
+          },
+        },
+      },
     });
 
     if (!Delivery) throw new DomainError(404, "not_found", "Delivery not found.");
-    if (!Delivery.transport) throw new DomainError(400, "invalid_state", "This Delivery is not linked to a transport.");
+    if (!Delivery.transport) {
+      throw new DomainError(400, "invalid_state", "This Delivery is not linked to a transport.");
+    }
 
     const transport = Delivery.transport;
+    const supplierType = transport.order?.supplierRecord?.supplierType ?? null;
+    const party = resolveShortageParty(supplierType);
 
-    // Add this new deduction to the existing maintenance/deduction fields or recalculate totalDeduction directly.
-    // For manual shortage deduction, we increase the totalDeduction and decrease netTransportFeePaid.
-    const newTotalDeduction = Number(transport.totalDeduction) + body.totalDeduction;
-    const netTransportFeePaid = Math.max(0, Number(transport.netTransportFeePaid) - body.totalDeduction);
+    if (party === "UNCONFIGURED") {
+      throw new DomainError(
+        400,
+        "supplier_type_required",
+        "Set the supplier type (Local or Depot) before applying shortage deductions."
+      );
+    }
 
-    const updatedTransport = await prisma.transport.update({
-      where: { id: transport.id },
-      data: {
-        totalDeduction: newTotalDeduction,
-        netTransportFeePaid: netTransportFeePaid,
-        // Optional: you can log this in lossLogs as well
-        lossLogs: {
-          create: {
-            tenantId: actor.tenantId,
-            lossType: "SHORTAGE",
-            lostQuantity: body.variance,
-            expensesIncurred: body.totalDeduction,
-            comment: `Manual shortage deduction from Delivery ${Delivery.id}`
-          }
-        }
-      }
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: actor.tenantId },
+      select: { settingsJson: true },
     });
+    const settings = parseTenantSettings(tenant?.settingsJson);
+    const fleet = settings.fleet;
+
+    if (party === "SUPPLIER") {
+      if (!transport.orderId) {
+        throw new DomainError(400, "invalid_state", "Delivery is not linked to a supplier order.");
+      }
+      await prisma.transportLossLog.create({
+        data: {
+          tenantId: actor.tenantId,
+          transportId: transport.id,
+          lossType: "SHORTAGE",
+          lostQuantity: body.variance,
+          expensesIncurred: 0,
+          economicImpact: "SUPPLIER_CREDIT",
+          source: "DELIVERY_VARIANCE",
+          comment: `Supplier credit from delivery ${Delivery.id}`,
+        },
+      });
+      await syncOrderSupplierShortage(prisma, transport.orderId);
+    } else {
+      const newTotalDeduction = Number(transport.totalDeduction) + body.totalDeduction;
+      const netTransportFeePaid = Math.max(
+        0,
+        Number(transport.netTransportFeePaid) - body.totalDeduction
+      );
+
+      await prisma.transport.update({
+        where: { id: transport.id },
+        data: {
+          totalDeduction: newTotalDeduction,
+          netTransportFeePaid,
+          lossLogs: {
+            create: {
+              tenantId: actor.tenantId,
+              lossType: "SHORTAGE",
+              lostQuantity: body.variance,
+              expensesIncurred: body.totalDeduction,
+              economicImpact: "TRANSPORTER_RECOVERY",
+              source: "DELIVERY_VARIANCE",
+              comment: `Manual shortage deduction from Delivery ${Delivery.id}`,
+            },
+          },
+        },
+      });
+      await recomputeTransportLoss(prisma, transport.id, fleet);
+    }
 
     await audit({
       module: "FLEET",
@@ -65,12 +118,12 @@ export async function POST(
       targetType: "Delivery",
       targetId: Delivery.id,
       before: {} as object,
-      after: { deductionAmount: body.totalDeduction } as object,
+      after: { deductionAmount: body.totalDeduction, party } as object,
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
 
-    return ok({ success: true, transport: updatedTransport });
+    return ok({ success: true, party });
   } catch (e) {
     return handleError(e);
   }

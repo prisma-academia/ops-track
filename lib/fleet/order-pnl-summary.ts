@@ -1,3 +1,11 @@
+import type { FleetSettings } from "@/lib/fleet/fleet-settings";
+import { defaultFleetSettings } from "@/lib/fleet/fleet-settings";
+import {
+  classifyLossLogEconomicImpact,
+  landedCostPerLiter,
+  sumCompanyLossAmount,
+} from "@/lib/fleet/loss-attribution";
+
 type Numeric = number | string | { toString(): string } | null | undefined;
 
 function toNum(value: Numeric): number {
@@ -41,6 +49,8 @@ export type OrderPnlLossLog = {
   lossType: string;
   lostQuantity: Numeric;
   expensesIncurred: Numeric;
+  economicImpact?: string | null;
+  source?: string | null;
   comment?: string | null;
   createdAt?: Date | string;
 };
@@ -66,8 +76,15 @@ export type OrderPnlOrder = {
   litersOrdered: Numeric;
   pricePerLitre: Numeric;
   loadingCostPerLitre: Numeric;
+  supplierShortageLiters?: Numeric;
+  supplierRecord?: { supplierType?: string | null } | null;
   createdAt: Date | string;
   transports: OrderPnlTransport[];
+};
+
+export type OrderPnlOptions = {
+  fleet?: FleetSettings;
+  useAttributionPnL?: boolean;
 };
 
 export type OrderPnlDeliveryRow = {
@@ -140,6 +157,7 @@ export type OrderPnlSummary = {
   amountPaid: number;
   debtRemaining: number;
   pnl: number;
+  inventoryAtCost?: number;
   truckIds: string[];
   truckLabels: string[];
 };
@@ -179,10 +197,21 @@ export function aggregateDeliveryPnlRows(rows: OrderPnlDeliveryRow[]) {
  * Logged transport loss (incidents on the transport detail page) is shown
  * separately and is not subtracted again from total cost.
  */
-export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
+export function calculateOrderPnlSummary(
+  order: OrderPnlOrder,
+  options?: OrderPnlOptions
+): OrderPnlResult {
+  const fleet = options?.fleet ?? defaultFleetSettings();
+  const useAttributionPnL = options?.useAttributionPnL ?? fleet.useAttributionPnL;
+
   const litersOrdered = toNum(order.litersOrdered);
   const pricePerLitre = toNum(order.pricePerLitre);
   const loadingCostPerLitre = toNum(order.loadingCostPerLitre);
+  const orderRates = {
+    pricePerLitre,
+    loadingCostPerLitre,
+    supplierShortageLiters: toNum(order.supplierShortageLiters),
+  };
   const totalLoadingCost = loadingCostPerLitre * litersOrdered;
   const purchaseCost = litersOrdered * pricePerLitre;
   const orderCost = purchaseCost + totalLoadingCost;
@@ -305,7 +334,11 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
       totalIncidentLiters * loadingCostPerLitre +
       incidentLossExpenses;
 
-    const lossDeduction = totalIncidentAmount;
+    const companyLossOnTransport = useAttributionPnL
+      ? sumCompanyLossAmount(transportIncidentLogs, orderRates, fleet)
+      : totalIncidentAmount;
+
+    const lossDeduction = useAttributionPnL ? companyLossOnTransport : totalIncidentAmount;
 
     const transportDepotToPrimaryCost = depotToPrimaryCost;
     const transportTotalCost = depotToPrimaryCost + allocatedDeliveryTransport;
@@ -313,7 +346,7 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
     totalFleetExpenses += fleetExpenses;
     totalLossDeduction += lossDeduction;
     totalOrderLossLiters += totalIncidentLiters;
-    totalOrderLossAmount += totalIncidentAmount;
+    totalOrderLossAmount += useAttributionPnL ? companyLossOnTransport : totalIncidentAmount;
 
     totalDepotToPrimaryCost += transportDepotToPrimaryCost;
     totalDeliveryTransportCost += allocatedDeliveryTransport;
@@ -327,6 +360,8 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
       lossType: log.lossType,
       lostQuantity: toNum(log.lostQuantity),
       expensesIncurred: toNum(log.expensesIncurred),
+      economicImpact: log.economicImpact ?? classifyLossLogEconomicImpact(log, fleet),
+      source: log.source ?? null,
       comment: log.comment ?? null,
       createdAt: log.createdAt ? new Date(log.createdAt).toISOString() : undefined,
     }));
@@ -353,19 +388,29 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
     };
   });
 
-  const totalCost =
-    purchaseCost +
-    totalLoadingCost +
-    totalDepotToPrimaryCost +
-    totalDeliveryTransportCost +
-    totalFleetExpenses;
+  const soldDeliveryCost = transportsData.reduce(
+    (sum, transport) =>
+      sum + transport.deliveries.reduce((dSum, delivery) => dSum + delivery.totalCost, 0),
+    0
+  );
+
+  const totalCost = useAttributionPnL
+    ? soldDeliveryCost + totalLossDeduction
+    : purchaseCost +
+      totalLoadingCost +
+      totalDepotToPrimaryCost +
+      totalDeliveryTransportCost +
+      totalFleetExpenses;
   const pnl = amountSoldRev - totalCost;
+  const qtyBalance = litersOrdered - totalAmountSoldQty;
+  const inventoryAtCost = useAttributionPnL
+    ? qtyBalance * landedCostPerLiter(orderRates)
+    : undefined;
   const debtRemaining = transportsData.reduce(
     (sum, transport) =>
       sum + transport.deliveries.reduce((dSum, delivery) => dSum + delivery.debtRemaining, 0),
     0
   );
-  const qtyBalance = litersOrdered - totalAmountSoldQty;
   const effectiveLossLiters = totalOrderLossLiters;
 
   const summary: OrderPnlSummary = {
@@ -393,6 +438,7 @@ export function calculateOrderPnlSummary(order: OrderPnlOrder): OrderPnlResult {
     amountPaid,
     debtRemaining,
     pnl,
+    inventoryAtCost,
     truckIds: Array.from(truckIds),
     truckLabels: Array.from(truckLabels),
   };

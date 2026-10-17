@@ -5,6 +5,10 @@ import type {
   OrderPnlTransportRow,
 } from "@/lib/fleet/order-pnl-summary";
 import { getLossTypeLabel } from "@/lib/fleet/loss-types";
+import type { FleetSettings } from "@/lib/fleet/fleet-settings";
+import { defaultFleetSettings } from "@/lib/fleet/fleet-settings";
+import { companyLossAmountFromLog, toNum } from "@/lib/fleet/loss-attribution";
+import { isCompanyPnlLossLog } from "@/lib/fleet/pnl-options";
 
 type SummaryContext = Pick<
   OrderPnlSummary,
@@ -53,8 +57,15 @@ export function toFleetPnlDetailRow(
 
 export function buildFleetPnlDetailRows(
   summary: SummaryContext,
-  transports: OrderPnlTransportRow[]
+  transports: OrderPnlTransportRow[],
+  fleet: FleetSettings = defaultFleetSettings()
 ): FleetPnlTableRow[] {
+  const useAttribution = fleet.useAttributionPnL;
+  const orderRates = {
+    pricePerLitre: summary.priceBought,
+    loadingCostPerLitre: summary.loadingCostPerLitre,
+  };
+
   return transports.flatMap((transport): FleetPnlTableRow[] => {
     const truckLabels =
       transport.truckNo && transport.truckNo !== "Unknown" ? [transport.truckNo] : [];
@@ -64,12 +75,16 @@ export function buildFleetPnlDetailRows(
       toFleetPnlDetailRow(delivery, summary, transport)
     );
 
-    const lossRows: FleetPnlTableRow[] = (transport.incidentLossLogs ?? []).map((log) => {
-      const qty = Number(log.lostQuantity) || 0;
-      const expenses = Number(log.expensesIncurred) || 0;
+    const lossRows: FleetPnlTableRow[] = (transport.incidentLossLogs ?? [])
+      .filter((log) => !useAttribution || isCompanyPnlLossLog(log, fleet))
+      .map((log) => {
+      const qty = toNum(log.lostQuantity);
+      const expenses = toNum(log.expensesIncurred);
+      const tCost = useAttribution
+        ? companyLossAmountFromLog(log, orderRates)
+        : qty * summary.priceBought + qty * summary.loadingCostPerLitre + expenses;
       const pCost = qty * summary.priceBought;
       const lCost = qty * summary.loadingCostPerLitre;
-      const tCost = pCost + lCost + expenses;
       const lossTypeLabel = getLossTypeLabel(log.lossType);
 
       return {
@@ -103,7 +118,11 @@ export function buildFleetPnlDetailRows(
       };
     });
 
-    if (lossRows.length === 0 && (transport.incidentLossLiters ?? 0) > 0) {
+    if (
+      !useAttribution &&
+      lossRows.length === 0 &&
+      (transport.incidentLossLiters ?? 0) > 0
+    ) {
       const qty = transport.incidentLossLiters;
       const pCost = qty * summary.priceBought;
       const lCost = qty * summary.loadingCostPerLitre;

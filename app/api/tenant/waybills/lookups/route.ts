@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { type, name } = body;
+    const { type, name, supplierType } = body;
 
     if (!name || typeof name !== "string") {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -49,10 +49,20 @@ export async function POST(req: Request) {
     }
 
     if (type === "supplier") {
-      const created = await prisma.supplier.upsert({
+      const resolvedSupplierType =
+        supplierType === "LOCAL" || supplierType === "DEPOT" ? supplierType : "DEPOT";
+      const existing = await prisma.supplier.findUnique({
         where: { tenantId_name: { tenantId: actor.tenantId, name: normalizedName } },
-        update: {},
-        create: { tenantId: actor.tenantId, name: normalizedName },
+      });
+      if (existing) {
+        const updated = await prisma.supplier.update({
+          where: { id: existing.id },
+          data: { supplierType: resolvedSupplierType },
+        });
+        return NextResponse.json({ data: updated });
+      }
+      const created = await prisma.supplier.create({
+        data: { tenantId: actor.tenantId, name: normalizedName, supplierType: resolvedSupplierType },
       });
       return NextResponse.json({ data: created });
     } else if (type === "depot") {

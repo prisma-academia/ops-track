@@ -4,7 +4,7 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { SuppliersTable, type SupplierRow } from "./table";
-import { formatSupplierRow } from "@/lib/fleet/suppliers";
+import { mapSupplierListRow, supplierMetricsOrderInclude } from "@/lib/fleet/supplier-list";
 
 export default async function SuppliersPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_SUPPLIERS_READ.key);
@@ -12,41 +12,39 @@ export default async function SuppliersPage() {
   const take = 25;
   const skip = 0;
 
-  const [totalCount, suppliers] = await Promise.all([
+  const [totalCount, suppliers, tenant] = await Promise.all([
     prisma.supplier.count({ where: { tenantId: actor.tenantId } }),
     prisma.supplier.findMany({
       where: { tenantId: actor.tenantId },
       orderBy: { name: "asc" },
       take,
       skip,
-      include: {
-        orders: {
-          select: {
-            pricePerLitre: true,
-            loadingCostPerLitre: true,
-            litersOrdered: true,
-            paymentPaid: true,
-          },
-        },
-      },
+      include: supplierMetricsOrderInclude,
+    }),
+    prisma.tenant.findUnique({
+      where: { id: actor.tenantId },
+      select: { settingsJson: true },
     }),
   ]);
 
-  const rows: SupplierRow[] = suppliers.map((s) => {
-    const formatted = formatSupplierRow(s);
-    return {
-      id: s.id,
-      name: s.name,
-      email: s.email,
-      phone: s.phone,
-      contactPerson: s.contactPerson,
-      contactPhone: s.contactPhone,
-      contactPosition: s.contactPosition,
-      outstandingBalance: formatted.outstandingBalance,
-      depositBalance: formatted.depositBalance,
-      createdAt: s.createdAt.toISOString(),
-    };
-  });
+  const rows: SupplierRow[] = await Promise.all(
+    suppliers.map(async (s) => {
+      const row = await mapSupplierListRow(s, actor.tenantId, tenant?.settingsJson);
+      return {
+        ...row,
+        name: s.name,
+        email: s.email,
+        phone: s.phone,
+        contactPerson: s.contactPerson,
+        contactPhone: s.contactPhone,
+        contactPosition: s.contactPosition,
+        outstandingBalance: Number(row.outstandingBalance),
+        depositBalance: Number(row.depositBalance),
+        supplierType: row.supplierType as SupplierRow["supplierType"],
+        createdAt: s.createdAt.toISOString(),
+      };
+    })
+  );
 
   const totalPages = Math.ceil(totalCount / take);
   const initialMeta = {

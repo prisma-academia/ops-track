@@ -65,6 +65,7 @@ export type SaleRow = {
   transportId?: string | null;
   transportStatus?: string | null;
   transportRate?: number;
+  shortageParty?: "TRANSPORTER" | "SUPPLIER" | "UNCONFIGURED";
 };
 
 type ShortageReconciliationMode = "IN_TRUCK" | "SHORTAGE_DEDUCT";
@@ -131,6 +132,13 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
     const isShort = variance !== null && variance > 0;
     const finalLitersReturned = isShort && shortageMode === "IN_TRUCK" ? variance : 0;
     const finalShortageDeducted = isShort ? shortageMode === "SHORTAGE_DEDUCT" : true;
+
+    if (isShort && finalShortageDeducted && row.shortageParty === "UNCONFIGURED") {
+      setReceiveError(
+        "Configure the supplier type (Local or Depot) before marking this delivery shortage as deductible."
+      );
+      return;
+    }
 
     const res = await apiPatch(`/api/tenant/fleet/deliveries/${row.id}`, {
       litersReceived: Number(litersReceived),
@@ -363,19 +371,36 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
                 </div>
 
                 {shortageMode === "SHORTAGE_DEDUCT" ? (
-                  <div className="p-3 rounded-lg border border-rose-500/20 bg-rose-500/10 text-xs flex items-center justify-between text-rose-950 dark:text-rose-200">
-                    <div className="flex items-center gap-2 font-medium">
-                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                      <span>Driver Transport Deduction:</span>
-                    </div>
-                    {(row.transportRate || 0) > 0 ? (
-                      <span className="font-mono font-bold text-rose-700 dark:text-rose-400 text-sm">
-                        -₦{((variance || 0) * (row.transportRate || 0)).toLocaleString()}
-                      </span>
+                  <div className="p-3 rounded-lg border border-rose-500/20 bg-rose-500/10 text-xs text-rose-950 dark:text-rose-200 space-y-2">
+                    {row.shortageParty === "UNCONFIGURED" ? (
+                      <p className="flex items-center gap-2 font-medium">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        Set the supplier type (Local or Depot) before charging this shortage.
+                      </p>
                     ) : (
-                      <span className="font-medium text-muted-foreground text-xs">
-                        ₦0 (No driver transport fee)
-                      </span>
+                      <div className="flex items-center justify-between gap-2 font-medium">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                          <span>
+                            {row.shortageParty === "SUPPLIER"
+                              ? "Supplier order credit:"
+                              : "Transporter deduction:"}
+                          </span>
+                        </div>
+                        {row.shortageParty === "TRANSPORTER" && (row.transportRate || 0) > 0 ? (
+                          <span className="font-mono font-bold text-rose-700 dark:text-rose-400 text-sm">
+                            -₦{((variance || 0) * (row.transportRate || 0)).toLocaleString()}
+                          </span>
+                        ) : row.shortageParty === "SUPPLIER" ? (
+                          <span className="font-mono font-bold text-rose-700 dark:text-rose-400 text-sm">
+                            {(variance || 0).toLocaleString()} {unit} credited
+                          </span>
+                        ) : (
+                          <span className="font-medium text-muted-foreground text-xs">
+                            ₦0 (No transport rate)
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 ) : (

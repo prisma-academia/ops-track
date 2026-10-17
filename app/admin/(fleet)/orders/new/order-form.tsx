@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { FleetSettings } from "@/lib/fleet/fleet-settings";
 
 const toUppercaseOrNull = (val: string | null | undefined) => {
   if (val == null) return null;
@@ -50,9 +51,43 @@ const Schema = z.object({
 });
 
 type Values = z.infer<typeof Schema>;
-type LookupItem = { id: string; name: string };
+type LookupItem = { id: string; name: string; supplierType?: "LOCAL" | "DEPOT" | null };
 
-export function CreateOrderForm() {
+const SHORTAGE_BASIS_LABELS: Record<FleetSettings["shortageDeductionBasis"], string> = {
+  LANDED_COST: "Landed cost",
+  TRANSPORT_RATE: "Transport rate",
+  SELLING_PRICE: "Selling price",
+};
+
+function SupplierShortageRules({ fleetSettings }: { fleetSettings: FleetSettings }) {
+  return (
+    <div className="rounded-md border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
+      <p className="font-medium text-foreground">How supplier type affects shortages</p>
+      <ul className="list-disc pl-4 space-y-1">
+        <li>
+          <span className="font-medium text-foreground">Local</span> — delivery shortages are credited to the supplier.
+        </li>
+        <li>
+          <span className="font-medium text-foreground">Depot</span> — shortages are charged to the transporter.
+        </li>
+        {fleetSettings.requireSupplierTypeForOrders ? (
+          <li className="text-foreground">
+            Fleet setting: every supplier must have a type before you can create an order for them.
+          </li>
+        ) : null}
+        <li>
+          Depot suppliers: transporter shortage deductions use{" "}
+          <span className="font-medium text-foreground">
+            {SHORTAGE_BASIS_LABELS[fleetSettings.shortageDeductionBasis]}
+          </span>
+          .
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+export function CreateOrderForm({ fleetSettings }: { fleetSettings: FleetSettings }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   
@@ -67,7 +102,14 @@ export function CreateOrderForm() {
   // Modal State
   const [lookupDialog, setLookupDialog] = useState<{ type: "supplier" | "depot"; title: string } | null>(null);
   const [newLookupName, setNewLookupName] = useState("");
+  const [newSupplierType, setNewSupplierType] = useState<"LOCAL" | "DEPOT">("DEPOT");
+  const [lookupDialogError, setLookupDialogError] = useState<string | null>(null);
   const [isAddingLookup, setIsAddingLookup] = useState(false);
+
+  const [fixSupplierTypeOpen, setFixSupplierTypeOpen] = useState(false);
+  const [fixSupplierType, setFixSupplierType] = useState<"LOCAL" | "DEPOT">("DEPOT");
+  const [fixSupplierTypeError, setFixSupplierTypeError] = useState<string | null>(null);
+  const [isSavingSupplierType, setIsSavingSupplierType] = useState(false);
 
   const { handleSubmit, formState, setValue, watch, control } = useForm<Values>({
     resolver: zodResolver(Schema) as any,
@@ -97,7 +139,13 @@ export function CreateOrderForm() {
         const res = await fetch("/api/tenant/waybills/lookups");
         if (res.ok) {
           const data = await res.json();
-          setSuppliers((data.suppliers || []).map((s: LookupItem) => ({ ...s, name: s.name.toUpperCase() })));
+          setSuppliers(
+            (data.suppliers || []).map((s: LookupItem & { supplierType?: "LOCAL" | "DEPOT" | null }) => ({
+              id: s.id,
+              name: s.name.toUpperCase(),
+              supplierType: s.supplierType ?? null,
+            }))
+          );
           setDepots((data.depots || []).map((d: LookupItem) => ({ ...d, name: d.name.toUpperCase() })));
         }
       } catch (e) {
@@ -122,18 +170,34 @@ export function CreateOrderForm() {
 
   const handleAddLookup = async () => {
     if (!lookupDialog || !newLookupName.trim()) return;
+    if (lookupDialog.type === "supplier" && !newSupplierType) {
+      setLookupDialogError("Select Local or Depot for this supplier.");
+      return;
+    }
     setIsAddingLookup(true);
+    setLookupDialogError(null);
     try {
       const res = await fetch("/api/tenant/waybills/lookups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: lookupDialog.type, name: newLookupName.trim().toUpperCase() }),
+        body: JSON.stringify({
+          type: lookupDialog.type,
+          name: newLookupName.trim().toUpperCase(),
+          ...(lookupDialog.type === "supplier" ? { supplierType: newSupplierType } : {}),
+        }),
       });
+      const result = await res.json().catch(() => ({}));
       if (res.ok) {
-        const result = await res.json();
         const created = result.data;
         if (lookupDialog.type === "supplier") {
-          setSuppliers([...suppliers, { ...created, name: created.name.toUpperCase() }]);
+          setSuppliers([
+            ...suppliers,
+            {
+              id: created.id,
+              name: created.name.toUpperCase(),
+              supplierType: created.supplierType ?? newSupplierType,
+            },
+          ]);
           setValue("supplier", created.name.toUpperCase(), { shouldValidate: true });
         } else if (lookupDialog.type === "depot") {
           setDepots([...depots, { ...created, name: created.name.toUpperCase() }]);
@@ -141,12 +205,67 @@ export function CreateOrderForm() {
         }
         setLookupDialog(null);
         setNewLookupName("");
+        setNewSupplierType("DEPOT");
+      } else {
+        setLookupDialogError(result.error || "Could not save. Try again.");
       }
     } catch (e) {
       console.error(e);
+      setLookupDialogError("Could not save. Try again.");
     } finally {
       setIsAddingLookup(false);
     }
+  };
+
+  const selectedSupplier = suppliers.find(
+    (s) => watchSupplier && s.name.toUpperCase() === watchSupplier.toUpperCase()
+  );
+  const showUntypedSupplierWarning =
+    Boolean(watchSupplier) && (!selectedSupplier || !selectedSupplier.supplierType);
+
+  const handleSaveSupplierType = async () => {
+    if (!watchSupplier?.trim()) return;
+    setIsSavingSupplierType(true);
+    setFixSupplierTypeError(null);
+    try {
+      const res = await fetch("/api/tenant/waybills/lookups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "supplier",
+          name: watchSupplier.trim().toUpperCase(),
+          supplierType: fixSupplierType,
+        }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFixSupplierTypeError(result.error || "Could not update supplier type.");
+        return;
+      }
+      const updated = result.data;
+      setSuppliers((prev) => {
+        const idx = prev.findIndex((s) => s.id === updated.id);
+        const row = {
+          id: updated.id,
+          name: updated.name.toUpperCase(),
+          supplierType: updated.supplierType as "LOCAL" | "DEPOT",
+        };
+        if (idx === -1) return [...prev, row];
+        return prev.map((s, i) => (i === idx ? row : s));
+      });
+      setFixSupplierTypeOpen(false);
+    } catch {
+      setFixSupplierTypeError("Could not update supplier type.");
+    } finally {
+      setIsSavingSupplierType(false);
+    }
+  };
+
+  const openFixSupplierTypeModal = () => {
+    const current = selectedSupplier?.supplierType;
+    setFixSupplierType(current === "LOCAL" || current === "DEPOT" ? current : "DEPOT");
+    setFixSupplierTypeError(null);
+    setFixSupplierTypeOpen(true);
   };
 
   const onSubmit = handleSubmit(async (values) => {
@@ -218,6 +337,8 @@ export function CreateOrderForm() {
               className="w-full gap-2"
               onClick={() => {
                 setLookupDialog({ type, title: `Add New ${label}` });
+                setLookupDialogError(null);
+                setNewSupplierType("DEPOT");
                 setOpenState(false);
               }}
             >
@@ -332,6 +453,18 @@ export function CreateOrderForm() {
                       "Supplier",
                       openSupplierSelect,
                       setOpenSupplierSelect
+                    )}
+                    {showUntypedSupplierWarning && (
+                      <p className="text-xs text-amber-600 dark:text-amber-500">
+                        This supplier has no type set.{" "}
+                        <button
+                          type="button"
+                          className="font-medium underline underline-offset-2 hover:text-amber-700 dark:hover:text-amber-400"
+                          onClick={openFixSupplierTypeModal}
+                        >
+                          Set supplier type
+                        </button>
+                      </p>
                     )}
                   </div>
 
@@ -471,17 +604,27 @@ export function CreateOrderForm() {
       </form>
 
       {lookupDialog && (
-        <Dialog open={!!lookupDialog} onOpenChange={(open) => !open && setLookupDialog(null)}>
+        <Dialog
+          open={!!lookupDialog}
+          onOpenChange={(open) => {
+            if (!open) {
+              setLookupDialog(null);
+              setLookupDialogError(null);
+            }
+          }}
+        >
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>{lookupDialog.title}</DialogTitle>
               <DialogDescription>
-                Add a new {lookupDialog.type} to the system. This will be available for future orders.
+                {lookupDialog.type === "supplier"
+                  ? "Name and supplier type are required. Type controls who is charged for delivery shortages."
+                  : `Add a new depot. It will be available for future orders.`}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="lookupName">Name</Label>
+                <Label htmlFor="lookupName">Name*</Label>
                 <Input
                   id="lookupName"
                   value={newLookupName}
@@ -491,16 +634,97 @@ export function CreateOrderForm() {
                   autoFocus
                 />
               </div>
+              {lookupDialog.type === "supplier" && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Supplier type*</Label>
+                    <Select
+                      value={newSupplierType}
+                      onValueChange={(v) => setNewSupplierType(v as "LOCAL" | "DEPOT")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        <SelectItem value="DEPOT">Depot (shortage → transporter)</SelectItem>
+                        <SelectItem value="LOCAL">Local (shortage → supplier credit)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <SupplierShortageRules fleetSettings={fleetSettings} />
+                </>
+              )}
+              {lookupDialogError ? (
+                <p className="text-sm text-destructive">{lookupDialogError}</p>
+              ) : null}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setLookupDialog(null)}>Cancel</Button>
-              <Button type="button" onClick={handleAddLookup} disabled={isAddingLookup || !newLookupName.trim()}>
+              <Button
+                type="button"
+                onClick={handleAddLookup}
+                disabled={
+                  isAddingLookup ||
+                  !newLookupName.trim() ||
+                  (lookupDialog.type === "supplier" && !newSupplierType)
+                }
+              >
                 {isAddingLookup ? <SpinnerEllipsis /> : "Save"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
+
+      <Dialog
+        open={fixSupplierTypeOpen}
+        onOpenChange={(open) => {
+          setFixSupplierTypeOpen(open);
+          if (!open) setFixSupplierTypeError(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Set supplier type</DialogTitle>
+            <DialogDescription>
+              Choose how delivery shortages are attributed for this supplier on fleet orders and deliveries.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-2">
+              <Label>Supplier</Label>
+              <Input value={watchSupplier?.toUpperCase() ?? ""} readOnly className="uppercase bg-muted" />
+            </div>
+            <div className="space-y-2">
+              <Label>Supplier type*</Label>
+              <Select
+                value={fixSupplierType}
+                onValueChange={(v) => setFixSupplierType(v as "LOCAL" | "DEPOT")}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value="DEPOT">Depot (shortage → transporter)</SelectItem>
+                  <SelectItem value="LOCAL">Local (shortage → supplier credit)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <SupplierShortageRules fleetSettings={fleetSettings} />
+            {fixSupplierTypeError ? (
+              <p className="text-sm text-destructive">{fixSupplierTypeError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setFixSupplierTypeOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveSupplierType} disabled={isSavingSupplierType}>
+              {isSavingSupplierType ? <SpinnerEllipsis /> : "Save type"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

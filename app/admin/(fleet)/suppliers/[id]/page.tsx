@@ -53,20 +53,28 @@ export default async function SupplierDetailPage({
   const depositBalance = formatted.depositBalance;
   const outstandingBalance = formatted.outstandingBalance;
 
+  const isLocalSupplier = supplier.supplierType === "LOCAL";
+
   const orderRows: SupplierOrderRow[] = supplier.orders.map((o) => {
+    const litersOrdered = o.litersOrdered.toNumber();
+    const supplierShortageLiters = o.supplierShortageLiters?.toNumber() ?? 0;
+    const billableLiters = Math.max(0, litersOrdered - supplierShortageLiters);
     const totalPayable = orderTotalPayable(o);
     const paid = o.paymentPaid.toNumber();
     return {
       id: o.id,
       reference: o.reference,
       productType: o.productType,
-      litersOrdered: o.litersOrdered.toNumber(),
+      litersOrdered,
+      supplierShortageLiters: isLocalSupplier ? supplierShortageLiters : 0,
+      billableLiters: isLocalSupplier ? billableLiters : litersOrdered,
       totalPayable,
       paymentPaid: paid,
       balance: orderPaymentBalance({
         pricePerLitre: o.pricePerLitre,
         loadingCostPerLitre: o.loadingCostPerLitre,
         litersOrdered: o.litersOrdered,
+        supplierShortageLiters: o.supplierShortageLiters,
         paymentPaid: o.paymentPaid,
       }),
       paymentStatus: o.paymentStatus,
@@ -188,6 +196,7 @@ export default async function SupplierDetailPage({
                 contactPerson: supplier.contactPerson ?? "",
                 contactPhone: supplier.contactPhone ?? "",
                 contactPosition: supplier.contactPosition ?? "",
+                supplierType: supplier.supplierType,
               }}
             />
           </CardAction>
@@ -274,9 +283,16 @@ export default async function SupplierDetailPage({
           <h2 className="text-lg font-semibold text-foreground">Recent Orders</h2>
           <p className="text-sm text-muted-foreground">
             Procurement orders from {supplier.name} ({supplier.orders.length})
+            {isLocalSupplier
+              ? " — payable litres exclude delivery shortage credited to this supplier."
+              : null}
           </p>
         </div>
-        <SupplierOrdersTable data={orderRows} supplierId={supplier.id} />
+        <SupplierOrdersTable
+          data={orderRows}
+          supplierId={supplier.id}
+          showLocalPayableColumns={isLocalSupplier}
+        />
       </div>
     </div>
   );

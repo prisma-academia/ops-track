@@ -1,3 +1,6 @@
+import { defaultFleetSettings, type FleetSettings } from "@/lib/fleet/fleet-settings";
+import { computeTransporterFeeDeduction } from "@/lib/fleet/transport-deductions";
+import { syncOrderSupplierShortage } from "@/lib/fleet/supplier-shortage";
 
 /**
  * Single source of truth for transport tank volume and loss maths.
@@ -116,8 +119,38 @@ export async function getAvailableVolume(
  * - Pending deliveries (not yet received) are NOT counted as lost.
  * - Shortfalls flagged shortageDeducted=false are lost volume but not charged.
  */
-export async function recomputeTransportLoss(db: Db, transportId: string) {
-  const transport = await db.transport.findUnique({ where: { id: transportId } });
+
+function sellingPricePerLiter(deliveries: Array<{ amountPerLiter: unknown }>) {
+  for (const delivery of deliveries) {
+    const price = num(delivery.amountPerLiter);
+    if (price > 0) return price;
+  }
+  return 0;
+}
+
+export async function recomputeTransportLoss(
+  db: Db,
+  transportId: string,
+  fleetSettings?: FleetSettings
+) {
+  const transport = await db.transport.findUnique({
+    where: { id: transportId },
+    include: {
+      order: {
+        include: { supplierRecord: { select: { supplierType: true } } },
+      },
+      lossLogs: true,
+      deliveries: {
+        select: {
+          litersDespatched: true,
+          litersReceived: true,
+          litersReturned: true,
+          shortageDeducted: true,
+          amountPerLiter: true,
+        },
+      },
+    },
+  });
   if (!transport) return null;
   if (
     transport.status === "COMPLETED" ||
@@ -127,31 +160,38 @@ export async function recomputeTransportLoss(db: Db, transportId: string) {
     return transport;
   }
 
-  const deliveries = await db.delivery.findMany({
-    where: { transportId },
-    select: {
-      litersDespatched: true,
-      litersReceived: true,
-      litersReturned: true,
-      shortageDeducted: true,
-    },
+  const fleet = fleetSettings ?? defaultFleetSettings();
+  const deliveries = transport.deliveries;
+  const totalReceived = deliveries.reduce((s: number, d: VolumeDelivery) => s + num(d.litersReceived), 0);
+  const rate = num(transport.ratePerLiter);
+  const order = transport.order;
+  const orderRates = {
+    pricePerLitre: num(order?.pricePerLitre),
+    loadingCostPerLitre: num(order?.loadingCostPerLitre),
+    supplierShortageLiters: num(order?.supplierShortageLiters),
+  };
+
+  const { litersLost, totalDeduction } = computeTransporterFeeDeduction({
+    maintenanceCost: num(transport.maintenanceCost),
+    ratePerLiter: rate,
+    deliveries,
+    lossLogs: transport.lossLogs,
+    supplierType: order?.supplierRecord?.supplierType ?? null,
+    order: orderRates,
+    fleet,
+    sellingPrice: sellingPricePerLiter(deliveries),
   });
 
-  const loggedLost = await getLoggedLost(db, transportId);
-  const shortfallAll = deliveries.reduce((s: number, d: VolumeDelivery) => s + deliveryShortfall(d), 0);
-  const shortfallCharged = deliveries.reduce(
-    (s: number, d: VolumeDelivery) => s + (d.shortageDeducted === false ? 0 : deliveryShortfall(d)),
-    0
-  );
-  const totalReceived = deliveries.reduce((s: number, d: VolumeDelivery) => s + num(d.litersReceived), 0);
-
-  const rate = num(transport.ratePerLiter);
-  const litersLost = loggedLost + shortfallAll;
-  const totalDeduction = num(transport.maintenanceCost) + (loggedLost + shortfallCharged) * rate;
   const netTransportFeePaid = Math.max(0, rate * num(transport.litersCarried) - totalDeduction);
 
-  return db.transport.update({
+  const updated = await db.transport.update({
     where: { id: transportId },
     data: { litersDelivered: totalReceived, litersLost, totalDeduction, netTransportFeePaid },
   });
+
+  if (order?.id) {
+    await syncOrderSupplierShortage(db, order.id);
+  }
+
+  return updated;
 }

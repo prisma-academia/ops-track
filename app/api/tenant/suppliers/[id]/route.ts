@@ -5,10 +5,12 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
-import { formatSupplierRow, normalizeSupplierName } from "@/lib/fleet/suppliers";
+import { normalizeSupplierName } from "@/lib/fleet/suppliers";
+import { mapSupplierListRow, supplierMetricsOrderInclude } from "@/lib/fleet/supplier-list";
 
 const UpdateSupplierSchema = z.object({
   name: z.string().min(2).max(100).optional(),
+  supplierType: z.enum(["LOCAL", "DEPOT"]).optional().nullable(),
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().optional().or(z.literal("")),
   address: z.string().optional().or(z.literal("")),
@@ -20,17 +22,6 @@ const UpdateSupplierSchema = z.object({
   outstandingBalance: z.coerce.number().optional(),
 });
 
-const orderInclude = {
-  orders: {
-    select: {
-      pricePerLitre: true,
-      loadingCostPerLitre: true,
-      litersOrdered: true,
-      paymentPaid: true,
-    },
-  },
-};
-
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -41,14 +32,19 @@ export async function GET(
 
     const supplier = await prisma.supplier.findFirst({
       where: { id, tenantId: actor.tenantId },
-      include: orderInclude,
+      include: supplierMetricsOrderInclude,
     });
 
     if (!supplier) {
       throw new DomainError(404, "not_found", "Supplier not found.");
     }
 
-    return ok(formatSupplierRow(supplier));
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: actor.tenantId },
+      select: { settingsJson: true },
+    });
+
+    return ok(await mapSupplierListRow(supplier, actor.tenantId, tenant?.settingsJson));
   } catch (e) {
     return handleError(e);
   }
@@ -76,6 +72,7 @@ export async function PATCH(
       where: { id },
       data: {
         name: body.name ? normalizeSupplierName(body.name) : undefined,
+        supplierType: body.supplierType !== undefined ? body.supplierType : undefined,
         email: body.email !== undefined ? body.email || null : undefined,
         phone: body.phone !== undefined ? body.phone || null : undefined,
         address: body.address !== undefined ? body.address || null : undefined,

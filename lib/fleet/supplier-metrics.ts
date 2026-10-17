@@ -1,4 +1,5 @@
 import { calculateOrderPnlSummary, type OrderPnlOrder } from "@/lib/fleet/order-pnl-summary";
+import { orderTotalPayable } from "@/lib/fleet/order-payables";
 import { getOrderPnlOptions } from "@/lib/fleet/pnl-context";
 import type { TenantSettings } from "@/lib/tenant/settings";
 
@@ -45,10 +46,19 @@ export function computeSupplierFinancialMetrics(
 ) {
   const pnlOptions = getOrderPnlOptions(settings);
   let amountPaid = supplierTransactionsPaid;
+  let totalExpectedAmount = 0;
   let saleProfit = 0;
   let companyLoss = 0;
 
   for (const order of orders) {
+    totalExpectedAmount += orderTotalPayable({
+      pricePerLitre: Number(order.pricePerLitre),
+      loadingCostPerLitre: Number(order.loadingCostPerLitre),
+      litersOrdered: Number(order.litersOrdered),
+      supplierShortageLiters: order.supplierShortageLiters != null
+        ? Number(order.supplierShortageLiters)
+        : null,
+    });
     amountPaid += Number(order.paymentPaid);
 
     const pnlOrder = {
@@ -79,5 +89,5 @@ export function computeSupplierFinancialMetrics(
     companyLoss += result.summary.totalLossAmount;
   }
 
-  return { amountPaid, saleProfit, companyLoss };
+  return { amountPaid, totalExpectedAmount, saleProfit, companyLoss };
 }

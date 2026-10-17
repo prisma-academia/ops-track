@@ -1,17 +1,17 @@
 "use client";
 
 import { useMemo, useEffect } from "react";
-import { format } from "date-fns";
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
 import { usePaginatedQuery } from "@/hooks/use-paginated-query";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Truck } from "lucide-react";
+import { SupplierNavIcon } from "./_components/supplier-nav-icon";
+import { SupplierTypeBadge } from "./_components/supplier-type-badge";
 
 export type SupplierRow = {
   id: string;
   name: string;
   supplierType?: "LOCAL" | "DEPOT" | null;
+  totalExpectedAmount?: number;
   amountPaid?: number;
   saleProfit?: number;
   companyLoss?: number;
@@ -59,26 +59,14 @@ export function SuppliersTable({
         header: "Supplier",
         cell: ({ row }) => {
           const name = row.original.name;
-          const initials = name
-            ? name
-                .split(" ")
-                .map((n) => n[0])
-                .join("")
-                .substring(0, 2)
-                .toUpperCase()
-            : "SP";
-          const subtitle = row.original.phone || row.original.contactPerson || "Product supplier";
+          const subtitle = row.original.phone || row.original.email || "—";
 
           return (
             <div className="flex items-center gap-3">
-              <Avatar className="h-9 w-9 border border-border/50 shrink-0">
-                <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
-                  {initials || <Truck className="h-4 w-4 text-muted-foreground" />}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col">
-                <span className="font-medium text-foreground">{name}</span>
-                <span className="text-xs text-muted-foreground font-mono">{subtitle}</span>
+              <SupplierNavIcon />
+              <div className="flex flex-col min-w-0">
+                <span className="font-medium text-foreground truncate">{name}</span>
+                <span className="text-xs text-muted-foreground truncate">{subtitle}</span>
               </div>
             </div>
           );
@@ -86,33 +74,50 @@ export function SuppliersTable({
       },
       {
         accessorKey: "supplierType",
-        header: "Type",
-        cell: ({ row }) => {
-          const type = row.original.supplierType;
-          if (!type) {
-            return (
-              <span className="text-xs font-medium text-amber-600">Not set</span>
-            );
-          }
-          return (
-            <span className="text-xs font-medium text-foreground">
-              {type === "LOCAL" ? "Local" : "Depot"}
-            </span>
-          );
-        },
+        header: "Supplier Type",
+        cell: ({ row }) => (
+          <SupplierTypeBadge supplierType={row.original.supplierType} />
+        ),
+      },
+      {
+        accessorKey: "totalExpectedAmount",
+        header: "Total Expected Amount",
+        cell: ({ row }) => (
+          <span className="text-sm font-mono tabular-nums">
+            {formatNaira(Number(row.original.totalExpectedAmount ?? 0))}
+          </span>
+        ),
       },
       {
         accessorKey: "amountPaid",
-        header: "Paid",
+        header: "Total Paid",
         cell: ({ row }) => (
-          <span className="text-sm font-mono tabular-nums">
+          <span className="text-sm font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
             {formatNaira(Number(row.original.amountPaid ?? 0))}
           </span>
         ),
       },
       {
+        accessorKey: "outstandingBalance",
+        header: "Amount Owed",
+        cell: ({ row }) => {
+          const bal = Number(row.original.outstandingBalance || 0);
+          return (
+            <span
+              className={
+                bal > 0
+                  ? "text-sm font-medium font-mono tabular-nums text-rose-600"
+                  : "text-sm font-mono tabular-nums text-muted-foreground"
+              }
+            >
+              {formatNaira(bal)}
+            </span>
+          );
+        },
+      },
+      {
         accessorKey: "saleProfit",
-        header: "Sale profit",
+        header: "Profit on Sale",
         cell: ({ row }) => {
           const v = Number(row.original.saleProfit ?? 0);
           return (
@@ -127,57 +132,6 @@ export function SuppliersTable({
             </span>
           );
         },
-      },
-      {
-        accessorKey: "companyLoss",
-        header: "Company loss",
-        cell: ({ row }) => (
-          <span className="text-sm font-mono tabular-nums text-rose-600">
-            {formatNaira(Number(row.original.companyLoss ?? 0))}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "contactPerson",
-        header: "Contact",
-        cell: ({ row }) => {
-          const person = row.original.contactPerson;
-          if (!person) return <span className="text-sm text-muted-foreground">—</span>;
-          return <span className="text-sm font-medium">{person}</span>;
-        },
-      },
-      {
-        accessorKey: "outstandingBalance",
-        header: "Amount Owed",
-        cell: ({ row }) => {
-          const bal = Number(row.original.outstandingBalance || 0);
-          return (
-            <span className={bal > 0 ? "text-sm font-medium text-rose-600" : "text-sm text-muted-foreground"}>
-              {formatNaira(bal)}
-            </span>
-          );
-        },
-      },
-      {
-        accessorKey: "depositBalance",
-        header: "Prepaid Deposit",
-        cell: ({ row }) => {
-          const bal = Number(row.original.depositBalance || 0);
-          return (
-            <span className={bal > 0 ? "text-sm font-medium text-emerald-600" : "text-sm text-muted-foreground"}>
-              {formatNaira(bal)}
-            </span>
-          );
-        },
-      },
-      {
-        accessorKey: "createdAt",
-        header: "Added",
-        cell: ({ row }) => (
-          <span className="text-sm text-muted-foreground">
-            {format(new Date(row.original.createdAt), "MMM d, yyyy")}
-          </span>
-        ),
       },
     ],
     [],

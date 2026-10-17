@@ -74,7 +74,44 @@ export async function mapSupplierListRow(
   return {
     ...formatSupplierRow(supplier),
     amountPaid: metrics.amountPaid,
+    totalExpectedAmount: metrics.totalExpectedAmount,
     saleProfit: metrics.saleProfit,
     companyLoss: metrics.companyLoss,
   };
+}
+
+export type SupplierListTotals = {
+  totalExpectedAmount: number;
+  amountPaid: number;
+  outstandingBalance: number;
+  saleProfit: number;
+  depositBalance: number;
+};
+
+export function aggregateSupplierListTotals(
+  rows: Array<{
+    totalExpectedAmount?: number;
+    amountPaid?: number;
+    outstandingBalance: number;
+    saleProfit?: number;
+    depositBalance: number;
+  }>
+): SupplierListTotals {
+  return rows.reduce<SupplierListTotals>(
+    (acc, row) => {
+      acc.totalExpectedAmount += Number(row.totalExpectedAmount ?? 0);
+      acc.amountPaid += Number(row.amountPaid ?? 0);
+      acc.outstandingBalance += Number(row.outstandingBalance ?? 0);
+      acc.saleProfit += Number(row.saleProfit ?? 0);
+      acc.depositBalance += Number(row.depositBalance ?? 0);
+      return acc;
+    },
+    {
+      totalExpectedAmount: 0,
+      amountPaid: 0,
+      outstandingBalance: 0,
+      saleProfit: 0,
+      depositBalance: 0,
+    }
+  );
 }

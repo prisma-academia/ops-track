@@ -11,23 +11,47 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Landmark, Banknote, Droplet, Clock, Fuel, Wallet, Building2 } from "lucide-react";
+import { Landmark, Banknote, Wallet } from "lucide-react";
 import { cn, formatShortCurrency } from "@/lib/utils";
 import { formatSupplierRow } from "@/lib/fleet/suppliers";
-import { orderPaymentBalance, orderTotalPayable } from "@/lib/fleet/order-payables";
-import { SupplierOrdersTable, type SupplierOrderRow } from "./supplier-orders-table";
+import { calculateOrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
+import { loadOrderPnlOptionsForTenant } from "@/lib/fleet/pnl-context";
+import { mapSupplierListRow } from "@/lib/fleet/supplier-list";
+import { SupplierOrdersPnlTable } from "./supplier-orders-pnl-table";
 import { SupplierDetailActions } from "./supplier-detail-actions";
+import { SupplierNavIcon } from "../_components/supplier-nav-icon";
+import { SupplierTypeBadge } from "../_components/supplier-type-badge";
+import type { FleetPnlTableRow } from "../../fleet-pnl-report/fleet-pnl-columns";
 
 function formatNaira(value: number) {
   return `₦${value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+const orderPnlInclude = {
+  transports: {
+    include: {
+      transporter: { select: { name: true } },
+      truck: { select: { id: true, name: true, plateNumber: true } },
+      lossLogs: true,
+      deliveries: {
+        include: {
+          customer: { select: { name: true } },
+          station: { select: { name: true } },
+          transactions: {
+            where: { type: "INFLOW" },
+            select: { type: true, amount: true },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 export default async function SupplierDetailPage({
   params,
@@ -38,14 +62,22 @@ export default async function SupplierDetailPage({
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_SUPPLIERS_READ.key);
   const canEdit = hasPermission(actor, PERMISSIONS.TENANT_FLEET_SUPPLIERS_WRITE.key);
 
-  const supplier = await prisma.supplier.findFirst({
-    where: { id, tenantId: actor.tenantId },
-    include: {
-      orders: {
-        orderBy: { createdAt: "desc" },
+  const [supplier, pnlOptions, tenant] = await Promise.all([
+    prisma.supplier.findFirst({
+      where: { id, tenantId: actor.tenantId },
+      include: {
+        orders: {
+          orderBy: { createdAt: "desc" },
+          include: orderPnlInclude,
+        },
       },
-    },
-  });
+    }),
+    loadOrderPnlOptionsForTenant(actor.tenantId),
+    prisma.tenant.findUnique({
+      where: { id: actor.tenantId },
+      select: { settingsJson: true },
+    }),
+  ]);
 
   if (!supplier) notFound();
 
@@ -53,74 +85,25 @@ export default async function SupplierDetailPage({
   const depositBalance = formatted.depositBalance;
   const outstandingBalance = formatted.outstandingBalance;
 
-  const isLocalSupplier = supplier.supplierType === "LOCAL";
+  const listMetrics = await mapSupplierListRow(supplier, actor.tenantId, tenant?.settingsJson);
+  const totalPaid = listMetrics.amountPaid;
 
-  const orderRows: SupplierOrderRow[] = supplier.orders.map((o) => {
-    const litersOrdered = o.litersOrdered.toNumber();
-    const supplierShortageLiters = o.supplierShortageLiters?.toNumber() ?? 0;
-    const billableLiters = Math.max(0, litersOrdered - supplierShortageLiters);
-    const totalPayable = orderTotalPayable(o);
-    const paid = o.paymentPaid.toNumber();
+  const orderPnlRows: FleetPnlTableRow[] = supplier.orders.map((order) => {
+    const { summary } = calculateOrderPnlSummary(
+      { ...order, supplierRecord: { supplierType: supplier.supplierType } },
+      pnlOptions
+    );
     return {
-      id: o.id,
-      reference: o.reference,
-      productType: o.productType,
-      litersOrdered,
-      supplierShortageLiters: isLocalSupplier ? supplierShortageLiters : 0,
-      billableLiters: isLocalSupplier ? billableLiters : litersOrdered,
-      totalPayable,
-      paymentPaid: paid,
-      balance: orderPaymentBalance({
-        pricePerLitre: o.pricePerLitre,
-        loadingCostPerLitre: o.loadingCostPerLitre,
-        litersOrdered: o.litersOrdered,
-        supplierShortageLiters: o.supplierShortageLiters,
-        paymentPaid: o.paymentPaid,
-      }),
-      paymentStatus: o.paymentStatus,
-      createdAt: o.createdAt.toISOString(),
+      ...summary,
+      purchasePricePerLitre: summary.priceBought,
+      purchaseCost: summary.priceBought * summary.litersOrdered,
+      loadingCost: summary.totalLoadingCost,
     };
   });
 
-  const totals = orderRows.reduce(
-    (acc, row) => {
-      acc.totalPayable += row.totalPayable;
-      acc.totalPaid += row.paymentPaid;
-      acc.totalBalance += row.balance;
-      acc.totalLiters += row.litersOrdered;
-      const date = new Date(row.createdAt);
-      if (!acc.lastOrderAt || date > acc.lastOrderAt) {
-        acc.lastOrderAt = date;
-      }
-      return acc;
-    },
-    {
-      totalPayable: 0,
-      totalPaid: 0,
-      totalBalance: 0,
-      totalLiters: 0,
-      lastOrderAt: null as Date | null,
-    }
-  );
-
-  const initials = supplier.name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .substring(0, 2)
-    .toUpperCase();
-
-  const lastOrderLabel = totals.lastOrderAt ? totals.lastOrderAt.toLocaleDateString() : "—";
   const payUrl = `/admin/payments/new/outgoing?supplierId=${supplier.id}`;
 
   const statCards = [
-    {
-      title: "Orders",
-      value: supplier.orders.length.toLocaleString(),
-      fullValue: null as string | null,
-      icon: Fuel,
-      iconColor: "text-teal-600",
-    },
     {
       title: "Outstanding Balance",
       value: formatShortCurrency(outstandingBalance),
@@ -139,26 +122,11 @@ export default async function SupplierDetailPage({
     },
     {
       title: "Paid",
-      value: formatShortCurrency(totals.totalPaid),
-      fullValue: formatNaira(totals.totalPaid),
+      value: formatShortCurrency(totalPaid),
+      fullValue: formatNaira(totalPaid),
       icon: Banknote,
       iconColor: "text-emerald-600",
       valueColor: "text-emerald-600",
-    },
-    {
-      title: "Litres Ordered",
-      value: `${totals.totalLiters.toLocaleString()} L`,
-      fullValue: `${totals.totalLiters.toLocaleString()} Liters`,
-      icon: Droplet,
-      iconColor: "text-blue-600",
-      valueColor: "text-blue-600",
-    },
-    {
-      title: "Last Order",
-      value: lastOrderLabel,
-      fullValue: totals.lastOrderAt ? totals.lastOrderAt.toLocaleString() : null,
-      icon: Clock,
-      iconColor: "text-amber-600",
     },
   ];
 
@@ -169,13 +137,12 @@ export default async function SupplierDetailPage({
       <Card className="border-border/40 shadow-sm">
         <CardHeader className="pb-4 border-b border-border/40">
           <div className="flex items-center gap-4">
-            <Avatar className="h-12 w-12 border border-border/50 shrink-0">
-              <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
-                {initials || <Building2 className="h-5 w-5 text-muted-foreground" />}
-              </AvatarFallback>
-            </Avatar>
+            <SupplierNavIcon className="size-12 rounded-xl" iconSize={20} iconClassName="size-5" />
             <div>
-              <CardTitle className="text-lg font-semibold text-foreground">{supplier.name}</CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-lg font-semibold text-foreground">{supplier.name}</CardTitle>
+                <SupplierTypeBadge supplierType={supplier.supplierType} />
+              </div>
               <CardDescription className="text-xs">
                 Supplier profile, contact details, and procurement balance totals.
               </CardDescription>
@@ -232,45 +199,29 @@ export default async function SupplierDetailPage({
           </dl>
 
           <TooltipProvider delayDuration={200}>
-            <div className="rounded-lg border border-border/40 overflow-hidden grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-px bg-border">
+            <div className="rounded-lg border border-border/40 overflow-hidden grid grid-cols-1 sm:grid-cols-3 gap-px bg-border">
               {statCards.map((item) => (
                 <div key={item.title} className="bg-card">
-                  {item.fullValue ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="p-4 flex items-start justify-between cursor-default hover:bg-muted/30 transition-colors h-full">
-                          <div className="flex flex-col gap-2">
-                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                              {item.title}
-                            </p>
-                            <p className={cn("text-md font-semibold text-card-foreground", item.valueColor)}>
-                              {item.value}
-                            </p>
-                          </div>
-                          <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
-                            <item.icon size={14} className={cn("text-muted-foreground", item.iconColor)} />
-                          </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="p-4 flex items-start justify-between cursor-default hover:bg-muted/30 transition-colors h-full">
+                        <div className="flex flex-col gap-2">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            {item.title}
+                          </p>
+                          <p className={cn("text-md font-semibold text-card-foreground", item.valueColor)}>
+                            {item.value}
+                          </p>
                         </div>
-                      </TooltipTrigger>
-                      <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
-                        {item.fullValue}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <div className="p-4 flex items-start justify-between h-full">
-                      <div className="flex flex-col gap-2">
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                          {item.title}
-                        </p>
-                        <p className={cn("text-md font-semibold text-card-foreground", item.valueColor)}>
-                          {item.value}
-                        </p>
+                        <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
+                          <item.icon size={14} className={cn("text-muted-foreground", item.iconColor)} />
+                        </div>
                       </div>
-                      <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
-                        <item.icon size={14} className={cn("text-muted-foreground", item.iconColor)} />
-                      </div>
-                    </div>
-                  )}
+                    </TooltipTrigger>
+                    <TooltipContent className="font-mono text-sm tracking-tight px-3 py-1.5">
+                      {item.fullValue}
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               ))}
             </div>
@@ -280,19 +231,12 @@ export default async function SupplierDetailPage({
 
       <div className="space-y-3">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Recent Orders</h2>
+          <h2 className="text-lg font-semibold text-foreground">Profit & Loss</h2>
           <p className="text-sm text-muted-foreground">
-            Procurement orders from {supplier.name} ({supplier.orders.length})
-            {isLocalSupplier
-              ? " — payable litres exclude delivery shortage credited to this supplier."
-              : null}
+            Order-level revenue, costs, and profit for {supplier.name} ({supplier.orders.length} orders).
           </p>
         </div>
-        <SupplierOrdersTable
-          data={orderRows}
-          supplierId={supplier.id}
-          showLocalPayableColumns={isLocalSupplier}
-        />
+        <SupplierOrdersPnlTable data={JSON.parse(JSON.stringify(orderPnlRows))} />
       </div>
     </div>
   );

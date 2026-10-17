@@ -19,6 +19,7 @@ export function formatSupplierRow<
       pricePerLitre: { toNumber(): number };
       loadingCostPerLitre: { toNumber(): number };
       litersOrdered: { toNumber(): number };
+      supplierShortageLiters?: { toNumber(): number } | null;
       paymentPaid: { toNumber(): number };
     }>;
   },
@@ -30,6 +31,7 @@ export function formatSupplierRow<
         pricePerLitre: o.pricePerLitre.toNumber(),
         loadingCostPerLitre: o.loadingCostPerLitre.toNumber(),
         litersOrdered: o.litersOrdered.toNumber(),
+        supplierShortageLiters: o.supplierShortageLiters?.toNumber() ?? 0,
         paymentPaid: o.paymentPaid.toNumber(),
       }),
     0,

@@ -4,7 +4,18 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { SuppliersTable, type SupplierRow } from "./table";
-import { mapSupplierListRow, supplierMetricsOrderInclude } from "@/lib/fleet/supplier-list";
+import {
+  aggregateSupplierListTotals,
+  mapSupplierListRow,
+  supplierMetricsOrderInclude,
+} from "@/lib/fleet/supplier-list";
+import { FleetStatGroupCard } from "../_components/overview/fleet-stat-group-card";
+import type { FleetStatGroup } from "../types";
+import { formatShortCurrency } from "@/lib/utils";
+
+function formatNaira(value: number) {
+  return `₦${value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 export default async function SuppliersPage() {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_SUPPLIERS_READ.key);
@@ -12,13 +23,11 @@ export default async function SuppliersPage() {
   const take = 25;
   const skip = 0;
 
-  const [totalCount, suppliers, tenant] = await Promise.all([
+  const [totalCount, allSuppliers, tenant] = await Promise.all([
     prisma.supplier.count({ where: { tenantId: actor.tenantId } }),
     prisma.supplier.findMany({
       where: { tenantId: actor.tenantId },
       orderBy: { name: "asc" },
-      take,
-      skip,
       include: supplierMetricsOrderInclude,
     }),
     prisma.tenant.findUnique({
@@ -27,8 +36,8 @@ export default async function SuppliersPage() {
     }),
   ]);
 
-  const rows: SupplierRow[] = await Promise.all(
-    suppliers.map(async (s) => {
+  const mappedRows = await Promise.all(
+    allSuppliers.map(async (s) => {
       const row = await mapSupplierListRow(s, actor.tenantId, tenant?.settingsJson);
       return {
         ...row,
@@ -41,10 +50,62 @@ export default async function SuppliersPage() {
         outstandingBalance: Number(row.outstandingBalance),
         depositBalance: Number(row.depositBalance),
         supplierType: row.supplierType as SupplierRow["supplierType"],
+        totalExpectedAmount: row.totalExpectedAmount,
+        amountPaid: row.amountPaid,
+        saleProfit: row.saleProfit,
         createdAt: s.createdAt.toISOString(),
       };
     })
   );
+
+  const totals = aggregateSupplierListTotals(mappedRows);
+
+  const statGroups: FleetStatGroup[] = [
+    {
+      id: "supplier-payments",
+      title: "Supplier Payments",
+      accent: "violet",
+      headerIcon: "supplier",
+      hint: `${totalCount.toLocaleString()} supplier${totalCount === 1 ? "" : "s"}`,
+      metrics: [
+        {
+          label: "Total Expected Amount",
+          icon: "expected",
+          value: formatShortCurrency(totals.totalExpectedAmount),
+          tooltip: formatNaira(totals.totalExpectedAmount),
+        },
+        {
+          label: "Total Paid",
+          icon: "paid",
+          value: formatShortCurrency(totals.amountPaid),
+          tooltip: formatNaira(totals.amountPaid),
+        },
+      ],
+    },
+    {
+      id: "supplier-balance",
+      title: "Balances & P&L",
+      accent: "emerald",
+      headerIcon: "sales",
+      hint: "All suppliers",
+      metrics: [
+        {
+          label: "Amount Owed",
+          icon: "collected",
+          value: formatShortCurrency(totals.outstandingBalance),
+          tooltip: formatNaira(totals.outstandingBalance),
+        },
+        {
+          label: "Profit on Sale",
+          icon: "sold",
+          value: formatShortCurrency(totals.saleProfit),
+          tooltip: formatNaira(totals.saleProfit),
+        },
+      ],
+    },
+  ];
+
+  const rows: SupplierRow[] = mappedRows.slice(skip, skip + take);
 
   const totalPages = Math.ceil(totalCount / take);
   const initialMeta = {
@@ -57,7 +118,7 @@ export default async function SuppliersPage() {
   };
 
   return (
-    <div>
+    <div className="space-y-6">
       <DataTableToolbar
         title="Suppliers"
         action={
@@ -69,6 +130,13 @@ export default async function SuppliersPage() {
           </Link>
         }
       />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {statGroups.map((group) => (
+          <FleetStatGroupCard key={group.id} group={group} />
+        ))}
+      </div>
+
       <SuppliersTable initialData={rows} initialMeta={initialMeta} />
     </div>
   );

@@ -6,16 +6,10 @@ import {
   DataTableFilterDrawer,
   type FilterConfig,
 } from "@/components/data-table-filter-drawer";
-import { BadgeDollarSign, Droplet, FileText, MoreHorizontal, PackageCheck, Pencil, Printer, Truck, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { BadgeDollarSign, Droplet, FileText, MoreHorizontal, PackageCheck, Pencil, Printer, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,8 +62,6 @@ export type SaleRow = {
   shortageParty?: "TRANSPORTER" | "SUPPLIER" | "UNCONFIGURED";
 };
 
-type ShortageReconciliationMode = "IN_TRUCK" | "SHORTAGE_DEDUCT";
-
 function DeliveryRowActions({ row }: { row: SaleRow }) {
   const router = useRouter();
 
@@ -81,9 +73,7 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
 
   // Receive Dialog State
   const [litersReceived, setLitersReceived] = useState(row.litersReceived?.toString() || "");
-  const [shortageMode, setShortageMode] = useState<ShortageReconciliationMode>(
-    row.litersReturned > 0 ? "IN_TRUCK" : "SHORTAGE_DEDUCT"
-  );
+  const [confirmShortage, setConfirmShortage] = useState(false);
   const [isReceiving, setIsReceiving] = useState(false);
   const [receiveError, setReceiveError] = useState<string | null>(null);
 
@@ -104,9 +94,9 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
       return;
     }
     setLitersReceived(row.litersReceived?.toString() || "");
-    const initialMode: ShortageReconciliationMode =
-      row.litersReturned > 0 ? "IN_TRUCK" : "SHORTAGE_DEDUCT";
-    setShortageMode(initialMode);
+    const hasVariance =
+      row.litersReceived !== null && row.litersDespatched > row.litersReceived;
+    setConfirmShortage(hasVariance && row.shortageDeducted);
     setReceiveError(null);
     setOpenReceive(true);
   };
@@ -130,8 +120,7 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
     setReceiveError(null);
 
     const isShort = variance !== null && variance > 0;
-    const finalLitersReturned = isShort && shortageMode === "IN_TRUCK" ? variance : 0;
-    const finalShortageDeducted = isShort ? shortageMode === "SHORTAGE_DEDUCT" : true;
+    const finalShortageDeducted = isShort ? confirmShortage : true;
 
     if (isShort && finalShortageDeducted && row.shortageParty === "UNCONFIGURED") {
       setReceiveError(
@@ -142,7 +131,7 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
 
     const res = await apiPatch(`/api/tenant/fleet/deliveries/${row.id}`, {
       litersReceived: Number(litersReceived),
-      litersReturned: finalLitersReturned,
+      litersReturned: 0,
       shortageDeducted: finalShortageDeducted,
     });
 
@@ -311,6 +300,7 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
                 value={litersReceived}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                   setLitersReceived(e.target.value);
+                  setConfirmShortage(false);
                   if (receiveError) setReceiveError(null);
                 }}
                 prefixIcon={<Droplet className="w-4 h-4 text-muted-foreground" />}
@@ -345,32 +335,35 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
               </>
             )}
 
-            {/* If shortage, show reconciliation option (on truck vs mark as shortage) */}
             {isShortage && variance !== null && (
               <div className="space-y-3 pt-1">
-                <div className="space-y-1.5">
-                  <Label htmlFor={`shortage-mode-${row.id}`} className="text-xs font-semibold">
-                    Shortage Reconciliation
-                  </Label>
-                  <Select
-                    value={shortageMode}
-                    onValueChange={(val: "IN_TRUCK" | "SHORTAGE_DEDUCT") => setShortageMode(val)}
+                {!confirmShortage ? (
+                  <div className="p-3 rounded-lg border border-blue-500/20 bg-blue-500/10 text-xs text-blue-950 dark:text-blue-200">
+                    <p className="font-medium text-blue-800 dark:text-blue-300">
+                      {variance.toLocaleString()} {unit} remains pending (on truck / awaiting receipt). No
+                      shortage charge until you confirm below.
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="flex items-start gap-2.5">
+                  <Checkbox
+                    id={`confirm-shortage-${row.id}`}
+                    checked={confirmShortage}
+                    onCheckedChange={(checked) => {
+                      setConfirmShortage(checked === true);
+                      if (receiveError) setReceiveError(null);
+                    }}
+                  />
+                  <Label
+                    htmlFor={`confirm-shortage-${row.id}`}
+                    className="text-xs font-semibold leading-snug cursor-pointer"
                   >
-                    <SelectTrigger id={`shortage-mode-${row.id}`} className="w-full bg-card">
-                      <SelectValue placeholder="Select reconciliation method" />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="IN_TRUCK">
-                        Remains in Truck Tank
-                      </SelectItem>
-                      <SelectItem value="SHORTAGE_DEDUCT">
-                        Mark as Shortage
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                    Confirm deductible shortage ({variance.toLocaleString()} {unit})
+                  </Label>
                 </div>
 
-                {shortageMode === "SHORTAGE_DEDUCT" ? (
+                {confirmShortage ? (
                   <div className="p-3 rounded-lg border border-rose-500/20 bg-rose-500/10 text-xs text-rose-950 dark:text-rose-200 space-y-2">
                     {row.shortageParty === "UNCONFIGURED" ? (
                       <p className="flex items-center gap-2 font-medium">
@@ -403,17 +396,7 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className="p-3 rounded-lg border border-blue-500/20 bg-blue-500/10 text-xs flex items-center justify-between text-blue-950 dark:text-blue-200">
-                    <div className="flex items-center gap-2 font-medium text-blue-800 dark:text-blue-300">
-                      <Truck className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>Volume Remaining in Truck:</span>
-                    </div>
-                    <span className="font-mono font-bold text-blue-700 dark:text-blue-300 text-sm">
-                      {variance.toLocaleString()} {unit}
-                    </span>
-                  </div>
-                )}
+                ) : null}
               </div>
             )}
 

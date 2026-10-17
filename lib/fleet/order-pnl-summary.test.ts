@@ -46,4 +46,34 @@ describe("order-pnl-summary", () => {
     assert.equal(summary.totalCost, expectedSoldCost);
     assert.equal(summary.pnl, summary.amountSoldRev - summary.totalCost);
   });
+
+  it("uses received litres for P&L when received is less than dispatched", () => {
+    const fleet = { ...defaultFleetSettings(), useAttributionPnL: true };
+    const order = {
+      ...baseOrder,
+      transports: [
+        {
+          ...baseOrder.transports[0],
+          deliveries: [
+            {
+              ...baseOrder.transports[0].deliveries[0],
+              litersDespatched: 10000,
+              litersReceived: 7500,
+              totalExpectedAmount: 7500 * 150,
+            },
+          ],
+        },
+      ],
+    };
+    const { summary, transports } = calculateOrderPnlSummary(order, {
+      fleet,
+      useAttributionPnL: true,
+    });
+    const deliveryRow = transports[0].deliveries[0];
+    assert.equal(deliveryRow.litersSold, 7500);
+    assert.equal(deliveryRow.purchaseCost, 7500 * 100);
+    assert.equal(deliveryRow.salesRevenue, 7500 * 150);
+    assert.equal(summary.totalAmountSoldQty, 7500);
+    assert.equal(summary.pnl, deliveryRow.pnl);
+  });
 });

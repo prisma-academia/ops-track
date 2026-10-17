@@ -82,6 +82,10 @@ import {
   getFleetPnlDetailsColumns,
   type FleetPnlTableRow,
 } from "@/app/admin/(fleet)/fleet-pnl-report/fleet-pnl-columns";
+import { resolveShortageParty } from "@/lib/fleet/loss-attribution";
+import type { SupplierType } from "@/lib/generated/prisma/client";
+
+type EditShortageMode = "PENDING" | "CONFIRM_SHORTAGE" | "SHORTAGE_WAIVE";
 
 function fmtQtyLocal(n: number | null) {
   if (n === null || Number.isNaN(n)) return "—";
@@ -99,12 +103,14 @@ export function SalesDetailsManager({
   orderId,
   orderReference,
   stations = [],
+  supplierType = null,
 }: {
   delivery: any;
   pnlBreakdownRow?: FleetPnlTableRow | null;
   orderId?: string | null;
   orderReference?: string | null;
   stations?: { id: string; name: string; code?: string | null }[];
+  supplierType?: SupplierType | null;
 }) {
   const router = useRouter();
 
@@ -117,13 +123,11 @@ export function SalesDetailsManager({
   const [editStationId, setEditStationId] = useState(delivery.stationId || delivery.station?.id || "");
   const [editLitersReceived, setEditLitersReceived] = useState(delivery.litersReceived?.toString() || "");
   const [editAmountPerLiter, setEditAmountPerLiter] = useState(delivery.amountPerLiter?.toString() || "");
-  const [editShortageMode, setEditShortageMode] = useState<"IN_TRUCK" | "SHORTAGE_DEDUCT" | "SHORTAGE_WAIVE">(
-    Number(delivery.litersReturned || 0) > 0
-      ? "IN_TRUCK"
-      : delivery.shortageDeducted === false
-      ? "SHORTAGE_WAIVE"
-      : "SHORTAGE_DEDUCT"
+  const [editShortageMode, setEditShortageMode] = useState<EditShortageMode>(
+    delivery.shortageDeducted === false ? "PENDING" : "CONFIRM_SHORTAGE"
   );
+
+  const shortageParty = resolveShortageParty(supplierType);
 
   const [openReturnDialog, setOpenReturnDialog] = useState(false);
   const [returnAmount, setReturnAmount] = useState(delivery.litersReturned ? Number(delivery.litersReturned).toString() : "");
@@ -266,9 +270,15 @@ export function SalesDetailsManager({
       payload.litersReceived = numReceived;
       const numDespatched = payload.litersDespatched ?? Number(delivery.litersDespatched);
       if (numReceived < numDespatched) {
-        const diff = numDespatched - numReceived;
-        payload.litersReturned = editShortageMode === "IN_TRUCK" ? diff : 0;
-        payload.shortageDeducted = editShortageMode === "SHORTAGE_DEDUCT";
+        payload.litersReturned = 0;
+        payload.shortageDeducted = editShortageMode === "CONFIRM_SHORTAGE";
+        if (editShortageMode === "CONFIRM_SHORTAGE" && shortageParty === "UNCONFIGURED") {
+          setError(
+            "Set the supplier type (Local or Depot) before confirming a deductible shortage."
+          );
+          setIsSubmitting(false);
+          return;
+        }
       } else {
         payload.litersReturned = 0;
         payload.shortageDeducted = true;
@@ -585,7 +595,12 @@ export function SalesDetailsManager({
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Purchase Cost</p>
                   <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-                    {fmtQty(pnlBreakdownRow.litersDespatched ?? pnlBreakdownRow.litersOrdered)} {volumeUnit} @ {fmtMoney(pnlBreakdownRow.purchasePricePerLitre ?? 0)}/{volumeUnit}
+                    {fmtQty(
+                      pnlBreakdownRow.totalAmountSoldQty ??
+                        pnlBreakdownRow.litersReceived ??
+                        pnlBreakdownRow.litersOrdered
+                    )}{" "}
+                    {volumeUnit} @ {fmtMoney(pnlBreakdownRow.purchasePricePerLitre ?? 0)}/{volumeUnit}
                   </p>
                 </div>
                 <p className="text-lg font-bold font-mono text-foreground">
@@ -667,7 +682,8 @@ export function SalesDetailsManager({
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Expected Amount</p>
                 <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-                  {fmtQtyLocal(litersDespatched)} {volumeUnit} @ {fmtMoneyLocal(amountPerLiter)}/{volumeUnit}
+                  {fmtQtyLocal(litersReceived ?? litersDespatched)} {volumeUnit} @{" "}
+                  {fmtMoneyLocal(amountPerLiter)}/{volumeUnit}
                 </p>
               </div>
               <p className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400">
@@ -863,11 +879,7 @@ export function SalesDetailsManager({
               setEditLitersReceived(delivery.litersReceived?.toString() || "");
               setEditAmountPerLiter(delivery.amountPerLiter?.toString() || "");
               setEditShortageMode(
-                Number(delivery.litersReturned || 0) > 0
-                  ? "IN_TRUCK"
-                  : delivery.shortageDeducted === false
-                  ? "SHORTAGE_WAIVE"
-                  : "SHORTAGE_DEDUCT"
+                delivery.shortageDeducted === true ? "CONFIRM_SHORTAGE" : "PENDING"
               );
               setError(null);
             }
@@ -1023,61 +1035,67 @@ export function SalesDetailsManager({
                     <div className="space-y-2.5 p-3 rounded-lg border bg-muted/20 text-xs">
                       <div className="space-y-1.5">
                         <Label htmlFor="editShortageMode" className="text-xs font-semibold">
-                          Shortage Reconciliation ({diff.toLocaleString()} {volumeUnit})
+                          Variance ({diff.toLocaleString()} {volumeUnit})
                         </Label>
                         <Select
                           value={editShortageMode}
-                          onValueChange={(val: "IN_TRUCK" | "SHORTAGE_DEDUCT" | "SHORTAGE_WAIVE") => setEditShortageMode(val)}
+                          onValueChange={(val: EditShortageMode) => setEditShortageMode(val)}
                         >
                           <SelectTrigger id="editShortageMode" className="w-full text-xs h-9 bg-card">
-                            <SelectValue placeholder="Select how to reconcile shortage" />
+                            <SelectValue placeholder="How to treat unreceived volume" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="IN_TRUCK" className="text-xs">
-                              Remains in Truck Tank (Returned to Truck)
+                            <SelectItem value="PENDING" className="text-xs">
+                              Pending receipt (on truck / awaiting delivery)
                             </SelectItem>
-                            <SelectItem value="SHORTAGE_DEDUCT" className="text-xs">
-                              Transit Shortage (Deduct from Driver Fee)
+                            <SelectItem value="CONFIRM_SHORTAGE" className="text-xs">
+                              Confirm deductible shortage
                             </SelectItem>
                             <SelectItem value="SHORTAGE_WAIVE" className="text-xs">
-                              Transit Shortage (Waive Driver Deduction)
+                              Transit loss — waive charge (company absorbs)
                             </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
 
-                      {editShortageMode === "IN_TRUCK" && (
+                      {editShortageMode === "PENDING" && (
                         <div className="p-2.5 rounded-md border border-blue-500/20 bg-blue-500/10 text-[11px] space-y-1 text-blue-950 dark:text-blue-200">
-                          <div className="flex items-center gap-1.5 font-semibold text-blue-700 dark:text-blue-300">
-                            <Truck className="w-3.5 h-3.5 shrink-0" />
-                            <span>Outcome: Volume Restored to Truck Tank</span>
-                          </div>
                           <p className="text-muted-foreground leading-normal">
-                            The unreceived {diff.toLocaleString()} {volumeUnit} remains physically inside the truck tank and becomes available for another delivery. No penalty is deducted from the driver.
+                            {diff.toLocaleString()} {volumeUnit} stays pending until the client receives more.
+                            No supplier or transporter charge applies.
                           </p>
                         </div>
                       )}
 
-                      {editShortageMode === "SHORTAGE_DEDUCT" && (
+                      {editShortageMode === "CONFIRM_SHORTAGE" && (
                         <div className="p-2.5 rounded-md border border-rose-500/20 bg-rose-500/10 text-[11px] space-y-1 text-rose-950 dark:text-rose-200">
-                          <div className="flex items-center gap-1.5 font-semibold text-rose-700 dark:text-rose-400">
-                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                            <span>Outcome: Deducted from Driver / Transporter</span>
-                          </div>
-                          <p className="text-muted-foreground leading-normal">
-                            The {diff.toLocaleString()} {volumeUnit} is recorded as a transit shortage. ₦{(diff * price).toLocaleString()} will be deducted from the transporter&apos;s payout.
-                          </p>
+                          {shortageParty === "UNCONFIGURED" ? (
+                            <p className="flex items-center gap-1.5 font-medium">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                              Set supplier type (Local or Depot) before confirming this shortage.
+                            </p>
+                          ) : shortageParty === "SUPPLIER" ? (
+                            <p className="text-muted-foreground leading-normal">
+                              {diff.toLocaleString()} {volumeUnit} credited against the supplier order (local
+                              supplier).
+                            </p>
+                          ) : (
+                            <p className="text-muted-foreground leading-normal">
+                              {diff.toLocaleString()} {volumeUnit} transit shortage — transporter deduction
+                              {deliveryTransportRate != null && deliveryTransportRate > 0
+                                ? ` of ₦${(diff * deliveryTransportRate).toLocaleString()}`
+                                : ""}{" "}
+                              (depot supplier).
+                            </p>
+                          )}
                         </div>
                       )}
 
                       {editShortageMode === "SHORTAGE_WAIVE" && (
                         <div className="p-2.5 rounded-md border border-amber-500/20 bg-amber-500/10 text-[11px] space-y-1 text-amber-950 dark:text-amber-200">
-                          <div className="flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300">
-                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                            <span>Outcome: Transit Loss Absorbed by Company</span>
-                          </div>
                           <p className="text-muted-foreground leading-normal">
-                            The {diff.toLocaleString()} {volumeUnit} is recorded as unreceived product loss, but the driver deduction is waived by the company.
+                            The {diff.toLocaleString()} {volumeUnit} variance is recorded without charging the
+                            supplier or transporter.
                           </p>
                         </div>
                       )}

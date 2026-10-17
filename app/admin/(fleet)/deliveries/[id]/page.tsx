@@ -21,7 +21,11 @@ export default async function SaleDetailsPage({ params }: { params: Promise<{ id
           transporter: true,
           truck: true,
           driver: true,
-          order: true,
+          order: {
+            include: {
+              supplierRecord: { select: { supplierType: true } },
+            },
+          },
           lossLogs: true,
           deliveries: {
             select: { id: true, litersDespatched: true },
@@ -96,6 +100,7 @@ export default async function SaleDetailsPage({ params }: { params: Promise<{ id
         orderId={orderId}
         orderReference={orderReference}
         stations={stations}
+        supplierType={delivery.transport?.order?.supplierRecord?.supplierType ?? null}
       />
     </div>
   );

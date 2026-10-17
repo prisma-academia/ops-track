@@ -253,7 +253,12 @@ export function calculateOrderPnlSummary(
     const fleetBase = litersCarried > 0 ? litersCarried : distributedQty;
 
     const deliveriesData: OrderPnlDeliveryRow[] = transport.deliveries.map((delivery, index) => {
-      const saleQty = deliveryVolumes[index] ?? 0;
+      const dispatched = deliveryVolumes[index] ?? 0;
+      const litersReceived =
+        delivery.litersReceived !== null && delivery.litersReceived !== undefined
+          ? toNum(delivery.litersReceived)
+          : null;
+      const saleQty = litersReceived !== null ? litersReceived : dispatched;
       const depotToPrimaryShare = saleQty * ratePerLiter;
       const subsequentRate = toNum(delivery.transportRate);
       const subsequentCost =
@@ -263,10 +268,6 @@ export function calculateOrderPnlSummary(
       const fleetShare = fleetBase > 0 ? (saleQty / fleetBase) * fleetExpenses : 0;
 
       const sellingPrice = toNum(delivery.amountPerLiter);
-      const litersReceived =
-        delivery.litersReceived !== null && delivery.litersReceived !== undefined
-          ? toNum(delivery.litersReceived)
-          : null;
 
       const salePurchase = saleQty * pricePerLitre;
       const saleLoading = saleQty * loadingCostPerLitre;
@@ -278,7 +279,10 @@ export function calculateOrderPnlSummary(
         subsequentCost +
         fleetShare;
 
-      const saleRev = toNum(delivery.totalExpectedAmount);
+      const saleRev =
+        litersReceived !== null
+          ? toNum(delivery.totalExpectedAmount)
+          : saleQty * sellingPrice;
       const salePaid = resolveDeliveryPaymentReceived(delivery);
       const clientTransportFee =
         delivery.transportCostBorneBy === "CLIENT"

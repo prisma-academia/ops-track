@@ -53,6 +53,24 @@ const repaymentSelect = {
   payments: paymentListInclude,
 };
 
+/** Mobile sales link via `sales_logs.dippingClosingId`; Prisma `dippingClosing` uses `generateddeliveryId`. */
+const dippingClosingForReportSelect = {
+  id: true,
+  recordedAt: true,
+  closingLiters: true,
+  session: {
+    select: {
+      id: true,
+      openingLiters: true,
+      openingGapConfirmed: true,
+      openedAt: true,
+      tankId: true,
+      tenantId: true,
+      tank: { select: { name: true } },
+    },
+  },
+} as const;
+
 export default async function SalesReportDetailsPage({
   params,
 }: {
@@ -70,24 +88,7 @@ export default async function SalesReportDetailsPage({
       station: {
         select: { id: true, name: true, code: true },
       },
-      dippingClosing: {
-        select: {
-          id: true,
-          recordedAt: true,
-          closingLiters: true,
-          session: {
-            select: {
-              id: true,
-              openingLiters: true,
-              openingGapConfirmed: true,
-              openedAt: true,
-              tankId: true,
-              tenantId: true,
-              tank: { select: { name: true } },
-            },
-          },
-        },
-      },
+      dippingClosing: { select: dippingClosingForReportSelect },
       recordedBy: userSelect,
       approvedBy: userSelect,
       posBankAccount: bankSelect,
@@ -128,6 +129,17 @@ export default async function SalesReportDetailsPage({
     notFound();
   }
 
+  let linkedDippingClosing = report.dippingClosing;
+  if (!linkedDippingClosing?.session && report.dippingClosingId) {
+    linkedDippingClosing = await prisma.dippingClosing.findFirst({
+      where: {
+        id: report.dippingClosingId,
+        session: { tenantId: actor.tenantId },
+      },
+      select: dippingClosingForReportSelect,
+    });
+  }
+
   type DippingUiContext = {
     openingLiters: number;
     expectedOpening: number;
@@ -139,8 +151,8 @@ export default async function SalesReportDetailsPage({
   let dippingContext: DippingUiContext | null = null;
   let dippingAlert: DippingUiContext | null = null;
 
-  if (report.dippingClosing?.session) {
-    const session = report.dippingClosing.session;
+  if (linkedDippingClosing?.session) {
+    const session = linkedDippingClosing.session;
     const expectedOpening = await fetchExpectedOpeningBeforeSession(prisma, session);
     const openingLiters = Number(session.openingLiters);
     const base = {
@@ -148,7 +160,7 @@ export default async function SalesReportDetailsPage({
       expectedOpening: expectedOpening ?? openingLiters,
       sessionId: session.id,
       tankName: session.tank.name,
-      closingLiters: Number(report.dippingClosing.closingLiters),
+      closingLiters: Number(linkedDippingClosing.closingLiters),
     };
     dippingContext = base;
     if (
@@ -160,6 +172,9 @@ export default async function SalesReportDetailsPage({
   }
 
   const serializedReport = JSON.parse(JSON.stringify(report));
+  if (!serializedReport.dippingClosing && linkedDippingClosing) {
+    serializedReport.dippingClosing = JSON.parse(JSON.stringify(linkedDippingClosing));
+  }
 
   return (
     <SalesReportDetails

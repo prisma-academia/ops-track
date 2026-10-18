@@ -266,6 +266,13 @@ export async function POST(
         payments,
       });
 
+      if (body.dippingClosingId) {
+        await tx.dippingClosing.updateMany({
+          where: { id: body.dippingClosingId, generateddeliveryId: null },
+          data: { generateddeliveryId: log.id },
+        });
+      }
+
       return log;
     });
 

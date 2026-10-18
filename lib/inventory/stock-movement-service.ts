@@ -109,9 +109,13 @@ export const StockMovementService = {
     }, "RetailSale", { applyToTank: options?.applyToTank ?? false });
   },
 
-  async recordAdjustment(tx: Prisma.TransactionClient, params: CreateStockMovementParams) {
+  async recordAdjustment(
+    tx: Prisma.TransactionClient,
+    params: CreateStockMovementParams,
+    options?: ExecuteStockMovementOptions,
+  ) {
     // Adjustments can be positive or negative
-    return executeStockMovement(tx, StockMovementType.ADJUSTMENT, params, "Adjustment");
+    return executeStockMovement(tx, StockMovementType.ADJUSTMENT, params, "Adjustment", options);
   },
 
   async recordLoss(tx: Prisma.TransactionClient, params: CreateStockMovementParams) {

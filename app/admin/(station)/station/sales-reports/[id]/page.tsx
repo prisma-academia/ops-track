@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 import { notFound } from "next/navigation";
+import { fetchExpectedOpeningBeforeSession } from "@/lib/dipping/session-context";
+import { requiresOpeningGapConfirmation } from "@/lib/dipping/expected-opening";
 import { SalesReportDetails } from "./sales-report-details";
 
 const userSelect = {
@@ -69,7 +71,22 @@ export default async function SalesReportDetailsPage({
         select: { id: true, name: true, code: true },
       },
       dippingClosing: {
-        select: { id: true, recordedAt: true },
+        select: {
+          id: true,
+          recordedAt: true,
+          closingLiters: true,
+          session: {
+            select: {
+              id: true,
+              openingLiters: true,
+              openingGapConfirmed: true,
+              openedAt: true,
+              tankId: true,
+              tenantId: true,
+              tank: { select: { name: true } },
+            },
+          },
+        },
       },
       recordedBy: userSelect,
       approvedBy: userSelect,
@@ -111,7 +128,45 @@ export default async function SalesReportDetailsPage({
     notFound();
   }
 
+  type DippingUiContext = {
+    openingLiters: number;
+    expectedOpening: number;
+    sessionId: string;
+    tankName: string;
+    closingLiters: number;
+  };
+
+  let dippingContext: DippingUiContext | null = null;
+  let dippingAlert: DippingUiContext | null = null;
+
+  if (report.dippingClosing?.session) {
+    const session = report.dippingClosing.session;
+    const expectedOpening = await fetchExpectedOpeningBeforeSession(prisma, session);
+    const openingLiters = Number(session.openingLiters);
+    const base = {
+      openingLiters,
+      expectedOpening: expectedOpening ?? openingLiters,
+      sessionId: session.id,
+      tankName: session.tank.name,
+      closingLiters: Number(report.dippingClosing.closingLiters),
+    };
+    dippingContext = base;
+    if (
+      expectedOpening != null &&
+      requiresOpeningGapConfirmation(expectedOpening, openingLiters)
+    ) {
+      dippingAlert = { ...base, expectedOpening };
+    }
+  }
+
   const serializedReport = JSON.parse(JSON.stringify(report));
 
-  return <SalesReportDetails report={serializedReport} />;
+  return (
+    <SalesReportDetails
+      report={serializedReport}
+      dippingAlert={dippingAlert}
+      dippingContext={dippingContext}
+      canCorrectDipping={hasPermission(actor, PERMISSIONS.TENANT_DIPPINGS_WRITE.key)}
+    />
+  );
 }

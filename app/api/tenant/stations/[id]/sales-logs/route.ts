@@ -18,6 +18,7 @@ import {
   validatePaymentInputs,
 } from "@/lib/sales/payments";
 import { z } from "zod";
+import { computeLitersSoldForClosing } from "@/lib/dipping/closing-interval";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -137,10 +138,25 @@ export async function POST(
     const { amountPos, amountTransfer } = sumsFromPayments(payments);
     const banks = firstBankIds(payments);
 
+    let litersSold = body.litersSold;
+    if (body.dippingClosingId) {
+      const closing = await prisma.dippingClosing.findUnique({
+        where: { id: body.dippingClosingId },
+        include: {
+          session: {
+            include: { closings: { orderBy: { recordedAt: "asc" } } },
+          },
+        },
+      });
+      if (closing) {
+        litersSold = computeLitersSoldForClosing(closing.session, body.dippingClosingId);
+      }
+    }
+
     const appliedCredit = Number(body.appliedCredit || 0);
     if (appliedCredit > 0) {
       const available = await computeStationOverpayment(stationId, actor.tenantId);
-      const expected = Number(body.litersSold) * Number(body.pricePerLiter);
+      const expected = Number(litersSold) * Number(body.pricePerLiter);
       const maxCredit = Math.max(0, Math.min(available, expected));
       if (appliedCredit > maxCredit + 0.01) {
         throw new DomainError(
@@ -211,7 +227,7 @@ export async function POST(
           tenantId: actor.tenantId,
           stationId,
           productType: body.productType,
-          litersSold: body.litersSold,
+          litersSold,
           pricePerLiter: body.pricePerLiter,
           amountPos,
           amountTransfer,

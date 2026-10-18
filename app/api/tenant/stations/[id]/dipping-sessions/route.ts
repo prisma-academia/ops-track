@@ -6,12 +6,15 @@ import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { checkAndCreateVarianceTicket } from "@/lib/variance";
+import { requiresOpeningGapConfirmation } from "@/lib/dipping/expected-opening";
+import { fetchExpectedOpeningForNewSession } from "@/lib/dipping/session-context";
 
 const OpenSessionSchema = z.object({
   clientId: z.string().optional(),
   tankId: z.string().min(1),
   openingLiters: z.coerce.number().nonnegative(),
   pricePerLiter: z.coerce.number().positive(),
+  confirmedOpeningGap: z.boolean().optional(),
 });
 
 export async function POST(
@@ -86,37 +89,30 @@ export async function POST(
       }
     }
 
-    // Variance detection: fetch last session for this tank
-    const lastSession = await prisma.dippingSession.findFirst({
-      where: { tankId: body.tankId, tenantId: actor.tenantId },
-      orderBy: { openedAt: "desc" },
-      include: { closings: { orderBy: { recordedAt: "desc" }, take: 1 } },
-    });
+    const { expected: varianceExpected } = await fetchExpectedOpeningForNewSession(
+      prisma,
+      body.tankId,
+      actor.tenantId,
+    );
+    const shouldCheckVariance = varianceExpected != null;
 
-    let varianceExpected = 0;
-    let shouldCheckVariance = false;
-
-    if (lastSession && lastSession.closings.length > 0) {
-      const lastClosing = lastSession.closings[0];
-      let expectedVolume = lastClosing.closingLiters;
-
-      // Add waybill deliveries that occurred after the last closing
-      const deliveries = await prisma.waybillDipping.findMany({
-        where: {
-          tankId: body.tankId,
-          createdAt: { gt: lastClosing.recordedAt },
-        },
-      });
-
-      for (const d of deliveries) {
-        if (d.afterLiters && d.beforeLiters) {
-          expectedVolume = expectedVolume.plus(d.afterLiters.minus(d.beforeLiters));
-        }
-      }
-
-      varianceExpected = expectedVolume.toNumber();
-      shouldCheckVariance = true;
+    if (
+      varianceExpected != null &&
+      requiresOpeningGapConfirmation(varianceExpected, body.openingLiters) &&
+      body.confirmedOpeningGap !== true
+    ) {
+      const gap = Math.abs(varianceExpected - body.openingLiters);
+      throw new DomainError(
+        400,
+        "opening_gap_unconfirmed",
+        `Opening is ${body.openingLiters.toLocaleString()} L but the last closing was ${varianceExpected.toLocaleString()} L (${gap.toLocaleString()} L difference). Confirm the stick reading on the device before saving.`,
+      );
     }
+
+    const openingGapConfirmed =
+      varianceExpected != null &&
+      requiresOpeningGapConfirmation(varianceExpected, body.openingLiters) &&
+      body.confirmedOpeningGap === true;
 
     // Check if unresolved variance tickets block this operation
     const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId } });
@@ -172,10 +168,11 @@ export async function POST(
           openingLiters: body.openingLiters,
           pricePerLiter: body.pricePerLiter,
           status: "OPEN",
+          openingGapConfirmed,
         },
       });
 
-      if (shouldCheckVariance) {
+      if (shouldCheckVariance && varianceExpected != null) {
         await checkAndCreateVarianceTicket({
           tenantId: actor.tenantId,
           stationId,

@@ -131,7 +131,17 @@ interface SalesReportRow extends PaymentEntry {
     pricePerLiter: number;
     debtRepayments: PaymentEntry[];
   }) | null;
-  dippingClosing?: { id: string; recordedAt: string | Date } | null;
+  dippingClosing?: {
+    id: string;
+    recordedAt: string | Date;
+    closingLiters?: number;
+    session?: {
+      id: string;
+      openingLiters: number;
+      openingGapConfirmed?: boolean;
+      tank?: { name: string };
+    };
+  } | null;
   debtRepayments?: PaymentEntry[];
 }
 
@@ -283,8 +293,31 @@ function numberPaymentLines(lines: PaymentLine[]): PaymentLine[] {
   });
 }
 
-export function SalesReportDetails({ report }: { report: SalesReportRow }) {
+type DippingAlert = {
+  openingLiters: number;
+  expectedOpening: number;
+  sessionId: string;
+  tankName: string;
+  closingLiters: number;
+};
+
+export function SalesReportDetails({
+  report,
+  dippingAlert = null,
+  dippingContext = null,
+  canCorrectDipping = false,
+}: {
+  report: SalesReportRow;
+  dippingAlert?: DippingAlert | null;
+  dippingContext?: DippingAlert | null;
+  canCorrectDipping?: boolean;
+}) {
   const router = useRouter();
+
+  const [correctOpen, setCorrectOpen] = React.useState(false);
+  const [correctClosingLiters, setCorrectClosingLiters] = React.useState("");
+  const [correctReason, setCorrectReason] = React.useState("");
+  const [correctSubmitting, setCorrectSubmitting] = React.useState(false);
 
   const [reviewModalOpen, setReviewModalOpen] = React.useState(false);
   const [reviewTargetId, setReviewTargetId] = React.useState<string | null>(null);
@@ -702,6 +735,45 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
     (report.dippingClosing?.recordedAt ? formatTimeOnly(report.dippingClosing.recordedAt) : null) ||
     (report.payments?.[0]?.createdAt ? formatTimeOnly(report.payments[0].createdAt) : null);
 
+  const dipSession = report.dippingClosing?.session;
+  const dipForCorrect = dippingContext ?? dippingAlert;
+  const correctPreview = React.useMemo(() => {
+    if (!dipForCorrect || !correctClosingLiters.trim()) return null;
+    const left = Number(correctClosingLiters.replace(/,/g, ""));
+    if (!Number.isFinite(left) || left < 0) return null;
+    const newSold = Math.max(0, dipForCorrect.expectedOpening - left);
+    return { left, newSold };
+  }, [dipForCorrect, correctClosingLiters]);
+
+  const handleCorrectDip = async () => {
+    if (!dipForCorrect || !correctPreview) return;
+    if (correctReason.trim().length < 3) {
+      toast.error("Please enter a short reason (at least 3 characters).");
+      return;
+    }
+    setCorrectSubmitting(true);
+    try {
+      await apiPost(
+        `/api/tenant/stations/${report.stationId}/dipping-sessions/${dipForCorrect.sessionId}/correct`,
+        {
+          closingLiters: correctPreview.left,
+          reason: correctReason.trim(),
+        },
+      );
+      toast.success("Dipping reading corrected. Refreshing…");
+      setCorrectOpen(false);
+      router.refresh();
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: string }).message)
+          : "Could not correct this reading.";
+      toast.error(message);
+    } finally {
+      setCorrectSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-4">
@@ -738,6 +810,81 @@ export function SalesReportDetails({ report }: { report: SalesReportRow }) {
           </Badge>
         )}
       </div>
+
+      {dippingAlert && report.status !== "APPROVED" && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+          Opening is {dippingAlert.openingLiters.toLocaleString()} L. The last closing was{" "}
+          {dippingAlert.expectedOpening.toLocaleString()} L. Check the stick reading before approving.
+        </div>
+      )}
+
+      {canCorrectDipping && dipSession && dipForCorrect && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" onClick={() => setCorrectOpen(true)}>
+            Correct this reading
+          </Button>
+          <p className="text-sm text-muted-foreground">
+            Last closing was {dipForCorrect.expectedOpening.toLocaleString()} L. Opening was recorded as{" "}
+            {dipForCorrect.openingLiters.toLocaleString()} L. Tank shows{" "}
+            {dipForCorrect.closingLiters.toLocaleString()} L left.
+          </p>
+        </div>
+      )}
+
+      <Dialog open={correctOpen} onOpenChange={setCorrectOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Correct dipping reading</DialogTitle>
+            <DialogDescription>
+              {dipForCorrect
+                ? `We will set opening back to ${dipForCorrect.expectedOpening.toLocaleString()} L (${dipForCorrect.tankName}). Enter what is really left in the tank.`
+                : "Enter the corrected fuel left in the tank."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <Label htmlFor="correct-closing">Litres left in tank</Label>
+              <input
+                id="correct-closing"
+                className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                inputMode="decimal"
+                value={correctClosingLiters}
+                onChange={(e) => setCorrectClosingLiters(e.target.value)}
+                placeholder="e.g. 12500"
+              />
+            </div>
+            <div>
+              <Label htmlFor="correct-reason">Reason</Label>
+              <Textarea
+                id="correct-reason"
+                className="mt-1"
+                value={correctReason}
+                onChange={(e) => setCorrectReason(e.target.value)}
+                placeholder="e.g. Mistyped opening dip on mobile"
+                rows={3}
+              />
+            </div>
+            {correctPreview && dipForCorrect && (
+              <p className="text-sm text-muted-foreground">
+                Sale will be {correctPreview.newSold.toLocaleString()} L. Payments already recorded stay on
+                file; we will flag the sale for review if amounts no longer match.
+              </p>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              type="button"
+              disabled={correctSubmitting || !correctPreview}
+              onClick={handleCorrectDip}
+            >
+              {correctSubmitting ? "Saving…" : "Confirm correction"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-foreground">Amounts sent</h2>

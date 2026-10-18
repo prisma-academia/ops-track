@@ -5,12 +5,14 @@ import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
+import { requiresEmptyTankConfirmation } from "@/lib/dipping/expected-opening";
 
 const CloseSessionSchema = z.object({
   id: z.string().optional(), // Client-generated ID
   closingLiters: z.coerce.number().nonnegative(),
   reason: z.enum(["END_OF_DAY", "PRICE_CHANGE", "ROUTINE"]),
   newPricePerLiter: z.coerce.number().positive().optional(),
+  confirmedEmptyTank: z.boolean().optional(),
 });
 
 export async function POST(
@@ -41,6 +43,18 @@ export async function POST(
 
     if (body.reason === "PRICE_CHANGE" && !body.newPricePerLiter) {
       throw new DomainError(400, "missing_price", "A new price per liter is required when reason is PRICE_CHANGE.");
+    }
+
+    const tankCapacity = session.tank.capacity?.toNumber?.() ?? Number(session.tank.capacity);
+    if (
+      requiresEmptyTankConfirmation(body.closingLiters, tankCapacity) &&
+      body.confirmedEmptyTank !== true
+    ) {
+      throw new DomainError(
+        400,
+        "empty_tank_unconfirmed",
+        `Closing volume is ${body.closingLiters.toLocaleString()} L. Confirm on the device that the tank is nearly empty before saving.`,
+      );
     }
 
     // Block dipping session closing if there are unapproved sales logs in the current dipping session

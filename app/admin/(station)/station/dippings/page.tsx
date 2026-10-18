@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { resolveActiveOrgId } from "@/lib/auth/org-scope";
+import { expectedOpeningBeforeSessionFromRows } from "@/lib/dipping/session-context";
 import { DippingsManager, type DippingRow } from "./dippings-manager";
 
 export const metadata = { title: "Dippings" };
@@ -89,6 +90,12 @@ export default async function DippingsPage() {
   const rows: DippingRow[] = [];
 
   for (const session of sessions) {
+    const openingAfter = Number(session.openingLiters);
+    const expectedBefore = expectedOpeningBeforeSessionFromRows(
+      session,
+      sessions,
+      waybillDippings,
+    );
     rows.push({
       id: `session-open-${session.id}`,
       source: "SESSION",
@@ -100,8 +107,10 @@ export default async function DippingsPage() {
       productType: session.tank.productType,
       dippingType: "OPENING",
       reason: "OPENING_DIP",
-      dippingLiters: Number(session.openingLiters),
-      afterLiters: Number(session.openingLiters),
+      dippingLiters: openingAfter,
+      beforeLiters: expectedBefore,
+      afterLiters: openingAfter,
+      variance: expectedBefore != null ? openingAfter - expectedBefore : null,
       recordedAt: session.openedAt.toISOString(),
     });
 

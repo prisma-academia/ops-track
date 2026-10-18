@@ -195,6 +195,7 @@ model Tenant {
   transactions         Transaction[]
   transportLossLogs    TransportLossLog[]
   dippingSessions      DippingSession[]
+  dipCorrections       DipCorrection[]
   bankAccounts         BankAccount[]
   stationBankAccounts  StationBankAccount[]
   varianceLogs         VarianceLog[]
@@ -330,6 +331,7 @@ model TenantUser {
   recordedExpenses        Expense[]        @relation("ExpenseRecordedBy")
   approvedExpenses        Expense[]        @relation("ExpenseApprovedBy")
   recordedWaybillDippings WaybillDipping[]
+  dipCorrections          DipCorrection[]
   stockMovements          StockMovement[]
   createdNotifications    NotificationMessage[]
   managedClientFuelOrders ClientFuelOrder[] @relation("FuelOrderManager")
@@ -936,6 +938,7 @@ model SalesLog {
 
   dippingClosing   DippingClosing?
   dippingClosingId String?         @unique
+  dipCorrections   DipCorrection[]
 
   posBankAccountId      String?
   posBankAccount        BankAccount? @relation("SalesLogPosBankAccount", fields: [posBankAccountId], references: [id], onDelete: SetNull)
@@ -1822,12 +1825,40 @@ model DippingSession {
   status      DippingSessionStatus @default(OPEN)
   completedAt DateTime?
 
-  closings DippingClosing[]
+  openingGapConfirmed Boolean @default(false)
+
+  closings       DippingClosing[]
+  dipCorrections DipCorrection[]
 
   @@index([tenantId])
   @@index([stationId])
   @@index([tankId])
   @@map("dipping_sessions")
+}
+
+model DipCorrection {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId String
+  session   DippingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  salesLogId String
+  salesLog  SalesLog @relation(fields: [salesLogId], references: [id], onDelete: Cascade)
+
+  oldOpeningLiters Decimal @db.Decimal(12, 2)
+  newOpeningLiters Decimal @db.Decimal(12, 2)
+  oldClosingLiters Decimal @db.Decimal(12, 2)
+  newClosingLiters Decimal @db.Decimal(12, 2)
+  reason           String  @db.Text
+
+  correctedById String
+  correctedBy   TenantUser @relation(fields: [correctedById], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([sessionId])
+  @@index([salesLogId])
+  @@map("dip_corrections")
 }
 
 model DippingClosing {

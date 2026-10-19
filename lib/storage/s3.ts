@@ -1,5 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { S3Client, PutObjectCommand, HeadBucketCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  HeadBucketCommand,
+  type S3ClientConfig,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/db/client";
@@ -21,6 +26,7 @@ import { prisma } from "@/lib/db/client";
 const DEFAULT_REGION = "us-east-1";
 
 export const MAX_LOGO_BYTES = 2 * 1024 * 1024; // 2 MB
+export const MAX_RECEIPT_BYTES = 8 * 1024 * 1024; // 8 MB
 
 const CONTENT_TYPE_EXT: Record<string, string> = {
   "image/png": "png",
@@ -56,36 +62,49 @@ export function s3Configured(): boolean {
 }
 
 let client: S3Client | null = null;
+let presignClient: S3Client | null = null;
+
+function s3ClientOptions(endpoint?: string): S3ClientConfig {
+  const forcePathStyle = endpoint ?? env.S3_ENDPOINT
+    ? env.S3_FORCE_PATH_STYLE !== false
+    : env.S3_FORCE_PATH_STYLE === true;
+
+  return {
+    region: env.S3_REGION ?? DEFAULT_REGION,
+    ...(endpoint ? { endpoint } : env.S3_ENDPOINT ? { endpoint: env.S3_ENDPOINT } : {}),
+    forcePathStyle,
+    credentials: {
+      accessKeyId: env.S3_ACCESS_KEY_ID!,
+      secretAccessKey: env.S3_SECRET_ACCESS_KEY!,
+    },
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
+  };
+}
 
 function getClient(): S3Client {
   if (!s3Configured()) {
     throw new Error("S3 is not configured (S3_REGION/S3_BUCKET/credentials).");
   }
   if (!client) {
-    // Default to path-style whenever a custom endpoint is set unless the
-    // operator explicitly opts out (S3_FORCE_PATH_STYLE=false).
-    const forcePathStyle = env.S3_ENDPOINT
-      ? env.S3_FORCE_PATH_STYLE !== false
-      : env.S3_FORCE_PATH_STYLE === true;
-
-    client = new S3Client({
-      region: env.S3_REGION ?? DEFAULT_REGION,
-      ...(env.S3_ENDPOINT ? { endpoint: env.S3_ENDPOINT } : {}),
-      forcePathStyle,
-      credentials: {
-        accessKeyId: env.S3_ACCESS_KEY_ID!,
-        secretAccessKey: env.S3_SECRET_ACCESS_KEY!,
-      },
-      // AWS SDK v3 (>= ~3.730) sends CRC32 checksum headers on PutObject by
-      // default. Browsers performing the presigned PUT never send that signed
-      // header, so MinIO and other gateways reject the upload with a signature
-      // mismatch. Only compute checksums when the operation actually requires
-      // one — AWS S3 still works, and self-hosted backends accept the PUT.
-      requestChecksumCalculation: "WHEN_REQUIRED",
-      responseChecksumValidation: "WHEN_REQUIRED",
-    });
+    client = new S3Client(s3ClientOptions());
   }
   return client;
+}
+
+/** Presigned PUT URLs must use an endpoint reachable from the uploader (browser / mobile). */
+function getPresignClient(): S3Client {
+  if (!s3Configured()) {
+    throw new Error("S3 is not configured (S3_REGION/S3_BUCKET/credentials).");
+  }
+  const publicEndpoint = env.S3_PUBLIC_ENDPOINT;
+  if (!publicEndpoint) {
+    return getClient();
+  }
+  if (!presignClient) {
+    presignClient = new S3Client(s3ClientOptions(publicEndpoint));
+  }
+  return presignClient;
 }
 
 export function publicUrlForKey(key: string): string {
@@ -98,35 +117,61 @@ export function publicUrlForKey(key: string): string {
   return `https://${env.S3_BUCKET}.s3.${env.S3_REGION}.amazonaws.com/${key}`;
 }
 
-export async function createPresignedUpload(input: {
-  tenantId: string;
-  contentType: string;
-  kind: PresignKind;
-}): Promise<{ url: string; key: string; publicUrl: string }> {
-  const ext = CONTENT_TYPE_EXT[input.contentType];
+async function buildObjectKey(
+  tenantId: string,
+  kind: PresignKind,
+  contentType: string,
+): Promise<string> {
+  const ext = CONTENT_TYPE_EXT[contentType];
   if (!ext) throw new Error("Unsupported content type.");
-  
+
   let tenantName = "unknown";
   try {
     const tenant = await prisma.tenant.findUnique({
-      where: { id: input.tenantId },
-      select: { name: true }
+      where: { id: tenantId },
+      select: { name: true },
     });
     if (tenant?.name) {
-      tenantName = tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      tenantName = tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     }
   } catch (error) {
     console.error("Failed to fetch tenant name for S3 upload:", error);
   }
 
-  const key = `tenants/${tenantName}-${input.tenantId}/${input.kind}/${randomBytes(8).toString("hex")}.${ext}`;
-  
+  return `tenants/${tenantName}-${tenantId}/${kind}/${randomBytes(8).toString("hex")}.${ext}`;
+}
+
+export async function uploadObject(input: {
+  tenantId: string;
+  contentType: string;
+  kind: PresignKind;
+  body: Uint8Array | Buffer;
+}): Promise<{ key: string; publicUrl: string }> {
+  const key = await buildObjectKey(input.tenantId, input.kind, input.contentType);
+  await getClient().send(
+    new PutObjectCommand({
+      Bucket: env.S3_BUCKET!,
+      Key: key,
+      ContentType: input.contentType,
+      Body: input.body,
+    }),
+  );
+  return { key, publicUrl: publicUrlForKey(key) };
+}
+
+export async function createPresignedUpload(input: {
+  tenantId: string;
+  contentType: string;
+  kind: PresignKind;
+}): Promise<{ url: string; key: string; publicUrl: string }> {
+  const key = await buildObjectKey(input.tenantId, input.kind, input.contentType);
+
   const command = new PutObjectCommand({
     Bucket: env.S3_BUCKET!,
     Key: key,
     ContentType: input.contentType,
   });
-  const url = await getSignedUrl(getClient(), command, { expiresIn: 300 });
+  const url = await getSignedUrl(getPresignClient(), command, { expiresIn: 300 });
   return { url, key, publicUrl: publicUrlForKey(key) };
 }
 

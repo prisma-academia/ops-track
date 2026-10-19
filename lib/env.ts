@@ -39,6 +39,8 @@ const schema = z.object({
   GOOGLE_CREDENTIALS_JSON: z.string().optional(),
   PAYSTACK_SECRET_KEY: z.string().optional(),
   S3_ENDPOINT: z.url().optional(),
+  /** Public S3/MinIO URL used only for presigned PUT links (must match what browsers/mobile can reach). */
+  S3_PUBLIC_ENDPOINT: z.url().optional(),
   S3_PUBLIC_BASE_URL: z.url().optional(),
   // Path-style addressing (bucket in path, not subdomain). Required by MinIO
   // and most self-hosted gateways. Defaults to true whenever S3_ENDPOINT is set.

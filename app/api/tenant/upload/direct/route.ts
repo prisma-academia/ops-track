@@ -36,7 +36,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const contentType = file.type || "application/octet-stream";
+    const fileName = file instanceof File ? file.name : "upload.jpg";
+    let contentType = file.type || "application/octet-stream";
+    if (!isAllowedReceiptType(contentType)) {
+      const ext = fileName.split(".").pop()?.toLowerCase();
+      const byExt: Record<string, string> = {
+        png: "image/png",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        webp: "image/webp",
+        pdf: "application/pdf",
+      };
+      if (ext && byExt[ext]) contentType = byExt[ext];
+    }
     if (!isAllowedReceiptType(contentType)) {
       throw new DomainError(400, "invalid_type", "Unsupported file type.");
     }

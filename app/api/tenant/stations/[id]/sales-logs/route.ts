@@ -182,7 +182,11 @@ export async function POST(
         include: salesLogInclude,
       });
       if (existingLog) {
-        return ok({ salesLog: serializeSalesLog(existingLog) });
+        throw new DomainError(
+          409,
+          "sales_log_exists",
+          "This sales report already exists on the server. Submit payment changes from the edit screen instead of creating a new report.",
+        );
       }
     }
 

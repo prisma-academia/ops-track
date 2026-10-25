@@ -1,13 +1,15 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { DataTable } from "@/components/data-table";
+import { DataTable, type DataTableProps } from "@/components/data-table";
 import {
   DataTableFilterDrawer,
   type FilterConfig,
 } from "@/components/data-table-filter-drawer";
-import { BadgeDollarSign, Droplet, FileText, MoreHorizontal, PackageCheck, Pencil, Printer, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { Droplet, FileText, MoreHorizontal, PackageCheck, Pencil, Printer, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { BadgePercentIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { format, formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -61,6 +63,75 @@ export type SaleRow = {
   transportRate?: number;
   shortageParty?: "TRANSPORTER" | "SUPPLIER" | "UNCONFIGURED";
 };
+
+type StatusTone = {
+  label: string;
+  text: string;
+  dot: string;
+  surface: string;
+  border: string;
+};
+
+const DELIVERY_PAYMENT_STATUS: Record<string, StatusTone> = {
+  CLEARED: {
+    label: "Cleared",
+    text: "text-emerald-700 dark:text-emerald-400",
+    dot: "bg-emerald-600 dark:bg-emerald-400",
+    surface: "bg-emerald-50/80 dark:bg-emerald-950/30",
+    border: "border-emerald-200/80 dark:border-emerald-800/60",
+  },
+  PART_PAID: {
+    label: "Part paid",
+    text: "text-amber-700 dark:text-amber-400",
+    dot: "bg-amber-600 dark:bg-amber-400",
+    surface: "bg-amber-50/80 dark:bg-amber-950/30",
+    border: "border-amber-200/80 dark:border-amber-800/60",
+  },
+  UNPAID: {
+    label: "Unpaid",
+    text: "text-rose-700 dark:text-rose-400",
+    dot: "bg-rose-600 dark:bg-rose-400",
+    surface: "bg-rose-50/80 dark:bg-rose-950/30",
+    border: "border-rose-200/80 dark:border-rose-800/60",
+  },
+  OVERDUE: {
+    label: "Overdue",
+    text: "text-rose-800 dark:text-rose-300",
+    dot: "bg-rose-700 dark:bg-rose-300",
+    surface: "bg-rose-50 dark:bg-rose-950/40",
+    border: "border-rose-300 dark:border-rose-700/70",
+  },
+};
+
+function formatDeliveryNaira(value: number) {
+  return `₦${value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function DeliveryPaymentStatusBadge({ status }: { status: string }) {
+  const tone =
+    DELIVERY_PAYMENT_STATUS[status] ?? {
+      label: status.replace(/_/g, " ").toLowerCase(),
+      text: "text-muted-foreground",
+      dot: "bg-muted-foreground",
+      surface: "bg-muted/40",
+      border: "border-border",
+    };
+
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "h-[22px] gap-1.5 rounded-md px-2 text-[11px] font-medium capitalize tracking-normal shadow-none",
+        tone.text,
+        tone.surface,
+        tone.border
+      )}
+    >
+      <span className={cn("size-1.5 shrink-0 rounded-full", tone.dot)} aria-hidden />
+      {tone.label}
+    </Badge>
+  );
+}
 
 function DeliveryRowActions({ row }: { row: SaleRow }) {
   const router = useRouter();
@@ -436,20 +507,20 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
 const columns: ColumnDef<SaleRow>[] = [
   { 
     accessorKey: "customerName", 
-    header: "Customer",
+    header: () => <span className="text-xs font-medium text-muted-foreground">Customer</span>,
     cell: ({ row }) => {
       const name = row.original.customerName;
       const details = row.original.transportDetails;
       return (
-        <div className="flex items-center gap-3 py-1 min-w-0 max-w-[220px] sm:max-w-[260px]">
-          <div className="size-10 flex items-center justify-center shrink-0 text-primary bg-primary/10 rounded-md">
-            <BadgeDollarSign className="w-5 h-5" />
+        <div className="flex items-center gap-2.5 py-0.5 min-w-0 max-w-[220px] sm:max-w-[280px]">
+          <div className="size-9 flex items-center justify-center shrink-0 rounded-lg border border-primary/15 bg-primary/5 text-primary">
+            <HugeiconsIcon icon={BadgePercentIcon} size={18} strokeWidth={2} />
           </div>
-          <div className="flex flex-col min-w-0 flex-1">
-            <span className="font-semibold text-foreground truncate" title={name}>
+          <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+            <span className="text-[13px] font-medium text-foreground truncate leading-tight" title={name}>
               {name}
             </span>
-            <span className="text-xs text-muted-foreground truncate" title={details}>
+            <span className="text-[11px] text-muted-foreground truncate leading-snug" title={details}>
               {details}
             </span>
           </div>
@@ -459,75 +530,130 @@ const columns: ColumnDef<SaleRow>[] = [
   },
   { 
     accessorKey: "litersReceived", 
-    header: "Vol. Received",
+    header: () => <span className="text-xs font-medium text-muted-foreground">Received</span>,
     cell: ({ row }) => {
       const vol = row.original.litersReceived;
       const unit = row.original.volumeUnit || "L";
-      return vol != null ? (
-        <span className="font-medium text-foreground">
-          {vol.toLocaleString()} {unit}
+      if (vol == null) {
+        return (
+          <Badge
+            variant="outline"
+            className="h-[22px] gap-1.5 rounded-md border-border/80 bg-muted/30 px-2 text-[11px] font-medium text-muted-foreground shadow-none"
+          >
+            <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/70" aria-hidden />
+            Pending
+          </Badge>
+        );
+      }
+      return (
+        <span className="font-mono text-xs tabular-nums text-foreground">
+          {vol.toLocaleString()}
+          <span className="ml-0.5 text-[10px] font-sans text-muted-foreground">{unit}</span>
         </span>
-      ) : (
-        <span className="text-muted-foreground italic">Pending</span>
       );
     }
   },
   {
     accessorKey: "variance",
-    header: "Variance",
+    header: () => <span className="text-xs font-medium text-muted-foreground">Variance</span>,
     cell: ({ row }) => {
       const variance = row.original.variance;
       const unit = row.original.volumeUnit || "L";
-      if (variance === null) return "—";
+      if (variance === null) {
+        return <span className="text-xs text-muted-foreground/60">—</span>;
+      }
+      const isShortage = variance > 0;
+      const isBalanced = variance === 0;
+      const display = isShortage
+        ? `−${variance.toLocaleString()}`
+        : variance < 0
+          ? `+${Math.abs(variance).toLocaleString()}`
+          : "0";
+
+      if (isBalanced) {
+        return (
+          <Badge
+            variant="outline"
+            className="h-[22px] gap-1.5 rounded-md border-emerald-200/80 bg-emerald-50/60 px-2 text-[11px] font-medium text-emerald-700 shadow-none dark:border-emerald-800/60 dark:bg-emerald-950/25 dark:text-emerald-400"
+          >
+            <span className="size-1.5 shrink-0 rounded-full bg-emerald-600 dark:bg-emerald-400" aria-hidden />
+            Balanced
+          </Badge>
+        );
+      }
+
       return (
-        <span className={variance > 0 ? "text-destructive font-medium" : "text-emerald-600 font-medium"}>
-          {variance > 0 ? `-${variance.toLocaleString()} ${unit}` : `${variance.toLocaleString()} ${unit}`}
+        <span
+          className={cn(
+            "font-mono text-xs tabular-nums font-medium",
+            isShortage ? "text-rose-600 dark:text-rose-400" : "text-sky-600 dark:text-sky-400"
+          )}
+        >
+          {display}
+          <span className="ml-0.5 text-[10px] font-sans font-normal text-muted-foreground">{unit}</span>
         </span>
       );
     }
   },
   {
     accessorKey: "amountPerLiter",
-    header: "Sold Price (₦/L)",
-    cell: ({ row }) => row.original.amountPerLiter.toLocaleString(),
+    header: () => <span className="text-xs font-medium text-muted-foreground">Rate</span>,
+    cell: ({ row }) => (
+      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+        {formatDeliveryNaira(row.original.amountPerLiter)}
+        <span className="text-[10px] font-sans">/L</span>
+      </span>
+    ),
   },
   { 
     accessorKey: "totalExpectedAmount", 
-    header: "Expected Amt (₦)",
-    cell: ({ row }) => row.original.totalExpectedAmount.toLocaleString()
+    header: () => <span className="text-xs font-medium text-muted-foreground">Expected</span>,
+    cell: ({ row }) => (
+      <span className="font-mono text-xs tabular-nums font-medium text-foreground">
+        {formatDeliveryNaira(row.original.totalExpectedAmount)}
+      </span>
+    ),
   },
   { 
     accessorKey: "paymentReceived", 
-    header: "Paid (₦)",
-    cell: ({ row }) => row.original.paymentReceived.toLocaleString()
-  },
-  { 
-    accessorKey: "status", 
-    header: "Status",
+    header: () => <span className="text-xs font-medium text-muted-foreground">Collected</span>,
     cell: ({ row }) => {
-      const status = row.original.status;
-      let variant: "default" | "secondary" | "destructive" | "outline" = "secondary";
-      if (status === "UNPAID") variant = "destructive";
-      if (status === "PART_PAID") variant = "secondary";
-      if (status === "CLEARED") variant = "default";
-      if (status === "OVERDUE") variant = "destructive";
+      const paid = row.original.paymentReceived;
+      const expected = row.original.totalExpectedAmount;
+      const isFullyPaid = expected > 0 && paid >= expected;
       return (
-        <Badge variant={variant}>
-          {status}
-        </Badge>
+        <span
+          className={cn(
+            "font-mono text-xs tabular-nums",
+            isFullyPaid
+              ? "font-medium text-emerald-600 dark:text-emerald-400"
+              : paid > 0
+                ? "font-medium text-foreground"
+                : "text-muted-foreground"
+          )}
+        >
+          {formatDeliveryNaira(paid)}
+        </span>
       );
     }
   },
   { 
+    accessorKey: "status", 
+    header: () => <span className="text-xs font-medium text-muted-foreground">Payment</span>,
+    cell: ({ row }) => <DeliveryPaymentStatusBadge status={row.original.status} />,
+  },
+  { 
     accessorKey: "createdAt", 
-    header: "Date",
+    header: () => <span className="text-xs font-medium text-muted-foreground">Date</span>,
     cell: ({ row }) => {
       const dateStr = row.original.createdAt;
       const date = new Date(dateStr);
       return (
-        <div className="flex flex-col">
-          <span>{date.toLocaleDateString()}</span>
-          <span className="text-xs text-muted-foreground">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs font-medium text-foreground tabular-nums">
+            {format(date, "MMM d, yyyy")}
+          </span>
+          <span suppressHydrationWarning className="text-[11px] text-muted-foreground">
             {formatDistanceToNow(date, { addSuffix: true })}
           </span>
         </div>
@@ -554,7 +680,10 @@ export function SalesTable({
   data: SaleRow[];
   filterNode?: React.ReactNode;
   filterConfigs?: FilterConfig[];
-  serverPagination?: any;
+  serverPagination?: Omit<
+    NonNullable<DataTableProps<SaleRow, unknown>["serverPagination"]>,
+    "onPageChange" | "onPageSizeChange"
+  >;
 }) {
   const resolvedFilterNode =
     filterNode ??

@@ -5,6 +5,11 @@ const withNextIntl = createNextIntlPlugin("./lib/i18n/request.ts");
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["argon2"],
+  experimental: {
+    // Receipt photos are posted through /api. Keep headroom if a matcher
+    // ever includes those routes again (default proxy buffer is 10MB).
+    proxyClientMaxBodySize: "20mb",
+  },
   images: {
     remotePatterns: [
       {

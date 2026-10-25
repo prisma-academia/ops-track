@@ -9,6 +9,9 @@ import {
   uploadObject,
 } from "@/lib/storage/s3";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 /**
  * Server-side receipt upload for mobile (and other clients that cannot reach
  * internal MinIO presigned PUT URLs). Streams the file into object storage.
@@ -22,7 +25,12 @@ export async function POST(request: Request) {
       throw new DomainError(503, "storage_unconfigured", "Object storage is not configured.");
     }
 
-    const formData = await request.formData();
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      throw new DomainError(400, "invalid_file", "Receipt file could not be read. Try a smaller photo.");
+    }
     const file = formData.get("file");
     if (!file || !(file instanceof Blob)) {
       throw new DomainError(400, "invalid_file", "Missing file upload.");
@@ -54,12 +62,18 @@ export async function POST(request: Request) {
     }
 
     const body = Buffer.from(await file.arrayBuffer());
-    const { publicUrl } = await uploadObject({
-      tenantId: actor.tenantId,
-      contentType,
-      kind: "receipt",
-      body,
-    });
+    let publicUrl: string;
+    try {
+      ({ publicUrl } = await uploadObject({
+        tenantId: actor.tenantId,
+        contentType,
+        kind: "receipt",
+        body,
+      }));
+    } catch (err) {
+      console.error("MinIO receipt upload failed:", err);
+      throw new DomainError(502, "storage_error", "Could not store the receipt. Try again.");
+    }
 
     return ok({ publicUrl });
   } catch (e) {

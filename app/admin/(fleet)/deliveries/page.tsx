@@ -3,11 +3,39 @@ import { requireTenantPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { SalesTable } from "./table";
-import { Card, CardContent } from "@/components/ui/card";
-import { Banknote, Droplets, ReceiptText, Landmark } from "lucide-react";
-import { cn, formatShortCurrency, formatDestination, formatTruckLabel } from "@/lib/utils";
+import { FleetStatGroupCard } from "../_components/overview/fleet-stat-group-card";
+import type { FleetStatGroup } from "../types";
+import { formatDestination, formatTruckLabel } from "@/lib/utils";
 import { resolveDeliveryCreatedAtFilter } from "@/lib/fleet/delivery-sales-metrics";
 import { resolveShortageParty } from "@/lib/fleet/loss-attribution";
+import { format } from "date-fns";
+
+function formatNaira(value: number) {
+  return `₦${value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatLitersFull(value: number) {
+  return `${value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L`;
+}
+
+function resolveDeliveriesPeriodHint(from?: string, to?: string) {
+  if (from && to) {
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    if (!isNaN(fromDate.getTime()) && !isNaN(toDate.getTime())) {
+      return `${format(fromDate, "MMM d, yyyy")} – ${format(toDate, "MMM d, yyyy")}`;
+    }
+  }
+  if (from) {
+    const fromDate = new Date(from);
+    if (!isNaN(fromDate.getTime())) return `From ${format(fromDate, "MMM d, yyyy")}`;
+  }
+  if (to) {
+    const toDate = new Date(to);
+    if (!isNaN(toDate.getTime())) return `Until ${format(toDate, "MMM d, yyyy")}`;
+  }
+  return "All deliveries";
+}
 
 export default async function SalesPage({
   searchParams,
@@ -47,7 +75,7 @@ export default async function SalesPage({
     ...stations.map(s => ({ value: `s-${s.id}`, label: `Station: ${s.name}` }))
   ];
 
-  const [statsAgg, totalCount, Deliveries] = await Promise.all([
+  const [statsAgg, totalCount, statusBreakdown, Deliveries] = await Promise.all([
     prisma.delivery.aggregate({
       where,
       _sum: {
@@ -57,6 +85,11 @@ export default async function SalesPage({
       },
     }),
     prisma.delivery.count({ where }),
+    prisma.delivery.groupBy({
+      by: ["status"],
+      where,
+      _count: { _all: true },
+    }),
     prisma.delivery.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -101,6 +134,17 @@ export default async function SalesPage({
   const totalExpected = Number(statsAgg._sum.totalExpectedAmount) || 0;
   const totalCollected = Number(statsAgg._sum.paymentReceived) || 0;
   const outstanding = Math.max(0, totalExpected - totalCollected);
+  const collectionRate =
+    totalExpected > 0 ? Math.min(100, (totalCollected / totalExpected) * 100) : totalCollected > 0 ? 100 : 0;
+
+  const statusCount = (status: string) =>
+    statusBreakdown.find((row) => row.status === status)?._count._all ?? 0;
+  const unpaidCount = statusCount("UNPAID");
+  const partPaidCount = statusCount("PART_PAID");
+  const overdueCount = statusCount("OVERDUE");
+  const clearedCount = statusCount("CLEARED");
+
+  const periodHint = resolveDeliveriesPeriodHint(from, to);
 
   const rows = Deliveries.map((delivery) => {
     const litersDespatched = Number(delivery.litersDespatched);
@@ -167,34 +211,69 @@ export default async function SalesPage({
 
   const totalPages = Math.ceil(totalCount / take);
 
-  const stats = [
+  const statGroups: FleetStatGroup[] = [
     {
-      title: "Volume Sold",
-      value: `${totalVolume.toLocaleString()} L`,
-      icon: Droplets,
-      badgeColor: "bg-blue-400/10 text-blue-700 dark:text-blue-400",
-      iconColor: "text-blue-600",
+      id: "delivery-volume",
+      title: "Delivery volume",
+      accent: "blue",
+      headerIcon: "volume",
+      hint: `${totalCount.toLocaleString()} deliveries · ${periodHint}`,
+      metrics: [
+        {
+          label: "Dispatched",
+          icon: "sold",
+          value: formatLitersFull(totalVolume),
+          tooltip: formatLitersFull(totalVolume),
+        },
+        {
+          label: "On record",
+          icon: "ordered",
+          value: totalCount.toLocaleString(),
+          tooltip: `${totalCount.toLocaleString()} deliveries match current filters`,
+        },
+      ],
     },
     {
-      title: "Total Expected",
-      value: formatShortCurrency(totalExpected),
-      icon: ReceiptText,
-      badgeColor: "bg-indigo-400/10 text-indigo-700 dark:text-indigo-400",
-      iconColor: "text-indigo-600",
+      id: "sales-collections",
+      title: "Sales & collections",
+      accent: "emerald",
+      headerIcon: "sales",
+      hint: `${collectionRate.toFixed(1)}% collected · ${periodHint}`,
+      metrics: [
+        {
+          label: "Expected",
+          icon: "expected",
+          value: formatNaira(totalExpected),
+          tooltip: formatNaira(totalExpected),
+        },
+        {
+          label: "Collected",
+          icon: "collected",
+          value: formatNaira(totalCollected),
+          tooltip: formatNaira(totalCollected),
+        },
+      ],
     },
     {
-      title: "Collected Revenue",
-      value: formatShortCurrency(totalCollected),
-      icon: Banknote,
-      badgeColor: "bg-emerald-400/10 text-emerald-700 dark:text-emerald-400",
-      iconColor: "text-emerald-600",
-    },
-    {
-      title: "Outstanding",
-      value: formatShortCurrency(outstanding),
-      icon: Landmark,
-      badgeColor: "bg-rose-400/10 text-rose-700 dark:text-rose-400",
-      iconColor: "text-rose-600",
+      id: "receivables-tracking",
+      title: "Receivables",
+      accent: "amber",
+      headerIcon: "sales",
+      hint: `${unpaidCount} unpaid · ${partPaidCount} part paid · ${overdueCount} overdue`,
+      metrics: [
+        {
+          label: "Outstanding",
+          icon: "expected",
+          value: formatNaira(outstanding),
+          tooltip: formatNaira(outstanding),
+        },
+        {
+          label: "Cleared",
+          icon: "paid",
+          value: clearedCount.toLocaleString(),
+          tooltip: `${clearedCount.toLocaleString()} deliveries fully cleared`,
+        },
+      ],
     },
   ];
 
@@ -207,33 +286,11 @@ export default async function SalesPage({
         description="Manage B2B Deliveries and bulk deliveries to clients."
       />
       
-      <Card className="p-0 shadow-xs border-border/40">
-        <CardContent className="flex items-center w-full lg:flex-nowrap flex-wrap px-0">
-          {stats.map((item, index) => (
-            <div
-              key={index}
-              className="lg:w-3/12 md:w-6/12 w-full border-border border-b last:border-b-0 md:border-e md:even:border-e-0 md:nth-[n+3]:border-b-0 lg:border-b-0 lg:even:border-e lg:last:border-e-0"
-            >
-              <div className="p-4 flex items-start justify-between">
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{item.title}</p>
-                  <div>
-                    <p className="text-xl font-semibold text-card-foreground">
-                      {item.value}
-                    </p>
-                  </div>
-                </div>
-                <div className="p-2.5 rounded-full bg-muted/30 outline outline-1 outline-border/50">
-                  <item.icon
-                    size={14}
-                    className={cn("text-muted-foreground", item.iconColor)}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {statGroups.map((group) => (
+          <FleetStatGroupCard key={group.id} group={group} />
+        ))}
+      </div>
 
       <SalesTable
         data={rows}

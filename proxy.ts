@@ -122,5 +122,7 @@ function handleClient(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
+  // Skip /api so receipt uploads are not buffered by the proxy body limit.
+  // API routes are not rewritten here.
+  matcher: ["/((?!api/|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };

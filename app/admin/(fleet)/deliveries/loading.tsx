@@ -12,7 +12,7 @@ export default function DeliveriesLoading() {
         action={<Skeleton className="h-9 w-28 rounded-md" />}
       />
 
-      <KpiStatCardsSkeleton count={4} />
+      <KpiStatCardsSkeleton count={3} />
 
       <TableSkeleton
         headers={[

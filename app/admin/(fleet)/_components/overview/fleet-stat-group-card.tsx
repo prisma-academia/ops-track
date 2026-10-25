@@ -127,7 +127,7 @@ export function FleetStatGroupCard({ group }: { group: FleetStatGroup }) {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span
-                    className="text-sm font-semibold tabular-nums text-foreground text-right cursor-default shrink-0 max-w-[55%] truncate"
+                    className="text-sm font-semibold tabular-nums text-foreground text-right cursor-default shrink-0 max-w-[58%] break-all leading-snug"
                     tabIndex={0}
                   >
                     {row.value}

@@ -40,6 +40,9 @@ function timeAgo(value: string) {
   return days === 1 ? "Yesterday" : `${days}d ago`
 }
 
+const headerCircleButtonClass =
+  "size-10 shrink-0 rounded-full border border-border bg-transparent shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent"
+
 interface HeaderV2Props {
   user?: {
     name?: string | null;
@@ -118,9 +121,9 @@ export default function HeaderV2({
           <Sheet>
             <SheetTrigger asChild>
               <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full relative text-foreground hover:bg-muted"
+                variant="outline"
+                size="icon-lg"
+                className={`${headerCircleButtonClass} relative text-foreground`}
               >
                 <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
@@ -186,9 +189,9 @@ export default function HeaderV2({
 
           {/* Theme Toggle */}
           <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full text-foreground hover:bg-muted"
+            variant="outline"
+            size="icon-lg"
+            className={`${headerCircleButtonClass} relative text-foreground`}
             onClick={() => setTheme(isDark ? "light" : "dark")}
           >
             <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />

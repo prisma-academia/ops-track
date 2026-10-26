@@ -13,6 +13,20 @@ import {
 } from "@/components/ui/tooltip";
 import { Box, Droplet, Clock, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { litersDeliveredFromSales } from "@/lib/fleet/transport-report";
+
+function sumLitersSoldFromTransports(
+  transports: Array<{
+    litersDelivered: unknown;
+    deliveries: Array<{ litersDespatched: unknown; litersReceived: unknown }>;
+  }>
+) {
+  return transports.reduce((sum, transport) => {
+    const fromDeliveries = litersDeliveredFromSales(transport.deliveries ?? []);
+    if (fromDeliveries > 0) return sum + fromDeliveries;
+    return sum + Number(transport.litersDelivered || 0);
+  }, 0);
+}
 
 export default async function OrdersPage({
   searchParams,
@@ -71,6 +85,13 @@ export default async function OrdersPage({
           where: { status: { not: "CANCELLED" } },
           select: {
             litersCarried: true,
+            litersDelivered: true,
+            deliveries: {
+              select: {
+                litersDespatched: true,
+                litersReceived: true,
+              },
+            },
           },
         },
       },
@@ -105,7 +126,12 @@ export default async function OrdersPage({
     const litersOrdered = Number(o.litersOrdered);
     const litersLifted = o.transports.reduce((sum, t) => sum + Number(t.litersCarried || 0), 0);
     const litersRemaining = Math.max(0, litersOrdered - litersLifted);
-    const fulfillmentProgress = litersOrdered > 0 ? Math.min(100, Math.round((litersLifted / litersOrdered) * 100)) : 0;
+    const fulfillmentProgress =
+      litersOrdered > 0 ? Math.min(100, Math.round((litersLifted / litersOrdered) * 100)) : 0;
+    const litersSold = Math.min(litersOrdered, sumLitersSoldFromTransports(o.transports));
+    const soldRemaining = Math.max(0, litersOrdered - litersSold);
+    const soldProgress =
+      litersOrdered > 0 ? Math.min(100, Math.round((litersSold / litersOrdered) * 100)) : 0;
 
     return {
       id: o.id,
@@ -116,7 +142,10 @@ export default async function OrdersPage({
       litersOrdered,
       litersLifted,
       litersRemaining,
+      litersSold,
+      soldRemaining,
       fulfillmentProgress,
+      soldProgress,
       pricePerLitre: Number(o.pricePerLitre),
       totalCost: (Number(o.pricePerLitre) + Number(o.loadingCostPerLitre)) * litersOrdered,
       status: o.status,

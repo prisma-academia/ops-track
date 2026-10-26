@@ -7,6 +7,11 @@ import { FleetStatGroupCard } from "../_components/overview/fleet-stat-group-car
 import type { FleetStatGroup } from "../types";
 import { formatDestination, formatTruckLabel } from "@/lib/utils";
 import { resolveDeliveryCreatedAtFilter } from "@/lib/fleet/delivery-sales-metrics";
+import {
+  b2bDeliveryWhere,
+  computeStationCollectionByDeliveryId,
+  managedStationDeliveryWhere,
+} from "@/lib/fleet/delivery-station-collection";
 import { resolveShortageParty } from "@/lib/fleet/loss-attribution";
 import { format } from "date-fns";
 
@@ -40,10 +45,32 @@ function resolveDeliveriesPeriodHint(from?: string, to?: string) {
 export default async function SalesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; status?: string; customerStationId?: string; minVol?: string; maxVol?: string; page?: string; take?: string }>;
+  searchParams: Promise<{
+    from?: string;
+    to?: string;
+    status?: string;
+    customerStationId?: string;
+    minVol?: string;
+    maxVol?: string;
+    page?: string;
+    take?: string;
+    view?: string;
+  }>;
 }) {
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_SALES_READ.key);
-  const { from, to, status, customerStationId, minVol, maxVol, page: pageParam, take: takeParam } = await searchParams;
+  const {
+    from,
+    to,
+    status,
+    customerStationId,
+    minVol,
+    maxVol,
+    page: pageParam,
+    take: takeParam,
+    view: viewParam,
+  } = await searchParams;
+
+  const view = viewParam === "b2b" ? "b2b" : "stations";
 
   const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
   const take = Math.min(100, Math.max(1, parseInt(takeParam || "25", 10) || 25));
@@ -66,6 +93,9 @@ export default async function SalesPage({
   }
   where.createdAt = resolveDeliveryCreatedAtFilter(from, to);
 
+  const audienceWhere = view === "stations" ? managedStationDeliveryWhere() : b2bDeliveryWhere();
+  const listWhere = { ...where, ...audienceWhere };
+
   const [customers, stations] = await Promise.all([
     prisma.customer.findMany({ where: { tenantId: actor.tenantId }, select: { id: true, name: true } }),
     prisma.station.findMany({ where: { tenantId: actor.tenantId }, select: { id: true, name: true } })
@@ -75,23 +105,27 @@ export default async function SalesPage({
     ...stations.map(s => ({ value: `s-${s.id}`, label: `Station: ${s.name}` }))
   ];
 
-  const [statsAgg, totalCount, statusBreakdown, Deliveries] = await Promise.all([
+  const [statsAgg, totalCount, tabCounts, statusBreakdown, Deliveries] = await Promise.all([
     prisma.delivery.aggregate({
-      where,
+      where: listWhere,
       _sum: {
         litersDespatched: true,
         totalExpectedAmount: true,
         paymentReceived: true,
       },
     }),
-    prisma.delivery.count({ where }),
+    prisma.delivery.count({ where: listWhere }),
+    Promise.all([
+      prisma.delivery.count({ where: { ...where, ...managedStationDeliveryWhere() } }),
+      prisma.delivery.count({ where: { ...where, ...b2bDeliveryWhere() } }),
+    ]),
     prisma.delivery.groupBy({
       by: ["status"],
-      where,
+      where: listWhere,
       _count: { _all: true },
     }),
     prisma.delivery.findMany({
-      where,
+      where: listWhere,
       orderBy: { createdAt: "desc" },
       skip,
       take,
@@ -146,11 +180,49 @@ export default async function SalesPage({
 
   const periodHint = resolveDeliveriesPeriodHint(from, to);
 
+  const stationIdsOnPage = [
+    ...new Set(
+      Deliveries.map((d) => d.stationId).filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  const fifoDeliveryRows =
+    view === "stations" && stationIdsOnPage.length > 0
+      ? await prisma.delivery.findMany({
+          where: {
+            tenantId: actor.tenantId,
+            ...managedStationDeliveryWhere(),
+            stationId: { in: stationIdsOnPage },
+            createdAt: where.createdAt,
+          },
+          select: {
+            id: true,
+            stationId: true,
+            createdAt: true,
+            totalExpectedAmount: true,
+          },
+          orderBy: { createdAt: "asc" },
+        })
+      : [];
+
+  const stationCollectionByDeliveryId =
+    fifoDeliveryRows.length > 0
+      ? await computeStationCollectionByDeliveryId(
+          actor.tenantId,
+          fifoDeliveryRows.map((d) => ({
+            id: d.id,
+            stationId: d.stationId as string,
+            createdAt: d.createdAt,
+            totalExpectedAmount: Number(d.totalExpectedAmount),
+          }))
+        )
+      : new Map();
+
   const rows = Deliveries.map((delivery) => {
     const litersDespatched = Number(delivery.litersDespatched);
     const litersReceived = delivery.litersReceived ? Number(delivery.litersReceived) : null;
     const variance = litersReceived !== null ? litersDespatched - litersReceived : null;
-    const isExternalClient = Boolean(delivery.customer || delivery.organization || !delivery.station);
+    const isExternalClient = !delivery.stationId;
     const productType = delivery.transport?.productType || "PMS";
     const volumeUnit = productType === "LPG" ? "KG" : "L";
     const transportRate = delivery.transport ? Number(delivery.transport.ratePerLiter || 0) : 0;
@@ -183,8 +255,13 @@ export default async function SalesPage({
       delivery.organization?.name ||
       "Walk-in Client";
 
+    const stationCollection = delivery.stationId
+      ? stationCollectionByDeliveryId.get(delivery.id)
+      : undefined;
+
     return {
       id: delivery.id,
+      stationId: delivery.stationId,
       customerName,
       transportDetails,
       litersDespatched,
@@ -206,6 +283,9 @@ export default async function SalesPage({
       shortageParty: resolveShortageParty(
         delivery.transport?.order?.supplierRecord?.supplierType ?? null
       ),
+      stationRetailCollected: stationCollection?.collected ?? null,
+      stationRetailRemaining: stationCollection?.remaining ?? null,
+      stationCollectionPercent: stationCollection?.percent ?? null,
     };
   });
 
@@ -294,6 +374,8 @@ export default async function SalesPage({
 
       <SalesTable
         data={rows}
+        view={view}
+        tabCounts={{ stations: tabCounts[0], b2b: tabCounts[1] }}
         serverPagination={{
           page,
           pageSize: take,

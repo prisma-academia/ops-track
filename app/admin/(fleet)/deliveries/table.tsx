@@ -6,7 +6,21 @@ import {
   DataTableFilterDrawer,
   type FilterConfig,
 } from "@/components/data-table-filter-drawer";
-import { Droplet, FileText, MoreHorizontal, PackageCheck, Pencil, Printer, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import {
+  Building2,
+  Droplet,
+  FileText,
+  List,
+  MoreHorizontal,
+  PackageCheck,
+  Pencil,
+  Printer,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+} from "lucide-react";
+export type DeliveriesListView = "stations" | "b2b";
+import { DeliveryCollectionProgressRing } from "@/components/fleet/delivery-collection-progress-ring";
 import { BadgePercentIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { format, formatDistanceToNow } from "date-fns";
@@ -43,6 +57,7 @@ import { toast } from "sonner";
 
 export type SaleRow = {
   id: string;
+  stationId?: string | null;
   customerName: string;
   transportDetails: string;
   litersDespatched: number;
@@ -62,6 +77,9 @@ export type SaleRow = {
   transportStatus?: string | null;
   transportRate?: number;
   shortageParty?: "TRANSPORTER" | "SUPPLIER" | "UNCONFIGURED";
+  stationRetailCollected?: number | null;
+  stationRetailRemaining?: number | null;
+  stationCollectionPercent?: number | null;
 };
 
 type StatusTone = {
@@ -504,10 +522,9 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
   );
 }
 
-const columns: ColumnDef<SaleRow>[] = [
-  { 
-    accessorKey: "customerName", 
-    header: () => <span className="text-xs font-medium text-muted-foreground">Customer</span>,
+const customerColumn: ColumnDef<SaleRow> = {
+  accessorKey: "customerName",
+  header: () => <span className="text-xs font-medium text-muted-foreground">Customer</span>,
     cell: ({ row }) => {
       const name = row.original.customerName;
       const details = row.original.transportDetails;
@@ -526,11 +543,36 @@ const columns: ColumnDef<SaleRow>[] = [
           </div>
         </div>
       );
-    }
+    },
+};
+
+const stationColumn: ColumnDef<SaleRow> = {
+  accessorKey: "customerName",
+  header: () => <span className="text-xs font-medium text-muted-foreground">Station</span>,
+  cell: ({ row }) => {
+    const name = row.original.customerName;
+    const details = row.original.transportDetails;
+    return (
+      <div className="flex items-center gap-2.5 py-0.5 min-w-0 max-w-[220px] sm:max-w-[280px]">
+        <div className="size-9 flex items-center justify-center shrink-0 rounded-lg border border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-400">
+          <Building2 className="size-4" strokeWidth={2} />
+        </div>
+        <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+          <span className="text-[13px] font-medium text-foreground truncate leading-tight" title={name}>
+            {name}
+          </span>
+          <span className="text-[11px] text-muted-foreground truncate leading-snug" title={details}>
+            {details}
+          </span>
+        </div>
+      </div>
+    );
   },
-  { 
-    accessorKey: "litersReceived", 
-    header: () => <span className="text-xs font-medium text-muted-foreground">Received</span>,
+};
+
+const receivedColumn: ColumnDef<SaleRow> = {
+  accessorKey: "litersReceived",
+  header: () => <span className="text-xs font-medium text-muted-foreground">Received</span>,
     cell: ({ row }) => {
       const vol = row.original.litersReceived;
       const unit = row.original.volumeUnit || "L";
@@ -551,10 +593,25 @@ const columns: ColumnDef<SaleRow>[] = [
           <span className="ml-0.5 text-[10px] font-sans text-muted-foreground">{unit}</span>
         </span>
       );
-    }
+    },
+};
+
+const dispatchedColumn: ColumnDef<SaleRow> = {
+  accessorKey: "litersDespatched",
+  header: () => <span className="text-xs font-medium text-muted-foreground">Dispatched</span>,
+  cell: ({ row }) => {
+    const unit = row.original.volumeUnit || "L";
+    return (
+      <span className="font-mono text-xs tabular-nums text-foreground">
+        {row.original.litersDespatched.toLocaleString()}
+        <span className="ml-0.5 text-[10px] font-sans text-muted-foreground">{unit}</span>
+      </span>
+    );
   },
-  {
-    accessorKey: "variance",
+};
+
+const varianceColumn: ColumnDef<SaleRow> = {
+  accessorKey: "variance",
     header: () => <span className="text-xs font-medium text-muted-foreground">Variance</span>,
     cell: ({ row }) => {
       const variance = row.original.variance;
@@ -593,10 +650,11 @@ const columns: ColumnDef<SaleRow>[] = [
           <span className="ml-0.5 text-[10px] font-sans font-normal text-muted-foreground">{unit}</span>
         </span>
       );
-    }
-  },
-  {
-    accessorKey: "amountPerLiter",
+    },
+};
+
+const rateColumn: ColumnDef<SaleRow> = {
+  accessorKey: "amountPerLiter",
     header: () => <span className="text-xs font-medium text-muted-foreground">Rate</span>,
     cell: ({ row }) => (
       <span className="font-mono text-xs tabular-nums text-muted-foreground">
@@ -604,19 +662,55 @@ const columns: ColumnDef<SaleRow>[] = [
         <span className="text-[10px] font-sans">/L</span>
       </span>
     ),
-  },
-  { 
-    accessorKey: "totalExpectedAmount", 
-    header: () => <span className="text-xs font-medium text-muted-foreground">Expected</span>,
+};
+
+const expectedColumn: ColumnDef<SaleRow> = {
+  accessorKey: "totalExpectedAmount",
+  header: () => <span className="text-xs font-medium text-muted-foreground">Fleet sale</span>,
     cell: ({ row }) => (
       <span className="font-mono text-xs tabular-nums font-medium text-foreground">
         {formatDeliveryNaira(row.original.totalExpectedAmount)}
       </span>
     ),
+};
+
+const fleetExpectedB2bColumn: ColumnDef<SaleRow> = {
+  ...expectedColumn,
+  header: () => <span className="text-xs font-medium text-muted-foreground">Expected</span>,
+};
+
+const stationCollectionColumn: ColumnDef<SaleRow> = {
+  id: "stationCollection",
+  header: () => (
+    <span className="text-xs font-medium text-muted-foreground">Retail coverage</span>
+  ),
+  cell: ({ row }) => {
+    const collected = row.original.stationRetailCollected;
+    const remaining = row.original.stationRetailRemaining;
+    const percent = row.original.stationCollectionPercent;
+    const fleetAmount = row.original.totalExpectedAmount;
+    if (
+      collected == null ||
+      remaining == null ||
+      percent == null ||
+      fleetAmount <= 0
+    ) {
+      return <span className="text-xs text-muted-foreground/60">—</span>;
+    }
+    return (
+      <DeliveryCollectionProgressRing
+        collected={collected}
+        remaining={remaining}
+        percent={percent}
+        fleetAmount={fleetAmount}
+      />
+    );
   },
-  { 
-    accessorKey: "paymentReceived", 
-    header: () => <span className="text-xs font-medium text-muted-foreground">Collected</span>,
+};
+
+const paymentReceivedColumn: ColumnDef<SaleRow> = {
+  accessorKey: "paymentReceived",
+  header: () => <span className="text-xs font-medium text-muted-foreground">Collected</span>,
     cell: ({ row }) => {
       const paid = row.original.paymentReceived;
       const expected = row.original.totalExpectedAmount;
@@ -635,16 +729,18 @@ const columns: ColumnDef<SaleRow>[] = [
           {formatDeliveryNaira(paid)}
         </span>
       );
-    }
-  },
-  { 
-    accessorKey: "status", 
-    header: () => <span className="text-xs font-medium text-muted-foreground">Payment</span>,
-    cell: ({ row }) => <DeliveryPaymentStatusBadge status={row.original.status} />,
-  },
-  { 
-    accessorKey: "createdAt", 
-    header: () => <span className="text-xs font-medium text-muted-foreground">Date</span>,
+    },
+};
+
+const statusColumn: ColumnDef<SaleRow> = {
+  accessorKey: "status",
+  header: () => <span className="text-xs font-medium text-muted-foreground">Payment</span>,
+  cell: ({ row }) => <DeliveryPaymentStatusBadge status={row.original.status} />,
+};
+
+const dateColumn: ColumnDef<SaleRow> = {
+  accessorKey: "createdAt",
+  header: () => <span className="text-xs font-medium text-muted-foreground">Date</span>,
     cell: ({ row }) => {
       const dateStr = row.original.createdAt;
       const date = new Date(dateStr);
@@ -658,26 +754,131 @@ const columns: ColumnDef<SaleRow>[] = [
           </span>
         </div>
       );
-    }
-  },
-  {
-    id: "actions",
+    },
+};
+
+const actionsColumn: ColumnDef<SaleRow> = {
+  id: "actions",
     header: () => <span className="text-right block pr-2">Actions</span>,
     cell: ({ row }) => (
       <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
         <DeliveryRowActions row={row.original} />
       </div>
     ),
-  }
+};
+
+const b2bColumns: ColumnDef<SaleRow>[] = [
+  customerColumn,
+  receivedColumn,
+  varianceColumn,
+  rateColumn,
+  fleetExpectedB2bColumn,
+  paymentReceivedColumn,
+  statusColumn,
+  dateColumn,
+  actionsColumn,
 ];
+
+const stationColumns: ColumnDef<SaleRow>[] = [
+  stationColumn,
+  dispatchedColumn,
+  receivedColumn,
+  expectedColumn,
+  stationCollectionColumn,
+  statusColumn,
+  dateColumn,
+  actionsColumn,
+];
+
+type DeliveriesTabCounts = { stations: number; b2b: number };
+
+function DeliveriesViewTabs({
+  view,
+  counts,
+}: {
+  view: DeliveriesListView;
+  counts: DeliveriesTabCounts;
+}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const setView = (next: DeliveriesListView) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", next);
+    params.delete("page");
+    router.push(`?${params.toString()}`);
+  };
+
+  const tabs: {
+    id: DeliveriesListView;
+    label: string;
+    count: number;
+    icon: React.ReactNode;
+  }[] = [
+    {
+      id: "stations",
+      label: "Managed stations",
+      count: counts.stations,
+      icon: <Building2 className="size-4 shrink-0" />,
+    },
+    {
+      id: "b2b",
+      label: "B2B client",
+      count: counts.b2b,
+      icon: <List className="size-4 shrink-0" />,
+    },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 border-b border-border/80 px-1">
+      {tabs.map((tab) => {
+        const active = view === tab.id;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setView(tab.id)}
+            className={cn(
+              "relative flex items-center gap-2 rounded-t-md px-3 py-2.5 text-sm transition-colors",
+              active
+                ? "font-semibold text-foreground"
+                : "font-medium text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+            <span
+              className={cn(
+                "rounded-full px-1.5 py-0.5 text-[11px] tabular-nums",
+                active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+              )}
+            >
+              {tab.count.toLocaleString()}
+            </span>
+            {active ? (
+              <span
+                className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary"
+                aria-hidden
+              />
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function SalesTable({
   data,
+  view = "stations",
+  tabCounts,
   filterNode,
   filterConfigs,
   serverPagination,
 }: {
   data: SaleRow[];
+  view?: DeliveriesListView;
+  tabCounts?: DeliveriesTabCounts;
   filterNode?: React.ReactNode;
   filterConfigs?: FilterConfig[];
   serverPagination?: Omit<
@@ -688,7 +889,7 @@ export function SalesTable({
   const resolvedFilterNode =
     filterNode ??
     (filterConfigs && filterConfigs.length > 0 ? (
-      <DataTableFilterDrawer filters={filterConfigs} />
+      <DataTableFilterDrawer filters={filterConfigs} triggerVariant="default" />
     ) : undefined);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -706,14 +907,22 @@ export function SalesTable({
     router.push(`?${params.toString()}`);
   };
 
+  const columns = view === "b2b" ? b2bColumns : stationColumns;
+  const searchPlaceholder =
+    view === "b2b" ? "Filter B2B deliveries…" : "Filter managed station deliveries…";
+
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      rowHref={(s) => `/admin/deliveries/${s.id}`}
-      filterColumnId="customerName"
-      searchPlaceholder="Search by customer/station…"
-      filterNode={resolvedFilterNode}
+    <div className="space-y-0 rounded-xl border border-border/80 bg-card shadow-sm overflow-hidden">
+      {tabCounts ? <DeliveriesViewTabs view={view} counts={tabCounts} /> : null}
+      <div className="px-4 pt-3 pb-1">
+        <DataTable
+          columns={columns}
+          data={data}
+          rowHref={(s) => `/admin/deliveries/${s.id}`}
+          filterColumnId="customerName"
+          searchPlaceholder={searchPlaceholder}
+          filterNode={resolvedFilterNode}
+          toolbarSearchFirst
       {...(serverPagination ? {
         serverPagination: {
           ...serverPagination,
@@ -721,6 +930,8 @@ export function SalesTable({
           onPageSizeChange: handlePageSizeChange,
         }
       } : {})}
-    />
+        />
+      </div>
+    </div>
   );
 }

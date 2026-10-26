@@ -87,6 +87,8 @@ export interface DataTableProps<TData, TValue> {
   onSearchChange?: (value: string) => void;
   searchValue?: string;
   renderSubRow?: (row: TData) => React.ReactNode | null;
+  /** Search before filter; toolbar aligns left when there is no title. */
+  toolbarSearchFirst?: boolean;
 }
 
 export function DataTable<TData, TValue>({
@@ -108,6 +110,7 @@ export function DataTable<TData, TValue>({
   onSearchChange,
   searchValue,
   renderSubRow,
+  toolbarSearchFirst = false,
 }: DataTableProps<TData, TValue>) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -149,50 +152,88 @@ export function DataTable<TData, TValue>({
     },
   });
 
+  const hasToolbarTitle = Boolean(title || description);
+  const showToolbar =
+    hasToolbarTitle || effectiveSearchKey || headerAction || filterColumnId || filterNode;
+
+  const searchField = effectiveSearchKey ? (
+    <InputGroup
+      key="data-table-search"
+      className={cn(
+        toolbarSearchFirst && !hasToolbarTitle ? "w-full sm:flex-1 sm:max-w-md" : "max-w-xs"
+      )}
+    >
+      <InputGroupInput
+        placeholder={searchPlaceholder}
+        value={
+          searchValue !== undefined
+            ? searchValue
+            : ((table.getColumn(effectiveSearchKey)?.getFilterValue() as string) ?? "")
+        }
+        onChange={(event) => {
+          if (onSearchChange) {
+            onSearchChange(event.target.value);
+          } else {
+            table.getColumn(effectiveSearchKey)?.setFilterValue(event.target.value);
+          }
+        }}
+        className="text-sm"
+      />
+      <InputGroupAddon>
+        <Search size={16} />
+      </InputGroupAddon>
+    </InputGroup>
+  ) : null;
+
   return (
     <DataTableContext.Provider value={{ startTransition: handleStartTransition }}>
       <div className="space-y-6">
-        {(title || effectiveSearchKey || headerAction || filterColumnId || filterNode) && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0">
-          <div className="space-y-1">
-            {title && (
-              <h2 className="text-xl font-bold tracking-tight text-foreground uppercase tracking-widest">
-                {title}
-              </h2>
+        {showToolbar && (
+        <div
+          className={cn(
+            "flex flex-col gap-4 sm:flex-row sm:items-center",
+            hasToolbarTitle ? "justify-between" : "justify-start"
+          )}
+        >
+          {hasToolbarTitle ? (
+            <div className="space-y-1">
+              {title && (
+                <h2 className="text-xl font-bold tracking-tight text-foreground uppercase tracking-widest">
+                  {title}
+                </h2>
+              )}
+              {description && (
+                <p className="text-xs text-muted-foreground">{description}</p>
+              )}
+            </div>
+          ) : null}
+          <div
+            className={cn(
+              "flex flex-col sm:flex-row sm:items-center gap-3",
+              !hasToolbarTitle && "w-full"
             )}
-            {description && (
-              <p className="text-xs text-muted-foreground">
-                {description}
-              </p>
+          >
+            {toolbarSearchFirst ? (
+              <>
+                {searchField}
+                {filterNode != null ? (
+                  <div key="data-table-filter-node" className="shrink-0">
+                    {filterNode}
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                {filterNode != null ? (
+                  <div key="data-table-filter-node" className="shrink-0">
+                    {filterNode}
+                  </div>
+                ) : null}
+                {searchField}
+              </>
             )}
-          </div>
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-            {filterNode != null ? (
-              <div key="data-table-filter-node" className="shrink-0">
-                {filterNode}
-              </div>
-            ) : null}
-            {effectiveSearchKey ? (
-              <InputGroup key="data-table-search" className="max-w-xs">
-                <InputGroupInput
-                  placeholder={searchPlaceholder}
-                  value={searchValue !== undefined ? searchValue : ((table.getColumn(effectiveSearchKey)?.getFilterValue() as string) ?? "")}
-                  onChange={(event) => {
-                    if (onSearchChange) {
-                      onSearchChange(event.target.value);
-                    } else {
-                      table.getColumn(effectiveSearchKey)?.setFilterValue(event.target.value);
-                    }
-                  }}
-                  className="text-sm"
-                />
-                <InputGroupAddon>
-                  <Search size={16} />
-                </InputGroupAddon>
-              </InputGroup>
-            ) : null}
             {headerAction != null ? (
-              <div key="data-table-header-action" className="shrink-0">
+              <div key="data-table-header-action" className="shrink-0 sm:ml-auto">
                 {headerAction}
               </div>
             ) : null}

@@ -70,7 +70,12 @@ export default async function SalesPage({
     view: viewParam,
   } = await searchParams;
 
-  const view = viewParam === "b2b" ? "b2b" : "stations";
+  const view =
+    viewParam === "stations"
+      ? "stations"
+      : viewParam === "b2b"
+        ? "b2b"
+        : "all";
 
   const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
   const take = Math.min(100, Math.max(1, parseInt(takeParam || "25", 10) || 25));
@@ -93,7 +98,12 @@ export default async function SalesPage({
   }
   where.createdAt = resolveDeliveryCreatedAtFilter(from, to);
 
-  const audienceWhere = view === "stations" ? managedStationDeliveryWhere() : b2bDeliveryWhere();
+  const audienceWhere =
+    view === "stations"
+      ? managedStationDeliveryWhere()
+      : view === "b2b"
+        ? b2bDeliveryWhere()
+        : {};
   const listWhere = { ...where, ...audienceWhere };
 
   const [customers, stations] = await Promise.all([
@@ -116,6 +126,7 @@ export default async function SalesPage({
     }),
     prisma.delivery.count({ where: listWhere }),
     Promise.all([
+      prisma.delivery.count({ where }),
       prisma.delivery.count({ where: { ...where, ...managedStationDeliveryWhere() } }),
       prisma.delivery.count({ where: { ...where, ...b2bDeliveryWhere() } }),
     ]),
@@ -375,7 +386,7 @@ export default async function SalesPage({
       <SalesTable
         data={rows}
         view={view}
-        tabCounts={{ stations: tabCounts[0], b2b: tabCounts[1] }}
+        tabCounts={{ all: tabCounts[0], stations: tabCounts[1], b2b: tabCounts[2] }}
         serverPagination={{
           page,
           pageSize: take,

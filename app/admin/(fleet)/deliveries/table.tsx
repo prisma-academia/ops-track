@@ -10,6 +10,7 @@ import {
   Building2,
   Droplet,
   FileText,
+  LayoutGrid,
   List,
   MoreHorizontal,
   PackageCheck,
@@ -19,7 +20,7 @@ import {
   CheckCircle2,
   Clock,
 } from "lucide-react";
-export type DeliveriesListView = "stations" | "b2b";
+export type DeliveriesListView = "all" | "stations" | "b2b";
 import { DeliveryCollectionProgressRing } from "@/components/fleet/delivery-collection-progress-ring";
 import { BadgePercentIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -790,7 +791,7 @@ const stationColumns: ColumnDef<SaleRow>[] = [
   actionsColumn,
 ];
 
-type DeliveriesTabCounts = { stations: number; b2b: number };
+type DeliveriesTabCounts = { all: number; stations: number; b2b: number };
 
 function DeliveriesViewTabs({
   view,
@@ -815,6 +816,12 @@ function DeliveriesViewTabs({
     count: number;
     icon: React.ReactNode;
   }[] = [
+    {
+      id: "all",
+      label: "All sales",
+      count: counts.all,
+      icon: <LayoutGrid className="size-4 shrink-0" />,
+    },
     {
       id: "stations",
       label: "Managed stations",
@@ -870,7 +877,7 @@ function DeliveriesViewTabs({
 
 export function SalesTable({
   data,
-  view = "stations",
+  view = "all",
   tabCounts,
   filterNode,
   filterConfigs,
@@ -907,9 +914,13 @@ export function SalesTable({
     router.push(`?${params.toString()}`);
   };
 
-  const columns = view === "b2b" ? b2bColumns : stationColumns;
+  const columns = view === "stations" ? stationColumns : b2bColumns;
   const searchPlaceholder =
-    view === "b2b" ? "Filter B2B deliveries…" : "Filter managed station deliveries…";
+    view === "b2b"
+      ? "Filter B2B deliveries…"
+      : view === "stations"
+        ? "Filter managed station deliveries…"
+        : "Search by customer/station…";
 
   return (
     <div className="space-y-0 rounded-xl border border-border/80 bg-card shadow-sm overflow-hidden">

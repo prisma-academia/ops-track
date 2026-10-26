@@ -45,7 +45,7 @@ export function litersDespatchedFromSales(
 }
 
 export function litersDeliveredFromSales(
-  deliveries: Array<{ litersDespatched: unknown; litersReceived: unknown }>
+  deliveries: Array<{ litersDespatched?: unknown; litersReceived?: unknown }>
 ) {
   return deliveries.reduce((sum, delivery) => {
     const despatched = toNum(delivery.litersDespatched);

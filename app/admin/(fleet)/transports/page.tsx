@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Truck as TruckIcon, Navigation, CheckCircle2, Droplets } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buildTransportSalesLossMetrics } from "@/lib/fleet/transport-row-metrics";
 
 export default async function TransportsPage({
   searchParams,
@@ -54,9 +55,16 @@ export default async function TransportsPage({
         truck: { select: { id: true, name: true, plateNumber: true, truckNumber: true } },
         driver: { select: { id: true, firstName: true, lastName: true } },
         order: { select: { id: true, reference: true, sourceDepot: true } },
-        _count: {
+        deliveries: {
           select: {
-            deliveries: true,
+            litersDespatched: true,
+            litersReceived: true,
+          },
+        },
+        lossLogs: {
+          select: {
+            lossType: true,
+            lostQuantity: true,
           },
         },
       },
@@ -96,6 +104,8 @@ export default async function TransportsPage({
         ? rawDriver
         : null;
 
+    const salesLoss = buildTransportSalesLossMetrics(t);
+
     return {
       id: t.id,
       destination: t.destination,
@@ -107,7 +117,11 @@ export default async function TransportsPage({
       isUnlinked: !t.orderId,
       status: t.status,
       productType: t.productType || "-",
-      salesCount: t._count.deliveries,
+      salesCount: salesLoss.salesCount,
+      litersSold: salesLoss.litersSold,
+      litersLost: salesLoss.litersLost,
+      lossBreakdown: salesLoss.lossBreakdown,
+      pendingDeliveries: salesLoss.pendingDeliveries,
       litersCarried: Number(t.litersCarried),
       createdAt: t.createdAt.toISOString(),
     };

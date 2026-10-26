@@ -4,11 +4,12 @@ import { useMemo, useState, useCallback } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronDown } from "lucide-react";
+import { AlertTriangle, ChevronDown } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { DataTable } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   Table,
   TableBody,
@@ -18,8 +19,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn, formatDestination } from "@/lib/utils";
-import { formatTransportStatusLabel } from "@/lib/fleet/transport-loss";
+import {
+  formatLossTypeLabel,
+  formatTransportLiters,
+  TransportSalesLossBadges,
+  TransportStatusBadge,
+} from "@/components/fleet/transport-sales-loss-badges";
 import { feeLegStatusBadge } from "@/components/fleet/transport-fee-breakdown";
+import {
+  groupTransportLossByType,
+  sumTransportLossLiters,
+} from "@/lib/fleet/order-volume-metrics";
+import { litersDeliveredFromSales } from "@/lib/fleet/transport-report";
 import {
   getFeeLegBreakdown,
   type TransportFeeDelivery,
@@ -30,10 +41,13 @@ import {
 type DispatchTransport = TransportFeeTransport & {
   status: string;
   createdAt: string | Date;
+  litersLost?: unknown;
+  litersDelivered?: unknown;
   truck?: { plateNumber?: string | null; name?: string | null } | null;
   transporter?: { name?: string | null } | null;
   deliveries?: TransportFeeDelivery[];
   transactions?: TransportFeeTransaction[];
+  lossLogs?: Array<{ lossType?: string; lostQuantity?: unknown }>;
 };
 
 export type SubsequentDestinationRow = {
@@ -52,25 +66,17 @@ export type OrderDispatchTableRow = {
   transporterName: string;
   routeLabel: string;
   litersCarried: number;
+  litersSold: number;
+  litersLost: number;
+  lossBreakdown: { type: string; liters: number }[];
+  pendingDeliveries: number;
   status: string;
   createdAt: string;
   subsequent: SubsequentDestinationRow[];
 };
 
-function formatLiters(value: number) {
-  return `${value.toLocaleString()} L`;
-}
-
 function formatFee(amount: number) {
   return `₦${amount.toLocaleString()}`;
-}
-
-function transportStatusClass(status: string) {
-  if (status === "COMPLETED") return "text-emerald-700 dark:text-emerald-400";
-  if (status === "IN_TRANSIT") return "text-indigo-700 dark:text-indigo-400";
-  if (status === "LOSS") return "text-rose-700 dark:text-rose-400";
-  if (status === "CANCELLED") return "text-muted-foreground";
-  return "text-foreground";
 }
 
 function buildDispatchRows(
@@ -134,6 +140,13 @@ function buildDispatchRows(
     }
 
     const depot = sourceDepot?.trim() || "Depot";
+    const litersSold =
+      litersDeliveredFromSales(deliveries) || Number(transport.litersDelivered || 0);
+    const litersLost = sumTransportLossLiters(transport);
+    const lossBreakdown = groupTransportLossByType(transport);
+    const pendingDeliveries = deliveries.filter(
+      (d) => d.litersReceived === null || d.litersReceived === undefined
+    ).length;
 
     return {
       id: transport.id,
@@ -142,6 +155,10 @@ function buildDispatchRows(
       transporterName: transport.transporter?.name || "Unassigned",
       routeLabel: `${depot} → ${primaryDest}`,
       litersCarried: Number(transport.litersCarried) || 0,
+      litersSold,
+      litersLost,
+      lossBreakdown,
+      pendingDeliveries,
       status: transport.status,
       createdAt: new Date(transport.createdAt).toISOString(),
       subsequent,
@@ -152,54 +169,81 @@ function buildDispatchRows(
 function SubsequentDestinationsPanel({
   rows,
   transportId,
+  lossBreakdown,
+  litersLost,
 }: {
   rows: SubsequentDestinationRow[];
   transportId: string;
+  lossBreakdown: { type: string; liters: number }[];
+  litersLost: number;
 }) {
-  if (rows.length === 0) {
-    return (
-      <div className="px-6 py-4 text-xs text-muted-foreground bg-muted/5 border-b">
-        No subsequent destinations from the primary stop.
-      </div>
-    );
-  }
-
   return (
-    <div className="px-4 sm:px-6 py-4 bg-muted/5 border-b">
-      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">
-        Subsequent destinations
-      </p>
-      <div className="rounded-lg border border-border/60 overflow-hidden bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="text-xs">Recipient</TableHead>
-              <TableHead className="text-xs">Route</TableHead>
-              <TableHead className="text-xs text-right">Volume</TableHead>
-              <TableHead className="text-xs text-right">Transport fee</TableHead>
-              <TableHead className="text-xs text-right">Fee status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) => (
-              <TableRow key={row.id} className="text-sm">
-                <TableCell className="font-medium">{row.recipient}</TableCell>
-                <TableCell className="text-muted-foreground text-xs max-w-[200px] truncate" title={row.route}>
-                  {row.route}
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {formatLiters(row.liters)}
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {formatFee(row.fee)}
-                </TableCell>
-                <TableCell className="text-right">{feeLegStatusBadge(row.feeStatus)}</TableCell>
-              </TableRow>
+    <div className="px-4 sm:px-6 py-4 bg-muted/5 border-b space-y-4">
+      {litersLost > 0 ? (
+        <div>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+            Loss deductions
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {lossBreakdown.map((item) => (
+              <Badge
+                key={item.type}
+                variant="outline"
+                className="gap-1.5 border-rose-200/80 text-rose-800 dark:text-rose-300 dark:border-rose-800/60"
+              >
+                <AlertTriangle className="size-3" aria-hidden />
+                <span className="capitalize">{formatLossTypeLabel(item.type)}</span>
+                <span className="font-mono tabular-nums">{formatTransportLiters(item.liters)}</span>
+              </Badge>
             ))}
-          </TableBody>
-        </Table>
-      </div>
-      <div className="mt-3 flex justify-end">
+          </div>
+        </div>
+      ) : null}
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No subsequent destinations from the primary stop.</p>
+      ) : (
+        <>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            Subsequent destinations
+          </p>
+          <div className="rounded-lg border border-border/60 overflow-hidden bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs">Recipient</TableHead>
+                  <TableHead className="text-xs">Route</TableHead>
+                  <TableHead className="text-xs text-right">Volume</TableHead>
+                  <TableHead className="text-xs text-right">Transport fee</TableHead>
+                  <TableHead className="text-xs text-right">Fee status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow key={row.id} className="text-sm">
+                    <TableCell className="font-medium">{row.recipient}</TableCell>
+                    <TableCell
+                      className="text-muted-foreground text-xs max-w-[200px] truncate"
+                      title={row.route}
+                    >
+                      {row.route}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatTransportLiters(row.liters)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatFee(row.fee)}
+                    </TableCell>
+                    <TableCell className="text-right">{feeLegStatusBadge(row.feeStatus)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
+
+      <div className="flex justify-end">
         <Button variant="outline" size="sm" asChild>
           <Link href={`/admin/transports/${transportId}`}>Open transport</Link>
         </Button>
@@ -262,7 +306,10 @@ export function OrderDispatchedTransportsTable({
         accessorKey: "routeLabel",
         header: "Route",
         cell: ({ row }) => (
-          <span className="text-sm text-foreground max-w-[200px] truncate block" title={row.original.routeLabel}>
+          <span
+            className="text-sm text-foreground max-w-[200px] truncate block"
+            title={row.original.routeLabel}
+          >
             {row.original.routeLabel}
           </span>
         ),
@@ -272,23 +319,29 @@ export function OrderDispatchedTransportsTable({
         header: "Volume",
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-sm">
-            {formatLiters(row.original.litersCarried)}
+            {formatTransportLiters(row.original.litersCarried)}
           </span>
+        ),
+      },
+      {
+        id: "salesLoss",
+        header: "Sales & loss",
+        cell: ({ row }) => (
+          <TransportSalesLossBadges
+            summary={{
+              status: row.original.status,
+              litersSold: row.original.litersSold,
+              litersLost: row.original.litersLost,
+              lossBreakdown: row.original.lossBreakdown,
+              pendingDeliveries: row.original.pendingDeliveries,
+            }}
+          />
         ),
       },
       {
         accessorKey: "status",
         header: "Status",
-        cell: ({ row }) => (
-          <span
-            className={cn(
-              "text-[11px] font-semibold capitalize",
-              transportStatusClass(row.original.status)
-            )}
-          >
-            {formatTransportStatusLabel(row.original.status)}
-          </span>
-        ),
+        cell: ({ row }) => <TransportStatusBadge status={row.original.status} />,
       },
       {
         accessorKey: "createdAt",
@@ -324,7 +377,9 @@ export function OrderDispatchedTransportsTable({
         id: "expand",
         header: "",
         cell: ({ row }) => {
-          if (row.original.subsequent.length === 0) return null;
+          const canExpand =
+            row.original.subsequent.length > 0 || row.original.litersLost > 0;
+          if (!canExpand) return null;
           const open = expandedIds[row.original.id];
           return (
             <Button
@@ -336,7 +391,7 @@ export function OrderDispatchedTransportsTable({
                 e.stopPropagation();
                 toggleExpanded(row.original.id);
               }}
-              aria-label={open ? "Collapse destinations" : "Expand destinations"}
+              aria-label={open ? "Collapse details" : "Expand details"}
             >
               <ChevronDown
                 className={cn("size-4 transition-transform", open && "rotate-180")}
@@ -355,21 +410,28 @@ export function OrderDispatchedTransportsTable({
     (row: OrderDispatchTableRow) => {
       if (!expandedIds[row.id]) return null;
       return (
-        <SubsequentDestinationsPanel rows={row.subsequent} transportId={row.id} />
+        <SubsequentDestinationsPanel
+          rows={row.subsequent}
+          transportId={row.id}
+          lossBreakdown={row.lossBreakdown}
+          litersLost={row.litersLost}
+        />
       );
     },
     [expandedIds]
   );
 
   return (
-    <DataTable
-      columns={columns}
-      data={rows}
-      rowHref={(row) => `/admin/transports/${row.id}`}
-      getRowClassName={(row) => (expandedIds[row.id] ? "bg-muted/10" : "")}
-      renderSubRow={renderSubRow}
-      pageSize={10}
-      empty="No trucks assigned to this order yet."
-    />
+    <TooltipProvider delayDuration={200}>
+      <DataTable
+        columns={columns}
+        data={rows}
+        rowHref={(row) => `/admin/transports/${row.id}`}
+        getRowClassName={(row) => (expandedIds[row.id] ? "bg-muted/10" : "")}
+        renderSubRow={renderSubRow}
+        pageSize={10}
+        empty="No trucks assigned to this order yet."
+      />
+    </TooltipProvider>
   );
 }

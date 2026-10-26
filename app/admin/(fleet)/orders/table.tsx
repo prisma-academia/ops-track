@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
 import { TankerTruckIcon } from "@hugeicons/core-free-icons";
@@ -8,6 +9,12 @@ import { ShoppingCart } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export type OrderRow = {
@@ -20,9 +27,12 @@ export type OrderRow = {
   litersLifted: number;
   litersRemaining: number;
   litersSold: number;
+  litersLost: number;
   soldRemaining: number;
   fulfillmentProgress: number;
   soldProgress: number;
+  lossProgress: number;
+  remainingToSellProgress: number;
   pricePerLitre: number;
   totalCost: number;
   status: string;
@@ -33,6 +43,11 @@ export type OrderRow = {
 const CELLULAR_BAR_COUNT = 5;
 const CELLULAR_BAR_HEIGHT_PX = 12;
 const CELLULAR_BAR_WIDTH_PX = 3;
+
+/** Open volume still to lift / sell (distinct from loss or shortage). */
+const REMAINING_BAR_COLOR = "bg-stone-300 dark:bg-stone-600";
+const REMAINING_BAR_EMPTY = "bg-stone-200/90 dark:bg-stone-700/80";
+const LOSS_BAR_COLOR = "bg-rose-600 dark:bg-rose-500";
 
 type StatusTone = {
   label: string;
@@ -120,18 +135,34 @@ function progressBarColor(percent: number, status: string) {
   return "bg-muted-foreground/25";
 }
 
+type BarSegment = { percent: number; color: string };
+
+function barSlotColors(segments: BarSegment[], emptyColor = "bg-muted"): string[] {
+  const slots = Array.from({ length: CELLULAR_BAR_COUNT }, () => emptyColor);
+  let index = 0;
+  for (const segment of segments) {
+    if (index >= CELLULAR_BAR_COUNT) break;
+    const pct = Math.min(100, Math.max(0, segment.percent));
+    if (pct <= 0) continue;
+    const barsForSegment = Math.max(1, Math.ceil((pct / 100) * CELLULAR_BAR_COUNT));
+    for (let i = 0; i < barsForSegment && index < CELLULAR_BAR_COUNT; i += 1) {
+      slots[index] = segment.color;
+      index += 1;
+    }
+  }
+  return slots;
+}
+
 function CellularVolumeBar({
-  percent,
-  status,
+  segments,
   className,
+  remainderColor = "bg-muted",
 }: {
-  percent: number;
-  status: string;
+  segments: BarSegment[];
   className?: string;
+  remainderColor?: string;
 }) {
-  const clamped = Math.min(100, Math.max(0, percent));
-  const filledBars = clamped <= 0 ? 0 : Math.max(1, Math.ceil((clamped / 100) * CELLULAR_BAR_COUNT));
-  const activeColor = progressBarColor(clamped, status);
+  const colors = barSlotColors(segments, remainderColor);
 
   return (
     <div
@@ -139,23 +170,38 @@ function CellularVolumeBar({
       style={{ height: CELLULAR_BAR_HEIGHT_PX }}
       aria-hidden
     >
-      {Array.from({ length: CELLULAR_BAR_COUNT }, (_, index) => {
-        const active = index < filledBars;
-        return (
-          <div
-            key={index}
-            className={cn(
-              "rounded-[2px] transition-colors shrink-0",
-              active ? activeColor : "bg-muted"
-            )}
-            style={{
-              width: CELLULAR_BAR_WIDTH_PX,
-              height: CELLULAR_BAR_HEIGHT_PX,
-            }}
-          />
-        );
-      })}
+      {colors.map((color, index) => (
+        <div
+          key={index}
+          className={cn("rounded-[2px] transition-colors shrink-0", color)}
+          style={{
+            width: CELLULAR_BAR_WIDTH_PX,
+            height: CELLULAR_BAR_HEIGHT_PX,
+          }}
+        />
+      ))}
     </div>
+  );
+}
+
+function CellularVolumeBarFromPercent({
+  percent,
+  status,
+  className,
+  remainderColor = REMAINING_BAR_COLOR,
+}: {
+  percent: number;
+  status: string;
+  className?: string;
+  remainderColor?: string;
+}) {
+  const clamped = Math.min(100, Math.max(0, percent));
+  const fillColor = progressBarColor(clamped, status);
+  const segments: BarSegment[] =
+    clamped > 0 ? [{ percent: clamped, color: fillColor }] : [];
+  const emptyColor = clamped < 100 ? remainderColor : "bg-muted";
+  return (
+    <CellularVolumeBar segments={segments} className={className} remainderColor={emptyColor} />
   );
 }
 
@@ -169,37 +215,86 @@ function OrderStatusLabel({ status }: { status: string }) {
   );
 }
 
-function VolumeMetricCell({
-  primary,
-  remaining,
-  remainingText,
-  completeText,
-  percent,
-  status,
+type VolumeTooltipLine = {
+  label: string;
+  value: string;
+  tone?: "default" | "muted" | "sold" | "loss" | "remaining";
+};
+
+function volumeTooltipLineClass(tone: VolumeTooltipLine["tone"]) {
+  if (tone === "sold") return "text-emerald-600 dark:text-emerald-400";
+  if (tone === "loss") return "text-rose-600 dark:text-rose-400";
+  if (tone === "remaining") return "text-stone-600 dark:text-stone-400";
+  if (tone === "muted") return "text-muted-foreground";
+  return "text-foreground";
+}
+
+function OrderVolumeBarTooltip({
+  children,
+  title,
+  lines,
 }: {
-  primary: number;
-  remaining: number;
-  remainingText: string;
-  completeText: string;
-  percent: number;
-  status: string;
+  children: ReactNode;
+  title: string;
+  lines: VolumeTooltipLine[];
 }) {
   return (
-    <div className="flex flex-col gap-1 py-1 min-w-[118px]">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold font-mono tabular-nums text-foreground">
-          {formatLiters(primary)}
-        </span>
-        <span className="text-[10px] font-mono font-medium text-muted-foreground tabular-nums">
-          {percent}%
-        </span>
-      </div>
-      <CellularVolumeBar percent={percent} status={status} />
-      <span className="text-[10px] text-muted-foreground leading-tight">
-        {remaining > 0 ? remainingText : completeText}
-      </span>
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className="w-fit max-w-full cursor-help"
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="p-3 max-w-[260px]">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+          {title}
+        </p>
+        <ul className="space-y-1.5 text-xs">
+          {lines.map((line) => (
+            <li key={line.label} className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground">{line.label}</span>
+              <span className={cn("font-mono tabular-nums font-medium", volumeTooltipLineClass(line.tone))}>
+                {line.value}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </TooltipContent>
+    </Tooltip>
   );
+}
+
+function soldVolumeFootnote(
+  litersSold: number,
+  litersLost: number,
+  remainingToSell: number
+) {
+  if (remainingToSell > 0 && litersLost > 0) {
+    return {
+      text: `${formatLiters(remainingToSell)} remaining · ${formatLiters(litersLost)} loss`,
+      className: "text-muted-foreground",
+    };
+  }
+  if (remainingToSell > 0) {
+    return {
+      text: `${formatLiters(remainingToSell)} remaining to sell`,
+      className: "text-muted-foreground",
+    };
+  }
+  if (litersLost > 0) {
+    return {
+      text: `${formatLiters(litersLost)} loss`,
+      className: "text-rose-600 dark:text-rose-400 font-medium",
+    };
+  }
+  if (litersSold > 0) {
+    return { text: "Fully sold", className: "text-emerald-600 dark:text-emerald-400" };
+  }
+  return { text: "Not yet sold", className: "text-muted-foreground" };
 }
 
 const columns: ColumnDef<OrderRow>[] = [
@@ -238,25 +333,44 @@ const columns: ColumnDef<OrderRow>[] = [
     accessorKey: "litersOrdered",
     header: "Volume & Lifted",
     cell: ({ row }) => {
-      const { litersOrdered, litersRemaining, fulfillmentProgress, status } = row.original;
+      const { litersOrdered, litersLifted, litersRemaining, fulfillmentProgress, status } =
+        row.original;
       const liftNote =
         litersRemaining > 0
           ? `${formatLiters(litersRemaining)} remaining to lift`
           : "Fully lifted";
 
       return (
-        <div className="flex flex-col gap-1 py-1 min-w-[130px]">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold font-mono tabular-nums text-foreground">
-              {formatLiters(litersOrdered)}
-            </span>
-            <span className="text-[10px] font-mono font-medium text-muted-foreground tabular-nums">
-              {fulfillmentProgress}%
-            </span>
+        <OrderVolumeBarTooltip
+          title="Lift volume"
+          lines={[
+            { label: "Ordered", value: formatLiters(litersOrdered) },
+            { label: "Lifted", value: formatLiters(litersLifted), tone: "sold" },
+            {
+              label: "Remaining to lift",
+              value: formatLiters(litersRemaining),
+              tone: litersRemaining > 0 ? "remaining" : "muted",
+            },
+            { label: "Lift progress", value: `${fulfillmentProgress}%`, tone: "muted" },
+          ]}
+        >
+          <div className="flex flex-col gap-1 py-1 min-w-[130px]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold font-mono tabular-nums text-foreground">
+                {formatLiters(litersOrdered)}
+              </span>
+              <span className="text-[10px] font-mono font-medium text-muted-foreground tabular-nums">
+                {fulfillmentProgress}%
+              </span>
+            </div>
+            <CellularVolumeBarFromPercent
+              percent={fulfillmentProgress}
+              status={status}
+              remainderColor={litersRemaining > 0 ? REMAINING_BAR_COLOR : "bg-muted"}
+            />
+            <span className="text-[10px] leading-tight text-muted-foreground">{liftNote}</span>
           </div>
-          <CellularVolumeBar percent={fulfillmentProgress} status={status} />
-          <span className="text-[10px] text-muted-foreground leading-tight">{liftNote}</span>
-        </div>
+        </OrderVolumeBarTooltip>
       );
     },
   },
@@ -264,18 +378,63 @@ const columns: ColumnDef<OrderRow>[] = [
     accessorKey: "litersSold",
     header: "Sold",
     cell: ({ row }) => {
-      const { litersSold, soldRemaining, soldProgress, status } = row.original;
-      const soldCompleteText =
-        soldRemaining <= 0 && litersSold > 0 ? "Fully sold" : "Not yet sold";
+      const {
+        litersOrdered,
+        litersSold,
+        litersLost,
+        soldRemaining,
+        soldProgress,
+        lossProgress,
+        remainingToSellProgress,
+      } = row.original;
+      const footnote = soldVolumeFootnote(litersSold, litersLost, soldRemaining);
+      const barSegments: BarSegment[] = [];
+      if (soldProgress > 0) {
+        barSegments.push({ percent: soldProgress, color: "bg-emerald-500" });
+      }
+      if (lossProgress > 0) {
+        barSegments.push({ percent: lossProgress, color: LOSS_BAR_COLOR });
+      }
+      if (remainingToSellProgress > 0) {
+        barSegments.push({ percent: remainingToSellProgress, color: REMAINING_BAR_COLOR });
+      }
+
+      const soldTooltipLines: VolumeTooltipLine[] = [
+        { label: "Ordered", value: formatLiters(litersOrdered) },
+        { label: "Sold", value: formatLiters(litersSold), tone: "sold" },
+        {
+          label: "Loss / shortage",
+          value: formatLiters(litersLost),
+          tone: litersLost > 0 ? "loss" : "muted",
+        },
+        {
+          label: "Remaining to sell",
+          value: formatLiters(soldRemaining),
+          tone: soldRemaining > 0 ? "remaining" : "muted",
+        },
+        { label: "Sold progress", value: `${soldProgress}%`, tone: "muted" },
+      ];
+
       return (
-        <VolumeMetricCell
-          primary={litersSold}
-          remaining={soldRemaining}
-          remainingText={`${formatLiters(soldRemaining)} remaining`}
-          completeText={soldCompleteText}
-          percent={soldProgress}
-          status={status}
-        />
+        <OrderVolumeBarTooltip title="Sales volume" lines={soldTooltipLines}>
+          <div className="flex flex-col gap-1 py-1 min-w-[118px]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold font-mono tabular-nums text-foreground">
+                {formatLiters(litersSold)}
+              </span>
+              <span className="text-[10px] font-mono font-medium text-muted-foreground tabular-nums">
+                {soldProgress}%
+              </span>
+            </div>
+            <CellularVolumeBar
+              segments={barSegments}
+              remainderColor={soldRemaining > 0 ? REMAINING_BAR_EMPTY : "bg-muted"}
+            />
+            <span className={cn("text-[10px] leading-tight", footnote.className)}>
+              {footnote.text}
+            </span>
+          </div>
+        </OrderVolumeBarTooltip>
       );
     },
   },
@@ -364,22 +523,24 @@ export function OrdersTable({
   };
 
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      rowHref={(s) => `/admin/orders/${s.id}`}
-      filterColumnId="reference"
-      searchPlaceholder="Search by reference…"
-      filterNode={filterNode}
-      {...(serverPagination
-        ? {
-            serverPagination: {
-              ...serverPagination,
-              onPageChange: handlePageChange,
-              onPageSizeChange: handlePageSizeChange,
-            },
-          }
-        : {})}
-    />
+    <TooltipProvider delayDuration={200}>
+      <DataTable
+        columns={columns}
+        data={data}
+        rowHref={(s) => `/admin/orders/${s.id}`}
+        filterColumnId="reference"
+        searchPlaceholder="Search by reference…"
+        filterNode={filterNode}
+        {...(serverPagination
+          ? {
+              serverPagination: {
+                ...serverPagination,
+                onPageChange: handlePageChange,
+                onPageSizeChange: handlePageSizeChange,
+              },
+            }
+          : {})}
+      />
+    </TooltipProvider>
   );
 }

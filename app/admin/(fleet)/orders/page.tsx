@@ -13,20 +13,11 @@ import {
 } from "@/components/ui/tooltip";
 import { Box, Droplet, Clock, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { litersDeliveredFromSales } from "@/lib/fleet/transport-report";
-
-function sumLitersSoldFromTransports(
-  transports: Array<{
-    litersDelivered: unknown;
-    deliveries: Array<{ litersDespatched: unknown; litersReceived: unknown }>;
-  }>
-) {
-  return transports.reduce((sum, transport) => {
-    const fromDeliveries = litersDeliveredFromSales(transport.deliveries ?? []);
-    if (fromDeliveries > 0) return sum + fromDeliveries;
-    return sum + Number(transport.litersDelivered || 0);
-  }, 0);
-}
+import {
+  soldVolumeBreakdown,
+  sumLitersSoldFromTransports,
+  sumOrderLossLiters,
+} from "@/lib/fleet/order-volume-metrics";
 
 export default async function OrdersPage({
   searchParams,
@@ -84,8 +75,13 @@ export default async function OrdersPage({
         transports: {
           where: { status: { not: "CANCELLED" } },
           select: {
+            status: true,
             litersCarried: true,
             litersDelivered: true,
+            litersLost: true,
+            lossLogs: {
+              select: { lostQuantity: true, lossType: true },
+            },
             deliveries: {
               select: {
                 litersDespatched: true,
@@ -129,9 +125,8 @@ export default async function OrdersPage({
     const fulfillmentProgress =
       litersOrdered > 0 ? Math.min(100, Math.round((litersLifted / litersOrdered) * 100)) : 0;
     const litersSold = Math.min(litersOrdered, sumLitersSoldFromTransports(o.transports));
-    const soldRemaining = Math.max(0, litersOrdered - litersSold);
-    const soldProgress =
-      litersOrdered > 0 ? Math.min(100, Math.round((litersSold / litersOrdered) * 100)) : 0;
+    const litersLost = sumOrderLossLiters(o.transports);
+    const volume = soldVolumeBreakdown(litersOrdered, litersSold, litersLost);
 
     return {
       id: o.id,
@@ -142,10 +137,13 @@ export default async function OrdersPage({
       litersOrdered,
       litersLifted,
       litersRemaining,
-      litersSold,
-      soldRemaining,
+      litersSold: volume.sold,
+      litersLost: volume.loss,
+      soldRemaining: volume.remainingToSell,
       fulfillmentProgress,
-      soldProgress,
+      soldProgress: volume.soldProgress,
+      lossProgress: volume.lossProgress,
+      remainingToSellProgress: volume.remainingProgress,
       pricePerLitre: Number(o.pricePerLitre),
       totalCost: (Number(o.pricePerLitre) + Number(o.loadingCostPerLitre)) * litersOrdered,
       status: o.status,

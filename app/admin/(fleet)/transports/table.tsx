@@ -2,13 +2,17 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
-import { Route } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { formatDestination } from "@/lib/utils";
-import { formatTransportStatusLabel } from "@/lib/fleet/transport-loss";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  TransportSalesLossBadges,
+  TransportStatusBadge,
+  type TransportLossBreakdownItem,
+} from "@/components/fleet/transport-sales-loss-badges";
 
 export type TransportRow = {
   id: string;
@@ -22,13 +26,17 @@ export type TransportRow = {
   status: string;
   productType: string;
   salesCount: number;
+  litersSold: number;
+  litersLost: number;
+  lossBreakdown: TransportLossBreakdownItem[];
+  pendingDeliveries: number;
   litersCarried: number;
   createdAt: string;
 };
 
 const columns: ColumnDef<TransportRow>[] = [
-  { 
-    accessorKey: "destination", 
+  {
+    accessorKey: "destination",
     header: "Destination",
     cell: ({ row }) => {
       const rawDestination = row.original.destination;
@@ -61,70 +69,47 @@ const columns: ColumnDef<TransportRow>[] = [
           </div>
         </div>
       );
-    }
+    },
   },
-  { 
-    accessorKey: "litersCarried", 
+  {
+    accessorKey: "litersCarried",
     header: "Volume (L)",
-    cell: ({ row }) => row.original.litersCarried.toLocaleString()
+    cell: ({ row }) => row.original.litersCarried.toLocaleString(),
   },
-  { 
-    accessorKey: "status", 
+  {
+    id: "salesLoss",
+    header: "Sales & loss",
+    cell: ({ row }) => (
+      <TransportSalesLossBadges
+        summary={{
+          status: row.original.status,
+          litersSold: row.original.litersSold,
+          litersLost: row.original.litersLost,
+          lossBreakdown: row.original.lossBreakdown,
+          pendingDeliveries: row.original.pendingDeliveries,
+        }}
+      />
+    ),
+  },
+  {
+    accessorKey: "status",
     header: "Status",
-    cell: ({ row }) => {
-      const status = row.original.status;
-      let variant: "default" | "secondary" | "destructive" | "outline" | "warning" = "secondary";
-      if (status === "PENDING") variant = "warning";
-      if (status === "IN_TRANSIT") variant = "secondary";
-      if (status === "COMPLETED") variant = "default";
-      if (status === "LOSS" || status === "CANCELLED" || status === "REJECTED") variant = "destructive";
-      return (
-        <Badge
-          variant={variant === "warning" ? "default" : variant}
-          className={
-            variant === "warning"
-              ? "bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300"
-              : status === "LOSS"
-                ? "bg-rose-600 text-white hover:bg-rose-600 dark:bg-rose-700"
-                : ""
-          }
-        >
-          {formatTransportStatusLabel(status)}
-        </Badge>
-      );
-    }
+    cell: ({ row }) => <TransportStatusBadge status={row.original.status} />,
   },
-  { 
-    accessorKey: "productType", 
+  {
+    accessorKey: "productType",
     header: "Product",
     cell: ({ row }) => {
       const pType = row.original.productType;
       return (
-        <Badge variant={pType ? "outline" : "default"}>
-          {pType || "N/A"}
+        <Badge variant={pType && pType !== "-" ? "outline" : "default"}>
+          {pType && pType !== "-" ? pType : "N/A"}
         </Badge>
       );
-    }
+    },
   },
-  // {
-  //   accessorKey: "orderReference",
-  //   header: "Order",
-  //   cell: ({ row }) => (
-  //     <div className="flex items-center gap-2">
-  //       <span className="text-sm">{row.original.orderReference}</span>
-  //       {row.original.isUnlinked && (
-  //         <Badge variant="outline" className="text-[10px]">Unlinked</Badge>
-  //       )}
-  //     </div>
-  //   ),
-  // },
-  { 
-    accessorKey: "salesCount", 
-    header: "Sales Logged",
-    cell: ({ row }) => row.original.salesCount
-  },
-  { 
-    accessorKey: "createdAt", 
+  {
+    accessorKey: "createdAt",
     header: "Date",
     cell: ({ row }) => {
       const dateStr = row.original.createdAt;
@@ -137,11 +122,19 @@ const columns: ColumnDef<TransportRow>[] = [
           </span>
         </div>
       );
-    }
+    },
   },
 ];
 
-export function TransportsTable({ data, filterNode, serverPagination }: { data: TransportRow[], filterNode?: React.ReactNode, serverPagination?: any }) {
+export function TransportsTable({
+  data,
+  filterNode,
+  serverPagination,
+}: {
+  data: TransportRow[];
+  filterNode?: React.ReactNode;
+  serverPagination?: any;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -159,20 +152,24 @@ export function TransportsTable({ data, filterNode, serverPagination }: { data: 
   };
 
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      rowHref={(s) => `/admin/transports/${s.id}`}
-      filterColumnId="destination"
-      searchPlaceholder="Search by destination…"
-      filterNode={filterNode}
-      {...(serverPagination ? {
-        serverPagination: {
-          ...serverPagination,
-          onPageChange: handlePageChange,
-          onPageSizeChange: handlePageSizeChange,
-        }
-      } : {})}
-    />
+    <TooltipProvider delayDuration={200}>
+      <DataTable
+        columns={columns}
+        data={data}
+        rowHref={(s) => `/admin/transports/${s.id}`}
+        filterColumnId="destination"
+        searchPlaceholder="Search by destination…"
+        filterNode={filterNode}
+        {...(serverPagination
+          ? {
+              serverPagination: {
+                ...serverPagination,
+                onPageChange: handlePageChange,
+                onPageSizeChange: handlePageSizeChange,
+              },
+            }
+          : {})}
+      />
+    </TooltipProvider>
   );
 }

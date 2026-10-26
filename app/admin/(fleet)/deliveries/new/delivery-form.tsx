@@ -1,11 +1,19 @@
 "use client";
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { formatShortCurrency, formatHumanReadableDate, formatDestination } from "@/lib/utils";
+import {
+  cn,
+  formatHumanReadableDate,
+  formatDestination,
+} from "@/lib/utils";
+import {
+  estimateDeliverySalePnl,
+  type DeliverySaleEstimate,
+} from "@/lib/fleet/delivery-sale-estimate";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
@@ -13,7 +21,31 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Save, ChevronsUpDown, Store, UserCircle, Droplet, Truck, Package2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Save,
+  ChevronsUpDown,
+  Store,
+  UserCircle,
+  Droplet,
+  Truck,
+  Info,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
@@ -47,12 +79,15 @@ type CreateSaleFormProps = {
     status: string;
     createdAt?: string | Date;
     order?: {
+      id?: string;
       reference: string | null;
       productType: string;
       litersOrdered: any;
       supplier: string | null;
       sourceDepot: string | null;
       status: string;
+      pricePerLitre: any;
+      loadingCostPerLitre: any;
     } | null;
     deliveries?: { litersDespatched: any; litersReturned?: any }[];
     lossLogs?: { lostQuantity: any }[];
@@ -82,11 +117,248 @@ function getTransportVolumes(transport: TransportOption) {
   return { carried, distributed, loggedLost, available };
 }
 
-function TripSummaryRow({ label, value }: { label: string; value: ReactNode }) {
+function TripRefLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border/40 last:border-0">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium text-foreground text-right">{value}</span>
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="font-mono text-xs font-semibold text-primary hover:underline"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {children}
+    </a>
+  );
+}
+
+function formatTripRef(transport: TransportOption) {
+  return transport.id.slice(0, 8).toUpperCase();
+}
+
+function formatFullNaira(value: number) {
+  return `₦${value.toLocaleString("en-NG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function EstimateLine({
+  label,
+  value,
+  emphasize,
+}: {
+  label: string;
+  value: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2 border-b border-border/40 last:border-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span
+        className={cn(
+          "font-mono text-sm tabular-nums text-right",
+          emphasize ? "font-semibold text-foreground" : "text-foreground"
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function SaleEstimatePanel({
+  pnlEstimate,
+  dispatching,
+  amountPerLiter,
+  transportCostBorneBy,
+  soldToLabel,
+  recipientKind,
+  orderLinked,
+}: {
+  pnlEstimate: DeliverySaleEstimate | null;
+  dispatching: number;
+  amountPerLiter: number;
+  transportCostBorneBy: "CLIENT" | "COMPANY";
+  soldToLabel: string;
+  recipientKind: "STATION" | "CUSTOMER";
+  orderLinked: boolean;
+}) {
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const grossRevenue = dispatching * amountPerLiter;
+  const isProfit = pnlEstimate ? pnlEstimate.grossProfit >= 0 : false;
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border/50 bg-background/80 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Sold to
+        </span>
+        <Badge variant="outline" className="text-[10px] uppercase">
+          {recipientKind === "STATION" ? "Managed station" : "B2B client"}
+        </Badge>
+      </div>
+      <p className="text-sm font-semibold text-foreground truncate" title={soldToLabel}>
+        {soldToLabel}
+      </p>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Sale volume</span>
+        <span className="font-mono font-medium">{dispatching.toLocaleString("en-NG")} L</span>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Selling price</span>
+        <span className="font-mono font-medium">{formatFullNaira(amountPerLiter)}/L</span>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Gross revenue</span>
+        <span className="font-mono font-semibold">{formatFullNaira(grossRevenue)}</span>
+      </div>
+
+      {pnlEstimate ? (
+        <div
+          className={cn(
+            "mt-1 rounded-md border px-3 py-2.5",
+            isProfit
+              ? "border-emerald-200/80 bg-emerald-50/60 dark:border-emerald-800/50 dark:bg-emerald-950/25"
+              : "border-rose-200/80 bg-rose-50/60 dark:border-rose-800/50 dark:bg-rose-950/25"
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1 space-y-1">
+              <span className="text-xs font-semibold text-foreground">
+                {isProfit ? "Estimated profit" : "Estimated loss"}
+              </span>
+              <p
+                className={cn(
+                  "font-mono text-base font-bold tabular-nums leading-tight break-all",
+                  isProfit
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-rose-700 dark:text-rose-400"
+                )}
+              >
+                {isProfit ? "" : "−"}
+                {formatFullNaira(Math.abs(pnlEstimate.grossProfit))}
+              </p>
+              <p className="text-[10px] leading-snug text-muted-foreground">
+                Margin {pnlEstimate.marginPercent.toFixed(2)}% ·{" "}
+                {formatFullNaira(pnlEstimate.marginPerLiter)}/L
+              </p>
+            </div>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-8 shrink-0 rounded-full bg-background/80"
+                    onClick={() => setBreakdownOpen(true)}
+                    aria-label="Open full sale estimate breakdown"
+                  >
+                    <Info className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="max-w-[220px] text-xs">
+                  Click for the full revenue, cost, and margin breakdown before you log this delivery.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
+      ) : !orderLinked ? (
+        <p className="text-[11px] text-amber-700 dark:text-amber-400">
+          Link this trip to an order to estimate profit or loss.
+        </p>
+      ) : null}
+
+      <Dialog open={breakdownOpen} onOpenChange={setBreakdownOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              {pnlEstimate && isProfit ? (
+                <TrendingUp className="size-5 text-emerald-600" />
+              ) : (
+                <TrendingDown className="size-5 text-rose-600" />
+              )}
+              Sale estimate breakdown
+            </DialogTitle>
+            <DialogDescription>
+              Projected figures for {dispatching.toLocaleString("en-NG")} L to {soldToLabel}. Actual P&amp;L may
+              change after receipt and payments.
+            </DialogDescription>
+          </DialogHeader>
+          {pnlEstimate ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Net result
+                </p>
+                <p
+                  className={cn(
+                    "mt-1 font-mono text-2xl font-bold tabular-nums",
+                    isProfit ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"
+                  )}
+                >
+                  {isProfit ? "" : "−"}
+                  {formatFullNaira(Math.abs(pnlEstimate.grossProfit))}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {pnlEstimate.marginPercent.toFixed(2)}% margin ·{" "}
+                  {formatFullNaira(pnlEstimate.marginPerLiter)} per litre
+                </p>
+              </div>
+
+              <div>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Revenue
+                </p>
+                <EstimateLine label="Gross sales" value={formatFullNaira(pnlEstimate.revenue)} emphasize />
+              </div>
+
+              <div>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Landed cost (company)
+                </p>
+                <EstimateLine label="Product (order price)" value={formatFullNaira(pnlEstimate.productCost)} />
+                <EstimateLine label="Loading" value={formatFullNaira(pnlEstimate.loadingCost)} />
+                <EstimateLine label="Trip haulage" value={formatFullNaira(pnlEstimate.tripHaulageCost)} />
+                {pnlEstimate.companyTransportCost > 0 ? (
+                  <EstimateLine
+                    label="Delivery transport (company)"
+                    value={formatFullNaira(pnlEstimate.companyTransportCost)}
+                  />
+                ) : null}
+                <EstimateLine
+                  label="Total landed cost"
+                  value={formatFullNaira(pnlEstimate.totalLandedCost)}
+                  emphasize
+                />
+              </div>
+
+              {transportCostBorneBy === "CLIENT" && pnlEstimate.clientTransportBilled > 0 ? (
+                <div className="rounded-md border border-blue-200/80 bg-blue-50/50 px-3 py-2 text-xs text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
+                  Client-billed transport (not in company landed cost):{" "}
+                  <span className="font-mono font-semibold">
+                    {formatFullNaira(pnlEstimate.clientTransportBilled)}
+                  </span>
+                </div>
+              ) : null}
+
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Haulage uses the trip rate on this transport. Product and loading use the linked order rates.
+                {transportCostBorneBy === "COMPANY"
+                  ? " Delivery transport is included in landed cost."
+                  : " Delivery transport is charged to the client separately."}
+              </p>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -94,9 +366,19 @@ function TripSummaryRow({ label, value }: { label: string; value: ReactNode }) {
 function TripSummaryCard({
   transport,
   dispatchVolume,
+  amountPerLiter,
+  transportCostPerLiter,
+  transportCostBorneBy,
+  recipientLabel,
+  recipientKind,
 }: {
   transport: TransportOption | undefined;
   dispatchVolume: number;
+  amountPerLiter: number;
+  transportCostPerLiter: number;
+  transportCostBorneBy: "CLIENT" | "COMPANY";
+  recipientLabel: string | null;
+  recipientKind: "STATION" | "CUSTOMER" | null;
 }) {
   if (!transport) {
     return (
@@ -114,24 +396,35 @@ function TripSummaryCard({
     );
   }
 
-  const { carried, distributed, loggedLost, available } = getTransportVolumes(transport);
   const dispatching = Math.max(0, dispatchVolume || 0);
-  const remainingAfter = Math.max(0, available - dispatching);
-  const totalAccounted = distributed + loggedLost;
-  const utilization = carried > 0 ? Math.min(100, Math.round((totalAccounted / carried) * 100)) : 0;
-  const afterDispatchUtilization =
-    carried > 0 ? Math.min(100, Math.round(((totalAccounted + dispatching) / carried) * 100)) : 0;
-  const truckLabel = (transport.truck?.plateNumber || transport.oneTimeTruckPlate) || (transport.truck?.name || "One-Time Truck");
+
+  const orderRef = transport.order?.reference || "Unlinked";
+  const tripRef = formatTripRef(transport);
+
+  const pnlEstimate =
+    dispatching > 0 && amountPerLiter > 0 && transport.order
+      ? estimateDeliverySalePnl({
+          liters: dispatching,
+          sellingPricePerLiter: amountPerLiter,
+          orderPricePerLiter: Number(transport.order.pricePerLitre || 0),
+          orderLoadingPerLiter: Number(transport.order.loadingCostPerLitre || 0),
+          tripRatePerLiter: Number(transport.ratePerLiter || 0),
+          deliveryTransportPerLiter: transportCostPerLiter || 0,
+          transportCostBorneBy,
+        })
+      : null;
+
+  const soldToLabel =
+    recipientLabel ||
+    (recipientKind === "STATION" ? "Select a station" : recipientKind === "CUSTOMER" ? "Select a client" : null);
 
   return (
     <Card className="border-border/60 bg-card/80 backdrop-blur-xs sticky top-6 shadow-sm">
       <CardHeader className="pb-3 border-b border-border/40">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-              Trip Summary
-            </CardTitle>
-          </div>
+          <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+            Trip Summary
+          </CardTitle>
           {transport.order?.productType ? (
             <Badge variant="outline" className="font-mono text-[10px] uppercase shrink-0">
               {transport.order.productType}
@@ -139,103 +432,37 @@ function TripSummaryCard({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
-          <div className="flex items-center gap-2 mb-3">
-            <Package2 className="size-4 text-muted-foreground" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Order</span>
+      <CardContent className="space-y-4">
+        <div className="space-y-2.5 rounded-lg border border-border/50 bg-muted/20 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Order
+            </span>
+            {transport.order?.id ? (
+              <TripRefLink href={`/admin/orders/${transport.order.id}`}>{orderRef}</TripRefLink>
+            ) : (
+              <span className="font-mono text-xs text-muted-foreground">{orderRef}</span>
+            )}
           </div>
-          <TripSummaryRow
-            label="Reference"
-            value={
-              <span className="font-mono text-xs">
-                {transport.order?.reference || "Unlinked"}
-              </span>
-            }
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Transport
+            </span>
+            <TripRefLink href={`/admin/transports/${transport.id}`}>{tripRef}</TripRefLink>
+          </div>
+        </div>
+
+        {soldToLabel && dispatching > 0 && amountPerLiter > 0 ? (
+          <SaleEstimatePanel
+            pnlEstimate={pnlEstimate}
+            dispatching={dispatching}
+            amountPerLiter={amountPerLiter}
+            transportCostBorneBy={transportCostBorneBy}
+            soldToLabel={soldToLabel}
+            recipientKind={recipientKind ?? "STATION"}
+            orderLinked={Boolean(transport.order)}
           />
-          {transport.order?.sourceDepot ? (
-            <TripSummaryRow label="Depot" value={transport.order.sourceDepot} />
-          ) : null}
-        </div>
-
-        <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
-          <div className="flex items-center gap-2 mb-3">
-            <Truck className="size-4 text-muted-foreground" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transport</span>
-          </div>
-          <TripSummaryRow label="Destination" value={formatDestination(transport.destination)} />
-          <TripSummaryRow label="Transporter" value={transport.transporter?.name || transport.oneTimeTransporterName || "Unknown"} />
-          <TripSummaryRow label="Truck" value={truckLabel} />
-          <TripSummaryRow
-            label="Status"
-            value={
-              <Badge variant="secondary" className="text-[10px] uppercase">
-                {transport.status.replace(/_/g, " ")}
-              </Badge>
-            }
-          />
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-            <span>Volume on trip</span>
-            <span>{utilization}% accounted</span>
-          </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full border border-border/50 bg-muted/40">
-            <div
-              className="h-full rounded-full bg-primary/70 transition-all duration-300"
-              style={{ width: `${utilization}%` }}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-2">
-            <div className="flex items-center justify-between rounded-md border border-border/50 bg-background/80 px-3 py-2.5">
-              <span className="text-xs text-muted-foreground">Carried (Loaded)</span>
-              <span className="font-mono text-sm font-semibold">{carried.toLocaleString()} L</span>
-            </div>
-            {loggedLost > 0 ? (
-              <div className="flex items-center justify-between rounded-md border border-rose-200/70 bg-rose-50/50 px-3 py-2.5 dark:border-rose-900/40 dark:bg-rose-950/20">
-                <span className="text-xs text-muted-foreground">Loss deducted</span>
-                <span className="font-mono text-sm font-semibold text-rose-700 dark:text-rose-400">
-                  -{loggedLost.toLocaleString()} L
-                </span>
-              </div>
-            ) : null}
-            <div className="flex items-center justify-between rounded-md border border-amber-200/70 bg-amber-50/50 px-3 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/20">
-              <span className="text-xs text-muted-foreground">Already distributed</span>
-              <span className="font-mono text-sm font-semibold text-amber-700 dark:text-amber-400">
-                {distributed.toLocaleString()} L
-              </span>
-            </div>
-            <div className="flex items-center justify-between rounded-md border border-emerald-200/70 bg-emerald-50/50 px-3 py-2.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-              <span className="text-xs text-muted-foreground">Available now</span>
-              <span className="font-mono text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-                {available.toLocaleString()} L
-              </span>
-            </div>
-          </div>
-
-          {dispatching > 0 ? (
-            <div className="rounded-md border border-dashed border-primary/30 bg-primary/5 px-3 py-2.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">This dispatch</span>
-                <span className="font-mono font-semibold text-primary">{dispatching.toLocaleString()} L</span>
-              </div>
-              <div className="mt-2 flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Remaining after</span>
-                <span className={`font-mono font-semibold ${remainingAfter === 0 ? "text-emerald-600" : "text-foreground"}`}>
-                  {remainingAfter.toLocaleString()} L
-                </span>
-              </div>
-              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted/50">
-                <div
-                  className="h-full rounded-full bg-primary transition-all duration-300"
-                  style={{ width: `${afterDispatchUtilization}%` }}
-                />
-              </div>
-            </div>
-          ) : null}
-        </div>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -304,6 +531,24 @@ export function CreateSaleForm({
   const selectedTransportId = watch("transportId");
   const selectedTransport = transports.find((t) => t.id === selectedTransportId);
   const litersDespatched = watch("litersDespatched");
+  const amountPerLiter = watch("amountPerLiter");
+  const transportCostPerLiter = watch("transportCostPerLiter");
+  const recipientLabel =
+    recipientType === "CUSTOMER"
+      ? selectedCustomer?.name ?? null
+      : selectedStation?.name ?? null;
+
+  const transportsForSelect = useMemo(() => {
+    const withAvailability = transports.filter((t) => getTransportVolumes(t).available > 0);
+    if (
+      selectedTransportId &&
+      !withAvailability.some((t) => t.id === selectedTransportId)
+    ) {
+      const current = transports.find((t) => t.id === selectedTransportId);
+      if (current) return [current, ...withAvailability];
+    }
+    return withAvailability;
+  }, [transports, selectedTransportId]);
 
   // Keep per-litre transport cost synchronized when in flat fee mode
   useEffect(() => {
@@ -556,7 +801,7 @@ export function CreateSaleForm({
                       <CommandList className="max-h-[200px] overflow-y-auto">
                         <CommandEmpty>No transport found.</CommandEmpty>
                         <CommandGroup>
-                          {transports.map((t) => {
+                          {transportsForSelect.map((t) => {
                             const { available, loggedLost } = getTransportVolumes(t);
                             return (
                               <CommandItem
@@ -811,7 +1056,15 @@ export function CreateSaleForm({
         </div>
 
         <div className="space-y-6">
-          <TripSummaryCard transport={selectedTransport} dispatchVolume={Number(litersDespatched || 0)} />
+          <TripSummaryCard
+            transport={selectedTransport}
+            dispatchVolume={Number(litersDespatched || 0)}
+            amountPerLiter={Number(amountPerLiter || 0)}
+            transportCostPerLiter={Number(transportCostPerLiter || 0)}
+            transportCostBorneBy={transportCostBorneBy}
+            recipientLabel={recipientLabel}
+            recipientKind={recipientType}
+          />
         </div>
       </div>
     </form>

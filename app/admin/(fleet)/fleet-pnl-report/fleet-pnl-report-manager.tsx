@@ -26,9 +26,12 @@ import {
   type DataTableFilterField,
 } from "@/components/tables";
 import { cn } from "@/lib/utils";
+import type { FilterFn } from "@tanstack/react-table";
+
 import {
   fmtMoney,
   getFleetPnlColumns,
+  PRODUCT_LABELS,
   type FleetPnlTableRow,
 } from "./fleet-pnl-columns";
 
@@ -36,6 +39,49 @@ interface Truck {
   id: string;
   plateNumber: string;
 }
+
+function last30Days(): DateRange {
+  return { from: addDays(new Date(), -30), to: new Date() };
+}
+
+function parseDateInput(value: string): Date | undefined {
+  if (!value) return undefined;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+function matchesDateRange(iso: string, range: DateRange | undefined) {
+  const created = new Date(iso);
+  if (Number.isNaN(created.getTime())) return false;
+  if (range?.from) {
+    const start = new Date(range.from);
+    start.setHours(0, 0, 0, 0);
+    if (created < start) return false;
+  }
+  if (range?.to) {
+    const end = new Date(range.to);
+    end.setHours(23, 59, 59, 999);
+    if (created > end) return false;
+  }
+  return true;
+}
+
+const globalFilterFn: FilterFn<FleetPnlTableRow> = (row, _columnId, filterValue) => {
+  const search = String(filterValue ?? "").trim().toLowerCase();
+  if (!search) return true;
+  const record = row.original;
+  return [
+    record.orderReference,
+    record.depot,
+    record.productType,
+    PRODUCT_LABELS[record.productType],
+    record.truckLabels.join(" "),
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(search);
+};
 
 export function FleetPnlReportManager({
   initialOrders,
@@ -45,13 +91,12 @@ export function FleetPnlReportManager({
   trucks: Truck[];
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [draftDateRange, setDraftDateRange] = React.useState<DateRange | undefined>({
-    from: addDays(new Date(), -30),
-    to: new Date(),
-  });
+  const [draftDateRange, setDraftDateRange] = React.useState<DateRange | undefined>(last30Days);
   const [draftSelectedTruckIds, setDraftSelectedTruckIds] = React.useState<string[]>([]);
-  const [dateRange, setDateRange] = React.useState<DateRange | undefined>(draftDateRange);
+  const [dateRange, setDateRange] = React.useState<DateRange | undefined>(last30Days);
   const [selectedTruckIds, setSelectedTruckIds] = React.useState<string[]>([]);
+
+  const [filtersResetKey, setFiltersResetKey] = React.useState(0);
 
   const applyFilters = React.useCallback(() => {
     setDateRange(draftDateRange);
@@ -65,6 +110,12 @@ export function FleetPnlReportManager({
     setDateRange(undefined);
     setSelectedTruckIds([]);
     setIsOpen(false);
+    setFiltersResetKey((key) => key + 1);
+  }, []);
+
+  const handleDateRangeChange = React.useCallback((range: DateRange | undefined) => {
+    setDraftDateRange(range);
+    setDateRange(range);
   }, []);
 
   const filteredRows = React.useMemo(() => {
@@ -75,20 +126,11 @@ export function FleetPnlReportManager({
       ) {
         return false;
       }
-      const d = new Date(row.orderDate);
-      if (dateRange?.from) {
-        const s = new Date(dateRange.from);
-        s.setHours(0, 0, 0, 0);
-        if (d < s) return false;
-      }
-      if (dateRange?.to) {
-        const e = new Date(dateRange.to);
-        e.setHours(23, 59, 59, 999);
-        if (d > e) return false;
-      }
-      return true;
+      return matchesDateRange(row.orderDate, dateRange);
     });
   }, [initialOrders, selectedTruckIds, dateRange]);
+
+  const [visibleRows, setVisibleRows] = React.useState<FleetPnlTableRow[]>(filteredRows);
 
   const metrics = React.useMemo(() => {
     let totalCost = 0;
@@ -97,7 +139,7 @@ export function FleetPnlReportManager({
     let debtRemaining = 0;
     let profitAndLoss = 0;
 
-    filteredRows.forEach((r) => {
+    visibleRows.forEach((r) => {
       totalCost += r.totalCost;
       salesRevenue += r.amountSoldRev;
       salesCollected += r.amountPaid;
@@ -112,7 +154,7 @@ export function FleetPnlReportManager({
       debtRemaining,
       profitAndLoss,
     };
-  }, [filteredRows]);
+  }, [visibleRows]);
 
   const insightStats = React.useMemo(
     () =>
@@ -158,19 +200,40 @@ export function FleetPnlReportManager({
 
   const columns = React.useMemo(() => getFleetPnlColumns(), []);
 
-  const filterFields = React.useMemo<DataTableFilterField<FleetPnlTableRow>[]>(
-    () => [
+  const filterFields = React.useMemo<DataTableFilterField<FleetPnlTableRow>[]>(() => {
+    const orders = Array.from(new Set(initialOrders.map((order) => order.orderReference))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+    const products = Array.from(new Set(initialOrders.map((order) => order.productType))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+    const depots = Array.from(new Set(initialOrders.map((order) => order.depot))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+
+    return [
+      {
+        id: "orderReference",
+        label: "Order",
+        options: orders.map((order) => ({ label: order, value: order })),
+      },
       {
         id: "productType",
         label: "Product",
-        options: Array.from(new Set(initialOrders.map((o) => o.productType))).map((p) => ({
-          label: p,
-          value: p,
+        options: products.map((product) => ({
+          label: PRODUCT_LABELS[product] ?? product,
+          value: product,
         })),
       },
-    ],
-    [initialOrders]
-  );
+      {
+        id: "depot",
+        label: "Depot",
+        options: depots.map((depot) => ({ label: depot, value: depot })),
+      },
+    ];
+  }, [initialOrders]);
+
+  const hasExternalFilters = selectedTruckIds.length > 0 || Boolean(dateRange?.from || dateRange?.to);
 
   const filterSheet = (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -250,7 +313,7 @@ export function FleetPnlReportManager({
                   value={draftDateRange?.from ? format(draftDateRange.from, "yyyy-MM-dd") : ""}
                   onChange={(e) =>
                     setDraftDateRange((prev) => ({
-                      from: e.target.value ? new Date(e.target.value) : undefined,
+                      from: parseDateInput(e.target.value),
                       to: prev?.to,
                     }))
                   }
@@ -264,7 +327,7 @@ export function FleetPnlReportManager({
                   onChange={(e) =>
                     setDraftDateRange((prev) => ({
                       from: prev?.from,
-                      to: e.target.value ? new Date(e.target.value) : undefined,
+                      to: parseDateInput(e.target.value),
                     }))
                   }
                 />
@@ -300,7 +363,15 @@ export function FleetPnlReportManager({
         data={filteredRows}
         tableId="fleet-pnl-report-v3"
         filterFields={filterFields}
-        searchPlaceholder="Search order, depot, truck..."
+        searchPlaceholder="Search order, depot, product, truck..."
+        globalFilterFn={globalFilterFn}
+        dateRange={dateRange}
+        onDateRangeChange={handleDateRangeChange}
+        hasExternalFilters={hasExternalFilters}
+        onFiltersReset={clearFilters}
+        onFilteredRowsChange={setVisibleRows}
+        filtersResetKey={filtersResetKey}
+        showFacetedFilters
         toolbarActions={filterSheet}
         rowHref={(row) => `/admin/fleet-pnl-report/${row.id}`}
         emptyMessage="No orders found for the selected filters."

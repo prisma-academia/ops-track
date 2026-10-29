@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useDataTable } from "./data-table-context";
 import { DataTableExportMenu } from "./data-table-export-menu";
+import { DataTableFacetedFilter } from "./data-table-faceted-filter";
 import { DataTableViewOptions } from "./data-table-view-options";
 
 interface DataTableToolbarProps {
@@ -24,6 +25,11 @@ interface DataTableToolbarProps {
   onRefresh?: () => void;
   hideSearch?: boolean;
   hideDateFilter?: boolean;
+  dateRange?: DateRange;
+  onDateRangeChange?: (date: DateRange | undefined) => void;
+  hasExternalFilters?: boolean;
+  onFiltersReset?: () => void;
+  showFacetedFilters?: boolean;
   title?: React.ReactNode;
 }
 
@@ -33,12 +39,24 @@ export function DataTableToolbar<TData>({
   onRefresh,
   hideSearch = false,
   hideDateFilter = false,
+  dateRange,
+  onDateRangeChange,
+  hasExternalFilters = false,
+  onFiltersReset,
+  showFacetedFilters = false,
   title,
 }: DataTableToolbarProps) {
-  const { table } = useDataTable<TData>();
-  const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
+  const { table, filterFields } = useDataTable<TData>();
+  const [uncontrolledDateRange, setUncontrolledDateRange] = React.useState<
+    DateRange | undefined
+  >(undefined);
+  const isDateControlled = onDateRangeChange != null;
+  const activeDateRange = isDateControlled ? dateRange : uncontrolledDateRange;
+  const setActiveDateRange = isDateControlled ? onDateRangeChange : setUncontrolledDateRange;
   const isFiltered =
-    table.getState().columnFilters.length > 0 || !!table.getState().globalFilter;
+    table.getState().columnFilters.length > 0 ||
+    !!table.getState().globalFilter ||
+    hasExternalFilters;
 
   return (
     <div className="flex flex-col gap-3">
@@ -59,7 +77,7 @@ export function DataTableToolbar<TData>({
           </div>
         ) : null}
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -77,11 +95,26 @@ export function DataTableToolbar<TData>({
 
           {!hideDateFilter ? (
             <DateRangeFilter
-              date={dateRange}
-              setDate={setDateRange}
-              tooltip="Filter by date range (coming soon)"
+              date={activeDateRange}
+              setDate={setActiveDateRange}
+              tooltip={isDateControlled ? "Filter by date range" : "Filter by date range (coming soon)"}
             />
           ) : null}
+
+          {showFacetedFilters
+            ? filterFields.map((field) => {
+                const column = table.getColumn(field.id as string);
+                if (!column) return null;
+                return (
+                  <DataTableFacetedFilter
+                    key={field.id as string}
+                    column={column}
+                    title={field.label}
+                    options={field.options}
+                  />
+                );
+              })
+            : null}
 
           {isFiltered ? (
             <Tooltip>
@@ -93,6 +126,7 @@ export function DataTableToolbar<TData>({
                   onClick={() => {
                     table.resetColumnFilters();
                     table.setGlobalFilter("");
+                    onFiltersReset?.();
                   }}
                 >
                   <XIcon />

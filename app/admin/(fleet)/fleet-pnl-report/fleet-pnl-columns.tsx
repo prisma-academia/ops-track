@@ -49,6 +49,22 @@ export function fmtMoney(n: number | null) {
   return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+export const PRODUCT_LABELS: Record<string, string> = {
+  PMS: "PMS (Petrol)",
+  AGO: "AGO (Diesel)",
+  DPK: "DPK (Kerosene)",
+  LPG: "LPG (Gas)",
+};
+
+function selectedValueFilter(
+  row: { getValue: (id: string) => unknown },
+  id: string,
+  value: unknown
+) {
+  if (!Array.isArray(value) || value.length === 0) return true;
+  return value.includes(row.getValue(id));
+}
+
 function trucksColumn(): ColumnDef<FleetPnlTableRow> {
   return {
     id: "trucks",
@@ -86,10 +102,7 @@ function productColumn(): ColumnDef<FleetPnlTableRow> {
         {row.original.productType}
       </Badge>
     ),
-    filterFn: (row, id, value) => {
-      if (!Array.isArray(value)) return true;
-      return value.includes(row.getValue(id));
-    },
+    filterFn: selectedValueFilter,
   };
 }
 
@@ -184,12 +197,14 @@ export function getFleetPnlColumns(): ColumnDef<FleetPnlTableRow>[] {
           header: ({ column }) => <DataTableColumnHeader column={column} title="Order" />,
           meta: { label: "Order" },
           cell: ({ row }) => <span>{row.original.orderReference}</span>,
+          filterFn: selectedValueFilter,
         },
         {
           accessorKey: "depot",
           header: ({ column }) => <DataTableColumnHeader column={column} title="Depot" />,
           meta: { label: "Depot" },
           cell: ({ row }) => <span>{row.original.depot}</span>,
+          filterFn: selectedValueFilter,
         },
         productColumn(),
         {

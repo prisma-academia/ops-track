@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   type ColumnDef,
   type ColumnFiltersState,
+  type FilterFn,
   type SortingState,
   type VisibilityState,
   flexRender,
@@ -16,6 +17,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { useRouter } from "next/navigation";
+import { type DateRange } from "react-day-picker";
 
 import { cn } from "@/lib/utils";
 import {
@@ -97,6 +99,20 @@ export interface DataTableProps<TData, TValue> {
   printExtraHtml?: string;
   hideSearch?: boolean;
   hideDateFilter?: boolean;
+  /** When set, the toolbar date control filters through this callback. */
+  dateRange?: DateRange;
+  onDateRangeChange?: (date: DateRange | undefined) => void;
+  /** True when filters outside the table (date, truck, and similar) are active. */
+  hasExternalFilters?: boolean;
+  /** Called when the toolbar reset button clears table filters. */
+  onFiltersReset?: () => void;
+  /** Receives the rows left after search and column filters. */
+  onFilteredRowsChange?: (rows: TData[]) => void;
+  /** Bump to clear search and column filters from outside the table. */
+  filtersResetKey?: number;
+  /** Renders `filterFields` as toolbar filters. Off unless a page opts in. */
+  showFacetedFilters?: boolean;
+  globalFilterFn?: FilterFn<TData>;
   /** Extra row content rendered under a parent row (full table width). */
   renderSubRow?: (row: TData) => React.ReactNode | null;
   /** Optional title to render on the left side of the toolbar. */
@@ -123,6 +139,14 @@ export function DataTable<TData, TValue>({
   printExtraHtml,
   hideSearch = false,
   hideDateFilter = false,
+  dateRange,
+  onDateRangeChange,
+  hasExternalFilters = false,
+  onFiltersReset,
+  onFilteredRowsChange,
+  filtersResetKey,
+  showFacetedFilters = false,
+  globalFilterFn,
   renderSubRow,
   title,
 }: DataTableProps<TData, TValue>) {
@@ -179,7 +203,37 @@ export function DataTable<TData, TValue>({
     getPaginationRowModel: getPaginationRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    ...(globalFilterFn ? { globalFilterFn } : {}),
   });
+
+  const onFilteredRowsChangeRef = React.useRef(onFilteredRowsChange);
+  onFilteredRowsChangeRef.current = onFilteredRowsChange;
+  const columnFilterSignature = columnFilters
+    .map((filter) => `${filter.id}:${JSON.stringify(filter.value)}`)
+    .join("|");
+  const dataSignature = data
+    .map((row, index) => {
+      if (row && typeof row === "object" && "id" in row && row.id != null) {
+        return String(row.id);
+      }
+      return String(index);
+    })
+    .join("\u0001");
+  const filteredSignature = `${dataSignature}:${globalFilter}:${columnFilterSignature}`;
+
+  React.useEffect(() => {
+    onFilteredRowsChangeRef.current?.(
+      table.getFilteredRowModel().rows.map((row) => row.original)
+    );
+  }, [filteredSignature, table]);
+
+  const appliedResetKey = React.useRef(filtersResetKey);
+  React.useEffect(() => {
+    if (filtersResetKey === undefined || filtersResetKey === appliedResetKey.current) return;
+    appliedResetKey.current = filtersResetKey;
+    table.resetColumnFilters();
+    table.setGlobalFilter("");
+  }, [filtersResetKey, table]);
 
   return (
     <DataTableProvider
@@ -199,6 +253,11 @@ export function DataTable<TData, TValue>({
         onRefresh={onRefresh}
         hideSearch={hideSearch}
         hideDateFilter={hideDateFilter}
+        dateRange={dateRange}
+        onDateRangeChange={onDateRangeChange}
+        hasExternalFilters={hasExternalFilters}
+        onFiltersReset={onFiltersReset}
+        showFacetedFilters={showFacetedFilters}
         rowHref={rowHref}
         getRowClassName={getRowClassName}
         emptyMessage={emptyMessage}
@@ -221,6 +280,11 @@ function DataTableBody<TData, TValue>({
   onRefresh,
   hideSearch,
   hideDateFilter,
+  dateRange,
+  onDateRangeChange,
+  hasExternalFilters,
+  onFiltersReset,
+  showFacetedFilters,
   rowHref,
   getRowClassName,
   emptyMessage,
@@ -238,6 +302,11 @@ function DataTableBody<TData, TValue>({
   onRefresh?: () => void;
   hideSearch?: boolean;
   hideDateFilter?: boolean;
+  dateRange?: DateRange;
+  onDateRangeChange?: (date: DateRange | undefined) => void;
+  hasExternalFilters?: boolean;
+  onFiltersReset?: () => void;
+  showFacetedFilters?: boolean;
   rowHref?: (row: TData) => string | null | undefined;
   getRowClassName?: (row: TData) => string | undefined;
   emptyMessage?: string;
@@ -265,6 +334,11 @@ function DataTableBody<TData, TValue>({
               onRefresh={onRefresh}
               hideSearch={hideSearch}
               hideDateFilter={hideDateFilter}
+              dateRange={dateRange}
+              onDateRangeChange={onDateRangeChange}
+              hasExternalFilters={hasExternalFilters}
+              onFiltersReset={onFiltersReset}
+              showFacetedFilters={showFacetedFilters}
               title={title}
             />
           </div>

@@ -1,27 +1,30 @@
 "use client";
 import Feature from "@/components/landing-page/features/feature";
-import { BellRing, ClipboardList, Fuel, Truck } from "lucide-react";
 
 const featureData = [
   {
-    icon: Truck,
+    image: "/assets/icons/oil-industry.png",
+    title: "Oil Industries",
     content:
-      "Dispatch trucks and follow transport from depot to station without re-entering the same trip.",
+      "Run depot stock, fleet, and station sales from one petroleum operations workspace.",
   },
   {
-    icon: Fuel,
+    image: "/assets/icons/fuel-truck.png",
+    title: "Transporters",
+    content:
+      "Dispatch trucks and follow every load from depot to station without re-entering the trip.",
+  },
+  {
+    image: "/assets/icons/route.png",
+    title: "Routes",
+    content:
+      "Keep waybills, deliveries, and planned routes current as trucks move.",
+  },
+  {
+    image: "/assets/icons/fuel-station.png",
+    title: "Filling Stations",
     content:
       "Track tank levels, dipping, and station stock so every litre stays accounted for.",
-  },
-  {
-    icon: BellRing,
-    content:
-      "Get alerts when tickets, stock variances, or deliveries need action from the team.",
-  },
-  {
-    icon: ClipboardList,
-    content:
-      "Keep waybills, station sales, and payments current as operations move.",
   },
 ];
 

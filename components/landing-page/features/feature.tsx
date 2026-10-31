@@ -3,18 +3,18 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
 
-type Features = {
-  icon: LucideIcon;
+type FeatureItem = {
+  image: string;
+  title: string;
   content: string;
-}[];
+};
 
 const quotePerson = LANDING_PEOPLE.aliyu;
 
-const Feature = ({ featureData }: { featureData: Features }) => {
+const Feature = ({ featureData }: { featureData: FeatureItem[] }) => {
   return (
     <section className="overflow-x-clip">
       <div className="lg:py-20 sm:py-16 py-8 ">
@@ -97,10 +97,10 @@ const Feature = ({ featureData }: { featureData: Features }) => {
                 </Card>
               </motion.div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-6">
-                {featureData?.map((value, index) => {
+                {featureData?.map((value) => {
                   return (
                     <motion.div
-                      key={index}
+                      key={value.title}
                       initial={{ x: 100, opacity: 0 }}
                       whileInView={{ x: 0, opacity: 1 }}
                       viewport={{ once: true }}
@@ -111,12 +111,20 @@ const Feature = ({ featureData }: { featureData: Features }) => {
                     >
                       <Card className="py-8 bg-muted ring-0 border-0 h-full">
                         <CardContent className="w-full h-full px-8 flex flex-col items-start gap-12 justify-between">
-                          <value.icon
-                            className="w-6 h-6 text-muted-foreground"
-                            strokeWidth={1.5}
-                          />
+                          <div className="flex flex-col items-start gap-3">
+                            <img
+                              src={value.image}
+                              alt=""
+                              width={40}
+                              height={40}
+                              className="size-10 object-contain dark:invert"
+                            />
+                            <p className="text-sm font-medium text-foreground">
+                              {value.title}
+                            </p>
+                          </div>
                           <p className="text-base text-primary font-normal">
-                            {value?.content}
+                            {value.content}
                           </p>
                         </CardContent>
                       </Card>

@@ -20,7 +20,6 @@ const Hero02Page = ({
     { name: "Home", href: "/", isActive: true },
     { name: "Pricing", href: "/#pricing", isActive: false },
     { name: "FAQs", href: "/#faq", isActive: false },
-    { name: "Book Demo", href: "https://calendly.com/opstrack/30min", isActive: false },
     { name: "Register", href: "/auth/register", isActive: false },
   ];
   return (

@@ -7,6 +7,7 @@ import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 import { fleetModuleFilter } from "@/lib/auth/org-scope";
+import { assertTenantCapacity } from "@/lib/tenant/capacity";
 
 const CreateOrgSchema = z.object({
   name: z.string().min(2).max(100),
@@ -101,6 +102,8 @@ export async function POST(request: Request) {
     if (existing) {
       throw new DomainError(409, "slug_taken", "Organization slug is already in use for this tenant.");
     }
+
+    await assertTenantCapacity(actor.tenantId, "organizations");
 
     const org = await prisma.organization.create({
       data: {

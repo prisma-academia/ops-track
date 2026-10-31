@@ -9,7 +9,6 @@ import { TenantStatusBadge } from "../_components/tenant-status-badge";
 export type TenantRow = {
   id: string;
   name: string;
-  slug: string;
   status: string;
   companyEmail: string | null;
   createdAt: string;
@@ -47,7 +46,7 @@ const columns: ColumnDef<TenantRow>[] = [
           </Avatar>
           <div className="min-w-0">
             <div className="truncate font-medium text-foreground">{tenant.name}</div>
-            <div className="truncate font-mono text-xs text-muted-foreground">{tenant.slug}</div>
+            <div className="truncate text-xs text-muted-foreground">{tenant.companyEmail ?? "—"}</div>
           </div>
         </div>
       );
@@ -84,13 +83,6 @@ const columns: ColumnDef<TenantRow>[] = [
       if (daysLeft <= 5) return <Badge variant="outline" className="text-xs border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">Trial expiring ({daysLeft}d)</Badge>;
       return <Badge variant="outline" className="text-xs border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300">Trial ({daysLeft}d)</Badge>;
     },
-  },
-  {
-    accessorKey: "companyEmail",
-    header: "Email",
-    cell: (info) => (
-      <span className="text-sm text-muted-foreground">{(info.getValue() as string) ?? "—"}</span>
-    ),
   },
   {
     accessorKey: "createdAt",

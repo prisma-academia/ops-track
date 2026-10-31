@@ -17,6 +17,8 @@ import { useEffect, useState } from "react";
 import type { NavItem } from "@/components/sections/main-nav";
 import { NavSearchCommand } from "@/components/sections/nav-search-command";
 import { PrintCompanyProvider, type PrintCompanyInfo } from "@/components/print/print-company-context";
+import { WorkspaceNoticeList } from "@/components/tenant/workspace-notice";
+import type { WorkspaceNotice } from "@/lib/tenant/workspace-state";
 import { apiPost } from "@/lib/client/api";
 
 interface DashboardLayoutShellProps {
@@ -46,6 +48,7 @@ interface DashboardLayoutShellProps {
   enabledModules?: string[];
   internalOrganizations?: { id: string; name: string; slug: string | null; logoUrl: string | null }[];
   profileHref?: string;
+  notices?: WorkspaceNotice[];
 }
 
 export function DashboardLayoutShell({
@@ -65,6 +68,7 @@ export function DashboardLayoutShell({
   tenant,
   printCompany,
   profileHref,
+  notices = [],
 }: DashboardLayoutShellProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [logOutModal, setLogOutModal] = useState(false);
@@ -133,7 +137,10 @@ export function DashboardLayoutShell({
                 }
               }
             >
-              {children}
+              <div className="flex flex-col gap-6">
+                <WorkspaceNoticeList notices={notices} />
+                {children}
+              </div>
             </PrintCompanyProvider>
           </main>
 

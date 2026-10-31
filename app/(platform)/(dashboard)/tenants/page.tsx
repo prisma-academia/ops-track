@@ -14,7 +14,6 @@ export default async function TenantsPage() {
     select: {
       id: true,
       name: true,
-      slug: true,
       status: true,
       companyEmail: true,
       createdAt: true,
@@ -40,14 +39,14 @@ export default async function TenantsPage() {
       ? `${owner.firstName ?? ""} ${owner.lastName ?? ""}`.trim() || owner.email
       : null;
     const activeSub = t.subscriptions[0] ?? null;
+    const settings = parseTenantSettings(t.settingsJson);
     return {
       id: t.id,
       name: t.name,
-      slug: t.slug,
       status: t.status,
       companyEmail: t.companyEmail,
       createdAt: t.createdAt.toISOString(),
-      logoUrl: resolveLogoUrl(parseTenantSettings(t.settingsJson).logoKey),
+      logoUrl: resolveLogoUrl(settings.logoKey),
       ownerName,
       trialEndsAt: t.trialEndsAt?.toISOString() ?? null,
       hasActiveSub: !!activeSub,

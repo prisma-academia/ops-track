@@ -124,10 +124,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     // ── set_settings ───────────────────────────────────────────────────────
     } else if (action === "set_settings") {
       const current = parseTenantSettings(tenant.settingsJson);
-      const next = { ...current, ...payload.patch };
+      const next = parseTenantSettings({ ...current, ...payload.patch });
       updated = await prisma.tenant.update({
         where: { id },
-        data: { settingsJson: next as object },
+        data: { settingsJson: JSON.parse(JSON.stringify(next)) },
       });
 
     // ── set_notes ──────────────────────────────────────────────────────────

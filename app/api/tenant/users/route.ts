@@ -26,6 +26,7 @@ import {
 import { resolveActiveOrgIdFromCookie } from "@/lib/auth/org-scope";
 import type { AppModule } from "@/lib/generated/prisma/client";
 import { resolveUserRole } from "@/lib/auth/role-resolver";
+import { assertTenantCapacity } from "@/lib/tenant/capacity";
 
 const InviteBody = z.object({
   email: z.email(),
@@ -288,6 +289,8 @@ export async function POST(request: Request) {
     const activeModules: AppModule[] = inviteContext === "STATION"
       ? ["STATION"]
       : (body.activeModules && body.activeModules.length > 0 ? body.activeModules : ["FLEET"]);
+
+    await assertTenantCapacity(actor.tenantId, "users");
 
     const tempPassword = generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);

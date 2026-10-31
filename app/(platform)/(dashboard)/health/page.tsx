@@ -1,9 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, Card } from "@/components/shell";
-import { CheckCircle2, XCircle, Loader2, Database, HardDrive, Mail, Activity } from "lucide-react";
+import { PageHeader } from "@/components/shell";
 import { DatabaseBackupButton } from "@/components/platform/database-backup-button";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  CloudServerIcon,
+  Database01Icon,
+  HardDriveIcon,
+  Mail01Icon,
+  RefreshIcon,
+} from "@hugeicons/core-free-icons";
+import type { IconSvgElement } from "@hugeicons/react";
 
 type HealthStatus = {
   database: boolean;
@@ -13,23 +25,55 @@ type HealthStatus = {
   capabilities?: { databaseBackup?: boolean };
 };
 
+const CHECKS: {
+  key: keyof Pick<HealthStatus, "database" | "s3" | "smtp" | "redis">;
+  title: string;
+  description: string;
+  icon: IconSvgElement;
+}[] = [
+  {
+    key: "database",
+    title: "Database",
+    description: "PostgreSQL connection used by tenants, fleet, and stations.",
+    icon: Database01Icon,
+  },
+  {
+    key: "s3",
+    title: "Object storage",
+    description: "MinIO / S3 bucket used for logos, receipts, and documents.",
+    icon: HardDriveIcon,
+  },
+  {
+    key: "smtp",
+    title: "Email",
+    description: "Outbound SMTP used for invites, trials, and alerts.",
+    icon: Mail01Icon,
+  },
+  {
+    key: "redis",
+    title: "Cache",
+    description: "Upstash Redis used for rate limiting and short-lived cache.",
+    icon: CloudServerIcon,
+  },
+];
+
 export default function HealthPage() {
   const [status, setStatus] = useState<HealthStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [checkedAt, setCheckedAt] = useState<Date | null>(null);
 
   const fetchHealth = async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/platform/health");
-      if (!res.ok) {
-        throw new Error("Failed to fetch health status");
-      }
-      const data = await res.json();
+      if (!res.ok) throw new Error("Failed to fetch health status");
+      const data = (await res.json()) as HealthStatus;
       setStatus(data);
-    } catch (err: any) {
-      setError(err.message);
+      setCheckedAt(new Date());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch health status");
     } finally {
       setLoading(false);
     }
@@ -39,87 +83,119 @@ export default function HealthPage() {
     fetchHealth();
   }, []);
 
-  const StatusIcon = ({ isHealthy }: { isHealthy: boolean }) => {
-    if (isHealthy) return <CheckCircle2 className="w-6 h-6 text-green-500" />;
-    return <XCircle className="w-6 h-6 text-red-500" />;
-  };
+  const healthyCount = status
+    ? CHECKS.filter((check) => status[check.key]).length
+    : 0;
+  const allHealthy = !!status && healthyCount === CHECKS.length;
 
   return (
     <div className="space-y-6">
-      <PageHeader title="System Health Monitoring" />
-
-      <div className="flex justify-end">
-        <button
-          onClick={fetchHealth}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
-        >
-          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-          Refresh
-        </button>
-      </div>
+      <PageHeader
+        title="System Health"
+        action={
+          <Button type="button" variant="outline" onClick={fetchHealth} disabled={loading}>
+            <HugeiconsIcon
+              icon={RefreshIcon}
+              size={16}
+              className={cn(loading && "animate-spin")}
+            />
+            Refresh
+          </Button>
+        }
+      />
 
       {error ? (
-        <Card className="p-6 border-red-200 bg-red-50">
-          <p className="text-red-600 font-medium">Error loading health data: {error}</p>
+        <Card className="border-destructive/30 bg-destructive/10 p-6">
+          <p className="font-medium text-destructive">Could not load health data</p>
+          <p className="mt-1 text-sm text-destructive/80">{error}</p>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="p-6 flex flex-col gap-4 items-start">
-            <div className="flex items-center gap-3 w-full">
-              <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-                <Database className="w-5 h-5" />
+        <>
+          <Card className="flex flex-col gap-3 p-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span
+                className={cn(
+                  "size-2.5 rounded-full",
+                  loading ? "bg-muted-foreground/40" : allHealthy ? "bg-emerald-500" : "bg-destructive"
+                )}
+              />
+              <div>
+                <p className="font-medium text-foreground">
+                  {loading
+                    ? "Checking services…"
+                    : allHealthy
+                      ? "All services are responding"
+                      : `${healthyCount} of ${CHECKS.length} services are responding`}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {checkedAt
+                    ? `Last checked ${checkedAt.toLocaleTimeString()}`
+                    : "Waiting for the first check"}
+                </p>
               </div>
-              <h3 className="font-semibold text-lg flex-1">Database</h3>
-              {loading ? <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /> : <StatusIcon isHealthy={!!status?.database} />}
             </div>
-            <p className="text-sm text-muted-foreground">
-              Main PostgreSQL database connection.
-            </p>
-            {!loading && status?.capabilities?.databaseBackup ? (
-              <DatabaseBackupButton className="mt-1" />
+            {!loading && status ? (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "w-fit font-medium",
+                  allHealthy
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "border-destructive/30 bg-destructive/10 text-destructive"
+                )}
+              >
+                {allHealthy ? "Operational" : "Needs attention"}
+              </Badge>
             ) : null}
           </Card>
 
-          <Card className="p-6 flex flex-col gap-4 items-start">
-            <div className="flex items-center gap-3 w-full">
-              <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
-                <HardDrive className="w-5 h-5" />
-              </div>
-              <h3 className="font-semibold text-lg flex-1">Object Storage</h3>
-              {loading ? <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /> : <StatusIcon isHealthy={!!status?.s3} />}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              MinIO / S3 bucket connectivity.
-            </p>
-          </Card>
-
-          <Card className="p-6 flex flex-col gap-4 items-start">
-            <div className="flex items-center gap-3 w-full">
-              <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
-                <Mail className="w-5 h-5" />
-              </div>
-              <h3 className="font-semibold text-lg flex-1">SMTP Email</h3>
-              {loading ? <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /> : <StatusIcon isHealthy={!!status?.smtp} />}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Outbound email server connection.
-            </p>
-          </Card>
-
-          <Card className="p-6 flex flex-col gap-4 items-start">
-            <div className="flex items-center gap-3 w-full">
-              <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
-                <Activity className="w-5 h-5" />
-              </div>
-              <h3 className="font-semibold text-lg flex-1">Redis Cache</h3>
-              {loading ? <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /> : <StatusIcon isHealthy={!!status?.redis} />}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Upstash Redis rate limiting/cache.
-            </p>
-          </Card>
-        </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {CHECKS.map((check) => {
+              const healthy = !!status?.[check.key];
+              return (
+                <Card key={check.key} className="gap-0 overflow-hidden p-0 py-0">
+                  <div
+                    className={cn(
+                      "h-1",
+                      loading ? "bg-muted" : healthy ? "bg-emerald-500" : "bg-destructive"
+                    )}
+                  />
+                  <div className="flex flex-col gap-4 p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex size-10 items-center justify-center rounded-xl bg-muted text-foreground">
+                        <HugeiconsIcon icon={check.icon} size={20} />
+                      </div>
+                      {loading ? (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          Checking
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "font-medium",
+                            healthy
+                              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                              : "border-destructive/30 bg-destructive/10 text-destructive"
+                          )}
+                        >
+                          {healthy ? "Operational" : "Unavailable"}
+                        </Badge>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-foreground">{check.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">{check.description}</p>
+                    </div>
+                    {check.key === "database" && !loading && status?.capabilities?.databaseBackup ? (
+                      <DatabaseBackupButton />
+                    ) : null}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

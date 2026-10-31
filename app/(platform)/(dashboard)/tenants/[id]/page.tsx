@@ -4,13 +4,15 @@ import { prisma } from "@/lib/db/client";
 import { requirePlatformPage } from "@/lib/auth/page-guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { parseTenantSettings } from "@/lib/tenant/settings";
+import { tenantWorkspaceNotices } from "@/lib/tenant/workspace-state";
+import { WorkspaceNoticeList } from "@/components/tenant/workspace-notice";
 import { resolveLogoUrl } from "@/lib/email/branding";
 import { resolveActivityLogRows } from "@/lib/activity/resolver";
 import { buildOffsetPageMeta } from "@/lib/api/pagination";
 import { failedActivityWhere } from "@/lib/activity/status";
 import { PageHeader } from "@/components/shell";
 import { Card, CardAction, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { TenantActions, TenantModuleToggle, TrialControls, PlatformControls, TenantNotesEditor, RevokeSubscriptionButton } from "./actions";
+import { TenantActions, TenantModuleToggle, TrialControls, WorkspaceAccessToggles, CapacityControls, TenantNotesEditor, RevokeSubscriptionButton } from "./actions";
 import { TenantActivityTab } from "./activity-tab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -129,7 +131,16 @@ export default async function TenantDrilldownPage({
   };
 
   const owner = users.find((u) => u.isOwner) ?? null;
-  const logoUrl = resolveLogoUrl(parseTenantSettings(tenant.settingsJson).logoKey);
+  const settings = parseTenantSettings(tenant.settingsJson);
+  const hasActiveSub = tenant.subscriptions.some(
+    (sub) => sub.status === "ACTIVE" && sub.endDate.getTime() > Date.now(),
+  );
+  const workspaceNotices = tenantWorkspaceNotices({
+    settingsJson: tenant.settingsJson,
+    trialEndsAt: tenant.trialEndsAt,
+    hasActiveSubscription: hasActiveSub,
+  });
+  const logoUrl = resolveLogoUrl(settings.logoKey);
   const stationOn = isModuleOn("STATION", tenant.activeModules, tenant.modules);
   const fleetOn = isModuleOn("FLEET", tenant.activeModules, tenant.modules);
   const address = [tenant.addressLine1, tenant.addressLine2, tenant.city, tenant.region, tenant.postalCode, tenant.country]
@@ -214,6 +225,8 @@ export default async function TenantDrilldownPage({
         </CardContent>
       </Card>
 
+      <WorkspaceNoticeList notices={workspaceNotices} />
+
       <Tabs defaultValue="controls" className="w-full">
         <TabsList>
           <TabsTrigger value="users">Users</TabsTrigger>
@@ -295,83 +308,101 @@ export default async function TenantDrilldownPage({
         </TabsContent>
 
         <TabsContent value="controls" className="mt-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            
-            {/* ── Modules ── */}
-            <div className="flex flex-col gap-4">
-              <ModuleCard
-                icon={Fuel}
-                title="Station Management"
-                description="Fuel stations, tanks, pumps, shifts, and retail operations."
-                tenantId={tenant.id}
-                module="STATION"
-                enabled={stationOn}
-              />
-              <ModuleCard
-                icon={Truck}
-                title="Fleet Management"
-                description="Trucks, orders, deliveries, and transport operations."
-                tenantId={tenant.id}
-                module="FLEET"
-                enabled={fleetOn}
-              />
-            </div>
-            
-            {/* ── Internal Notes ── */}
-            <Card className="flex flex-col">
-              <CardHeader className="border-b border-border/40 pb-3 shrink-0">
-                <CardTitle className="text-sm font-semibold">Internal Notes</CardTitle>
-                <CardDescription className="text-xs">Private notes — not visible to the tenant.</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-4 flex-1">
-                <TenantNotesEditor tenantId={tenant.id} initialNotes={tenant.notes ?? null} />
-              </CardContent>
-            </Card>
-
-            {/* ── Trial Panel ── */}
-            <Card>
-              <CardHeader className="border-b border-border/40 pb-3">
-                <div className="flex items-center gap-2">
-                  <CalendarClock className="size-4 text-primary" />
-                  <CardTitle className="text-sm font-semibold">Trial</CardTitle>
-                </div>
-                <CardDescription className="text-xs">Configure the trial window for this tenant.</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <TrialControls
-                  tenantId={tenant.id}
-                  trialDays={tenant.trialDays}
-                  trialStartedAt={tenant.trialStartedAt?.toISOString() ?? null}
-                  trialEndsAt={tenant.trialEndsAt?.toISOString() ?? null}
-                />
-              </CardContent>
-            </Card>
-
-            {/* ── Platform Controls ── */}
+          <div className="grid items-start gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader className="border-b border-border/40 pb-3">
                 <div className="flex items-center gap-2">
                   <SlidersHorizontal className="size-4 text-primary" />
-                  <CardTitle className="text-sm font-semibold">Platform Controls</CardTitle>
+                  <CardTitle className="text-sm font-semibold">Toggles</CardTitle>
                 </div>
-                <CardDescription className="text-xs">Capacity limits and feature gates.</CardDescription>
+                <CardDescription className="text-xs">Switches save immediately and show on the workspace.</CardDescription>
               </CardHeader>
-              <CardContent className="pt-4">
-                <PlatformControls
-                  tenantId={tenant.id}
-                  settings={{
-                    maxUsers: parseTenantSettings(tenant.settingsJson).maxUsers,
-                    maxStations: parseTenantSettings(tenant.settingsJson).maxStations,
-                    maxOrganizations: parseTenantSettings(tenant.settingsJson).maxOrganizations,
-                    allowClientPortal: parseTenantSettings(tenant.settingsJson).allowClientPortal,
-                    allowApiAccess: parseTenantSettings(tenant.settingsJson).allowApiAccess,
-                    maintenanceMode: parseTenantSettings(tenant.settingsJson).maintenanceMode,
-                    maintenanceMessage: parseTenantSettings(tenant.settingsJson).maintenanceMessage,
-                  }}
-                />
+              <CardContent className="flex flex-col gap-5 pt-4">
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Modules</p>
+                  <ModuleRow
+                    icon={Fuel}
+                    title="Station management"
+                    description="Fuel stations, tanks, pumps, shifts, and retail operations."
+                    tenantId={tenant.id}
+                    module="STATION"
+                    enabled={stationOn}
+                  />
+                  <ModuleRow
+                    icon={Truck}
+                    title="Fleet management"
+                    description="Trucks, orders, deliveries, and transport operations."
+                    tenantId={tenant.id}
+                    module="FLEET"
+                    enabled={fleetOn}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Access</p>
+                  <WorkspaceAccessToggles
+                    tenantId={tenant.id}
+                    settings={{
+                      allowClientPortal: settings.allowClientPortal,
+                      allowApiAccess: settings.allowApiAccess,
+                      maintenanceMode: settings.maintenanceMode,
+                      maintenanceMessage: settings.maintenanceMessage,
+                    }}
+                  />
+                </div>
               </CardContent>
             </Card>
 
+            <div className="flex flex-col gap-4">
+              <Card>
+                <CardHeader className="border-b border-border/40 pb-3">
+                  <CardTitle className="text-sm font-semibold">Capacity</CardTitle>
+                  <CardDescription className="text-xs">Limits for users, stations, and organizations.</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <CapacityControls
+                    tenantId={tenant.id}
+                    usage={{
+                      users: tenant._count.users,
+                      stations: tenant._count.stations,
+                      organizations: tenant._count.organizations,
+                    }}
+                    settings={{
+                      maxUsers: settings.maxUsers,
+                      maxStations: settings.maxStations,
+                      maxOrganizations: settings.maxOrganizations,
+                    }}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="border-b border-border/40 pb-3">
+                  <div className="flex items-center gap-2">
+                    <CalendarClock className="size-4 text-primary" />
+                    <CardTitle className="text-sm font-semibold">Trial</CardTitle>
+                  </div>
+                  <CardDescription className="text-xs">Set or extend the free trial window.</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <TrialControls
+                    tenantId={tenant.id}
+                    trialDays={tenant.trialDays}
+                    trialStartedAt={tenant.trialStartedAt?.toISOString() ?? null}
+                    trialEndsAt={tenant.trialEndsAt?.toISOString() ?? null}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="border-b border-border/40 pb-3">
+                  <CardTitle className="text-sm font-semibold">Internal notes</CardTitle>
+                  <CardDescription className="text-xs">Private notes. The tenant does not see these.</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <TenantNotesEditor tenantId={tenant.id} initialNotes={tenant.notes ?? null} />
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
 
@@ -485,7 +516,7 @@ function MetaField({
   );
 }
 
-function ModuleCard({
+function ModuleRow({
   icon: Icon,
   title,
   description,
@@ -501,21 +532,17 @@ function ModuleCard({
   enabled: boolean;
 }) {
   return (
-    <Card>
-      <CardContent>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex gap-3 min-w-0">
-            <div className="p-2.5 rounded-lg bg-primary/10 ring-1 ring-primary/20 h-fit">
-              <Icon className="size-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">{title}</p>
-              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{description}</p>
-            </div>
-          </div>
-          <TenantModuleToggle tenantId={tenantId} module={module} enabled={enabled} />
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-muted/30 px-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background ring-1 ring-border">
+          <Icon className="size-4 text-primary" />
         </div>
-      </CardContent>
-    </Card>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">{title}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      <TenantModuleToggle tenantId={tenantId} module={module} enabled={enabled} />
+    </div>
   );
 }

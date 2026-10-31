@@ -8,6 +8,7 @@ import { requireCsrf } from "@/lib/api/csrf-guard";
 import { parsePagination, buildPageMeta, parseOffsetPagination, buildOffsetPageMeta } from "@/lib/api/pagination";
 import { stationIncludeQuery, formatStationRows } from "@/lib/station-format";
 import { resolveActiveOrgId, assertOrgAccess } from "@/lib/auth/org-scope";
+import { assertTenantCapacity } from "@/lib/tenant/capacity";
 
 const CreateStationSchema = z.object({
   code: z.string().min(2).max(50),
@@ -157,6 +158,8 @@ export async function POST(request: Request) {
         throw new DomainError(400, "invalid_staff", "Assigned station manager must be an active user with the station module enabled.");
       }
     }
+
+    await assertTenantCapacity(actor.tenantId, "stations");
 
     // Connect staff if provided
     const staffConnect = body.staffUserIds && body.staffUserIds.length > 0

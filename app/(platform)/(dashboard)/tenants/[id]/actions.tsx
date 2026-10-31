@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiPatch, apiPost } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -65,10 +66,10 @@ export function TenantModuleToggle({ tenantId, module, enabled }: { tenantId: st
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <Badge variant="outline" className={cn("font-medium", on ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "text-muted-foreground")}>
-        {on ? "Enabled" : "Disabled"}
-      </Badge>
+    <div className="flex shrink-0 items-center gap-3">
+      <span className={cn("text-xs font-medium", on ? "text-emerald-700 dark:text-emerald-300" : "text-muted-foreground")}>
+        {on ? "On" : "Off"}
+      </span>
       <Switch checked={on} disabled={pending} onCheckedChange={toggle} aria-label={on ? `Disable ${module}` : `Enable ${module}`} />
     </div>
   );
@@ -119,22 +120,30 @@ export function TrialControls({
     : <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">Active ({daysLeft}d left)</Badge>;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-sm font-medium text-muted-foreground">Trial status</span>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">Current window</p>
         {trialBadge}
       </div>
 
-      {endsAt && (
-        <p className="text-xs text-muted-foreground">
-          Started: {trialStartedAt ? new Date(trialStartedAt).toLocaleDateString() : "—"} ·
-          Ends: {endsAt.toLocaleDateString()}
-        </p>
-      )}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-border bg-muted/30 px-3 py-2.5">
+          <p className="text-xs text-muted-foreground">Started</p>
+          <p className="mt-1 text-sm font-medium text-foreground">
+            {trialStartedAt ? new Date(trialStartedAt).toLocaleDateString() : "Not started"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-muted/30 px-3 py-2.5">
+          <p className="text-xs text-muted-foreground">Ends</p>
+          <p className="mt-1 text-sm font-medium text-foreground">
+            {endsAt ? endsAt.toLocaleDateString() : "—"}
+          </p>
+        </div>
+      </div>
 
-      <div className="flex items-end gap-3">
+      <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1.5">
-          <Label htmlFor="trial-days" className="text-xs">Trial duration (days)</Label>
+          <Label htmlFor="trial-days" className="text-xs">Duration (days)</Label>
           <div className="flex items-center gap-2">
             <Input
               id="trial-days"
@@ -143,22 +152,21 @@ export function TrialControls({
               max={365}
               value={days}
               onChange={(e) => setDays(Number(e.target.value))}
-              className="w-20 h-8 text-sm"
+              className="h-9 w-24 text-sm"
             />
             <Button size="sm" variant="outline" disabled={pending !== null} onClick={saveTrial}>
               {pending === "save" ? "Saving…" : "Set"}
             </Button>
           </div>
         </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <span className="text-xs text-muted-foreground self-center">Extend by:</span>
-        {[7, 14, 30].map((d) => (
-          <Button key={d} size="sm" variant="outline" disabled={pending !== null} onClick={() => extend(d)}>
-            {pending === `extend_${d}` ? "…" : `+${d}d`}
-          </Button>
-        ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Extend</span>
+          {[7, 14, 30].map((d) => (
+            <Button key={d} size="sm" variant="outline" disabled={pending !== null} onClick={() => extend(d)}>
+              {pending === `extend_${d}` ? "…" : `+${d}d`}
+            </Button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -166,82 +174,135 @@ export function TrialControls({
 
 // ── Platform controls (capacity limits + feature gates) ─────────────────────
 
-export function PlatformControls({
-  tenantId,
-  settings,
-}: {
-  tenantId: string;
-  settings: {
-    maxUsers: number;
-    maxStations: number;
-    maxOrganizations: number;
-    allowClientPortal: boolean;
-    allowApiAccess: boolean;
-    maintenanceMode: boolean;
-    maintenanceMessage: string;
-  };
-}) {
+type AccessSettings = {
+  allowClientPortal: boolean;
+  allowApiAccess: boolean;
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+};
+
+type CapacitySettings = {
+  maxUsers: number;
+  maxStations: number;
+  maxOrganizations: number;
+};
+
+function useSettingsSave<T extends Record<string, unknown>>(tenantId: string, settings: T) {
+  const router = useRouter();
   const [values, setValues] = useState(settings);
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  async function save(patch: Partial<typeof values>) {
+  async function save(patch: Partial<T>) {
+    const previous = values;
     const next = { ...values, ...patch };
     setValues(next);
     setPending(true);
     const res = await apiPatch(`/api/platform/tenants/${tenantId}`, { action: "set_settings", patch });
     setPending(false);
-    if (res.error) { setValues(values); alert(res.error.message); return; }
+    if (res.error) { setValues(previous); alert(res.error.message); return; }
     setSaved(true);
+    router.refresh();
     setTimeout(() => setSaved(false), 2000);
   }
 
+  return { values, setValues, pending, saved, save };
+}
+
+export function WorkspaceAccessToggles({
+  tenantId,
+  settings,
+}: {
+  tenantId: string;
+  settings: AccessSettings;
+}) {
+  const { values, setValues, pending, save } = useSettingsSave(tenantId, settings);
+  const toggles = [
+    {
+      key: "maintenanceMode" as const,
+      label: "Maintenance mode",
+      desc: "Locks the workspace and shows the message below.",
+    },
+    {
+      key: "allowClientPortal" as const,
+      label: "Client portal",
+      desc: "Client sign-in and the client area stay open.",
+    },
+    {
+      key: "allowApiAccess" as const,
+      label: "API access",
+      desc: "Allows this workspace to use API access.",
+    },
+  ];
+
   return (
-    <div className="space-y-5">
-      {/* Toggles */}
-      <div className="space-y-3">
-        {([
-          { key: "maintenanceMode", label: "Maintenance Mode", desc: "Lock tenant out with a maintenance message" },
-          { key: "allowClientPortal", label: "Client Portal", desc: "Allow tenant's client-facing portal" },
-          { key: "allowApiAccess", label: "API Access", desc: "Allow API key generation" },
-        ] as const).map(({ key, label, desc }) => (
-          <div key={key} className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium">{label}</p>
-              <p className="text-xs text-muted-foreground">{desc}</p>
+    <div className="flex flex-col gap-2">
+      {toggles.map(({ key, label, desc }) => (
+        <div key={key} className="rounded-xl border border-border bg-muted/30">
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">{label}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{desc}</p>
             </div>
-            <Switch
-              checked={values[key]}
-              disabled={pending}
-              onCheckedChange={(v) => save({ [key]: v })}
-              aria-label={label}
-            />
+            <div className="flex shrink-0 items-center gap-3">
+              <span className={cn("text-xs font-medium", values[key] ? "text-emerald-700 dark:text-emerald-300" : "text-muted-foreground")}>
+                {values[key] ? "On" : "Off"}
+              </span>
+              <Switch
+                checked={values[key]}
+                disabled={pending}
+                onCheckedChange={(v) => save({ [key]: v })}
+                aria-label={label}
+              />
+            </div>
           </div>
-        ))}
-      </div>
-
-      {values.maintenanceMode && (
-        <div className="space-y-1.5">
-          <Label className="text-xs">Maintenance message</Label>
-          <Textarea
-            value={values.maintenanceMessage}
-            onChange={(e) => setValues((p) => ({ ...p, maintenanceMessage: e.target.value }))}
-            onBlur={() => save({ maintenanceMessage: values.maintenanceMessage })}
-            rows={2}
-            className="text-sm resize-none"
-          />
+          {key === "maintenanceMode" && values.maintenanceMode ? (
+            <div className="space-y-1.5 border-t border-border px-4 py-3">
+              <Label className="text-xs">Message shown to the workspace</Label>
+              <Textarea
+                value={values.maintenanceMessage}
+                onChange={(e) => setValues((p) => ({ ...p, maintenanceMessage: e.target.value }))}
+                onBlur={() => save({ maintenanceMessage: values.maintenanceMessage })}
+                rows={2}
+                className="resize-none bg-background text-sm"
+              />
+            </div>
+          ) : null}
         </div>
-      )}
+      ))}
+    </div>
+  );
+}
 
-      {/* Limits */}
-      <div className="grid grid-cols-3 gap-3">
-        {([
-          { key: "maxUsers", label: "Max Users" },
-          { key: "maxStations", label: "Max Stations" },
-          { key: "maxOrganizations", label: "Max Orgs" },
-        ] as const).map(({ key, label }) => (
-          <div key={key} className="space-y-1.5">
-            <Label htmlFor={key} className="text-xs">{label}</Label>
+export function CapacityControls({
+  tenantId,
+  settings,
+  usage,
+}: {
+  tenantId: string;
+  settings: CapacitySettings;
+  usage: {
+    users: number;
+    stations: number;
+    organizations: number;
+  };
+}) {
+  const { values, setValues, saved, save } = useSettingsSave(tenantId, settings);
+  const limits = [
+    { key: "maxUsers" as const, label: "Users", used: usage.users },
+    { key: "maxStations" as const, label: "Stations", used: usage.stations },
+    { key: "maxOrganizations" as const, label: "Organizations", used: usage.organizations },
+  ];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-1 gap-3">
+        {limits.map(({ key, label, used }) => (
+          <div key={key} className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor={key} className="text-xs text-muted-foreground">{label}</Label>
+              <span className="text-xs text-muted-foreground">{used.toLocaleString()} in use</span>
+            </div>
             <Input
               id={key}
               type="number"
@@ -249,13 +310,12 @@ export function PlatformControls({
               value={values[key]}
               onChange={(e) => setValues((p) => ({ ...p, [key]: Number(e.target.value) }))}
               onBlur={() => save({ [key]: values[key] })}
-              className="h-8 text-sm"
+              className="mt-2 h-9 bg-background text-sm"
             />
           </div>
         ))}
       </div>
-
-      {saved && <p className="text-xs text-emerald-600">Saved ✓</p>}
+      {saved ? <p className="text-xs text-emerald-600">Saved</p> : null}
     </div>
   );
 }

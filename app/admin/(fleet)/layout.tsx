@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
 import { parseTenantSettings } from "@/lib/tenant/settings";
+import { trialWorkspaceNotice } from "@/lib/tenant/workspace-state";
 import { DashboardLayoutShell } from "@/components/dashboard-layout-shell";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
@@ -239,6 +240,12 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
       addressLine2: true,
       city: true,
       region: true,
+      trialEndsAt: true,
+      subscriptions: {
+        where: { status: "ACTIVE", endDate: { gt: new Date() } },
+        select: { id: true },
+        take: 1,
+      },
       modules: {
         where: { status: "ACTIVE" }
       }
@@ -258,6 +265,10 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
     }
   }
   const settings = parseTenantSettings(tenant.settingsJson);
+  const trialNotice = trialWorkspaceNotice({
+    trialEndsAt: tenant.trialEndsAt,
+    hasActiveSubscription: tenant.subscriptions.length > 0,
+  });
   
   const logoUrl =
     settings.logoKey?.startsWith("http")
@@ -397,6 +408,7 @@ export default async function FleetDashboardLayout({ children }: { children: Rea
             .join(", ") || null,
       }}
       profileHref="/admin/profile"
+      notices={trialNotice ? [trialNotice] : undefined}
     >
       <UnauthorizedToast />
       {children}

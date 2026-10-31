@@ -10,6 +10,7 @@ import {
 } from "@/lib/print/org-branding";
 import { publicUrlForKey, s3Configured } from "@/lib/storage/s3";
 import { parseTenantSettings, type ModuleKey } from "@/lib/tenant/settings";
+import { trialWorkspaceNotice } from "@/lib/tenant/workspace-state";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -206,6 +207,12 @@ export default async function StationDashboardLayout({ children }: { children: R
       addressLine2: true,
       city: true,
       region: true,
+      trialEndsAt: true,
+      subscriptions: {
+        where: { status: "ACTIVE", endDate: { gt: new Date() } },
+        select: { id: true },
+        take: 1,
+      },
     },
   });
   if (!tenant || tenant.status !== "ACTIVE") redirect("/maintenance");
@@ -221,6 +228,10 @@ export default async function StationDashboardLayout({ children }: { children: R
 
   const tNav = await getTranslations("nav");
   const settings = parseTenantSettings(tenant?.settingsJson);
+  const trialNotice = trialWorkspaceNotice({
+    trialEndsAt: tenant.trialEndsAt,
+    hasActiveSubscription: tenant.subscriptions.length > 0,
+  });
   const enabled = Array.from(new Set([
     ...settings.enabledModules,
     ...(tenant?.activeModules?.map(m => m.toLowerCase() as ModuleKey) || [])
@@ -321,6 +332,7 @@ export default async function StationDashboardLayout({ children }: { children: R
       }}
       printCompany={orgInfo ? printCompanyFromOrganization(orgInfo) : undefined}
       profileHref="/admin/station/profile"
+      notices={trialNotice ? [trialNotice] : undefined}
     >
       <UnauthorizedToast />
       {children}

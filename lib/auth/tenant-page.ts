@@ -3,6 +3,7 @@ import {
   loadTenantPageContext,
   type TenantPageContext,
 } from "@/lib/db/page-context";
+import { parseTenantSettings } from "@/lib/tenant/settings";
 
 /**
  * Guard for any route served on a tenant host (admin + client areas).
@@ -23,5 +24,6 @@ export async function requireExistingTenant(): Promise<TenantPageContext> {
   if (page.mode !== "tenant") return page;
   if (!page.tenant) notFound();
   if (page.tenant.status !== "ACTIVE") redirect("/maintenance");
+  if (parseTenantSettings(page.tenant.settingsJson).maintenanceMode) redirect("/maintenance");
   return page;
 }

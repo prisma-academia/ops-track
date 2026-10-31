@@ -7,7 +7,7 @@ import { UnauthorizedToast } from "@/components/unauthorized-toast";
 import { COMPANY_NAME, COMPANY_LOGO } from "@/lib/branding";
 
 const NAV = [
-  { href: "/dashboard", title: "Overview", icon: "DashboardSquare01Icon", permission: null },
+  { href: "/dashboard", title: "Dashboard", icon: "DashboardSquare01Icon", permission: null },
   { href: "/tenants", title: "Tenants", icon: "Building02Icon", permission: PERMISSIONS.PLATFORM_TENANTS_READ.key },
   { href: "/demo-requests", title: "Demo Requests", icon: "InboxIcon", permission: PERMISSIONS.PLATFORM_TENANTS_READ.key },
   { href: "/subscriptions", title: "Subscription", icon: "Invoice01Icon", permission: PERMISSIONS.PLATFORM_TENANTS_WRITE.key },

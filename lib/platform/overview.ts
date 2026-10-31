@@ -7,6 +7,8 @@ export type MonthlyPoint = {
   label: string;
   tenants: number;
   users: number;
+  stations: number;
+  clients: number;
 };
 
 export type RecentTenant = {
@@ -84,6 +86,8 @@ export async function getPlatformOverviewData(): Promise<PlatformOverviewData> {
     tenantsLastMonth,
     createdInWindow,
     usersInWindow,
+    stationsInWindow,
+    clientsInWindow,
     recent,
   ] = await Promise.all([
     prisma.tenant.count(),
@@ -109,6 +113,14 @@ export async function getPlatformOverviewData(): Promise<PlatformOverviewData> {
       where: { createdAt: { gte: windowStart } },
       select: { createdAt: true },
     }),
+    prisma.station.findMany({
+      where: { createdAt: { gte: windowStart } },
+      select: { createdAt: true },
+    }),
+    prisma.client.findMany({
+      where: { createdAt: { gte: windowStart } },
+      select: { createdAt: true },
+    }),
     prisma.tenant.findMany({
       orderBy: { createdAt: "desc" },
       take: 8,
@@ -128,29 +140,41 @@ export async function getPlatformOverviewData(): Promise<PlatformOverviewData> {
     }),
   ]);
 
-  const tenantBuckets = new Map<string, number>();
-  const userBuckets = new Map<string, number>();
+  const buckets = {
+    tenants: new Map<string, number>(),
+    users: new Map<string, number>(),
+    stations: new Map<string, number>(),
+    clients: new Map<string, number>(),
+  };
   const monthly: MonthlyPoint[] = [];
 
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const key = monthKey(d);
-    tenantBuckets.set(key, 0);
-    userBuckets.set(key, 0);
-    monthly.push({ key, label: monthLabel(key), tenants: 0, users: 0 });
+    buckets.tenants.set(key, 0);
+    buckets.users.set(key, 0);
+    buckets.stations.set(key, 0);
+    buckets.clients.set(key, 0);
+    monthly.push({ key, label: monthLabel(key), tenants: 0, users: 0, stations: 0, clients: 0 });
   }
 
-  for (const row of createdInWindow) {
-    const key = monthKey(row.createdAt);
-    if (tenantBuckets.has(key)) tenantBuckets.set(key, (tenantBuckets.get(key) ?? 0) + 1);
+  function fill(rows: { createdAt: Date }[], bucket: Map<string, number>) {
+    for (const row of rows) {
+      const key = monthKey(row.createdAt);
+      if (bucket.has(key)) bucket.set(key, (bucket.get(key) ?? 0) + 1);
+    }
   }
-  for (const row of usersInWindow) {
-    const key = monthKey(row.createdAt);
-    if (userBuckets.has(key)) userBuckets.set(key, (userBuckets.get(key) ?? 0) + 1);
-  }
+
+  fill(createdInWindow, buckets.tenants);
+  fill(usersInWindow, buckets.users);
+  fill(stationsInWindow, buckets.stations);
+  fill(clientsInWindow, buckets.clients);
+
   for (const point of monthly) {
-    point.tenants = tenantBuckets.get(point.key) ?? 0;
-    point.users = userBuckets.get(point.key) ?? 0;
+    point.tenants = buckets.tenants.get(point.key) ?? 0;
+    point.users = buckets.users.get(point.key) ?? 0;
+    point.stations = buckets.stations.get(point.key) ?? 0;
+    point.clients = buckets.clients.get(point.key) ?? 0;
   }
 
   return {

@@ -8,8 +8,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { Building02Icon, FuelStationIcon, UserGroupIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { Archive, CheckCircle2, PauseCircle, Plus, Minus, RotateCcw } from "lucide-react";
 
 // ── Lifecycle actions (existing) ────────────────────────────────────────────
@@ -119,54 +122,54 @@ export function TrialControls({
     ? <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">Expiring ({daysLeft}d left)</Badge>
     : <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">Active ({daysLeft}d left)</Badge>;
 
+  const remainingLabel = daysLeft === null
+    ? "No window"
+    : daysLeft < 0
+      ? "Overdue"
+      : "Days left";
+  const remainingValue = daysLeft === null ? "—" : daysLeft < 0 ? String(Math.abs(daysLeft)) : String(daysLeft);
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">Current window</p>
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5">
+        <div className="flex size-11 items-center justify-center rounded-lg bg-background text-lg font-semibold tabular-nums ring-1 ring-border">
+          {remainingValue}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">{remainingLabel}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {trialStartedAt ? new Date(trialStartedAt).toLocaleDateString() : "Not started"}
+            {" – "}
+            {endsAt ? endsAt.toLocaleDateString() : "No end date"}
+          </p>
+        </div>
         {trialBadge}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl border border-border bg-muted/30 px-3 py-2.5">
-          <p className="text-xs text-muted-foreground">Started</p>
-          <p className="mt-1 text-sm font-medium text-foreground">
-            {trialStartedAt ? new Date(trialStartedAt).toLocaleDateString() : "Not started"}
-          </p>
+      <div className="grid grid-cols-[1fr_auto] items-end gap-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="trial-days" className="text-xs">Set duration (days)</Label>
+          <Input
+            id="trial-days"
+            type="number"
+            min={1}
+            max={365}
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+            className="h-9 w-full bg-background text-sm"
+          />
         </div>
-        <div className="rounded-xl border border-border bg-muted/30 px-3 py-2.5">
-          <p className="text-xs text-muted-foreground">Ends</p>
-          <p className="mt-1 text-sm font-medium text-foreground">
-            {endsAt ? endsAt.toLocaleDateString() : "—"}
-          </p>
-        </div>
+        <Button size="sm" variant="outline" className="h-9" disabled={pending !== null} onClick={saveTrial}>
+          {pending === "save" ? "Saving…" : "Set"}
+        </Button>
       </div>
 
-      <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1.5">
-          <Label htmlFor="trial-days" className="text-xs">Duration (days)</Label>
-          <div className="flex items-center gap-2">
-            <Input
-              id="trial-days"
-              type="number"
-              min={1}
-              max={365}
-              value={days}
-              onChange={(e) => setDays(Number(e.target.value))}
-              className="h-9 w-24 text-sm"
-            />
-            <Button size="sm" variant="outline" disabled={pending !== null} onClick={saveTrial}>
-              {pending === "save" ? "Saving…" : "Set"}
-            </Button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Extend</span>
-          {[7, 14, 30].map((d) => (
-            <Button key={d} size="sm" variant="outline" disabled={pending !== null} onClick={() => extend(d)}>
-              {pending === `extend_${d}` ? "…" : `+${d}d`}
-            </Button>
-          ))}
-        </div>
+      <div className="grid grid-cols-3 gap-2">
+        {[7, 14, 30].map((d) => (
+          <Button key={d} size="sm" variant="outline" className="h-9 w-full" disabled={pending !== null} onClick={() => extend(d)}>
+            {pending === `extend_${d}` ? "…" : `+${d} days`}
+          </Button>
+        ))}
       </div>
     </div>
   );
@@ -287,34 +290,52 @@ export function CapacityControls({
     organizations: number;
   };
 }) {
-  const { values, setValues, saved, save } = useSettingsSave(tenantId, settings);
-  const limits = [
-    { key: "maxUsers" as const, label: "Users", used: usage.users },
-    { key: "maxStations" as const, label: "Stations", used: usage.stations },
-    { key: "maxOrganizations" as const, label: "Organizations", used: usage.organizations },
+  const { values, pending, saved, save } = useSettingsSave(tenantId, settings);
+  const limits: {
+    key: keyof CapacitySettings;
+    label: string;
+    used: number;
+    icon: IconSvgElement;
+    presets: number[];
+  }[] = [
+    { key: "maxUsers", label: "Users", used: usage.users, icon: UserGroupIcon, presets: [5, 10, 25, 50, 100, 250, 500] },
+    { key: "maxStations", label: "Stations", used: usage.stations, icon: FuelStationIcon, presets: [1, 3, 5, 10, 25, 50, 100] },
+    { key: "maxOrganizations", label: "Organizations", used: usage.organizations, icon: Building02Icon, presets: [1, 3, 5, 10, 25, 50] },
   ];
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-1 gap-3">
-        {limits.map(({ key, label, used }) => (
-          <div key={key} className="rounded-xl border border-border bg-muted/30 px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <Label htmlFor={key} className="text-xs text-muted-foreground">{label}</Label>
-              <span className="text-xs text-muted-foreground">{used.toLocaleString()} in use</span>
+    <div className="flex flex-col gap-2">
+      {limits.map(({ key, label, used, icon, presets }) => {
+        const options = Array.from(new Set([...presets, values[key]])).filter((count) => count >= 1).sort((a, b) => a - b);
+        return (
+          <div key={key} className="flex items-center justify-between gap-4 rounded-xl border border-border bg-muted/30 px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">{label}</p>
+              <p className="text-xs text-muted-foreground">{used.toLocaleString()} in use</p>
             </div>
-            <Input
-              id={key}
-              type="number"
-              min={1}
-              value={values[key]}
-              onChange={(e) => setValues((p) => ({ ...p, [key]: Number(e.target.value) }))}
-              onBlur={() => save({ [key]: values[key] })}
-              className="mt-2 h-9 bg-background text-sm"
-            />
+            <Select
+              value={String(values[key])}
+              disabled={pending}
+              onValueChange={(next) => {
+                if (!next) return;
+                save({ [key]: Number(next) });
+              }}
+            >
+              <SelectTrigger id={key} className="h-9 w-32 bg-background">
+                <HugeiconsIcon icon={icon} size={16} className="text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {options.map((count) => (
+                  <SelectItem key={count} value={String(count)}>
+                    {count.toLocaleString()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        ))}
-      </div>
+        );
+      })}
       {saved ? <p className="text-xs text-emerald-600">Saved</p> : null}
     </div>
   );

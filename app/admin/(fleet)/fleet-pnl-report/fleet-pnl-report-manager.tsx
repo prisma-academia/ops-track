@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { addDays, format } from "date-fns";
+import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { Filter } from "lucide-react";
 
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   DataTable,
+  DataTableFilterControls,
   TableInsightCards,
   buildPctStats,
   type DataTableFilterField,
@@ -38,10 +39,6 @@ import {
 interface Truck {
   id: string;
   plateNumber: string;
-}
-
-function last30Days(): DateRange {
-  return { from: addDays(new Date(), -30), to: new Date() };
 }
 
 function parseDateInput(value: string): Date | undefined {
@@ -83,6 +80,143 @@ const globalFilterFn: FilterFn<FleetPnlTableRow> = (row, _columnId, filterValue)
     .includes(search);
 };
 
+function FleetPnlFilterSheet({
+  isOpen,
+  onOpenChange,
+  trucks,
+  draftSelectedTruckIds,
+  setDraftSelectedTruckIds,
+  draftDateRange,
+  setDraftDateRange,
+  onApply,
+  onClear,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  trucks: Truck[];
+  draftSelectedTruckIds: string[];
+  setDraftSelectedTruckIds: React.Dispatch<React.SetStateAction<string[]>>;
+  draftDateRange: DateRange | undefined;
+  setDraftDateRange: React.Dispatch<React.SetStateAction<DateRange | undefined>>;
+  onApply: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+      <SheetTrigger asChild>
+        <Button variant="outline" className="gap-2 h-9">
+          <Filter className="h-4 w-4" />
+          Filter
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right" className="flex w-[400px] flex-col sm:w-[540px]">
+        <SheetHeader>
+          <SheetTitle>Filter Records</SheetTitle>
+          <SheetDescription>Apply filters to narrow down results.</SheetDescription>
+        </SheetHeader>
+        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-6">
+          <div className="space-y-1 w-full">
+            <Label className=" text-muted-foreground">Truck(s)</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    draftSelectedTruckIds.length === 0 && "text-muted-foreground"
+                  )}
+                >
+                  {draftSelectedTruckIds.length === 0
+                    ? "All Trucks"
+                    : `${draftSelectedTruckIds.length} truck(s) selected`}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-2" align="start">
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2 p-1">
+                    <Checkbox
+                      id="truck-all"
+                      checked={draftSelectedTruckIds.length === 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) setDraftSelectedTruckIds([]);
+                      }}
+                    />
+                    <label htmlFor="truck-all" className="text-sm font-medium leading-none cursor-pointer">
+                      All Trucks
+                    </label>
+                  </div>
+                  {trucks.map((t) => (
+                    <div key={t.id} className="flex items-center space-x-2 p-1">
+                      <Checkbox
+                        id={`truck-${t.id}`}
+                        checked={draftSelectedTruckIds.includes(t.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setDraftSelectedTruckIds([...draftSelectedTruckIds, t.id]);
+                          } else {
+                            setDraftSelectedTruckIds(
+                              draftSelectedTruckIds.filter((id) => id !== t.id)
+                            );
+                          }
+                        }}
+                      />
+                      <label htmlFor={`truck-${t.id}`} className="text-sm font-medium leading-none cursor-pointer">
+                        {t.plateNumber}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="space-y-3 w-full">
+            <Label className="text-sm">Date Range</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className=" text-muted-foreground">From</Label>
+                <Input
+                  type="date"
+                  value={draftDateRange?.from ? format(draftDateRange.from, "yyyy-MM-dd") : ""}
+                  onChange={(e) =>
+                    setDraftDateRange((prev) => ({
+                      from: parseDateInput(e.target.value),
+                      to: prev?.to,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className=" text-muted-foreground">To</Label>
+                <Input
+                  type="date"
+                  value={draftDateRange?.to ? format(draftDateRange.to, "yyyy-MM-dd") : ""}
+                  onChange={(e) =>
+                    setDraftDateRange((prev) => ({
+                      from: prev?.from,
+                      to: parseDateInput(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+            </div>
+          </div>
+          <div className="border-t pt-4">
+            <DataTableFilterControls />
+          </div>
+        </div>
+        <SheetFooter className="border-t pt-4">
+          <Button variant="outline" onClick={onClear} className="w-full">
+            Reset Filters
+          </Button>
+          <Button onClick={onApply} className="w-full">
+            Apply Filters
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function FleetPnlReportManager({
   initialOrders,
   trucks,
@@ -91,9 +225,9 @@ export function FleetPnlReportManager({
   trucks: Truck[];
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [draftDateRange, setDraftDateRange] = React.useState<DateRange | undefined>(last30Days);
+  const [draftDateRange, setDraftDateRange] = React.useState<DateRange | undefined>(undefined);
   const [draftSelectedTruckIds, setDraftSelectedTruckIds] = React.useState<string[]>([]);
-  const [dateRange, setDateRange] = React.useState<DateRange | undefined>(last30Days);
+  const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
   const [selectedTruckIds, setSelectedTruckIds] = React.useState<string[]>([]);
 
   const [filtersResetKey, setFiltersResetKey] = React.useState(0);
@@ -113,10 +247,11 @@ export function FleetPnlReportManager({
     setFiltersResetKey((key) => key + 1);
   }, []);
 
-  const handleDateRangeChange = React.useCallback((range: DateRange | undefined) => {
-    setDraftDateRange(range);
-    setDateRange(range);
-  }, []);
+  React.useEffect(() => {
+    if (!isOpen) return;
+    setDraftDateRange(dateRange);
+    setDraftSelectedTruckIds(selectedTruckIds);
+  }, [isOpen, dateRange, selectedTruckIds]);
 
   const filteredRows = React.useMemo(() => {
     return initialOrders.filter((row) => {
@@ -235,118 +370,6 @@ export function FleetPnlReportManager({
 
   const hasExternalFilters = selectedTruckIds.length > 0 || Boolean(dateRange?.from || dateRange?.to);
 
-  const filterSheet = (
-    <Sheet open={isOpen} onOpenChange={setIsOpen}>
-      <SheetTrigger asChild>
-        <Button variant="outline" className="gap-2 h-9">
-          <Filter className="h-4 w-4" />
-          Filter
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="right" className="flex w-[400px] flex-col sm:w-[540px]">
-        <SheetHeader>
-          <SheetTitle>Filter Records</SheetTitle>
-          <SheetDescription>Apply filters to narrow down results.</SheetDescription>
-        </SheetHeader>
-        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-6">
-          <div className="space-y-1 w-full">
-            <Label className=" text-muted-foreground">Truck(s)</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    draftSelectedTruckIds.length === 0 && "text-muted-foreground"
-                  )}
-                >
-                  {draftSelectedTruckIds.length === 0
-                    ? "All Trucks"
-                    : `${draftSelectedTruckIds.length} truck(s) selected`}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-2" align="start">
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2 p-1">
-                    <Checkbox
-                      id="truck-all"
-                      checked={draftSelectedTruckIds.length === 0}
-                      onCheckedChange={(checked) => {
-                        if (checked) setDraftSelectedTruckIds([]);
-                      }}
-                    />
-                    <label htmlFor="truck-all" className="text-sm font-medium leading-none cursor-pointer">
-                      All Trucks
-                    </label>
-                  </div>
-                  {trucks.map((t) => (
-                    <div key={t.id} className="flex items-center space-x-2 p-1">
-                      <Checkbox
-                        id={`truck-${t.id}`}
-                        checked={draftSelectedTruckIds.includes(t.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setDraftSelectedTruckIds([...draftSelectedTruckIds, t.id]);
-                          } else {
-                            setDraftSelectedTruckIds(
-                              draftSelectedTruckIds.filter((id) => id !== t.id)
-                            );
-                          }
-                        }}
-                      />
-                      <label htmlFor={`truck-${t.id}`} className="text-sm font-medium leading-none cursor-pointer">
-                        {t.plateNumber}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div className="space-y-3 w-full">
-            <Label className="text-sm">Date Range</Label>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className=" text-muted-foreground">From</Label>
-                <Input
-                  type="date"
-                  value={draftDateRange?.from ? format(draftDateRange.from, "yyyy-MM-dd") : ""}
-                  onChange={(e) =>
-                    setDraftDateRange((prev) => ({
-                      from: parseDateInput(e.target.value),
-                      to: prev?.to,
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className=" text-muted-foreground">To</Label>
-                <Input
-                  type="date"
-                  value={draftDateRange?.to ? format(draftDateRange.to, "yyyy-MM-dd") : ""}
-                  onChange={(e) =>
-                    setDraftDateRange((prev) => ({
-                      from: prev?.from,
-                      to: parseDateInput(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-        <SheetFooter className="border-t pt-4">
-          <Button variant="outline" onClick={clearFilters} className="w-full">
-            Reset Filters
-          </Button>
-          <Button onClick={applyFilters} className="w-full">
-            Apply Filters
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
-  );
-
   return (
     <div className="space-y-6">
       <div>
@@ -362,17 +385,28 @@ export function FleetPnlReportManager({
         columns={columns}
         data={filteredRows}
         tableId="fleet-pnl-report-v3"
+        pageSize={100}
         filterFields={filterFields}
         searchPlaceholder="Search order, depot, product, truck..."
         globalFilterFn={globalFilterFn}
-        dateRange={dateRange}
-        onDateRangeChange={handleDateRangeChange}
+        hideDateFilter
         hasExternalFilters={hasExternalFilters}
         onFiltersReset={clearFilters}
         onFilteredRowsChange={setVisibleRows}
         filtersResetKey={filtersResetKey}
-        showFacetedFilters
-        toolbarActions={filterSheet}
+        toolbarActions={
+          <FleetPnlFilterSheet
+            isOpen={isOpen}
+            onOpenChange={setIsOpen}
+            trucks={trucks}
+            draftSelectedTruckIds={draftSelectedTruckIds}
+            setDraftSelectedTruckIds={setDraftSelectedTruckIds}
+            draftDateRange={draftDateRange}
+            setDraftDateRange={setDraftDateRange}
+            onApply={applyFilters}
+            onClear={clearFilters}
+          />
+        }
         rowHref={(row) => `/admin/fleet-pnl-report/${row.id}`}
         emptyMessage="No orders found for the selected filters."
       />

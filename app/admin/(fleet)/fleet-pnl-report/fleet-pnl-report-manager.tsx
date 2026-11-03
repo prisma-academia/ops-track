@@ -64,6 +64,19 @@ function matchesDateRange(iso: string, range: DateRange | undefined) {
   return true;
 }
 
+/** `YYYY-MM` from order date ISO string. */
+function orderMonthKey(iso: string): string | null {
+  const created = new Date(iso);
+  if (Number.isNaN(created.getTime())) return null;
+  const month = String(created.getMonth() + 1).padStart(2, "0");
+  return `${created.getFullYear()}-${month}`;
+}
+
+function matchesMonthFilter(iso: string, monthKey: string | undefined) {
+  if (!monthKey) return true;
+  return orderMonthKey(iso) === monthKey;
+}
+
 const globalFilterFn: FilterFn<FleetPnlTableRow> = (row, _columnId, filterValue) => {
   const search = String(filterValue ?? "").trim().toLowerCase();
   if (!search) return true;
@@ -88,6 +101,8 @@ function FleetPnlFilterSheet({
   setDraftSelectedTruckIds,
   draftDateRange,
   setDraftDateRange,
+  draftMonth,
+  setDraftMonth,
   onApply,
   onClear,
 }: {
@@ -98,6 +113,8 @@ function FleetPnlFilterSheet({
   setDraftSelectedTruckIds: React.Dispatch<React.SetStateAction<string[]>>;
   draftDateRange: DateRange | undefined;
   setDraftDateRange: React.Dispatch<React.SetStateAction<DateRange | undefined>>;
+  draftMonth: string;
+  setDraftMonth: React.Dispatch<React.SetStateAction<string>>;
   onApply: () => void;
   onClear: () => void;
 }) {
@@ -169,33 +186,52 @@ function FleetPnlFilterSheet({
               </PopoverContent>
             </Popover>
           </div>
+          <div className="space-y-1.5 w-full">
+            <Label className="text-sm">Month</Label>
+            <Input
+              type="month"
+              value={draftMonth}
+              onChange={(e) => {
+                const value = e.target.value;
+                setDraftMonth(value);
+                if (value) setDraftDateRange(undefined);
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Filter by a full calendar month, or use a custom range below.
+            </p>
+          </div>
           <div className="space-y-3 w-full">
-            <Label className="text-sm">Date Range</Label>
+            <Label className="text-sm">Custom Date Range</Label>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className=" text-muted-foreground">From</Label>
                 <Input
                   type="date"
+                  disabled={Boolean(draftMonth)}
                   value={draftDateRange?.from ? format(draftDateRange.from, "yyyy-MM-dd") : ""}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setDraftMonth("");
                     setDraftDateRange((prev) => ({
                       from: parseDateInput(e.target.value),
                       to: prev?.to,
-                    }))
-                  }
+                    }));
+                  }}
                 />
               </div>
               <div className="space-y-1.5">
                 <Label className=" text-muted-foreground">To</Label>
                 <Input
                   type="date"
+                  disabled={Boolean(draftMonth)}
                   value={draftDateRange?.to ? format(draftDateRange.to, "yyyy-MM-dd") : ""}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setDraftMonth("");
                     setDraftDateRange((prev) => ({
                       from: prev?.from,
                       to: parseDateInput(e.target.value),
-                    }))
-                  }
+                    }));
+                  }}
                 />
               </div>
             </div>
@@ -227,21 +263,31 @@ export function FleetPnlReportManager({
   const [isOpen, setIsOpen] = React.useState(false);
   const [draftDateRange, setDraftDateRange] = React.useState<DateRange | undefined>(undefined);
   const [draftSelectedTruckIds, setDraftSelectedTruckIds] = React.useState<string[]>([]);
+  const [draftMonth, setDraftMonth] = React.useState("");
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
+  const [selectedMonth, setSelectedMonth] = React.useState("");
   const [selectedTruckIds, setSelectedTruckIds] = React.useState<string[]>([]);
 
   const [filtersResetKey, setFiltersResetKey] = React.useState(0);
 
   const applyFilters = React.useCallback(() => {
-    setDateRange(draftDateRange);
+    if (draftMonth) {
+      setSelectedMonth(draftMonth);
+      setDateRange(undefined);
+    } else {
+      setSelectedMonth("");
+      setDateRange(draftDateRange);
+    }
     setSelectedTruckIds(draftSelectedTruckIds);
     setIsOpen(false);
-  }, [draftDateRange, draftSelectedTruckIds]);
+  }, [draftDateRange, draftMonth, draftSelectedTruckIds]);
 
   const clearFilters = React.useCallback(() => {
     setDraftDateRange(undefined);
+    setDraftMonth("");
     setDraftSelectedTruckIds([]);
     setDateRange(undefined);
+    setSelectedMonth("");
     setSelectedTruckIds([]);
     setIsOpen(false);
     setFiltersResetKey((key) => key + 1);
@@ -250,8 +296,9 @@ export function FleetPnlReportManager({
   React.useEffect(() => {
     if (!isOpen) return;
     setDraftDateRange(dateRange);
+    setDraftMonth(selectedMonth);
     setDraftSelectedTruckIds(selectedTruckIds);
-  }, [isOpen, dateRange, selectedTruckIds]);
+  }, [isOpen, dateRange, selectedMonth, selectedTruckIds]);
 
   const filteredRows = React.useMemo(() => {
     return initialOrders.filter((row) => {
@@ -261,9 +308,12 @@ export function FleetPnlReportManager({
       ) {
         return false;
       }
+      if (selectedMonth) {
+        return matchesMonthFilter(row.orderDate, selectedMonth);
+      }
       return matchesDateRange(row.orderDate, dateRange);
     });
-  }, [initialOrders, selectedTruckIds, dateRange]);
+  }, [initialOrders, selectedTruckIds, dateRange, selectedMonth]);
 
   const [visibleRows, setVisibleRows] = React.useState<FleetPnlTableRow[]>(filteredRows);
 
@@ -368,7 +418,10 @@ export function FleetPnlReportManager({
     ];
   }, [initialOrders]);
 
-  const hasExternalFilters = selectedTruckIds.length > 0 || Boolean(dateRange?.from || dateRange?.to);
+  const hasExternalFilters =
+    selectedTruckIds.length > 0 ||
+    Boolean(selectedMonth) ||
+    Boolean(dateRange?.from || dateRange?.to);
 
   return (
     <div className="space-y-6">
@@ -403,6 +456,8 @@ export function FleetPnlReportManager({
             setDraftSelectedTruckIds={setDraftSelectedTruckIds}
             draftDateRange={draftDateRange}
             setDraftDateRange={setDraftDateRange}
+            draftMonth={draftMonth}
+            setDraftMonth={setDraftMonth}
             onApply={applyFilters}
             onClear={clearFilters}
           />

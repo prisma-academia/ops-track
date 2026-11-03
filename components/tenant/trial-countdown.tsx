@@ -20,19 +20,22 @@ const UNITS = [
 ] as const;
 
 export function TrialCountdown({ endsAt }: { endsAt: string }) {
-  const [now, setNow] = useState(() => Date.now());
+  // Stay empty until after mount so server and client render the same markup.
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    const tick = () => setNow(Date.now());
+    tick();
+    const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
   }, []);
 
-  const left = remaining(endsAt, now);
+  const left = now == null ? null : remaining(endsAt, now);
 
   return (
     <div className="ml-auto flex shrink-0 items-center gap-1" aria-label="Trial time remaining">
       {UNITS.map((unit) => {
-        const value = String(left[unit.key]).padStart(2, "0");
+        const value = left ? String(left[unit.key]).padStart(2, "0") : "--";
         return (
           <span
             key={unit.key}

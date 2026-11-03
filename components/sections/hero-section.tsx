@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import Image from 'next/image'
 import { motion, Variants } from 'motion/react'
 import { HeroHeader } from "@/components/sections/header-hero"
+import { TENANT_HERO_FALLBACK_IMAGE } from "@/lib/branding"
 import { Facebook, FacebookIcon } from '@hugeicons/core-free-icons'
 // import { Spotify } from '@/components/ui/svgs/spotify'
 // import { SupabaseFull } from '@/components/ui/svgs/supabase'
@@ -72,7 +73,7 @@ export default function HeroSection({ slug, name, logoUrl, backgroundUrl }: { sl
                                 }}
                             >
                                 <Image
-                                    src={backgroundUrl || "https://images.unsplash.com/photo-1662285064441-bedb11ca7e47?q=80&w=1344&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"}
+                                    src={backgroundUrl || TENANT_HERO_FALLBACK_IMAGE}
                                     alt="background"
                                     className="object-cover"
                                     fill

@@ -21,6 +21,10 @@ export const STORE_ICONS = {
   playStore: "/assets/images/playstore.png",
 } as const;
 
+/** Same photo the tenant public hero uses when no banner is uploaded. */
+export const TENANT_HERO_FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1662285064441-bedb11ca7e47?q=80&w=1344&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D";
+
 export const POWERED_BY_NAME = "PrismaForge";
 
 /** Set to `/assets/images/prismaforge-logo.png` (or similar) when the mark is ready. */

@@ -97,13 +97,30 @@ export function AuthLayoutWrapper({
   tenantName,
   gridClassName,
   cardContainerClassName,
+  hideAside = false,
 }: { 
   children: React.ReactNode;
   logoUrl?: string | null;
   tenantName?: string;
   gridClassName?: string;
   cardContainerClassName?: string;
+  /** Center the form and skip the page-level left column. */
+  hideAside?: boolean;
 }) {
+  if (hideAside) {
+    return (
+      <section className="bg-background relative min-h-screen flex flex-col">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute left-1/2 top-0 h-650 w-650 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground/5 dark:bg-white/10" />
+          <div className="absolute left-1/2 top-0 h-175 w-175 -translate-x-1/2 -translate-y-1/2 rounded-full bg-background" />
+        </div>
+        <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 items-center justify-center px-4 py-10 sm:px-6">
+          <div className="flex w-full flex-col items-center">{children}</div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="bg-background relative min-h-screen flex flex-col">
       {/* Background decorations */}

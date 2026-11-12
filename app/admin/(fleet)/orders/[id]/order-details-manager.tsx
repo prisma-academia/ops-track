@@ -33,7 +33,8 @@ import {
   Droplet,
   Phone,
   MoreVertical,
-  User2
+  User2,
+  Building2,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -53,6 +54,7 @@ import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import type { OrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
 import { OrderFinancialSummary } from "./order-financial-summary";
 import { OrderDispatchedTransportsTable } from "./order-dispatched-transports-table";
+import { SupplierTypeBadge } from "@/app/admin/(fleet)/suppliers/_components/supplier-type-badge";
 // import { litersDeliveredFromSales } from "@/lib/fleet/transport-report";
 // import { OrderVolumeFulfillment } from "./order-volume-fulfillment";
 
@@ -121,6 +123,9 @@ export function OrderDetailsManager({
   const totalProductCost = Number(order.pricePerLitre) * Number(order.litersOrdered);
   const totalLoadingCost = Number(order.loadingCostPerLitre) * Number(order.litersOrdered);
   const totalProcurementCost = totalProductCost + totalLoadingCost;
+  const supplierDisplayName =
+    order.supplierRecord?.name?.trim() || order.supplier?.trim() || null;
+  const supplierType = order.supplierRecord?.supplierType ?? null;
   // Edit Form
   const { register, handleSubmit, formState, setValue, watch, reset, control } = useForm({
     resolver: zodResolver(EditOrderSchema),
@@ -326,6 +331,21 @@ export function OrderDetailsManager({
                   <div>
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Source Depot</p>
                     <p className="font-medium text-foreground text-sm">{order.sourceDepot || "Not specified"}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <Building2 size={14} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Supplier</p>
+                    <p className="font-medium text-foreground text-sm">
+                      {supplierDisplayName ?? "Not specified"}
+                    </p>
+                    <div className="mt-1">
+                      <SupplierTypeBadge supplierType={supplierType} />
+                    </div>
                   </div>
                 </div>
 

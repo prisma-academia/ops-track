@@ -5,6 +5,7 @@ import {
   landedCostPerLiter,
   sumCompanyLossAmount,
 } from "@/lib/fleet/loss-attribution";
+import { sumOrderBreakdownPnl } from "@/lib/fleet/order-pnl-breakdown-pnl";
 
 type Numeric = number | string | { toString(): string } | null | undefined;
 
@@ -405,7 +406,13 @@ export function calculateOrderPnlSummary(
       totalDepotToPrimaryCost +
       totalDeliveryTransportCost +
       totalFleetExpenses;
-  const pnl = amountSoldRev - totalCost;
+  const pnl = sumOrderBreakdownPnl(
+    transportsData,
+    pricePerLitre,
+    loadingCostPerLitre,
+    fleet,
+    useAttributionPnL
+  );
   const qtyBalance = litersOrdered - totalAmountSoldQty;
   const inventoryAtCost = useAttributionPnL
     ? qtyBalance * landedCostPerLiter(orderRates)

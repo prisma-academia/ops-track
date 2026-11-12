@@ -1,7 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { calculateOrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
+import { sumOrderBreakdownPnl } from "@/lib/fleet/order-pnl-breakdown-pnl";
 import { defaultFleetSettings } from "@/lib/fleet/fleet-settings";
+import { buildFleetPnlDetailRows } from "@/app/admin/(fleet)/fleet-pnl-report/fleet-pnl-detail-rows";
 
 describe("order-pnl-summary", () => {
   const baseOrder = {
@@ -38,12 +40,19 @@ describe("order-pnl-summary", () => {
 
   it("attribution mode uses sold-litre costs only", () => {
     const fleet = { ...defaultFleetSettings(), useAttributionPnL: true };
-    const { summary } = calculateOrderPnlSummary(baseOrder, { fleet, useAttributionPnL: true });
+    const { summary, transports } = calculateOrderPnlSummary(baseOrder, {
+      fleet,
+      useAttributionPnL: true,
+    });
     assert.equal(summary.totalAmountSoldQty, 8000);
     assert.equal(summary.qtyBalance, 2000);
     assert.ok(summary.inventoryAtCost === 2000 * 110);
     const expectedSoldCost = 8000 * 110 + 8000 * 5;
     assert.equal(summary.totalCost, expectedSoldCost);
+    assert.equal(
+      summary.pnl,
+      sumOrderBreakdownPnl(transports, summary.priceBought, summary.loadingCostPerLitre, fleet, true)
+    );
     assert.equal(summary.pnl, summary.amountSoldRev - summary.totalCost);
   });
 
@@ -75,5 +84,18 @@ describe("order-pnl-summary", () => {
     assert.equal(deliveryRow.salesRevenue, 7500 * 150);
     assert.equal(summary.totalAmountSoldQty, 7500);
     assert.equal(summary.pnl, deliveryRow.pnl);
+  });
+
+  it("default mode partial sale P&L matches breakdown footer not full-order cost", () => {
+    const fleet = defaultFleetSettings();
+    const { summary, transports } = calculateOrderPnlSummary(baseOrder, { fleet });
+    const breakdownRows = buildFleetPnlDetailRows(summary, transports, fleet);
+    const footerTotal = breakdownRows.reduce((sum, row) => sum + row.pnl, 0);
+    assert.equal(summary.pnl, footerTotal);
+    assert.equal(
+      summary.pnl,
+      sumOrderBreakdownPnl(transports, summary.priceBought, summary.loadingCostPerLitre, fleet, false)
+    );
+    assert.notEqual(summary.pnl, summary.amountSoldRev - summary.totalCost);
   });
 });

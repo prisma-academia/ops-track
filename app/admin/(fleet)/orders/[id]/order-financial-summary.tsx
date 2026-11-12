@@ -15,7 +15,6 @@ import type { OrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
 
 const SEGMENTS = [
   { key: "cost", label: "Cost", color: "#8b5cf6", dot: "bg-violet-500" },
-  { key: "expense", label: "Expenses", color: "#eab308", dot: "bg-amber-500" },
   { key: "profit", label: "Profit", color: "#10b981", dot: "bg-emerald-500" },
 ] as const;
 
@@ -24,11 +23,11 @@ function formatNaira(value: number) {
 }
 
 export function OrderFinancialSummary({ summary }: { summary?: OrderPnlSummary | null }) {
-  // orderCost = product + loading on full ordered volume (matches Procurement Info total)
-  const cost = summary?.orderCost ?? 0;
-  const expenses = summary
+  const procurementCost = summary?.orderCost ?? 0;
+  const logisticsCost = summary
     ? summary.totalTransportCost + summary.totalFleetExpenses
     : 0;
+  const cost = procurementCost + logisticsCost;
   const netProfit = summary?.pnl ?? 0;
   const revenue = summary?.amountSoldRev ?? 0;
 
@@ -36,7 +35,6 @@ export function OrderFinancialSummary({ summary }: { summary?: OrderPnlSummary |
     () =>
       ({
         cost: { label: "Cost", color: "#8b5cf6" },
-        expense: { label: "Expenses", color: "#eab308" },
         profit: { label: "Profit", color: "#10b981" },
       }) satisfies ChartConfig,
     [],
@@ -45,7 +43,6 @@ export function OrderFinancialSummary({ summary }: { summary?: OrderPnlSummary |
   const chartData = useMemo(() => {
     const rows = [
       { key: "cost", label: "Cost", value: cost },
-      { key: "expense", label: "Expenses", value: expenses },
       { key: "profit", label: "Profit", value: Math.max(0, netProfit) },
     ].filter((row) => row.value > 0);
 
@@ -56,18 +53,13 @@ export function OrderFinancialSummary({ summary }: { summary?: OrderPnlSummary |
         fill: meta.color,
       };
     });
-  }, [cost, expenses, netProfit]);
+  }, [cost, netProfit]);
 
   const pieTotal = chartData.reduce((sum, row) => sum + row.value, 0);
   const basis = revenue > 0 ? revenue : pieTotal;
 
   const legendRows = SEGMENTS.map((seg) => {
-    const value =
-      seg.key === "cost"
-        ? cost
-        : seg.key === "expense"
-          ? expenses
-          : netProfit;
+    const value = seg.key === "cost" ? cost : netProfit;
     return { ...seg, value };
   });
 
@@ -79,7 +71,7 @@ export function OrderFinancialSummary({ summary }: { summary?: OrderPnlSummary |
     );
   }
 
-  if (basis <= 0 && cost <= 0 && expenses <= 0 && netProfit === 0) {
+  if (basis <= 0 && cost <= 0 && netProfit === 0) {
     return (
       <p className="text-sm text-muted-foreground py-8 text-center">
         No delivery revenue or costs recorded for this order yet.

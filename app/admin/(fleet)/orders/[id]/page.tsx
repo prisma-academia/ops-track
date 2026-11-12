@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { redirect } from "next/navigation";
 import { OrderDetailsManager } from "./order-details-manager";
 import { calculateOrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
+import { loadOrderPnlOptionsForTenant } from "@/lib/fleet/pnl-context";
 import { parseTenantSettings } from "@/lib/tenant/settings";
 
 export default async function OrderDetailPage({
@@ -13,10 +14,12 @@ export default async function OrderDetailPage({
 }) {
   const { id } = await params;
   const actor = await requireTenantPage(PERMISSIONS.TENANT_FLEET_ORDERS_READ.key);
+  const pnlOptions = await loadOrderPnlOptionsForTenant(actor.tenantId);
 
   const order = await prisma.order.findUnique({
     where: { id },
     include: {
+      supplierRecord: { select: { name: true, supplierType: true } },
       transports: {
         orderBy: { createdAt: "desc" },
         take: 100,
@@ -85,7 +88,7 @@ export default async function OrderDetailPage({
     latitude: number | null;
     longitude: number | null;
   }[];
-  const { summary: pnlSummary } = calculateOrderPnlSummary(order);
+  const { summary: pnlSummary } = calculateOrderPnlSummary(order, pnlOptions);
   const serializedPnlSummary = JSON.parse(JSON.stringify(pnlSummary));
   const originToDepotFee = parseTenantSettings(tenant?.settingsJson).originToDepotFee;
 

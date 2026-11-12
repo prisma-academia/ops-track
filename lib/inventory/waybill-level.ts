@@ -17,6 +17,7 @@ export type WaybillLevelAllocation = {
 };
 
 export type WaybillLevelSale = {
+  id?: string;
   stationId: string;
   productType: string;
   logDate: Date;
@@ -26,12 +27,23 @@ export type WaybillLevelSale = {
   collected?: number;
 };
 
+export type WaybillSaleSlice = {
+  saleId: string | null;
+  logDate: Date;
+  liters: number;
+  saleLiters: number;
+  pricePerLiter: number;
+  revenue: number;
+  collected: number;
+};
+
 export type WaybillDrawdown = {
   soldQty: number;
   deposit: number;
   collected: number;
   fullySoldAt: Date | null;
   isFullySold: boolean;
+  slices: WaybillSaleSlice[];
 };
 
 /**
@@ -52,6 +64,7 @@ export function allocateWaybillDrawdown(
     deposit: number;
     collected: number;
     fullySoldAt: Date | null;
+    slices: WaybillSaleSlice[];
   };
 
   const groups = new Map<string, Bucket[]>();
@@ -72,6 +85,7 @@ export function allocateWaybillDrawdown(
       deposit: 0,
       collected: 0,
       fullySoldAt: null,
+      slices: [],
     };
     const key = `${allocation.stationId}:${allocation.productType}`;
     const list = groups.get(key);
@@ -108,9 +122,19 @@ export function allocateWaybillDrawdown(
         continue;
       }
       const take = Math.min(room, liters);
+      const collectedPart = saleLiters > 0 ? saleCollected * (take / saleLiters) : 0;
       bucket.sold += take;
       bucket.deposit += take * price;
-      bucket.collected += saleLiters > 0 ? saleCollected * (take / saleLiters) : 0;
+      bucket.collected += collectedPart;
+      bucket.slices.push({
+        saleId: sale.id ?? null,
+        logDate: sale.logDate,
+        liters: take,
+        saleLiters,
+        pricePerLiter: price,
+        revenue: take * price,
+        collected: collectedPart,
+      });
       liters -= take;
       if (bucket.capacity - bucket.sold <= EPS) {
         bucket.sold = bucket.capacity;
@@ -132,6 +156,7 @@ export function allocateWaybillDrawdown(
         collected: bucket.collected,
         fullySoldAt: bucket.fullySoldAt,
         isFullySold: bucket.capacity - soldQty <= EPS,
+        slices: bucket.slices,
       });
     }
   }

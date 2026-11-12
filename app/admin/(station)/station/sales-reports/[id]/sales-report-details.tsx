@@ -755,7 +755,7 @@ export function SalesReportDetails({
           </Link>
         </Button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-semibold text-foreground">Sales Report Details</h1>
+          <h1 className="text-xl font-semibold text-foreground">Daily Sales Submission</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {report.station.name} ({report.station.code}) · {report.productType} ·{" "}
             {metrics.litersSold.toLocaleString()} L @ {fmtMoney(metrics.pricePerLiter)}/L ·{" "}

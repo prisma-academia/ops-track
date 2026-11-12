@@ -16,10 +16,13 @@ const PRINT_TITLES: Record<string, string> = {
   "fleet-activity": "Activity Log",
   "fleet-bank-account-transactions": "Bank Account Transactions",
   "station-activity": "Activity Log",
-  "station-sales-reports": "Sales Submissions",
-  "station-sales-pnl": "Sales & Profit Report",
-  "station-delivery-pnl": "Delivery Profit & Loss",
-  "station-delivery-pnl-v2": "Delivery Profit & Loss",
+  "station-sales-reports": "Daily Sales Submission",
+  "station-sales-pnl": "Daily Sales Profit Report",
+  "station-delivery-pnl": "Waybill Profit Report",
+  "station-delivery-pnl-v2": "Waybill Profit Report",
+  "station-delivery-pnl-v4": "Waybill Profit Report",
+  "station-delivery-pnl-v5": "Waybill Profit Report",
+  "station-delivery-pnl-v6": "Waybill Profit Report",
 };
 
 /** Type codes: subject abbreviation + L (ledger) or R (report). */
@@ -38,9 +41,12 @@ const DOCUMENT_TYPE_CODES: Record<string, string> = {
   "station-activity": "ACTL",
   "station-sales-reports": "SLR",
   "station-sales-pnl": "PNLR",
-  "station-stock-report": "STKR",
-  "station-delivery-pnl": "DLR",
-  "station-delivery-pnl-v2": "DLR",
+  "station-stock-report": "WPR",
+  "station-delivery-pnl": "WPR",
+  "station-delivery-pnl-v2": "WPR",
+  "station-delivery-pnl-v4": "WPR",
+  "station-delivery-pnl-v5": "WPR",
+  "station-delivery-pnl-v6": "WPR",
 };
 
 export function getPrintDocumentTitle(tableId: string) {

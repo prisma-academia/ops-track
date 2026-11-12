@@ -649,7 +649,7 @@ export function SalesPnlManager({
       {/* Top Header Bar */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b pb-4">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Sales & Profit Report</h1>
+          <h1 className="text-xl font-semibold text-foreground">Daily Sales Profit Report</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Real-time financial performance, product sales ranking, and net profit distribution.
           </p>

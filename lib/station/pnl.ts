@@ -1,5 +1,5 @@
 /**
- * Station P&L calculations — shared by the overview dashboard and Sales & Profit Report.
+ * Station P&L calculations — shared by the overview dashboard and Daily Sales Profit Report.
  * Revenue: litersSold × pricePerLiter (approved sales, excluding debt repayments).
  * Expenses: STATION-context expenses that are not REJECTED (by expense createdAt).
  * Fuel cost (COGS): resolved from waybill allocations per sale logDate.

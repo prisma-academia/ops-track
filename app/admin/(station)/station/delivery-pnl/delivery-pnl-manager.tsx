@@ -39,14 +39,21 @@ interface DeliveryPnlRow {
   id: string;
   stationId: string;
   stationName: string;
+  waybillNumber: string;
   deliveryDate: string;
-  cycleEndDate: string;
+  cycleEndDate: string | null;
+  reconciledDate: string | null;
+  cycleState: "pending" | "open" | "closed";
   truckPlate: string;
   productType: string;
   receivedQty: number | null;
-  soldQty?: number;
-  remainingQty?: number;
-  expectedRevenueIfSold?: number;
+  dispatchedQty: number;
+  soldQty: number;
+  remainingQty: number;
+  remainingPct: number;
+  level: "ACTIVE" | "DEPLETED" | "PENDING";
+  stockValue: number;
+  expectedRevenue: number | null;
   purchasePrice: number;
   deliveryCost: number;
   deliveryRate: number;
@@ -57,8 +64,8 @@ interface DeliveryPnlRow {
   balanceDue?: number;
   collectionStatus?: "balanced" | "debt" | "none";
   cycleExpenses: number;
-  netProfit: number;
-  margin: number;
+  netProfit: number | null;
+  margin: number | null;
 }
 
 interface Station {
@@ -88,25 +95,30 @@ export function DeliveryPnlManager({
   const [draftDateRange, setDraftDateRange] = React.useState<DateRange | undefined>(undefined);
   const [draftStationIds, setDraftStationIds] = React.useState<string[]>([]);
   const [draftProduct, setDraftProduct] = React.useState<string>("ALL");
+  const [draftLevel, setDraftLevel] = React.useState<string>("ALL");
 
   const [appliedDateRange, setAppliedDateRange] = React.useState<DateRange | undefined>(undefined);
   const [appliedStationIds, setAppliedStationIds] = React.useState<string[]>([]);
   const [appliedProduct, setAppliedProduct] = React.useState<string>("ALL");
+  const [appliedLevel, setAppliedLevel] = React.useState<string>("ALL");
 
   const applyFilters = React.useCallback(() => {
     setAppliedDateRange(draftDateRange);
     setAppliedStationIds(draftStationIds);
     setAppliedProduct(draftProduct);
+    setAppliedLevel(draftLevel);
     setIsOpen(false);
-  }, [draftDateRange, draftStationIds, draftProduct]);
+  }, [draftDateRange, draftStationIds, draftProduct, draftLevel]);
 
   const clearFilters = React.useCallback(() => {
     setDraftDateRange(undefined);
     setDraftStationIds([]);
     setDraftProduct("ALL");
+    setDraftLevel("ALL");
     setAppliedDateRange(undefined);
     setAppliedStationIds([]);
     setAppliedProduct("ALL");
+    setAppliedLevel("ALL");
     setIsOpen(false);
   }, []);
 
@@ -114,6 +126,7 @@ export function DeliveryPnlManager({
     return initialRows.filter((row) => {
       if (appliedStationIds.length > 0 && !appliedStationIds.includes(row.stationId)) return false;
       if (appliedProduct !== "ALL" && row.productType !== appliedProduct) return false;
+      if (appliedLevel !== "ALL" && row.level !== appliedLevel) return false;
 
       const d = new Date(row.deliveryDate);
       if (appliedDateRange?.from) {
@@ -128,7 +141,7 @@ export function DeliveryPnlManager({
       }
       return true;
     });
-  }, [initialRows, appliedStationIds, appliedProduct, appliedDateRange]);
+  }, [initialRows, appliedStationIds, appliedProduct, appliedLevel, appliedDateRange]);
 
   const metrics = React.useMemo(() => {
     let totalReceived = 0;
@@ -141,6 +154,7 @@ export function DeliveryPnlManager({
     let totalExpectedRevenue = 0; // Expected amount (if sold)
     let totalExpenses = 0; // Cycle Expense
     let totalProfit = 0; // Net Profit
+    let totalStockValue = 0;
 
     filteredRows.forEach((r) => {
       const rec = r.receivedQty ?? 0;
@@ -153,9 +167,10 @@ export function DeliveryPnlManager({
       totalCollected += r.amountCollected ?? 0;
       totalOutstanding += r.balanceDue ?? 0;
       totalRevenue += r.cycleRevenue ?? 0;
-      totalExpectedRevenue += r.expectedRevenueIfSold ?? 0;
+      totalExpectedRevenue += r.expectedRevenue ?? 0;
       totalExpenses += r.cycleExpenses ?? 0;
       totalProfit += r.netProfit ?? 0;
+      totalStockValue += r.stockValue ?? 0;
     });
 
     return {
@@ -169,6 +184,7 @@ export function DeliveryPnlManager({
       totalExpectedRevenue,
       totalExpenses,
       totalProfit,
+      totalStockValue,
     };
   }, [filteredRows]);
 
@@ -233,7 +249,7 @@ export function DeliveryPnlManager({
         },
         {
           key: "expected",
-          label: "Expected Amount (if sold)",
+          label: "Expected Revenue",
           value: metrics.totalExpectedRevenue,
           color: "#3b82f6",
           format: (n) => fmtMoney(n),
@@ -252,6 +268,13 @@ export function DeliveryPnlManager({
           color: "#eab308",
           format: (n) => fmtMoney(n),
         },
+        {
+          key: "stock",
+          label: "Stock Value",
+          value: metrics.totalStockValue,
+          color: "#0ea5e9",
+          format: (n) => fmtMoney(n),
+        },
       ]),
     [metrics]
   );
@@ -264,19 +287,51 @@ export function DeliveryPnlManager({
         meta: { label: "Cycle Start" },
         enableHiding: false,
         footer: () => "Total",
-        cell: ({ row }) => (
-          <span className="text-muted-foreground">
-            {format(new Date(row.original.deliveryDate), "LLL dd, y")}
-          </span>
-        ),
+        cell: ({ row }) =>
+          row.original.cycleState === "pending" ? (
+            <div className="flex flex-col">
+              <span className="text-xs font-medium text-amber-600">In transit</span>
+              <span className="text-[11px] text-muted-foreground">
+                Dispatched {format(new Date(row.original.deliveryDate), "LLL dd, y")}
+              </span>
+            </div>
+          ) : (
+            <span className="text-muted-foreground">
+              {format(new Date(row.original.deliveryDate), "LLL dd, y")}
+            </span>
+          ),
       },
       {
         accessorKey: "cycleEndDate",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Cycle End" />,
         meta: { label: "Cycle End" },
+        cell: ({ row }) => {
+          if (row.original.cycleState === "pending") {
+            return <span className="text-muted-foreground">—</span>;
+          }
+          if (row.original.cycleState === "open" || !row.original.cycleEndDate) {
+            return (
+              <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                Open
+              </span>
+            );
+          }
+          return (
+            <span className="text-muted-foreground">
+              {format(new Date(row.original.cycleEndDate), "LLL dd, y")}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "reconciledDate",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Reconciled Date" />,
+        meta: { label: "Reconciled Date" },
         cell: ({ row }) => (
           <span className="text-muted-foreground">
-            {format(new Date(row.original.cycleEndDate), "LLL dd, y")}
+            {row.original.reconciledDate
+              ? format(new Date(row.original.reconciledDate), "LLL dd, y")
+              : "—"}
           </span>
         ),
       },
@@ -296,6 +351,14 @@ export function DeliveryPnlManager({
         ),
       },
       {
+        accessorKey: "waybillNumber",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Waybill" />,
+        meta: { label: "Waybill" },
+        cell: ({ row }) => (
+          <span className="font-mono text-xs font-semibold">{row.original.waybillNumber}</span>
+        ),
+      },
+      {
         accessorKey: "productType",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Product" />,
         meta: { label: "Product" },
@@ -308,6 +371,70 @@ export function DeliveryPnlManager({
           if (!Array.isArray(value)) return true;
           return value.includes(row.getValue(id));
         },
+      },
+      {
+        id: "waybillLevel",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Waybill Level" />,
+        meta: { label: "Waybill Level" },
+        accessorFn: (row) => row.remainingQty,
+        cell: ({ row }) => {
+          const r = row.original;
+          const remaining = r.remainingQty;
+          const total = r.receivedQty ?? r.dispatchedQty;
+          const pct = Math.max(0, Math.min(100, r.remainingPct));
+          const isDelivered = r.cycleState !== "pending";
+          const isDepleted = isDelivered && remaining <= 0.009;
+
+          return (
+            <div className="flex min-w-[150px] flex-col gap-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-mono font-semibold tabular-nums text-foreground">
+                  {fmtQty(remaining)}
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                    !isDelivered
+                      ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                      : isDepleted
+                        ? "bg-muted text-muted-foreground"
+                        : pct <= 20
+                          ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                          : pct <= 50
+                            ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                            : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                  )}
+                >
+                  {!isDelivered ? "In Transit" : isDepleted ? "Depleted" : `${pct.toFixed(0)}% Left`}
+                </span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-300",
+                    !isDelivered
+                      ? "bg-amber-400"
+                      : isDepleted
+                        ? "bg-muted-foreground/30"
+                        : pct <= 20
+                          ? "bg-red-500"
+                          : pct <= 50
+                            ? "bg-amber-500"
+                            : "bg-emerald-500"
+                  )}
+                  style={{ width: `${!isDelivered ? 100 : pct}%` }}
+                />
+              </div>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {fmtQty(r.soldQty)} sold of {fmtQty(total)}
+              </span>
+            </div>
+          );
+        },
+        footer: ({ table }) =>
+          fmtQty(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + (row.original.remainingQty ?? 0), 0)
+          ),
       },
       {
         accessorKey: "receivedQty",
@@ -384,6 +511,30 @@ export function DeliveryPnlManager({
           ),
       },
       {
+        accessorKey: "stockValue",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Stock Value" />,
+        meta: { label: "Stock Value" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums">{fmtMoney(row.original.stockValue)}</span>
+        ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.stockValue, 0)
+          ),
+      },
+      {
+        accessorKey: "expectedRevenue",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Expected Revenue" />,
+        meta: { label: "Expected Revenue" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums">{fmtMoney(row.original.expectedRevenue)}</span>
+        ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + (row.original.expectedRevenue ?? 0), 0)
+          ),
+      },
+      {
         accessorKey: "cycleRevenue",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Received Amount" />,
         meta: { label: "Received Amount" },
@@ -442,6 +593,9 @@ export function DeliveryPnlManager({
         meta: { label: "Net Profit" },
         cell: ({ row }) => {
           const val = row.original.netProfit;
+          if (val == null) {
+            return <span className="text-xs font-medium text-amber-500">Awaiting</span>;
+          }
           return (
             <span
               className={cn(
@@ -470,6 +624,7 @@ export function DeliveryPnlManager({
         meta: { label: "Margin" },
         cell: ({ row }) => {
           const val = row.original.margin;
+          if (val == null) return <span className="text-muted-foreground">—</span>;
           return (
             <span
               className={cn(
@@ -585,6 +740,29 @@ export function DeliveryPnlManager({
             </div>
           </div>
 
+          <div className="space-y-1.5 w-full">
+            <Label className="text-xs text-muted-foreground font-medium">Waybill Level</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: "ALL", label: "All Waybills" },
+                { id: "ACTIVE", label: "Active (> 0 L)" },
+                { id: "DEPLETED", label: "Depleted (0 L)" },
+                { id: "PENDING", label: "In Transit" },
+              ].map((opt) => (
+                <Button
+                  key={opt.id}
+                  type="button"
+                  variant={draftLevel === opt.id ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 justify-center text-xs"
+                  onClick={() => setDraftLevel(opt.id)}
+                >
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
           <div className="space-y-1 w-full">
             <Label className="text-xs text-muted-foreground font-medium">Product</Label>
             <Select value={draftProduct} onValueChange={setDraftProduct}>
@@ -616,9 +794,9 @@ export function DeliveryPnlManager({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Delivery Profit &amp; Loss</h1>
+        <h1 className="text-xl font-semibold text-foreground">Waybill Profit Report</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Per-delivery product purchase, transport, cycle sales, and net revenue by station.
+          Each waybill&apos;s sales cycle, stock left, and profit. Open a row for the purchase, sales, and profit breakdown.
         </p>
       </div>
 
@@ -631,8 +809,9 @@ export function DeliveryPnlManager({
       <DataTable
         columns={columns}
         data={filteredRows}
-        tableId="station-delivery-pnl-v4"
-        searchPlaceholder="Search station, truck..."
+        tableId="station-delivery-pnl-v6"
+        searchPlaceholder="Search station, truck, waybill..."
+        rowHref={(row) => `/admin/station/delivery-pnl/${row.id}`}
         toolbarActions={filterSheet}
         emptyMessage="No delivery records found for the selected filters."
       />

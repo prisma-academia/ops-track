@@ -23,6 +23,10 @@ const PRINT_TITLES: Record<string, string> = {
   "station-delivery-pnl-v4": "Waybill Profit Report",
   "station-delivery-pnl-v5": "Waybill Profit Report",
   "station-delivery-pnl-v6": "Waybill Profit Report",
+  "station-delivery-pnl-v7": "Waybill Profit Report",
+  "station-delivery-pnl-v8": "Waybill Profit Report",
+  "station-delivery-pnl-v9": "Waybill Profit Report",
+  "station-delivery-pnl-v10": "Waybill Profit Report",
 };
 
 /** Type codes: subject abbreviation + L (ledger) or R (report). */
@@ -47,6 +51,10 @@ const DOCUMENT_TYPE_CODES: Record<string, string> = {
   "station-delivery-pnl-v4": "WPR",
   "station-delivery-pnl-v5": "WPR",
   "station-delivery-pnl-v6": "WPR",
+  "station-delivery-pnl-v7": "WPR",
+  "station-delivery-pnl-v8": "WPR",
+  "station-delivery-pnl-v9": "WPR",
+  "station-delivery-pnl-v10": "WPR",
 };
 
 export function getPrintDocumentTitle(tableId: string) {

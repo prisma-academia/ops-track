@@ -361,7 +361,8 @@ function DataTableBody<TData, TValue>({
                       colSpan={header.colSpan}
                       className={cn(
                         "whitespace-nowrap border-t border-b border-border",
-                        header.colSpan > 1 && "text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                        header.colSpan > 1 && "text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground",
+                        (header.column.columnDef.meta as { className?: string } | undefined)?.className
                       )}
                     >
                       {header.isPlaceholder
@@ -402,7 +403,13 @@ function DataTableBody<TData, TValue>({
                         onClick={href ? () => router.push(href) : undefined}
                       >
                         {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id} className="whitespace-nowrap border-b border-border">
+                          <TableCell
+                            key={cell.id}
+                            className={cn(
+                              "whitespace-nowrap border-b border-border",
+                              (cell.column.columnDef.meta as { className?: string } | undefined)?.className
+                            )}
+                          >
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           </TableCell>
                         ))}
@@ -448,7 +455,10 @@ function DataTableBody<TData, TValue>({
                       <TableCell
                         key={header.id}
                         colSpan={header.colSpan}
-                        className="whitespace-nowrap border-t border-border font-semibold"
+                        className={cn(
+                          "whitespace-nowrap border-t border-border font-semibold",
+                          (header.column.columnDef.meta as { className?: string } | undefined)?.className
+                        )}
                       >
                         {header.isPlaceholder
                           ? null

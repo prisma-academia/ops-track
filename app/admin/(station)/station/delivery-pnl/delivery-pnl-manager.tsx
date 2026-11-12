@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { format } from "date-fns";
+import { differenceInCalendarDays, format } from "date-fns";
 import { type DateRange } from "react-day-picker";
-import { Filter } from "lucide-react";
+import { Check, Clock, Filter } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -262,13 +262,6 @@ export function DeliveryPnlManager({
           format: (n) => fmtMoney(n),
         },
         {
-          key: "expenses",
-          label: "Cycle Expense",
-          value: metrics.totalExpenses,
-          color: "#eab308",
-          format: (n) => fmtMoney(n),
-        },
-        {
           key: "stock",
           label: "Stock Value",
           value: metrics.totalStockValue,
@@ -302,61 +295,11 @@ export function DeliveryPnlManager({
           ),
       },
       {
-        accessorKey: "cycleEndDate",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Cycle End" />,
-        meta: { label: "Cycle End" },
-        cell: ({ row }) => {
-          if (row.original.cycleState === "pending") {
-            return <span className="text-muted-foreground">—</span>;
-          }
-          if (row.original.cycleState === "open" || !row.original.cycleEndDate) {
-            return (
-              <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                Open
-              </span>
-            );
-          }
-          return (
-            <span className="text-muted-foreground">
-              {format(new Date(row.original.cycleEndDate), "LLL dd, y")}
-            </span>
-          );
-        },
-      },
-      {
-        accessorKey: "reconciledDate",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Reconciled Date" />,
-        meta: { label: "Reconciled Date" },
-        cell: ({ row }) => (
-          <span className="text-muted-foreground">
-            {row.original.reconciledDate
-              ? format(new Date(row.original.reconciledDate), "LLL dd, y")
-              : "—"}
-          </span>
-        ),
-      },
-      {
         id: "stationName",
         accessorFn: (row) => row.stationName,
         header: ({ column }) => <DataTableColumnHeader column={column} title="Station" />,
         meta: { label: "Station" },
         cell: ({ row }) => <span className="font-medium">{row.original.stationName}</span>,
-      },
-      {
-        accessorKey: "truckPlate",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Truck" />,
-        meta: { label: "Truck" },
-        cell: ({ row }) => (
-          <span className="font-mono text-xs font-semibold uppercase">{row.original.truckPlate}</span>
-        ),
-      },
-      {
-        accessorKey: "waybillNumber",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Waybill" />,
-        meta: { label: "Waybill" },
-        cell: ({ row }) => (
-          <span className="font-mono text-xs font-semibold">{row.original.waybillNumber}</span>
-        ),
       },
       {
         accessorKey: "productType",
@@ -373,10 +316,9 @@ export function DeliveryPnlManager({
         },
       },
       {
-        id: "waybillLevel",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Waybill Level" />,
-        meta: { label: "Waybill Level" },
-        accessorFn: (row) => row.remainingQty,
+        accessorKey: "receivedQty",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Received Vol." />,
+        meta: { label: "Received Volume" },
         cell: ({ row }) => {
           const r = row.original;
           const remaining = r.remainingQty;
@@ -386,14 +328,12 @@ export function DeliveryPnlManager({
           const isDepleted = isDelivered && remaining <= 0.009;
 
           return (
-            <div className="flex min-w-[150px] flex-col gap-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-mono font-semibold tabular-nums text-foreground">
-                  {fmtQty(remaining)}
-                </span>
+            <div className="flex min-w-[148px] flex-col gap-1">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-mono font-semibold tabular-nums">{fmtQty(r.receivedQty)}</span>
                 <span
                   className={cn(
-                    "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                    "px-1.5 py-0.5 text-[10px] font-semibold",
                     !isDelivered
                       ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
                       : isDepleted
@@ -408,10 +348,10 @@ export function DeliveryPnlManager({
                   {!isDelivered ? "In Transit" : isDepleted ? "Depleted" : `${pct.toFixed(0)}% Left`}
                 </span>
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-2.5 w-full overflow-hidden bg-muted">
                 <div
                   className={cn(
-                    "h-full rounded-full transition-all duration-300",
+                    "h-full",
                     !isDelivered
                       ? "bg-amber-400"
                       : isDepleted
@@ -422,27 +362,19 @@ export function DeliveryPnlManager({
                             ? "bg-amber-500"
                             : "bg-emerald-500"
                   )}
-                  style={{ width: `${!isDelivered ? 100 : pct}%` }}
+                  style={{
+                    width: `${!isDelivered ? 100 : pct}%`,
+                    backgroundImage:
+                      "repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(255,255,255,0.45) 3px, rgba(255,255,255,0.45) 6px)",
+                  }}
                 />
               </div>
               <span className="font-mono text-[10px] text-muted-foreground">
-                {fmtQty(r.soldQty)} sold of {fmtQty(total)}
+                {fmtQty(remaining)} left · {fmtQty(r.soldQty)} sold
               </span>
             </div>
           );
         },
-        footer: ({ table }) =>
-          fmtQty(
-            table.getFilteredRowModel().rows.reduce((sum, row) => sum + (row.original.remainingQty ?? 0), 0)
-          ),
-      },
-      {
-        accessorKey: "receivedQty",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Received Vol." />,
-        meta: { label: "Received Volume" },
-        cell: ({ row }) => (
-          <span className="font-mono tabular-nums">{fmtQty(row.original.receivedQty)}</span>
-        ),
         footer: ({ table }) =>
           fmtQty(
             table
@@ -451,19 +383,9 @@ export function DeliveryPnlManager({
           ),
       },
       {
-        accessorKey: "purchasePrice",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Purchase Price" />,
-        meta: { label: "Purchase Price" },
-        cell: ({ row }) => (
-          <span className="font-mono tabular-nums text-muted-foreground">
-            {fmtMoney(row.original.purchasePrice)}/L
-          </span>
-        ),
-      },
-      {
         accessorKey: "deliveryCost",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Delivery Cost" />,
-        meta: { label: "Delivery Cost (Total Purchase)" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Purchase Cost" />,
+        meta: { label: "Purchase Cost" },
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-muted-foreground">
             {fmtMoney(row.original.deliveryCost)}
@@ -476,17 +398,12 @@ export function DeliveryPnlManager({
       },
       {
         accessorKey: "transportTotal",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Transport Cost" />,
-        meta: { label: "Transport Cost" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Transport" />,
+        meta: { label: "Transport" },
         cell: ({ row }) => (
-          <div className="flex flex-col">
-            <span className="font-mono tabular-nums text-muted-foreground">
-              {fmtMoney(row.original.transportTotal)}
-            </span>
-            {/* <span className="font-mono text-[11px] tabular-nums text-muted-foreground/70">
-              {fmtMoney(row.original.deliveryRate)}/L
-            </span> */}
-          </div>
+          <span className="font-mono tabular-nums text-muted-foreground">
+            {fmtMoney(row.original.transportTotal)}
+          </span>
         ),
         footer: ({ table }) =>
           fmtMoney(
@@ -496,10 +413,10 @@ export function DeliveryPnlManager({
       {
         id: "landedCost",
         accessorFn: (row) => row.deliveryCost + row.transportTotal,
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Total Order Cost" />,
-        meta: { label: "Total Order Cost" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Total Cost" />,
+        meta: { label: "Total Cost", className: "bg-sky-50 dark:bg-sky-950/40" },
         cell: ({ row }) => (
-          <span className="font-mono tabular-nums">
+          <span className="font-mono font-medium tabular-nums">
             {fmtMoney(row.original.deliveryCost + row.original.transportTotal)}
           </span>
         ),
@@ -535,6 +452,20 @@ export function DeliveryPnlManager({
           ),
       },
       {
+        accessorKey: "cycleExpenses",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Cycle Expense" />,
+        meta: { label: "Cycle Expense" },
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums text-amber-500">
+            {fmtMoney(row.original.cycleExpenses)}
+          </span>
+        ),
+        footer: ({ table }) =>
+          fmtMoney(
+            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.cycleExpenses, 0)
+          ),
+      },
+      {
         accessorKey: "cycleRevenue",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Received Amount" />,
         meta: { label: "Received Amount" },
@@ -548,44 +479,68 @@ export function DeliveryPnlManager({
       },
       {
         accessorKey: "collectionStatus",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Received Status" />,
-        meta: { label: "Received Status" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Reconciled Status" />,
+        meta: { label: "Reconciled Status" },
         cell: ({ row }) => {
           const status = row.original.collectionStatus ?? "none";
           const due = row.original.balanceDue ?? 0;
-          if (status === "none") {
-            return <span className="text-muted-foreground">—</span>;
-          }
           if (status === "balanced") {
             return (
-              <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+              <span className="inline-flex w-fit items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                <Check className="size-3.5" />
                 Balanced
               </span>
             );
           }
-          return (
-            <div className="flex flex-col gap-0.5">
-              <span className="w-fit rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
-                Remaining debt
+          if (status === "debt") {
+            return (
+              <span className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                <Clock className="size-3.5" />
+                {fmtMoney(due)}
               </span>
-              <span className="font-mono text-[11px] tabular-nums text-rose-600">{fmtMoney(due)}</span>
-            </div>
+            );
+          }
+          return (
+            <span className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+              <Clock className="size-3.5" />
+              Pending
+            </span>
           );
         },
       },
       {
-        accessorKey: "cycleExpenses",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Cycle Expenses" />,
-        meta: { label: "Cycle Expenses" },
-        cell: ({ row }) => (
-          <span className="font-mono tabular-nums text-amber-500">
-            {fmtMoney(row.original.cycleExpenses)}
-          </span>
-        ),
-        footer: ({ table }) =>
-          fmtMoney(
-            table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.cycleExpenses, 0)
-          ),
+        id: "reconciledDate",
+        accessorFn: (row) => row.reconciledDate ?? row.deliveryDate,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Reconciled Date" />,
+        meta: { label: "Reconciled Date" },
+        cell: ({ row }) => {
+          const pending = row.original.cycleState === "pending";
+          const start = new Date(row.original.deliveryDate);
+          const finish = row.original.reconciledDate ? new Date(row.original.reconciledDate) : null;
+          const end = finish ?? (pending ? null : new Date());
+          const days = end ? Math.max(1, differenceInCalendarDays(end, start) + 1) : null;
+
+          if (pending) {
+            return (
+              <span className="text-[11px] text-muted-foreground">
+                Dispatched {format(start, "d MMM y")}
+              </span>
+            );
+          }
+
+          return (
+            <div className="flex flex-col">
+              <span className="text-muted-foreground">
+                {format(start, "d MMM y")} – {finish ? format(finish, "d MMM y") : "Open"}
+              </span>
+              {days != null ? (
+                <span className="text-[11px] text-muted-foreground">
+                  {days} day{days === 1 ? "" : "s"}
+                </span>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "netProfit",
@@ -614,25 +569,6 @@ export function DeliveryPnlManager({
           return (
             <span className={cn("font-mono", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
               {fmtMoney(total)}
-            </span>
-          );
-        },
-      },
-      {
-        accessorKey: "margin",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Margin" />,
-        meta: { label: "Margin" },
-        cell: ({ row }) => {
-          const val = row.original.margin;
-          if (val == null) return <span className="text-muted-foreground">—</span>;
-          return (
-            <span
-              className={cn(
-                "font-mono font-semibold tabular-nums",
-                val >= 0 ? "text-emerald-600" : "text-rose-600"
-              )}
-            >
-              {val.toFixed(2)}%
             </span>
           );
         },
@@ -809,7 +745,7 @@ export function DeliveryPnlManager({
       <DataTable
         columns={columns}
         data={filteredRows}
-        tableId="station-delivery-pnl-v6"
+        tableId="station-delivery-pnl-v10"
         searchPlaceholder="Search station, truck, waybill..."
         rowHref={(row) => `/admin/station/delivery-pnl/${row.id}`}
         toolbarActions={filterSheet}

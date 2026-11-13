@@ -9,7 +9,7 @@ import { cn, formatHumanReadableDate, formatHumanReadableDateOnly } from "@/lib/
 import { z } from "zod";
 import { apiGet, apiPost, apiPatch } from "@/lib/client/api";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardAction, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { FormField, TextInput } from "@/components/form-field";
@@ -521,197 +521,170 @@ export function StationDetailsManager({
 
   return (
     <div className="space-y-6">
-      {/* ---------------- FULL WIDTH HEADER CARD ---------------- */}
-      <Card>
-        <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="icon" asChild className="h-10 w-10 shrink-0">
-              <Link href="/admin/station/stations">
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-            <div>
-              <CardTitle className="text-xl">{station.name}</CardTitle>
-              <CardDescription className="text-xs mt-0.5">Station overview · {station.code}</CardDescription>
-            </div>
-          </div>
-          <CardAction className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={openEditStation} className="gap-2">
-              <Pencil className="h-4 w-4" />
-              Edit Station
-            </Button>
-          </CardAction>
+      {/* ---------------- STATION PROFILE ---------------- */}
+      <Card className="">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-stone-200 pb-4 dark:border-stone-800">
+          <Button variant="outline" size="icon" asChild className="h-10 w-10 shrink-0">
+            <Link href="/admin/station/stations">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button variant="outline" onClick={openEditStation} className="shrink-0 gap-2">
+            <Pencil className="h-4 w-4" />
+            Edit Station
+          </Button>
         </CardHeader>
-      </Card>
-
-      {/* ---------------- STATION INFO & LEDGER GRID ---------------- */}
-      <div className="grid gap-6 md:grid-cols-2 items-stretch">
-        {/* Station Information Card */}
-        <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
-          <CardContent className="flex-1 flex flex-col justify-between">
+        <CardContent className="space-y-5">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-4 lg:items-stretch">
             {station.imageUrl ? (
-              <div className="mb-4 relative h-40 w-full overflow-hidden rounded-lg border border-stone-200 dark:border-stone-800 bg-muted">
+              <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-200 bg-muted dark:border-stone-800 lg:col-span-1">
                 <img
                   src={station.imageUrl}
                   alt={station.name}
-                  className="h-full w-full object-cover"
+                  className="absolute inset-0 h-full w-full object-cover"
                 />
               </div>
             ) : (
-              <div className="mb-4 relative h-40 w-full rounded-lg border border-dashed border-stone-300 dark:border-stone-700 bg-muted/20 flex flex-col items-center justify-center text-muted-foreground gap-2 p-4 text-center">
-                <div className="size-11 rounded-full bg-muted/80 border border-border/50 flex items-center justify-center text-muted-foreground/70">
+              <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-stone-300 bg-muted/20 p-4 text-center text-muted-foreground dark:border-stone-700 lg:col-span-1">
+                <div className="flex size-11 items-center justify-center rounded-full border border-border/50 bg-muted/80 text-muted-foreground/70">
                   <ImageIcon size={22} />
                 </div>
                 <div className="space-y-0.5">
-                  <p className="text-xs font-semibold text-foreground/80">No station image available</p>
+                  <p className="text-xs font-semibold text-foreground/80">No station image</p>
                   <p className="text-[11px] text-muted-foreground">Upload a photo via Edit Station</p>
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              {/* Left Column: Station Manager, State, Ward / LGA, Station Code */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                    <User size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Station Manager</p>
-                    <p className="font-semibold text-foreground truncate">{managerNames}</p>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                    <Landmark size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">State</p>
-                    <p className="font-semibold text-foreground truncate">{station.state || "N/A"}</p>
-                  </div>
+            <div className="flex flex-col gap-4 lg:col-span-3">
+              <div className="min-w-0">
+                <h2 className="truncate text-xl font-semibold text-foreground">{station.name}</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">Station overview</p>
+              </div>
+              <div className="grid grid-cols-1 content-center gap-4 sm:grid-cols-3">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <User size={16} />
                 </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Station Manager</p>
+                  <p className="truncate font-semibold text-foreground">{managerNames}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Landmark size={16} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">State</p>
+                  <p className="truncate font-semibold text-foreground">{station.state || "N/A"}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <MapPin size={16} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Address</p>
+                  <p className="truncate text-xs font-semibold text-foreground">
+                    {[station.ward, station.lga, station.location].filter(Boolean).join(" / ") || "N/A"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Store size={16} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Station Code</p>
+                  <Badge variant="outline" className="mt-0.5 h-5 bg-background px-2 py-0.5 font-mono text-[10px]">{station.code}</Badge>
+                </div>
+              </div>
+              {((station.latitude != null) || (station.longitude != null) || (station.altitude != null)) && (
+                <div className="flex items-center gap-3 sm:col-span-2">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <MapPin size={16} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Ward / LGA</p>
-                    <p className="font-semibold text-foreground truncate text-xs">
-                      {[station.ward, station.lga].filter(Boolean).join(" / ") || "N/A"}
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">GPS</p>
+                    <p className="truncate font-mono text-xs font-semibold text-foreground">
+                      {[
+                        station.latitude != null ? `LAT ${Number(station.latitude).toFixed(6)}` : null,
+                        station.longitude != null ? `LON ${Number(station.longitude).toFixed(6)}` : null,
+                        station.altitude != null ? `ALT ${Number(station.altitude).toFixed(1)}m` : null,
+                      ].filter(Boolean).join(" · ")}
                     </p>
-                    {station.location && (
-                      <p className="text-[10px] text-muted-foreground truncate">{station.location}</p>
-                    )}
                   </div>
                 </div>
-
-                <div className="flex items-center gap-3 pt-0.5">
-                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                    <Store size={16} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Station Code</p>
-                    <Badge variant="outline" className="font-mono text-[10px] px-2 py-0.5 h-5 bg-background mt-0.5">{station.code}</Badge>
-                  </div>
-                </div>
+              )}
               </div>
+            </div>
+          </div>
 
-              {/* Right Column: Product and Prices with same UI as left, no divider */}
-              <div className="space-y-3">
-                {["PMS", "AGO", "DPK", "LPG"].map((product) => {
-                  const price = latestPrices[product];
-                  return (
-                    <div key={product} className="flex items-center gap-3">
-                      <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                        {PRODUCT_ICONS[product] || <Flame size={16} />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate">
-                          {PRODUCT_NAMES[product] ? PRODUCT_NAMES[product].split(" ")[0] : product} Price
-                        </p>
-                        <p className="font-semibold text-foreground font-mono mt-0.5">
-                          {price != null ? (
-                            `₦${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / L`
-                          ) : (
-                            "—"
-                          )}
-                        </p>
-                      </div>
+          <div className="grid grid-cols-1 gap-6 border-t border-dashed border-stone-200 pt-4 sm:grid-cols-2 dark:border-stone-800">
+            <div className="space-y-3">
+              {["PMS", "AGO", "DPK", "LPG"].map((product) => {
+                const price = latestPrices[product];
+                return (
+                  <div key={product} className="flex items-center gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      {PRODUCT_ICONS[product] || <Flame size={16} />}
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        {PRODUCT_NAMES[product] ? PRODUCT_NAMES[product].split(" ")[0] : product} Price
+                      </p>
+                      <p className="font-mono font-semibold text-foreground">
+                        {price != null
+                          ? `₦${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / L`
+                          : "—"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-
-            {((station.latitude != null) || (station.longitude != null) || (station.altitude != null)) && (
-              <div className="flex items-center gap-3 border-t border-dashed border-stone-200 dark:border-stone-800 pt-3 mt-3">
-                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">GPS</div>
-                <div className="flex gap-4 text-xs font-mono">
-                  {station.latitude != null && (
-                    <div><span className="text-muted-foreground">LAT:</span> <span className="font-medium text-foreground">{Number(station.latitude).toFixed(6)}</span></div>
-                  )}
-                  {station.longitude != null && (
-                    <div><span className="text-muted-foreground">LON:</span> <span className="font-medium text-foreground">{Number(station.longitude).toFixed(6)}</span></div>
-                  )}
-                  {station.altitude != null && (
-                    <div><span className="text-muted-foreground">ALT:</span> <span className="font-medium text-foreground">{Number(station.altitude).toFixed(1)}m</span></div>
-                  )}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Station Ledger Card */}
-        <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle className="text-base font-semibold">Station Ledger</CardTitle>
-              <CardDescription className="text-xs">Collections against expected sales</CardDescription>
-            </div>
-            <Badge variant="outline" className={cn("h-6 gap-1 px-2 text-[10px] font-semibold uppercase tracking-wide", ledgerTone.badge)}>
-              <LedgerStatusIcon className="size-3" />
-              {ledgerTone.label}
-            </Badge>
-          </CardHeader>
-          <CardContent className="flex-1">
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Receipt size={16} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Expected</p>
-                  <p className="font-semibold text-foreground font-mono">{money(expectedRevenue)}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Expected</p>
+                  <p className="font-mono font-semibold text-foreground">{money(expectedRevenue)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Wallet size={16} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Collected</p>
-                  <p className="font-semibold text-foreground font-mono">{money(totalReceived)}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Collected</p>
+                  <p className="font-mono font-semibold text-foreground">{money(totalReceived)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <LedgerStatusIcon size={16} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                    {isOverpayment ? "Surplus" : "Shortfall"}
-                  </p>
-                  <p className={cn("font-semibold font-mono", ledgerTone.text)}>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      {isOverpayment ? "Surplus" : "Shortfall"}
+                    </p>
+                    <Badge variant="outline" className={cn("h-5 gap-1 px-1.5 text-[9px] font-semibold uppercase tracking-wide", ledgerTone.badge)}>
+                      {ledgerTone.label}
+                    </Badge>
+                  </div>
+                  <p className={cn("font-mono font-semibold", ledgerTone.text)}>
                     {isOverpayment ? money(stationLedger?.overpayment ?? 0) : money(stationLedger?.underpayment ?? 0)}
                   </p>
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ---------------- ACTIVITY SNAPSHOT ---------------- */}
       <div className="grid gap-6 md:grid-cols-3">

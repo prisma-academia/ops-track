@@ -40,6 +40,7 @@ import {
   Flame,
   Fuel,
   Wallet,
+  Receipt,
   Settings,
   TrendingUp,
   Plus,
@@ -52,6 +53,8 @@ import {
   ArrowRight,
   Lock,
   AlertCircle,
+  CheckCircle2,
+  CircleAlert,
   Landmark,
   UploadCloud,
   Trash2,
@@ -62,6 +65,7 @@ import { AssetTank } from "@/components/asset-tank";
 import SpinnerEllipsis from "@/components/spinner-ellipsis";
 import nigerianLocations from "@/constant/nigerian-locations.json";
 import { StationManagersSelector } from "@/components/station-managers-selector";
+import { RemainingVolumeBadge } from "@/components/remaining-volume-badge";
 
 const optionalReading = z.preprocess((value) => {
   if (value === "" || value === undefined || value === null) return null;
@@ -472,9 +476,46 @@ export function StationDetailsManager({
     });
   }
 
-  const isUnderpayment = (stationLedger?.balance ?? 0) < 0;
-  const isOverpayment = (stationLedger?.balance ?? 0) > 0;
-  const isSettled = (stationLedger?.balance ?? 0) === 0;
+  const ledgerBalance = stationLedger?.balance ?? 0;
+  const isUnderpayment = ledgerBalance < 0;
+  const isOverpayment = ledgerBalance > 0;
+  const expectedRevenue = stationLedger?.expectedRevenue ?? 0;
+  const totalReceived = stationLedger?.totalReceived ?? 0;
+  const ledgerTone = isUnderpayment
+    ? {
+        label: "Shortfall",
+        text: "text-rose-600 dark:text-rose-400",
+        badge: "text-rose-700 border-rose-200 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60",
+        Icon: CircleAlert,
+      }
+    : isOverpayment
+    ? {
+        label: "Surplus",
+        text: "text-emerald-600 dark:text-emerald-400",
+        badge: "text-emerald-700 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60",
+        Icon: CheckCircle2,
+      }
+    : {
+        label: "Reconciled",
+        text: "text-foreground",
+        badge: "text-stone-600 border-stone-200 bg-stone-50 dark:bg-stone-900/40 dark:text-stone-300 dark:border-stone-700",
+        Icon: CheckCircle2,
+      };
+  const LedgerStatusIcon = ledgerTone.Icon;
+  const money = (value: number) =>
+    `₦${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const tanks = Array.isArray(station.tanks) ? station.tanks : [];
+  const remainingByProduct = tanks.reduce(
+    (acc: Record<string, number>, tank: any) => {
+      const product = tank.productType as string;
+      if (product) acc[product] = (acc[product] || 0) + Number(tank.currentLiters || 0);
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+  const remainingVolume = tanks.reduce((sum: number, tank: any) => sum + Number(tank.currentLiters || 0), 0);
+  const tankCapacity = tanks.reduce((sum: number, tank: any) => sum + Number(tank.capacity || 0), 0);
 
   const shortageList = (stationLedger?.varianceItems || []).filter((item: any) => item.variance < 0);
 
@@ -624,86 +665,50 @@ export function StationDetailsManager({
 
         {/* Station Ledger Card */}
         <Card className="flex flex-col justify-between border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-950/60 backdrop-blur-xs shadow-sm">
-          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <div>
-              <CardTitle className="text-base font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                <Wallet size={16} className="text-primary" />
-                Station Ledger
-              </CardTitle>
-              <CardDescription className="text-xs">Sales revenue and settlement status</CardDescription>
+              <CardTitle className="text-base font-semibold">Station Ledger</CardTitle>
+              <CardDescription className="text-xs">Collections against expected sales</CardDescription>
             </div>
-            {stationLedger && (
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-[10px] font-medium px-2 py-0.5",
-                  isUnderpayment
-                    ? "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30"
-                    : isOverpayment
-                    ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
-                    : "text-muted-foreground border-stone-200 bg-stone-50 dark:bg-stone-900/30"
-                )}
-              >
-                {isUnderpayment
-                  ? "Underpayment"
-                  : isOverpayment
-                  ? "Overpayment"
-                  : "Settled"}
-              </Badge>
-            )}
+            <Badge variant="outline" className={cn("h-6 gap-1 px-2 text-[10px] font-semibold uppercase tracking-wide", ledgerTone.badge)}>
+              <LedgerStatusIcon className="size-3" />
+              {ledgerTone.label}
+            </Badge>
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col justify-between space-y-3">
-            {/* Station Ledger Balance Hero Box */}
-            <div className={cn(
-              "p-4 rounded-xl border flex items-center justify-between",
-              isUnderpayment
-                ? "bg-rose-500/5 border-rose-500/15"
-                : isOverpayment
-                ? "bg-emerald-500/5 border-emerald-500/15"
-                : "bg-stone-50/60 dark:bg-stone-900/60 border-stone-200 dark:border-stone-800"
-            )}>
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <span className={cn(
-                    "text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full",
-                    isUnderpayment
-                      ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 font-bold"
-                      : isOverpayment
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 font-bold"
-                      : "bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300 font-bold"
-                  )}>
-                    {isUnderpayment ? "Underpayment" : isOverpayment ? "Overpayment" : "Settled"}
-                  </span>
+          <CardContent className="flex-1">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <Receipt size={16} />
                 </div>
-                <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider pt-1">
-                  Station Ledger Balance
-                </p>
-                <p className={cn(
-                  "text-2xl font-bold font-mono",
-                  isUnderpayment
-                    ? "text-rose-600"
-                    : isOverpayment
-                    ? "text-emerald-600"
-                    : "text-foreground"
-                )}>
-                  {stationLedger
-                    ? `${stationLedger.balance < 0 ? "-₦" : stationLedger.balance > 0 ? "+₦" : "₦"}${Math.abs(stationLedger.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : "₦0.00"}
-                </p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Expected</p>
+                  <p className="font-semibold text-foreground font-mono">{money(expectedRevenue)}</p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-[11px] text-muted-foreground font-medium">
-                  {stationLedger?.totalSalesCount ?? 0} Sales Logged
-                </p>
-                <Link
-                  href="/admin/station/sales-reports"
-                  className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 mt-1.5"
-                >
-                  Sales Report &rarr;
-                </Link>
+              <div className="flex items-center gap-3">
+                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <Wallet size={16} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Collected</p>
+                  <p className="font-semibold text-foreground font-mono">{money(totalReceived)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <LedgerStatusIcon size={16} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    {isOverpayment ? "Surplus" : "Shortfall"}
+                  </p>
+                  <p className={cn("font-semibold font-mono", ledgerTone.text)}>
+                    {isOverpayment ? money(stationLedger?.overpayment ?? 0) : money(stationLedger?.underpayment ?? 0)}
+                  </p>
+                </div>
               </div>
             </div>
-
           </CardContent>
         </Card>
       </div>
@@ -922,9 +927,16 @@ export function StationDetailsManager({
       {/* ---------------- TANK OVERVIEW ---------------- */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 dark:border-stone-800 pb-3">
-          <div>
-            <h2 className="text-base font-bold text-foreground">Tank Overview</h2>
-            <p className="text-xs text-muted-foreground">Live storage levels across all tanks</p>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-bold text-foreground">Tank Overview</h2>
+              <RemainingVolumeBadge
+                volume={remainingVolume}
+                capacity={tankCapacity}
+                byProduct={remainingByProduct}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">On-hand stock across all tanks. Adequate is normal operating range, Low is a reorder, Critical is a run-out risk.</p>
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={openAddTankDialog} className="h-8 gap-1.5 text-xs">

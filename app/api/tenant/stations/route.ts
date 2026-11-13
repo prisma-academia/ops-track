@@ -62,7 +62,7 @@ export async function GET(request: Request) {
         // Post-filtering
         rows = rows.filter((r) => {
           const totalSales = r.todaySales.PMS + r.todaySales.AGO + r.todaySales.LPG;
-          const totalStock = r.lastClosingStockTotal;
+          const totalStock = r.remainingVolume;
           if (salesMin !== undefined && totalSales < salesMin) return false;
           if (salesMax !== undefined && totalSales > salesMax) return false;
           if (stockMin !== undefined && totalStock < stockMin) return false;

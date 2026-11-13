@@ -8,6 +8,7 @@ import { formatDistanceToNow } from "date-fns";
 import { usePaginatedQuery } from "@/hooks/use-paginated-query";
 import { DataTableFilterDrawer } from "@/components/data-table-filter-drawer";
 import { useSearchParams } from "next/navigation";
+import { RemainingVolumeBadge } from "@/components/remaining-volume-badge";
 
 const PRODUCT_ORDER = ["PMS", "AGO", "DPK", "LPG"] as const;
 
@@ -25,6 +26,9 @@ export type StationRow = {
   todaySales: { PMS: number; AGO: number; LPG: number };
   lastClosingStock: { PMS: number; AGO: number; DPK?: number; LPG: number };
   lastClosingStockTotal: number;
+  remainingByProduct?: Partial<Record<"PMS" | "AGO" | "DPK" | "LPG", number>>;
+  remainingVolume?: number;
+  tankCapacity?: number;
   lastSalesAmount: number;
   lastSalesDate?: string | null;
   lastSalesProducts?: { PMS: number; AGO: number; LPG: number };
@@ -101,12 +105,23 @@ const columns: ColumnDef<StationRow>[] = [
     }
   },
   {
-    accessorKey: "lastClosingStock",
-    header: "Last Closing Stock",
+    accessorKey: "remainingVolume",
+    header: "Remaining Volume",
     cell: ({ row }) => {
-      const total = row.original.lastClosingStockTotal ?? 0;
-      return <span className="text-xs font-medium">{formatLiters(total)}</span>;
-    }
+      const byProduct = row.original.remainingByProduct;
+      const total =
+        row.original.remainingVolume ??
+        (byProduct
+          ? (byProduct.PMS ?? 0) + (byProduct.AGO ?? 0) + (byProduct.DPK ?? 0) + (byProduct.LPG ?? 0)
+          : row.original.lastClosingStockTotal ?? 0);
+      return (
+        <RemainingVolumeBadge
+          volume={total}
+          capacity={row.original.tankCapacity ?? 0}
+          byProduct={byProduct}
+        />
+      );
+    },
   },
 
   { 

@@ -8,6 +8,7 @@ export const stationIncludeQuery = {
     select: { 
       productType: true, 
       currentLiters: true,
+      capacity: true,
       dippingSessions: {
         orderBy: { openedAt: "desc" as const },
         take: 1,
@@ -98,17 +99,24 @@ export async function formatStationRows(rawRows: any[]) {
     let lpgLiters = 0;
     const lastClosingStock = { PMS: 0, AGO: 0, DPK: 0, LPG: 0 };
     let lastClosingStockTotal = 0;
+    const remainingByProduct = { PMS: 0, AGO: 0, DPK: 0, LPG: 0 };
+    let remainingVolume = 0;
+    let tankCapacity = 0;
     const tankProducts = new Set<"PMS" | "AGO" | "DPK" | "LPG">();
 
     s.tanks.forEach((t: any) => {
-      if (t.productType === "PMS") pmsLiters += Number(t.currentLiters);
-      if (t.productType === "AGO") agoLiters += Number(t.currentLiters);
-      if (t.productType === "LPG") lpgLiters += Number(t.currentLiters);
+      const onHand = Number(t.currentLiters || 0);
+      if (t.productType === "PMS") pmsLiters += onHand;
+      if (t.productType === "AGO") agoLiters += onHand;
+      if (t.productType === "LPG") lpgLiters += onHand;
 
       const prod = t.productType as "PMS" | "AGO" | "DPK" | "LPG";
       if (lastClosingStock[prod] !== undefined) {
         tankProducts.add(prod);
+        remainingByProduct[prod] += onHand;
       }
+      remainingVolume += onHand;
+      tankCapacity += Number(t.capacity || 0);
 
       const closingLiters = t.dippingSessions?.[0]?.closings?.[0]
         ? Number(t.dippingSessions[0].closings[0].closingLiters)
@@ -177,6 +185,9 @@ export async function formatStationRows(rawRows: any[]) {
       todaySales,
       lastClosingStock,
       lastClosingStockTotal,
+      remainingByProduct,
+      remainingVolume,
+      tankCapacity,
     };
   });
 }

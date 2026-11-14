@@ -84,12 +84,22 @@ function transportHasUnpaidFeeLegs(
   );
 }
 
-function inferSupplierPaymentType(order: any | null, amount: string) {
+function inferSupplierPaymentType(
+  order: any | null,
+  amount: string,
+  currentType?: string,
+) {
   if (!order) return "ADVANCE_DEPOSIT";
   const outstanding = Number(order.balance || 0);
   const alreadyPaid = Number(order.paymentPaid || 0);
   const amt = Number(amount);
+  if (amt <= 0) {
+    if (currentType === "PART_PAYMENT") return "PART_PAYMENT";
+    if (currentType === "ADVANCE_DEPOSIT") return "ADVANCE_DEPOSIT";
+  }
   if (amt > 0 && amt < outstanding) return "PART_PAYMENT";
+  if (alreadyPaid > 0 && amt >= outstanding) return "DEBT_CLEARANCE";
+  if (amt >= outstanding && outstanding > 0) return "FULL_SETTLEMENT";
   if (alreadyPaid > 0) return "DEBT_CLEARANCE";
   return "FULL_SETTLEMENT";
 }
@@ -404,11 +414,16 @@ export default function OutgoingPaymentForm({
 
   useEffect(() => {
     if (category !== "SUPPLIER_PAYMENT") return;
-    const nextType = inferSupplierPaymentType(selectedSupplierOrder ?? null, formData.amount);
-    setFormData((prev) =>
-      prev.paymentType === nextType ? prev : { ...prev, paymentType: nextType },
-    );
-  }, [category, formData.supplierOrderId, formData.amount, selectedSupplierOrder]);
+    setFormData((prev) => {
+      if (category !== "SUPPLIER_PAYMENT") return prev;
+      const order =
+        prev.supplierOrderId && prev.supplierOrderId !== "none"
+          ? metadata?.orders?.find((o: any) => o.id === prev.supplierOrderId) ?? null
+          : null;
+      const nextType = inferSupplierPaymentType(order, prev.amount, prev.paymentType);
+      return prev.paymentType === nextType ? prev : { ...prev, paymentType: nextType };
+    });
+  }, [category, formData.supplierOrderId, formData.amount, metadata?.orders, selectedSupplierOrder]);
 
   useEffect(() => {
     if (category !== "SUPPLIER_PAYMENT") return;
@@ -872,7 +887,7 @@ export default function OutgoingPaymentForm({
                         <CommandItem
                           value="none"
                           onSelect={() => {
-                            setFormData({ ...formData, supplierOrderId: "none" });
+                            setFormData({ ...formData, supplierOrderId: "none", amount: "" });
                             setSupplierOrderOpen(false);
                           }}
                         >
@@ -883,13 +898,12 @@ export default function OutgoingPaymentForm({
                             key={o.id}
                             value={`${o.reference || o.id} ${o.supplier || ""}`}
                             onSelect={() => {
-                              const fullAmount = isSupplierFullPaymentType(formData.paymentType)
-                                ? supplierOrderBalanceAmount(o)
-                                : "";
                               setFormData({
                                 ...formData,
                                 supplierOrderId: o.id,
-                                ...(fullAmount ? { amount: fullAmount } : {}),
+                                amount: isSupplierFullPaymentType(formData.paymentType)
+                                  ? supplierOrderBalanceAmount(o)
+                                  : "",
                               });
                               setSupplierOrderOpen(false);
                             }}
@@ -908,14 +922,13 @@ export default function OutgoingPaymentForm({
               <Select
                 value={formData.paymentType}
                 onValueChange={(v) => {
-                  const fullAmount =
-                    isSupplierFullPaymentType(v) && selectedSupplierOrder
-                      ? supplierOrderBalanceAmount(selectedSupplierOrder)
-                      : "";
                   setFormData({
                     ...formData,
                     paymentType: v,
-                    ...(fullAmount ? { amount: fullAmount } : {}),
+                    amount:
+                      isSupplierFullPaymentType(v) && selectedSupplierOrder
+                        ? supplierOrderBalanceAmount(selectedSupplierOrder)
+                        : "",
                   });
                 }}
               >

@@ -25,7 +25,7 @@ export default async function OrderDetailPage({
         take: 100,
         include: {
           transporter: { select: { id: true, name: true } },
-          truck: { select: { id: true, name: true, plateNumber: true } },
+          truck: { select: { id: true, name: true, plateNumber: true, truckNumber: true } },
           driver: { select: { id: true, firstName: true, lastName: true } },
           lossLogs: true,
           deliveries: {

@@ -35,7 +35,14 @@ import {
   MoreVertical,
   User2,
   Building2,
+  CircleHelp,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
@@ -58,6 +65,37 @@ import { SupplierTypeBadge } from "@/app/admin/(fleet)/suppliers/_components/sup
 import { getOrderProcurementDisplay } from "@/lib/fleet/order-procurement";
 // import { litersDeliveredFromSales } from "@/lib/fleet/transport-report";
 // import { OrderVolumeFulfillment } from "./order-volume-fulfillment";
+
+function ProcurementStatLabel({ label, hint }: { label: string; hint?: string }) {
+  if (!hint) {
+    return (
+      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+        {label}
+      </p>
+    );
+  }
+  return (
+    <div className="flex items-center justify-center sm:justify-start gap-1">
+      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+        {label}
+      </p>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex text-muted-foreground/80 hover:text-foreground"
+            aria-label={`More about ${label}`}
+          >
+            <CircleHelp className="size-3" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+          {hint}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
 
 const EditOrderSchema = z.object({
   productType: z.enum(["PMS", "AGO", "DPK", "LPG"]),
@@ -419,74 +457,90 @@ export function OrderDetailsManager({
               </div>
             </div>
 
-            {(hasReceipt && !useReceivedForTotals) || shortageLiters > 0 ? (
-              <div className="rounded-lg border border-border/40 bg-muted/20 px-4 py-3 space-y-2 text-sm">
-                {hasReceipt && !useReceivedForTotals ? (
-                  <p className="text-muted-foreground">
-                    <span className="font-medium text-foreground">Received so far:</span>{" "}
-                    {receivedLiters.toLocaleString()} L
-                    {!tripsFinalized
-                      ? " — procurement totals use ordered volume until all trips are finalized."
-                      : supplierType === "DEPOT"
-                        ? " — procurement totals use ordered volume for depot suppliers."
-                        : ""}
-                  </p>
-                ) : null}
-                {shortageLiters > 0 ? (
-                  <p className="text-amber-700 dark:text-amber-500">
-                    <span className="font-medium">Shortage:</span> {shortageLiters.toLocaleString()} L
-                    {supplierType === "LOCAL" ? (
-                      <>
-                        {" "}
-                        (−₦{shortageAmount.toLocaleString()} from supplier amount)
-                      </>
-                    ) : supplierType === "DEPOT" ? (
-                      " — charged to the transporter, not deducted from product total."
-                    ) : (
-                      " — set supplier type to attribute this shortage."
-                    )}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
+            <TooltipProvider delayDuration={200}>
+              <div className="mt-2 pt-4 border-t border-border/40 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="rounded-lg bg-muted/30 px-4 py-3 text-center sm:text-left">
+                    <ProcurementStatLabel
+                      label="Total Product"
+                      hint={
+                        useReceivedForTotals
+                          ? "Product cost uses litres received at destinations, not litres ordered."
+                          : undefined
+                      }
+                    />
+                    <p className="font-mono font-semibold text-foreground mt-1">
+                      ₦{totalProductCost.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-muted/30 px-4 py-3 text-center sm:text-left">
+                    <ProcurementStatLabel
+                      label="Total Loading"
+                      hint={
+                        useReceivedForTotals
+                          ? "Loading cost uses litres received at destinations, not litres ordered."
+                          : undefined
+                      }
+                    />
+                    <p className="font-mono font-semibold text-foreground mt-1">
+                      ₦{totalLoadingCost.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-primary/5 border border-primary/15 px-4 py-3 text-center sm:text-left">
+                    <ProcurementStatLabel
+                      label="Total"
+                      hint={
+                        useReceivedForTotals
+                          ? `Final procurement total on ${receivedLiters.toLocaleString()} L received.`
+                          : undefined
+                      }
+                    />
+                    <p className="font-mono font-bold text-primary mt-1">
+                      ₦{totalProcurementCost.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
 
-            <div className="mt-2 pt-4 border-t border-border/40 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="rounded-lg bg-muted/30 px-4 py-3 text-center sm:text-left">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  Total Product
-                </p>
-                <p className="font-mono font-semibold text-foreground mt-1">
-                  ₦{totalProductCost.toLocaleString()}
-                </p>
-                {useReceivedForTotals ? (
-                  <p className="text-[10px] text-muted-foreground mt-1">Based on received volume</p>
+                {(hasReceipt && !useReceivedForTotals) || shortageLiters > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {hasReceipt && !useReceivedForTotals ? (
+                      <div className="rounded-lg bg-muted/30 px-4 py-3 text-center sm:text-left">
+                        <ProcurementStatLabel
+                          label="Received so far"
+                          hint={
+                            !tripsFinalized
+                              ? "Litres confirmed at destinations so far. Procurement totals still use ordered volume until every active trip is finalized (completed or closed as loss)."
+                              : supplierType === "DEPOT"
+                                ? "Litres received on this order. Depot supplier bills use ordered volume, not received volume."
+                                : undefined
+                          }
+                        />
+                        <p className="font-mono font-semibold text-emerald-600 dark:text-emerald-500 mt-1">
+                          {receivedLiters.toLocaleString()} L
+                        </p>
+                      </div>
+                    ) : null}
+                    {shortageLiters > 0 ? (
+                      <div className="rounded-lg bg-muted/30 px-4 py-3 text-center sm:text-left">
+                        <ProcurementStatLabel
+                          label="Shortage"
+                          hint={
+                            supplierType === "LOCAL"
+                              ? `${shortageLiters.toLocaleString()} L not received. ₦${shortageAmount.toLocaleString()} is deducted from the supplier payable (local supplier credit).`
+                              : supplierType === "DEPOT"
+                                ? `${shortageLiters.toLocaleString()} L delivery shortfall. Charged to the transporter; product and loading totals are not reduced.`
+                                : "Set the supplier type (Local or Depot) so shortages are attributed correctly."
+                          }
+                        />
+                        <p className="font-mono font-semibold text-amber-600 dark:text-amber-500 mt-1">
+                          {shortageLiters.toLocaleString()} L
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
-              <div className="rounded-lg bg-muted/30 px-4 py-3 text-center sm:text-left">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  Total Loading
-                </p>
-                <p className="font-mono font-semibold text-foreground mt-1">
-                  ₦{totalLoadingCost.toLocaleString()}
-                </p>
-                {useReceivedForTotals ? (
-                  <p className="text-[10px] text-muted-foreground mt-1">Based on received volume</p>
-                ) : null}
-              </div>
-              <div className="rounded-lg bg-primary/5 border border-primary/15 px-4 py-3 text-center sm:text-left">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  Total
-                </p>
-                <p className="font-mono font-bold text-primary mt-1">
-                  ₦{totalProcurementCost.toLocaleString()}
-                </p>
-                {useReceivedForTotals ? (
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Final amount on {receivedLiters.toLocaleString()} L received
-                  </p>
-                ) : null}
-              </div>
-            </div>
+            </TooltipProvider>
           </CardContent>
         </Card>
 

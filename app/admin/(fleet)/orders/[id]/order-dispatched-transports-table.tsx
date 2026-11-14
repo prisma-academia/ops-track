@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn, formatDestination } from "@/lib/utils";
+import { cn, formatDestination, formatTruckLabel } from "@/lib/utils";
 import {
   formatLossTypeLabel,
   formatTransportLiters,
@@ -43,12 +43,29 @@ type DispatchTransport = TransportFeeTransport & {
   createdAt: string | Date;
   litersLost?: unknown;
   litersDelivered?: unknown;
-  truck?: { plateNumber?: string | null; name?: string | null } | null;
+  isOneTime?: boolean | null;
+  oneTimeTruckPlate?: string | null;
+  oneTimeTransporterName?: string | null;
+  truck?: {
+    plateNumber?: string | null;
+    name?: string | null;
+    truckNumber?: string | null;
+  } | null;
   transporter?: { name?: string | null } | null;
   deliveries?: TransportFeeDelivery[];
   transactions?: TransportFeeTransaction[];
   lossLogs?: Array<{ lossType?: string; lostQuantity?: unknown }>;
 };
+
+function resolveTransporterName(transport: DispatchTransport): string {
+  const raw = (
+    transport.isOneTime ? transport.oneTimeTransporterName : transport.transporter?.name
+  )?.trim();
+  if (!raw) return "Unassigned";
+  const lower = raw.toLowerCase();
+  if (lower === "unknown" || lower === "unassigned") return "Unassigned";
+  return raw;
+}
 
 export type SubsequentDestinationRow = {
   id: string;
@@ -150,9 +167,8 @@ function buildDispatchRows(
 
     return {
       id: transport.id,
-      truckLabel:
-        transport.truck?.plateNumber || transport.truck?.name || "Unknown truck",
-      transporterName: transport.transporter?.name || "Unassigned",
+      truckLabel: formatTruckLabel(transport),
+      transporterName: resolveTransporterName(transport),
       routeLabel: `${depot} → ${primaryDest}`,
       litersCarried: Number(transport.litersCarried) || 0,
       litersSold,

@@ -68,6 +68,22 @@ type ExpenseCategory =
   | "SUPPLIER_PAYMENT"
   | "TRANSPORT_FEE";
 
+function orderHasSupplierBalance(order: { balance?: unknown } | null | undefined) {
+  return Number(order?.balance ?? 0) > 0.001;
+}
+
+function transportHasUnpaidFeeLegs(
+  transport: Parameters<typeof getAvailableFeeLegs>[0] & {
+    transactions?: Parameters<typeof getAvailableFeeLegs>[1];
+  },
+  originToDepotFee: number,
+) {
+  return (
+    getAvailableFeeLegs(transport, transport.transactions || [], { originToDepotFee }).length >
+    0
+  );
+}
+
 function inferSupplierPaymentType(order: any | null, amount: string) {
   if (!order) return "ADVANCE_DEPOSIT";
   const outstanding = Number(order.balance || 0);
@@ -76,6 +92,15 @@ function inferSupplierPaymentType(order: any | null, amount: string) {
   if (amt > 0 && amt < outstanding) return "PART_PAYMENT";
   if (alreadyPaid > 0) return "DEBT_CLEARANCE";
   return "FULL_SETTLEMENT";
+}
+
+function isSupplierFullPaymentType(paymentType: string) {
+  return paymentType === "FULL_SETTLEMENT" || paymentType === "DEBT_CLEARANCE";
+}
+
+function supplierOrderBalanceAmount(order: { balance?: unknown } | null | undefined) {
+  const balance = Number(order?.balance ?? 0);
+  return balance > 0 ? String(balance) : "";
 }
 
 function SummaryRow({
@@ -355,10 +380,18 @@ export default function OutgoingPaymentForm({
 
   const supplierOrders = (metadata?.orders || []).filter(
     (o: any) =>
-      !formData.supplierId ||
-      o.supplierId === formData.supplierId ||
-      metadata?.suppliers?.find((s: any) => s.id === formData.supplierId)?.name === o.supplier,
+      orderHasSupplierBalance(o) &&
+      (!formData.supplierId ||
+        o.supplierId === formData.supplierId ||
+        metadata?.suppliers?.find((s: any) => s.id === formData.supplierId)?.name === o.supplier),
   );
+
+  const transportTripOptions =
+    category === "TRANSPORT_FEE"
+      ? (metadata?.transports || []).filter((t: any) =>
+          transportHasUnpaidFeeLegs(t, originToDepotFee),
+        )
+      : metadata?.transports || [];
 
   const selectedSupplierOrder =
     formData.supplierOrderId && formData.supplierOrderId !== "none"
@@ -376,6 +409,40 @@ export default function OutgoingPaymentForm({
       prev.paymentType === nextType ? prev : { ...prev, paymentType: nextType },
     );
   }, [category, formData.supplierOrderId, formData.amount, selectedSupplierOrder]);
+
+  useEffect(() => {
+    if (category !== "SUPPLIER_PAYMENT") return;
+    if (!selectedSupplierOrder || !isSupplierFullPaymentType(formData.paymentType)) return;
+    const nextAmount = supplierOrderBalanceAmount(selectedSupplierOrder);
+    if (!nextAmount) return;
+    setFormData((prev) => (prev.amount === nextAmount ? prev : { ...prev, amount: nextAmount }));
+  }, [category, formData.paymentType, formData.supplierOrderId, selectedSupplierOrder]);
+
+  useEffect(() => {
+    if (!metadata || category !== "SUPPLIER_PAYMENT") return;
+    if (formData.supplierOrderId === "none") return;
+    const order = metadata.orders?.find((o: any) => o.id === formData.supplierOrderId);
+    if (order && !orderHasSupplierBalance(order)) {
+      setFormData((prev) => ({ ...prev, supplierOrderId: "none" }));
+    }
+  }, [category, formData.supplierOrderId, metadata]);
+
+  useEffect(() => {
+    if (!metadata || category !== "TRANSPORT_FEE" || !formData.transportId) return;
+    const transport = metadata.transports?.find((t: any) => t.id === formData.transportId);
+    if (!transport || !transportHasUnpaidFeeLegs(transport, originToDepotFee)) {
+      setFormData((prev) => ({
+        ...prev,
+        transportId: "",
+        transporterId: "",
+        truckId: "",
+        orderId: "",
+        amount: "",
+      }));
+      setFeeLeg("");
+      setDeliveryId("");
+    }
+  }, [category, formData.transportId, metadata, originToDepotFee]);
 
   useEffect(() => {
     if (!category) {
@@ -800,7 +867,7 @@ export default function OutgoingPaymentForm({
                   <Command>
                     <CommandInput placeholder="Search order..." />
                     <CommandList>
-                      <CommandEmpty>No order found.</CommandEmpty>
+                      <CommandEmpty>No orders with balance due.</CommandEmpty>
                       <CommandGroup>
                         <CommandItem
                           value="none"
@@ -816,7 +883,14 @@ export default function OutgoingPaymentForm({
                             key={o.id}
                             value={`${o.reference || o.id} ${o.supplier || ""}`}
                             onSelect={() => {
-                              setFormData({ ...formData, supplierOrderId: o.id });
+                              const fullAmount = isSupplierFullPaymentType(formData.paymentType)
+                                ? supplierOrderBalanceAmount(o)
+                                : "";
+                              setFormData({
+                                ...formData,
+                                supplierOrderId: o.id,
+                                ...(fullAmount ? { amount: fullAmount } : {}),
+                              });
                               setSupplierOrderOpen(false);
                             }}
                           >
@@ -833,7 +907,17 @@ export default function OutgoingPaymentForm({
               <Label>Payment type</Label>
               <Select
                 value={formData.paymentType}
-                onValueChange={(v) => setFormData({ ...formData, paymentType: v })}
+                onValueChange={(v) => {
+                  const fullAmount =
+                    isSupplierFullPaymentType(v) && selectedSupplierOrder
+                      ? supplierOrderBalanceAmount(selectedSupplierOrder)
+                      : "";
+                  setFormData({
+                    ...formData,
+                    paymentType: v,
+                    ...(fullAmount ? { amount: fullAmount } : {}),
+                  });
+                }}
               >
                 <SelectTrigger className="w-full" >
                   <SelectValue />
@@ -881,9 +965,13 @@ export default function OutgoingPaymentForm({
                 <Command>
                   <CommandInput placeholder="Search transport by ref, transporter, truck, destination..." />
                   <CommandList>
-                    <CommandEmpty>No transports found.</CommandEmpty>
+                    <CommandEmpty>
+                      {category === "TRANSPORT_FEE"
+                        ? "No trips with unpaid transport fees."
+                        : "No transports found."}
+                    </CommandEmpty>
                     <CommandGroup>
-                      {metadata?.transports?.map((t: any) => {
+                      {transportTripOptions.map((t: any) => {
                         const { ref, transporter, truck, destination, volume } = getTransportLabelParts(t);
                         return (
                           <CommandItem
@@ -927,7 +1015,7 @@ export default function OutgoingPaymentForm({
           </div>
         )}
 
-        {category === "TRANSPORT_FEE" && (
+        {category === "TRANSPORT_FEE" && formData.transportId && availableFeeLegs.length > 0 && (
           <div className="space-y-2 flex flex-col justify-end md:col-span-2">
             <Label>Transport Fee Leg *</Label>
             <Popover open={feeLegOpen} onOpenChange={setFeeLegOpen}>
@@ -936,7 +1024,6 @@ export default function OutgoingPaymentForm({
                   variant="outline"
                   role="combobox"
                   aria-expanded={feeLegOpen}
-                  disabled={!formData.transportId}
                   className="w-full justify-between font-normal text-left h-auto py-2"
                 >
                   <span className="flex min-w-0 items-center gap-2 pr-4">

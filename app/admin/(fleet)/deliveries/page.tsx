@@ -9,9 +9,9 @@ import { formatDestination, formatTruckLabel } from "@/lib/utils";
 import { resolveDeliveryCreatedAtFilter } from "@/lib/fleet/delivery-sales-metrics";
 import {
   b2bDeliveryWhere,
-  computeStationCollectionByDeliveryId,
   managedStationDeliveryWhere,
 } from "@/lib/fleet/delivery-station-collection";
+import { loadWaybillProfitReport } from "@/lib/station/waybill-profit";
 import { resolveShortageParty } from "@/lib/fleet/loss-attribution";
 import { format } from "date-fns";
 
@@ -193,43 +193,31 @@ export default async function SalesPage({
 
   const periodHint = resolveDeliveriesPeriodHint(from, to);
 
-  const stationIdsOnPage = [
-    ...new Set(
-      Deliveries.map((d) => d.stationId).filter((id): id is string => Boolean(id))
-    ),
-  ];
-
-  const fifoDeliveryRows =
-    view === "stations" && stationIdsOnPage.length > 0
-      ? await prisma.delivery.findMany({
-          where: {
-            tenantId: actor.tenantId,
-            ...managedStationDeliveryWhere(),
-            stationId: { in: stationIdsOnPage },
-            createdAt: where.createdAt,
-          },
-          select: {
-            id: true,
-            stationId: true,
-            createdAt: true,
-            totalExpectedAmount: true,
-          },
-          orderBy: { createdAt: "asc" },
-        })
-      : [];
-
-  const stationCollectionByDeliveryId =
-    fifoDeliveryRows.length > 0
-      ? await computeStationCollectionByDeliveryId(
-          actor.tenantId,
-          fifoDeliveryRows.map((d) => ({
-            id: d.id,
-            stationId: d.stationId as string,
-            createdAt: d.createdAt,
-            totalExpectedAmount: Number(d.totalExpectedAmount),
-          }))
-        )
-      : new Map();
+  const waybillProfit = view === "stations" ? await loadWaybillProfitReport(actor.tenantId) : null;
+  const waybillsByDeliveryId = new Map<
+    string,
+    {
+      id: string;
+      waybillNumber: string;
+      receivedAmount: number;
+      expectedRevenue: number | null;
+      collectionStatus: "balanced" | "debt" | "none";
+      balanceDue: number;
+    }[]
+  >();
+  for (const profitRow of waybillProfit?.rows ?? []) {
+    if (!profitRow.deliveryId) continue;
+    const list = waybillsByDeliveryId.get(profitRow.deliveryId) ?? [];
+    list.push({
+      id: profitRow.id,
+      waybillNumber: profitRow.waybillNumber,
+      receivedAmount: profitRow.cycleRevenue,
+      expectedRevenue: profitRow.expectedRevenue,
+      collectionStatus: profitRow.collectionStatus,
+      balanceDue: profitRow.balanceDue,
+    });
+    waybillsByDeliveryId.set(profitRow.deliveryId, list);
+  }
 
   const rows = Deliveries.map((delivery) => {
     const litersDespatched = Number(delivery.litersDespatched);
@@ -268,10 +256,6 @@ export default async function SalesPage({
       delivery.organization?.name ||
       "Walk-in Client";
 
-    const stationCollection = delivery.stationId
-      ? stationCollectionByDeliveryId.get(delivery.id)
-      : undefined;
-
     return {
       id: delivery.id,
       stationId: delivery.stationId,
@@ -298,9 +282,9 @@ export default async function SalesPage({
       shortageParty: resolveShortageParty(
         delivery.transport?.order?.supplierRecord?.supplierType ?? null
       ),
-      stationRetailCollected: stationCollection?.collected ?? null,
-      stationRetailRemaining: stationCollection?.remaining ?? null,
-      stationCollectionPercent: stationCollection?.percent ?? null,
+      stationWaybills: delivery.stationId
+        ? waybillsByDeliveryId.get(delivery.id) ?? []
+        : [],
     };
   });
 

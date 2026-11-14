@@ -18,6 +18,7 @@ import {
   Printer,
   AlertTriangle,
   CheckCircle2,
+  CircleHelp,
   Clock,
 } from "lucide-react";
 export type DeliveriesListView = "all" | "stations" | "b2b";
@@ -37,6 +38,12 @@ import {
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -80,9 +87,14 @@ export type SaleRow = {
   purchasePricePerLitre?: number;
   loadingCostPerLitre?: number;
   shortageParty?: "TRANSPORTER" | "SUPPLIER" | "UNCONFIGURED";
-  stationRetailCollected?: number | null;
-  stationRetailRemaining?: number | null;
-  stationCollectionPercent?: number | null;
+  stationWaybills?: {
+    id: string;
+    waybillNumber: string;
+    receivedAmount: number;
+    expectedRevenue: number | null;
+    collectionStatus: "balanced" | "debt" | "none";
+    balanceDue: number;
+  }[];
 };
 
 type StatusTone = {
@@ -687,28 +699,60 @@ const fleetExpectedB2bColumn: ColumnDef<SaleRow> = {
 const stationCollectionColumn: ColumnDef<SaleRow> = {
   id: "stationCollection",
   header: () => (
-    <span className="text-xs font-medium text-muted-foreground">Retail coverage</span>
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+      Retail coverage
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex text-muted-foreground/80 hover:text-foreground"
+              aria-label="What retail coverage means"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <CircleHelp className="size-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs text-xs">
+            <p className="font-medium">Per waybill, from the waybill profit report</p>
+            <p className="mt-1 text-muted-foreground">
+              The ring is this waybill only. It is the received amount as a percentage of that
+              waybill&apos;s expected revenue. Received amount is the retail sales recognised on
+              this waybill. When the ring reaches 100% the waybill is balanced, which means the
+              station has received enough on this load to pay for the order. Other waybills are
+              not included.
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </span>
   ),
   cell: ({ row }) => {
-    const collected = row.original.stationRetailCollected;
-    const remaining = row.original.stationRetailRemaining;
-    const percent = row.original.stationCollectionPercent;
-    const fleetAmount = row.original.totalExpectedAmount;
-    if (
-      collected == null ||
-      remaining == null ||
-      percent == null ||
-      fleetAmount <= 0
-    ) {
+    const waybills = row.original.stationWaybills ?? [];
+    if (waybills.length === 0) {
       return <span className="text-xs text-muted-foreground/60">—</span>;
     }
     return (
-      <DeliveryCollectionProgressRing
-        collected={collected}
-        remaining={remaining}
-        percent={percent}
-        fleetAmount={fleetAmount}
-      />
+      <div className="flex flex-col gap-2">
+        {waybills.map((waybill) => {
+          const expected = waybill.expectedRevenue ?? 0;
+          const percent =
+            waybill.collectionStatus === "balanced"
+              ? 100
+              : expected > 0
+                ? Math.min(100, (waybill.receivedAmount / expected) * 100)
+                : 0;
+          return (
+            <div key={waybill.id} className="flex flex-col gap-1">
+              <DeliveryCollectionProgressRing
+                collected={waybill.receivedAmount}
+                remaining={waybill.balanceDue}
+                percent={percent}
+              />
+            </div>
+          );
+        })}
+      </div>
     );
   },
 };

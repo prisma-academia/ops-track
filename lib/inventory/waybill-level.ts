@@ -1,5 +1,34 @@
 const EPS = 0.0001;
 
+function cashReceived(row: {
+  amountPos: { toString(): string } | number;
+  amountTransfer: { toString(): string } | number;
+  payments: { amount: { toString(): string } | number; status: string }[];
+}) {
+  if (row.payments.length > 0) {
+    return row.payments
+      .filter((payment) => payment.status !== "REJECTED")
+      .reduce((sum, payment) => sum + Number(payment.amount), 0);
+  }
+  return Number(row.amountPos || 0) + Number(row.amountTransfer || 0);
+}
+
+/** Cash, transfer, credit applied, and later debt repayments for one approved sale. */
+export function collectedForSale(log: {
+  amountPos: { toString(): string } | number;
+  amountTransfer: { toString(): string } | number;
+  appliedCredit: { toString(): string } | number;
+  payments: { amount: { toString(): string } | number; status: string }[];
+  debtRepayments: {
+    amountPos: { toString(): string } | number;
+    amountTransfer: { toString(): string } | number;
+    payments: { amount: { toString(): string } | number; status: string }[];
+  }[];
+}) {
+  const repayments = log.debtRepayments.reduce((sum, repayment) => sum + cashReceived(repayment), 0);
+  return cashReceived(log) + Number(log.appliedCredit || 0) + repayments;
+}
+
 function startOfDay(d: Date) {
   const next = new Date(d);
   next.setHours(0, 0, 0, 0);

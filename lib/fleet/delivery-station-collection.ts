@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/client";
+import { allocateWaybillDrawdown, collectedForSale } from "@/lib/inventory/waybill-level";
 
 export type DeliveryStationCollectionSlice = {
   collected: number;
@@ -10,25 +11,23 @@ export type DeliveryStationCollectionSlice = {
 type DeliveryForCollection = {
   id: string;
   stationId: string;
-  createdAt: Date;
   totalExpectedAmount: number;
 };
 
-function salesLogRevenue(log: {
-  amountPos: unknown;
-  amountTransfer: unknown;
-  appliedCredit: unknown;
-}): number {
-  return (
-    Number(log.amountPos || 0) +
-    Number(log.amountTransfer || 0) +
-    Number(log.appliedCredit || 0)
-  );
+function startOfDay(d: Date) {
+  const next = new Date(d);
+  next.setHours(0, 0, 0, 0);
+  return next;
 }
 
 /**
- * Allocates approved station retail sales (FIFO by delivery date) toward each fleet
- * delivery's expected amount for managed stations.
+ * Station deposits collected against each fleet delivery.
+ *
+ * Uses the same waybill drawdown as the station waybill profit report: approved
+ * retail sales are applied to the oldest received waybill for that station and
+ * product, and only the cash actually collected on those litres counts.
+ * The fleet amount is what was sold to the station. When deposits cover it,
+ * the station can pay for that order.
  */
 export async function computeStationCollectionByDeliveryId(
   tenantId: string,
@@ -38,75 +37,104 @@ export async function computeStationCollectionByDeliveryId(
   if (deliveries.length === 0) return result;
 
   const stationIds = [...new Set(deliveries.map((d) => d.stationId))];
-  const minCreatedAt = deliveries.reduce(
-    (min, d) => (d.createdAt < min ? d.createdAt : min),
-    deliveries[0].createdAt
-  );
-
-  const salesLogs = await prisma.salesLog.findMany({
+  const allocations = await prisma.waybillAllocation.findMany({
     where: {
       tenantId,
       stationId: { in: stationIds },
-      status: "APPROVED",
-      createdAt: { gte: minCreatedAt },
+      status: { not: "CANCELLED" },
     },
     select: {
+      id: true,
       stationId: true,
+      deliveryId: true,
+      deliveredAt: true,
+      litersReceived: true,
+      status: true,
       createdAt: true,
-      amountPos: true,
-      amountTransfer: true,
-      appliedCredit: true,
+      waybill: { select: { productType: true } },
     },
-    orderBy: { createdAt: "asc" },
   });
 
-  const salesByStation = new Map<string, { at: Date; amount: number }[]>();
-  for (const log of salesLogs) {
-    const list = salesByStation.get(log.stationId) ?? [];
-    list.push({ at: log.createdAt, amount: salesLogRevenue(log) });
-    salesByStation.set(log.stationId, list);
-  }
+  const minDeliveredAt = allocations.reduce<Date | null>((min, allocation) => {
+    if (!allocation.deliveredAt) return min;
+    return !min || allocation.deliveredAt < min ? allocation.deliveredAt : min;
+  }, null);
 
-  const deliveriesByStation = new Map<string, DeliveryForCollection[]>();
-  for (const d of deliveries) {
-    const list = deliveriesByStation.get(d.stationId) ?? [];
-    list.push(d);
-    deliveriesByStation.set(d.stationId, list);
-  }
+  const salesLogs = minDeliveredAt
+    ? await prisma.salesLog.findMany({
+        where: {
+          tenantId,
+          stationId: { in: stationIds },
+          status: "APPROVED",
+          isDebtRepayment: false,
+          logDate: { gte: startOfDay(minDeliveredAt) },
+        },
+        select: {
+          id: true,
+          stationId: true,
+          productType: true,
+          logDate: true,
+          litersSold: true,
+          pricePerLiter: true,
+          amountPos: true,
+          amountTransfer: true,
+          appliedCredit: true,
+          payments: { select: { amount: true, status: true } },
+          debtRepayments: {
+            select: {
+              amountPos: true,
+              amountTransfer: true,
+              payments: { select: { amount: true, status: true } },
+            },
+          },
+        },
+      })
+    : [];
 
-  const farFuture = new Date(8640000000000000);
+  const drawdown = allocateWaybillDrawdown(
+    allocations.map((allocation) => ({
+      id: allocation.id,
+      stationId: allocation.stationId,
+      productType: allocation.waybill.productType,
+      deliveredAt: allocation.deliveredAt,
+      litersReceived: allocation.litersReceived != null ? Number(allocation.litersReceived) : null,
+      status: allocation.status,
+      createdAt: allocation.createdAt,
+    })),
+    salesLogs.map((log) => ({
+      id: log.id,
+      stationId: log.stationId,
+      productType: log.productType,
+      logDate: log.logDate,
+      litersSold: Number(log.litersSold),
+      pricePerLiter: Number(log.pricePerLiter),
+      collected: collectedForSale(log),
+    }))
+  );
 
-  for (const [stationId, stationDeliveries] of deliveriesByStation) {
-    const ordered = [...stationDeliveries].sort(
-      (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+  const collectedByDelivery = new Map<string, number>();
+  for (const allocation of allocations) {
+    if (!allocation.deliveryId) continue;
+    const collected = drawdown.get(allocation.id)?.collected ?? 0;
+    collectedByDelivery.set(
+      allocation.deliveryId,
+      (collectedByDelivery.get(allocation.deliveryId) ?? 0) + collected
     );
-    const sales = salesByStation.get(stationId) ?? [];
-    let salesIdx = 0;
-    let salesCarry = 0;
+  }
 
-    for (let i = 0; i < ordered.length; i++) {
-      const delivery = ordered[i];
-      const windowEnd = i < ordered.length - 1 ? ordered[i + 1].createdAt : farFuture;
+  for (const delivery of deliveries) {
+    const fleetAmount = Math.max(0, delivery.totalExpectedAmount);
+    const collected = collectedByDelivery.get(delivery.id) ?? 0;
+    const remaining = Math.max(0, fleetAmount - collected);
+    const percent =
+      fleetAmount > 0 ? Math.min(100, (collected / fleetAmount) * 100) : collected > 0 ? 100 : 0;
 
-      while (salesIdx < sales.length && sales[salesIdx].at < windowEnd) {
-        salesCarry += sales[salesIdx].amount;
-        salesIdx += 1;
-      }
-
-      const fleetAmount = Math.max(0, delivery.totalExpectedAmount);
-      const collected = Math.min(fleetAmount, salesCarry);
-      salesCarry -= collected;
-      const remaining = Math.max(0, fleetAmount - collected);
-      const percent =
-        fleetAmount > 0 ? Math.min(100, (collected / fleetAmount) * 100) : collected > 0 ? 100 : 0;
-
-      result.set(delivery.id, {
-        collected,
-        remaining,
-        percent,
-        fleetAmount,
-      });
-    }
+    result.set(delivery.id, {
+      collected,
+      remaining,
+      percent,
+      fleetAmount,
+    });
   }
 
   return result;

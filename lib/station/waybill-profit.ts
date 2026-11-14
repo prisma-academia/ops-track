@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/client";
-import { allocateWaybillDrawdown } from "@/lib/inventory/waybill-level";
+import { allocateWaybillDrawdown, collectedForSale } from "@/lib/inventory/waybill-level";
 
 function startOfDay(d: Date) {
   const next = new Date(d);
@@ -13,34 +13,6 @@ function endOfDay(d: Date) {
   return next;
 }
 
-function cashReceived(row: {
-  amountPos: { toString(): string } | number;
-  amountTransfer: { toString(): string } | number;
-  payments: { amount: { toString(): string } | number; status: string }[];
-}) {
-  if (row.payments.length > 0) {
-    return row.payments
-      .filter((payment) => payment.status !== "REJECTED")
-      .reduce((sum, payment) => sum + Number(payment.amount), 0);
-  }
-  return Number(row.amountPos || 0) + Number(row.amountTransfer || 0);
-}
-
-function collectedForSale(log: {
-  amountPos: { toString(): string } | number;
-  amountTransfer: { toString(): string } | number;
-  appliedCredit: { toString(): string } | number;
-  payments: { amount: { toString(): string } | number; status: string }[];
-  debtRepayments: {
-    amountPos: { toString(): string } | number;
-    amountTransfer: { toString(): string } | number;
-    payments: { amount: { toString(): string } | number; status: string }[];
-  }[];
-}) {
-  const repayments = log.debtRepayments.reduce((sum, repayment) => sum + cashReceived(repayment), 0);
-  return cashReceived(log) + Number(log.appliedCredit || 0) + repayments;
-}
-
 export type WaybillProfitStation = {
   id: string;
   name: string;
@@ -49,6 +21,7 @@ export type WaybillProfitStation = {
 
 export type WaybillProfitRow = {
   id: string;
+  deliveryId: string | null;
   sn: number;
   stationId: string;
   stationName: string;
@@ -332,6 +305,7 @@ export async function loadWaybillProfitReport(tenantId: string) {
 
     rows.push({
       id: a.id,
+      deliveryId: a.deliveryId,
       stationId: a.stationId,
       stationName: a.station.name,
       waybillNumber: a.waybill.number,

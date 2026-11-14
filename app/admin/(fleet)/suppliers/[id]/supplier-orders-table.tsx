@@ -11,8 +11,10 @@ export type SupplierOrderRow = {
   id: string;
   reference: string | null;
   productType: string;
+  pricePerLitre: number;
   litersOrdered: number;
   supplierShortageLiters?: number;
+  shortageAmount?: number;
   billableLiters?: number;
   totalPayable: number;
   paymentPaid: number;
@@ -56,6 +58,11 @@ export function SupplierOrdersTable({
         header: "Product",
       },
       {
+        accessorKey: "pricePerLitre",
+        header: "Purchase price",
+        cell: ({ row }) => `${formatNaira(row.original.pricePerLitre)}/L`,
+      },
+      {
         accessorKey: "litersOrdered",
         header: "Ordered (L)",
         cell: ({ row }) => row.original.litersOrdered.toLocaleString(),
@@ -64,13 +71,31 @@ export function SupplierOrdersTable({
         ? [
             {
               accessorKey: "supplierShortageLiters",
-              header: "Shortage credit (L)",
-              cell: ({ row }: { row: { original: SupplierOrderRow } }) =>
-                (row.original.supplierShortageLiters ?? 0).toLocaleString(),
+              header: "Shortage (L)",
+              cell: ({ row }: { row: { original: SupplierOrderRow } }) => {
+                const liters = row.original.supplierShortageLiters ?? 0;
+                return (
+                  <span className={liters > 0 ? "font-medium text-rose-600" : ""}>
+                    {liters.toLocaleString()}
+                  </span>
+                );
+              },
+            } as ColumnDef<SupplierOrderRow>,
+            {
+              accessorKey: "shortageAmount",
+              header: "Shortage amount",
+              cell: ({ row }: { row: { original: SupplierOrderRow } }) => {
+                const amount = row.original.shortageAmount ?? 0;
+                return (
+                  <span className={amount > 0 ? "font-medium text-rose-600" : ""}>
+                    {amount > 0 ? `−${formatNaira(amount)}` : formatNaira(0)}
+                  </span>
+                );
+              },
             } as ColumnDef<SupplierOrderRow>,
             {
               accessorKey: "billableLiters",
-              header: "Billable (L)",
+              header: "Received (L)",
               cell: ({ row }: { row: { original: SupplierOrderRow } }) =>
                 (row.original.billableLiters ?? row.original.litersOrdered).toLocaleString(),
             } as ColumnDef<SupplierOrderRow>,

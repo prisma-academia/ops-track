@@ -161,6 +161,8 @@ export default async function SalesPage({
                 id: true,
                 reference: true,
                 sourceDepot: true,
+                pricePerLitre: true,
+                loadingCostPerLitre: true,
                 supplierRecord: { select: { supplierType: true } },
               },
             },
@@ -291,6 +293,8 @@ export default async function SalesPage({
       transportId: delivery.transportId,
       transportStatus: delivery.transport ? delivery.transport.status : null,
       transportRate,
+      purchasePricePerLitre: Number(delivery.transport?.order?.pricePerLitre ?? 0),
+      loadingCostPerLitre: Number(delivery.transport?.order?.loadingCostPerLitre ?? 0),
       shortageParty: resolveShortageParty(
         delivery.transport?.order?.supplierRecord?.supplierType ?? null
       ),

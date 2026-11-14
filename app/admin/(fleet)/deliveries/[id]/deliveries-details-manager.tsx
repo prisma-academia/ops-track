@@ -167,7 +167,22 @@ export function SalesDetailsManager({
   const unreceived = litersReceived !== null ? Math.max(0, litersDespatched - litersReceived) : 0;
   const effectiveShortage = Math.max(0, unreceived - litersReturned);
   const amountPerLiter = Number(delivery.amountPerLiter || 0);
-  const totalDeductionAmount = effectiveShortage > 0 ? effectiveShortage * amountPerLiter : 0;
+  const purchaseRate =
+    Number(delivery.transport?.order?.pricePerLitre || 0) +
+    Number(delivery.transport?.order?.loadingCostPerLitre || 0);
+  const shortageChargeRate =
+    purchaseRate > 0
+      ? purchaseRate
+      : shortageParty === "TRANSPORTER"
+        ? Number(delivery.transport?.ratePerLiter || 0)
+        : amountPerLiter;
+  const totalDeductionAmount = effectiveShortage > 0 ? effectiveShortage * shortageChargeRate : 0;
+  const shortageChargeLabel =
+    shortageParty === "SUPPLIER"
+      ? "Deducted from the supplier amount"
+      : shortageParty === "TRANSPORTER"
+        ? "Deducted from the transporter"
+        : "Shortage";
   const hasShortage = effectiveShortage > 0;
   const variance = litersReceived !== null ? litersDespatched - litersReceived : null;
 
@@ -382,7 +397,7 @@ export function SalesDetailsManager({
       title: hasShortage ? "Shortage" : "Price / Litre",
       value: hasShortage ? `${fmtQtyLocal(effectiveShortage)} ${volumeUnit}` : fmtMoneyLocal(amountPerLiter),
       fullValue: hasShortage
-        ? `${fmtQtyLocal(effectiveShortage)} ${volumeUnit} × ${fmtMoneyLocal(amountPerLiter)}/${volumeUnit} = ${fmtMoneyLocal(totalDeductionAmount)}${!shortageDeducted ? " (Driver deduction waived)" : ""}`
+        ? `${shortageChargeLabel}: ${fmtQtyLocal(effectiveShortage)} ${volumeUnit} × ${fmtMoneyLocal(shortageChargeRate)}/${volumeUnit} = ${fmtMoneyLocal(totalDeductionAmount)}${!shortageDeducted ? " (charge waived)" : shortageParty === "SUPPLIER" ? " — supplier bill uses litres received" : ""}`
         : `${fmtMoneyLocal(amountPerLiter)} per ${volumeUnit.toLowerCase()}`,
       icon: hasShortage ? TrendingDown : Receipt,
       valueColor: hasShortage ? "text-rose-600" : "text-foreground",
@@ -800,7 +815,9 @@ export function SalesDetailsManager({
                   <p className="text-base font-bold font-mono text-foreground">{fmtMoneyLocal(amountPerLiter)}</p>
                 </div>
                 <div className="space-y-1 text-right">
-                  <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Amount to Deduct</p>
+                  <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">
+                    {shortageDeducted ? shortageChargeLabel : "Charge waived"}
+                  </p>
                   <p className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">{fmtMoneyLocal(totalDeductionAmount)}</p>
                 </div>
               </div>
@@ -1076,16 +1093,21 @@ export function SalesDetailsManager({
                             </p>
                           ) : shortageParty === "SUPPLIER" ? (
                             <p className="text-muted-foreground leading-normal">
-                              {diff.toLocaleString()} {volumeUnit} credited against the supplier order (local
-                              supplier).
+                              {diff.toLocaleString()} {volumeUnit} is deducted from the supplier amount (local
+                              supplier)
+                              {purchaseRate > 0
+                                ? `: ₦${(diff * purchaseRate).toLocaleString()}`
+                                : ""}
+                              . The supplier bill uses the litres received. The transporter fee is not reduced.
                             </p>
                           ) : (
                             <p className="text-muted-foreground leading-normal">
-                              {diff.toLocaleString()} {volumeUnit} transit shortage — transporter deduction
-                              {deliveryTransportRate != null && deliveryTransportRate > 0
-                                ? ` of ₦${(diff * deliveryTransportRate).toLocaleString()}`
-                                : ""}{" "}
-                              (depot supplier).
+                              {diff.toLocaleString()} {volumeUnit} is deducted from the transporter (depot
+                              supplier)
+                              {shortageChargeRate > 0
+                                ? `: ₦${(diff * shortageChargeRate).toLocaleString()}`
+                                : ""}
+                              . The supplier bill is not reduced.
                             </p>
                           )}
                         </div>

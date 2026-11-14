@@ -77,6 +77,8 @@ export type SaleRow = {
   transportId?: string | null;
   transportStatus?: string | null;
   transportRate?: number;
+  purchasePricePerLitre?: number;
+  loadingCostPerLitre?: number;
   shortageParty?: "TRANSPORTER" | "SUPPLIER" | "UNCONFIGURED";
   stationRetailCollected?: number | null;
   stationRetailRemaining?: number | null;
@@ -461,28 +463,30 @@ function DeliveryRowActions({ row }: { row: SaleRow }) {
                         Set the supplier type (Local or Depot) before charging this shortage.
                       </p>
                     ) : (
-                      <div className="flex items-center justify-between gap-2 font-medium">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                          <span>
-                            {row.shortageParty === "SUPPLIER"
-                              ? "Supplier order credit:"
-                              : "Transporter deduction:"}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-2 font-medium">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span>
+                              {row.shortageParty === "SUPPLIER"
+                                ? "Deducted from the supplier amount"
+                                : "Deducted from the transporter"}
+                            </span>
+                          </div>
+                          <span className="font-mono font-bold text-rose-700 dark:text-rose-400 text-sm">
+                            −₦
+                            {(
+                              (variance || 0) *
+                              ((row.purchasePricePerLitre || 0) + (row.loadingCostPerLitre || 0) ||
+                                (row.shortageParty === "TRANSPORTER" ? row.transportRate || 0 : 0))
+                            ).toLocaleString()}
                           </span>
                         </div>
-                        {row.shortageParty === "TRANSPORTER" && (row.transportRate || 0) > 0 ? (
-                          <span className="font-mono font-bold text-rose-700 dark:text-rose-400 text-sm">
-                            -₦{((variance || 0) * (row.transportRate || 0)).toLocaleString()}
-                          </span>
-                        ) : row.shortageParty === "SUPPLIER" ? (
-                          <span className="font-mono font-bold text-rose-700 dark:text-rose-400 text-sm">
-                            {(variance || 0).toLocaleString()} {unit} credited
-                          </span>
-                        ) : (
-                          <span className="font-medium text-muted-foreground text-xs">
-                            ₦0 (No transport rate)
-                          </span>
-                        )}
+                        <p className="text-[11px] leading-snug text-rose-900/80 dark:text-rose-200/80">
+                          {row.shortageParty === "SUPPLIER"
+                            ? "Local supplier. The supplier bill uses the litres received. The transporter fee is not reduced."
+                            : "Depot supplier. This shortage is taken from the transporter fee, not the supplier bill."}
+                        </p>
                       </div>
                     )}
                   </div>

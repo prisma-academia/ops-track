@@ -25,14 +25,11 @@ export function deliveryCommitted(d: VolumeDelivery): number {
 }
 
 /**
- * Litres no longer on the truck for this delivery: confirmed reception uses
- * received volume (so fuel returned to the truck can be re-delivered on a
- * later drop); pending drops use committed dispatch volume.
+ * Litres no longer on the truck for this delivery.
+ * Returned litres stay available. A received shortfall has already left the
+ * truck, so it is not treated as fuel still in the tank.
  */
 export function volumeAccountedOutOfTruck(d: VolumeDelivery): number {
-  if (d.litersReceived !== null && d.litersReceived !== undefined) {
-    return num(d.litersReceived);
-  }
   return deliveryCommitted(d);
 }
 

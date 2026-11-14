@@ -35,6 +35,7 @@ import {
   deliveryShortfall,
   volumeAccountedOutOfTruck,
 } from "@/lib/fleet/transport-volume";
+import { resolveShortageParty } from "@/lib/fleet/loss-attribution";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { FilePreviewButton } from "@/components/file-viewer-modal";
 import { Pie, PieChart } from "recharts";
@@ -320,34 +321,6 @@ export function TransportDetailsManager({
     transport.status !== "CANCELLED" &&
     transport.status !== "LOSS";
 
-  const defaultSellingPrice = transport.deliveries?.length
-    ? Math.max(...transport.deliveries.map((d: any) => Number(d.amountPerLiter) || 0))
-    : Number(transport.order?.pricePerLiter) || 0;
-
-  // Compute shortage deductions per drop according to that drop's selling price
-  const deliveryDeduction = (transport.deliveries || []).reduce((sum: number, del: any) => {
-    if (del.shortageDeducted === false) return sum;
-    const dispatched = Math.max(0, Number(del.litersDespatched || del.litersSold || 0) - Number(del.litersReturned || 0));
-    if (del.litersReceived !== null && del.litersReceived !== undefined) {
-      const received = Number(del.litersReceived);
-      const diff = dispatched - received;
-      if (diff > 0) {
-        const price = Number(del.amountPerLiter) || defaultSellingPrice;
-        return sum + (diff * price);
-      }
-    }
-    return sum;
-  }, 0);
-
-  const totalDeductionAmount = deliveryDeduction + (unaccountedTruckShortage * defaultSellingPrice);
-  const sellingPrice = trueVariance > 0 ? Math.round(totalDeductionAmount / trueVariance) : defaultSellingPrice;
-
-  const driverOrTransporterName = transport.isOneTime
-    ? (transport.oneTimeDriverName || transport.oneTimeTransporterName || "Driver / Transporter")
-    : (transport.driver ? `${transport.driver.firstName} ${transport.driver.lastName}` : transport.transporter?.name || "Driver / Transporter");
-  const driverBaseFee = effectiveLoadedVolume * ratePerLiter;
-  const driverNetFee = Math.max(0, driverBaseFee - totalDeductionAmount);
-
   const handleOpenFinalizeDialog = () => {
     setError(null);
     setOpenFinalizeDialog(true);
@@ -359,9 +332,6 @@ export function TransportDetailsManager({
       (a: { createdAt: string }, b: { createdAt: string }) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  const shortageLossLogs = [...lossLogs].filter(
-    (log: { lossType?: string }) => log.lossType === "SHORTAGE"
-  );
   const loggedIncidentLiters = productLossLogs.reduce(
     (sum: number, log: { lostQuantity?: number | string }) => sum + Number(log.lostQuantity || 0),
     0
@@ -381,7 +351,6 @@ export function TransportDetailsManager({
 
   // Compute live breakdown based on deliveries' logged status
   let modalTransitShortage = 0;
-  let modalShortageDeductionAmount = 0;
 
   (transport.deliveries || []).forEach((del: any) => {
     if (del.litersReceived === null || del.litersReceived === undefined) return;
@@ -392,23 +361,27 @@ export function TransportDetailsManager({
     const shortage = Math.max(0, assigned - returned - received);
     if (shortage > 0.001) {
       modalTransitShortage += shortage;
-      const price = Number(del.amountPerLiter) || defaultSellingPrice;
-      modalShortageDeductionAmount += shortage * price;
     }
   });
 
   const modalRemainingInTruck = remainingVolume;
-  const modalSellingPrice =
-    modalTransitShortage > 0
-      ? Math.round(modalShortageDeductionAmount / modalTransitShortage)
-      : defaultSellingPrice;
 
+  const supplierType = transport.order?.supplierRecord?.supplierType ?? null;
+  const shortageParty = resolveShortageParty(supplierType);
+  const purchaseRate =
+    Number(transport.order?.pricePerLitre || 0) + Number(transport.order?.loadingCostPerLitre || 0);
+  const shortageChargePerLiter =
+    purchaseRate > 0 ? purchaseRate : ratePerLiter;
   const modalShortageFeeDeduction =
-    modalTransitShortage > 0.001
-      ? ratePerLiter > 0
-        ? modalTransitShortage * ratePerLiter
-        : modalShortageDeductionAmount
-      : 0;
+    modalTransitShortage > 0.001 ? modalTransitShortage * shortageChargePerLiter : 0;
+  const shortageChargeText =
+    modalTransitShortage <= 0.001
+      ? null
+      : shortageParty === "SUPPLIER"
+        ? `${modalTransitShortage.toLocaleString()} L is deducted from the supplier amount (local supplier): ₦${modalShortageFeeDeduction.toLocaleString()}. The supplier bill uses the litres received. The transporter fee is not reduced.`
+        : shortageParty === "TRANSPORTER"
+          ? `${modalTransitShortage.toLocaleString()} L is deducted from the transporter (depot supplier): ₦${modalShortageFeeDeduction.toLocaleString()}.`
+          : `Set the supplier type (Local or Depot) before this ${modalTransitShortage.toLocaleString()} L shortage can be deducted.`;
 
   const modalDeliveryVariance = normalizedDeliveries.reduce(
     (sum, item) => sum + deliveryShortfall(item),
@@ -434,7 +407,11 @@ export function TransportDetailsManager({
       tooltip: `${modalTransitShortage.toLocaleString()} L chargeable shortfall`,
       subtitle:
         modalTransitShortage > 0.001
-          ? `₦${modalShortageFeeDeduction.toLocaleString()} from transport fee`
+          ? shortageParty === "SUPPLIER"
+            ? `₦${modalShortageFeeDeduction.toLocaleString()} from the supplier amount`
+            : shortageParty === "TRANSPORTER"
+              ? `₦${modalShortageFeeDeduction.toLocaleString()} from the transporter`
+              : "Supplier type not set"
           : modalDeliveryVariance > 0.001
             ? `${modalDeliveryVariance.toLocaleString()} L delivery variance (not deducted)`
             : "No chargeable shortfall",
@@ -474,7 +451,7 @@ export function TransportDetailsManager({
     {
       id: "balance",
       label: "Load reconciles",
-      detail: `Loaded ${carriedVolume.toLocaleString()} L = ${deliveredOutOfTruckVolume.toLocaleString()} L delivered + ${loggedLostVolume.toLocaleString()} L logged loss.`,
+      detail: `Loaded ${carriedVolume.toLocaleString()} L = ${deliveredOutOfTruckVolume.toLocaleString()} L off the truck (received and shortage) + ${loggedLostVolume.toLocaleString()} L logged loss.`,
       pass: volumeBalances,
     },
     {
@@ -499,18 +476,11 @@ export function TransportDetailsManager({
     }
 
     const closingAsLoss = isCompleteLoadLoss;
-    const needsShortageLog =
-      !closingAsLoss &&
-      modalTransitShortage > 0.001 &&
-      !shortageLossLogs.some(
-        (log: { lostQuantity?: number | string }) =>
-          Math.abs(Number(log.lostQuantity || 0) - modalTransitShortage) < 0.01
-      );
 
     const confirmMessage = closingAsLoss
       ? "Close this trip as a complete loss? This cannot be undone."
-      : needsShortageLog
-        ? `Finalize and record ${modalTransitShortage.toLocaleString()} L shortage deduction (₦${modalShortageFeeDeduction.toLocaleString()} from transport fee)?`
+      : shortageChargeText
+        ? `${shortageChargeText} Mark this transport as completed? This cannot be undone.`
         : "Mark this transport as completed? This cannot be undone.";
     if (!window.confirm(confirmMessage)) return;
 
@@ -521,15 +491,6 @@ export function TransportDetailsManager({
       const payload: Record<string, unknown> = {
         status: closingAsLoss ? "LOSS" : "COMPLETED",
       };
-
-      if (needsShortageLog) {
-        payload.lossLog = {
-          lossType: "SHORTAGE",
-          lostQuantity: modalTransitShortage,
-          expensesIncurred: 0,
-          comment: `Shortage deduction on finalize. ${modalTransitShortage.toLocaleString()} L at ₦${ratePerLiter.toLocaleString()}/L transport rate.`,
-        };
-      }
 
       const res = await apiPatch(`/api/tenant/fleet/transports/${transport.id}`, payload);
       setIsFinalizing(false);
@@ -607,7 +568,12 @@ export function TransportDetailsManager({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    Unresolved shortage detected ({trueVariance.toLocaleString()} L). Will be deducted from driver fees.
+                    {trueVariance.toLocaleString()} L shortage.{" "}
+                    {shortageParty === "SUPPLIER"
+                      ? "Deducted from the supplier amount."
+                      : shortageParty === "TRANSPORTER"
+                        ? "Deducted from the transporter."
+                        : "Set the supplier type before it can be deducted."}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -1302,8 +1268,8 @@ export function TransportDetailsManager({
               {isCompleteLoadLoss ? "Close complete loss trip" : "Finalize transport"}
             </DialogTitle>
             <DialogDescription>
-              Review the trip summary below. Product loss must already be logged on this transport — nothing new is
-              added here except an automatic shortage deduction when applicable.
+              Review the trip summary below. A shortage already recorded on a delivery stays with the party named
+              here. Closing the trip does not move that charge.
             </DialogDescription>
           </DialogHeader>
 
@@ -1374,14 +1340,19 @@ export function TransportDetailsManager({
             </div>
 
             <div className="rounded-xl border border-dashed px-4 py-3 text-xs text-muted-foreground leading-relaxed">
-              <span className="font-semibold text-foreground">Driver transport fee (reference):</span>{" "}
-              ₦{(effectiveLoadedVolume * ratePerLiter).toLocaleString()} gross
-              {totalDeductionAmount > 0 && (
-                <>
-                  {" "}
-                  · <span className="text-rose-600">₦{totalDeductionAmount.toLocaleString()} deductions</span> · Net ₦
-                  {driverNetFee.toLocaleString()}
-                </>
+              {shortageChargeText ? (
+                <p>
+                  <span className="font-semibold text-foreground">Shortage: </span>
+                  {shortageChargeText}
+                </p>
+              ) : (
+                <p>
+                  <span className="font-semibold text-foreground">Driver transport fee: </span>
+                  ₦{(effectiveLoadedVolume * ratePerLiter).toLocaleString()}
+                  {Number(transport.totalDeduction) > 0
+                    ? ` · ₦${Number(transport.totalDeduction).toLocaleString()} already deducted · net ₦${Number(transport.netTransportFeePaid).toLocaleString()}`
+                    : ""}
+                </p>
               )}
             </div>
 
@@ -1400,7 +1371,7 @@ export function TransportDetailsManager({
               onClick={handleFinalizeTransport}
               disabled={!canFinalizeNow || isFinalizing}
               className={cn(
-                (isCompleteLoadLoss || modalTransitShortage > 0.001) &&
+                isCompleteLoadLoss &&
                   "bg-destructive text-destructive-foreground hover:bg-destructive/90"
               )}
             >
@@ -1408,8 +1379,6 @@ export function TransportDetailsManager({
                 <SpinnerEllipsis />
               ) : isCompleteLoadLoss ? (
                 "Close as loss"
-              ) : modalTransitShortage > 0.001 ? (
-                "Finalize with shortage deduction"
               ) : (
                 "Complete transport"
               )}

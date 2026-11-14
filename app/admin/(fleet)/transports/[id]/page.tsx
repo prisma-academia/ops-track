@@ -20,7 +20,11 @@ export default async function TransportDetailsPage({
   const transport = await prisma.transport.findFirst({
     where: { id, tenantId: actor.tenantId },
     include: {
-      order: true,
+      order: {
+        include: {
+          supplierRecord: { select: { name: true, supplierType: true } },
+        },
+      },
       transporter: true,
       truck: true,
       driver: true,

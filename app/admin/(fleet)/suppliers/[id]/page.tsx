@@ -17,7 +17,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Landmark, Banknote, Wallet } from "lucide-react";
+import { Landmark, Banknote, Wallet, TrendingDown } from "lucide-react";
+import { SupplierOrdersTable, type SupplierOrderRow } from "./supplier-orders-table";
 import { cn, formatShortCurrency } from "@/lib/utils";
 import { formatSupplierRow } from "@/lib/fleet/suppliers";
 import { calculateOrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
@@ -31,6 +32,22 @@ import type { FleetPnlTableRow } from "../../fleet-pnl-report/fleet-pnl-columns"
 
 function formatNaira(value: number) {
   return `₦${value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function receivedOnOrder(order: {
+  transports: Array<{ deliveries: Array<{ litersReceived: unknown }> }>;
+}) {
+  let liters = 0;
+  let hasReceipt = false;
+  for (const transport of order.transports) {
+    for (const delivery of transport.deliveries) {
+      if (delivery.litersReceived !== null && delivery.litersReceived !== undefined) {
+        hasReceipt = true;
+        liters += Number(delivery.litersReceived);
+      }
+    }
+  }
+  return { liters, hasReceipt };
 }
 
 const orderPnlInclude = {
@@ -83,7 +100,45 @@ export default async function SupplierDetailPage({
 
   const formatted = formatSupplierRow(supplier);
   const depositBalance = formatted.depositBalance;
-  const outstandingBalance = formatted.outstandingBalance;
+  const isLocalSupplier = supplier.supplierType === "LOCAL";
+
+  const orderPayableRows: SupplierOrderRow[] = supplier.orders.map((order) => {
+    const litersOrdered = Number(order.litersOrdered);
+    const shortageLiters = Number(order.supplierShortageLiters ?? 0);
+    const rate = Number(order.pricePerLitre) + Number(order.loadingCostPerLitre);
+    const received = receivedOnOrder(order);
+    const billableLiters =
+      isLocalSupplier && received.hasReceipt
+        ? received.liters
+        : Math.max(0, litersOrdered - (isLocalSupplier ? shortageLiters : 0));
+    const shortageAmount = isLocalSupplier ? shortageLiters * rate : 0;
+    const totalPayable = rate * billableLiters;
+    const paymentPaid = Number(order.paymentPaid);
+    return {
+      id: order.id,
+      reference: order.reference,
+      productType: order.productType,
+      pricePerLitre: Number(order.pricePerLitre),
+      litersOrdered,
+      supplierShortageLiters: shortageLiters,
+      shortageAmount,
+      billableLiters,
+      totalPayable,
+      paymentPaid,
+      balance: Math.max(0, totalPayable - paymentPaid),
+      paymentStatus: order.paymentStatus,
+      createdAt: order.createdAt.toISOString(),
+    };
+  });
+
+  const shortageAmount = orderPayableRows.reduce((sum, row) => sum + (row.shortageAmount ?? 0), 0);
+  const shortageLiters = orderPayableRows.reduce(
+    (sum, row) => sum + (row.supplierShortageLiters ?? 0),
+    0
+  );
+  const outstandingBalance = isLocalSupplier
+    ? orderPayableRows.reduce((sum, row) => sum + row.balance, 0)
+    : formatted.outstandingBalance;
 
   const listMetrics = await mapSupplierListRow(supplier, actor.tenantId, tenant?.settingsJson);
   const totalPaid = listMetrics.amountPaid;
@@ -93,11 +148,25 @@ export default async function SupplierDetailPage({
       { ...order, supplierRecord: { supplierType: supplier.supplierType } },
       pnlOptions
     );
+    const payable = orderPayableRows.find((row) => row.id === order.id);
+    const purchaseCost = isLocalSupplier
+      ? summary.priceBought * (payable?.billableLiters ?? summary.litersOrdered)
+      : summary.priceBought * summary.litersOrdered;
+    const loadingCost = isLocalSupplier
+      ? summary.loadingCostPerLitre * (payable?.billableLiters ?? summary.litersOrdered)
+      : summary.totalLoadingCost;
+    const orderCost = purchaseCost + loadingCost;
+    const costReduction = summary.orderCost - orderCost;
+    const rowShortage = payable?.shortageAmount ?? 0;
     return {
       ...summary,
       purchasePricePerLitre: summary.priceBought,
-      purchaseCost: summary.priceBought * summary.litersOrdered,
-      loadingCost: summary.totalLoadingCost,
+      purchaseCost,
+      loadingCost,
+      orderCost,
+      totalCost: summary.totalCost - costReduction,
+      pnl: summary.pnl + costReduction,
+      totalLossDeduction: summary.totalLossDeduction + rowShortage,
     };
   });
 
@@ -128,6 +197,18 @@ export default async function SupplierDetailPage({
       iconColor: "text-emerald-600",
       valueColor: "text-emerald-600",
     },
+    ...(isLocalSupplier
+      ? [
+          {
+            title: "Shortage deduction",
+            value: formatShortCurrency(shortageAmount),
+            fullValue: `${shortageLiters.toLocaleString()} L · ${formatNaira(shortageAmount)} deducted from the supplier amount`,
+            icon: TrendingDown,
+            iconColor: "text-amber-600",
+            valueColor: shortageAmount > 0 ? "text-amber-600" : undefined,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -199,7 +280,12 @@ export default async function SupplierDetailPage({
           </dl>
 
           <TooltipProvider delayDuration={200}>
-            <div className="rounded-lg border border-border/40 overflow-hidden grid grid-cols-1 sm:grid-cols-3 gap-px bg-border">
+            <div
+              className={cn(
+                "rounded-lg border border-border/40 overflow-hidden grid grid-cols-1 gap-px bg-border",
+                isLocalSupplier ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3"
+              )}
+            >
               {statCards.map((item) => (
                 <div key={item.title} className="bg-card">
                   <Tooltip>
@@ -229,11 +315,30 @@ export default async function SupplierDetailPage({
         </CardContent>
       </Card>
 
+      {isLocalSupplier ? (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Orders</h2>
+            <p className="text-sm text-muted-foreground">
+              Local supplier bills use the litres received. A shortage is deducted from the supplier amount and shown as a loss.
+            </p>
+          </div>
+          <SupplierOrdersTable
+            data={orderPayableRows}
+            supplierId={supplier.id}
+            showLocalPayableColumns
+          />
+        </div>
+      ) : null}
+
       <div className="space-y-3">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Profit & Loss</h2>
           <p className="text-sm text-muted-foreground">
             Order-level revenue, costs, and profit for {supplier.name} ({supplier.orders.length} orders).
+            {isLocalSupplier
+              ? " Purchase cost uses litres received, and shortage is included in Loss."
+              : ""}
           </p>
         </div>
         <SupplierOrdersPnlTable data={JSON.parse(JSON.stringify(orderPnlRows))} />

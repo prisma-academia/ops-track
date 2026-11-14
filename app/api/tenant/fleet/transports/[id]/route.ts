@@ -189,7 +189,14 @@ export async function PATCH(
     const isFinal =
       finalStatus === "COMPLETED" || finalStatus === "CANCELLED" || finalStatus === "LOSS";
 
-    // Open trips: pending deliveries are not losses. Final trips: the finalize log already covers shortfalls.
+    const alreadyFinal =
+      existing.status === "COMPLETED" ||
+      existing.status === "CANCELLED" ||
+      existing.status === "LOSS";
+
+    // Open trips still add delivery shortfalls into the stored loss figures.
+    // Closing a trip without a new loss log keeps the receive-time deduction
+    // (supplier credit or transporter landed-cost charge) instead of rewriting it.
     const shortfallAll = isFinal
       ? 0
       : existing.deliveries.reduce((s, d) => s + deliveryShortfall(d), 0);
@@ -198,11 +205,8 @@ export async function PATCH(
       : existing.deliveries.reduce((s, d) => s + (d.shortageDeducted === false ? 0 : deliveryShortfall(d)), 0);
 
     const keepStored =
-      (existing.status === "COMPLETED" ||
-        existing.status === "CANCELLED" ||
-        existing.status === "LOSS") &&
-      !body.lossLog &&
-      body.addMaintenanceCost === undefined;
+      (!alreadyFinal && isFinal && !body.lossLog && body.addMaintenanceCost === undefined) ||
+      (alreadyFinal && !body.lossLog && body.addMaintenanceCost === undefined);
 
     const currentLitersLost = keepStored ? Number(existing.litersLost) : loggedLostTotal + shortfallAll;
     const totalDeduction = keepStored

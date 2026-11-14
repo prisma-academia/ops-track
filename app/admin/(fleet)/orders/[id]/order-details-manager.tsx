@@ -55,6 +55,7 @@ import type { OrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
 import { OrderFinancialSummary } from "./order-financial-summary";
 import { OrderDispatchedTransportsTable } from "./order-dispatched-transports-table";
 import { SupplierTypeBadge } from "@/app/admin/(fleet)/suppliers/_components/supplier-type-badge";
+import { getOrderProcurementDisplay } from "@/lib/fleet/order-procurement";
 // import { litersDeliveredFromSales } from "@/lib/fleet/transport-report";
 // import { OrderVolumeFulfillment } from "./order-volume-fulfillment";
 
@@ -119,13 +120,28 @@ export function OrderDetailsManager({
   //   return Math.min(ordered, sold);
   // }, [order.litersOrdered, transports]);
 
-  // Procurement cost breakdown (product + loading only, excludes logistics)
-  const totalProductCost = Number(order.pricePerLitre) * Number(order.litersOrdered);
-  const totalLoadingCost = Number(order.loadingCostPerLitre) * Number(order.litersOrdered);
-  const totalProcurementCost = totalProductCost + totalLoadingCost;
   const supplierDisplayName =
     order.supplierRecord?.name?.trim() || order.supplier?.trim() || null;
   const supplierType = order.supplierRecord?.supplierType ?? null;
+  const procurement = getOrderProcurementDisplay({
+    litersOrdered: Number(order.litersOrdered),
+    pricePerLitre: Number(order.pricePerLitre),
+    loadingCostPerLitre: Number(order.loadingCostPerLitre),
+    supplierShortageLiters: order.supplierShortageLiters,
+    supplierType,
+    transports,
+  });
+  const {
+    totalProductCost,
+    totalLoadingCost,
+    totalProcurementCost,
+    shortageLiters,
+    shortageAmount,
+    hasReceipt,
+    receivedLiters,
+    useReceivedForTotals,
+    tripsFinalized,
+  } = procurement;
   // Edit Form
   const { register, handleSubmit, formState, setValue, watch, reset, control } = useForm({
     resolver: zodResolver(EditOrderSchema),
@@ -403,6 +419,37 @@ export function OrderDetailsManager({
               </div>
             </div>
 
+            {(hasReceipt && !useReceivedForTotals) || shortageLiters > 0 ? (
+              <div className="rounded-lg border border-border/40 bg-muted/20 px-4 py-3 space-y-2 text-sm">
+                {hasReceipt && !useReceivedForTotals ? (
+                  <p className="text-muted-foreground">
+                    <span className="font-medium text-foreground">Received so far:</span>{" "}
+                    {receivedLiters.toLocaleString()} L
+                    {!tripsFinalized
+                      ? " — procurement totals use ordered volume until all trips are finalized."
+                      : supplierType === "DEPOT"
+                        ? " — procurement totals use ordered volume for depot suppliers."
+                        : ""}
+                  </p>
+                ) : null}
+                {shortageLiters > 0 ? (
+                  <p className="text-amber-700 dark:text-amber-500">
+                    <span className="font-medium">Shortage:</span> {shortageLiters.toLocaleString()} L
+                    {supplierType === "LOCAL" ? (
+                      <>
+                        {" "}
+                        (−₦{shortageAmount.toLocaleString()} from supplier amount)
+                      </>
+                    ) : supplierType === "DEPOT" ? (
+                      " — charged to the transporter, not deducted from product total."
+                    ) : (
+                      " — set supplier type to attribute this shortage."
+                    )}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="mt-2 pt-4 border-t border-border/40 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="rounded-lg bg-muted/30 px-4 py-3 text-center sm:text-left">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -411,6 +458,9 @@ export function OrderDetailsManager({
                 <p className="font-mono font-semibold text-foreground mt-1">
                   ₦{totalProductCost.toLocaleString()}
                 </p>
+                {useReceivedForTotals ? (
+                  <p className="text-[10px] text-muted-foreground mt-1">Based on received volume</p>
+                ) : null}
               </div>
               <div className="rounded-lg bg-muted/30 px-4 py-3 text-center sm:text-left">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -419,6 +469,9 @@ export function OrderDetailsManager({
                 <p className="font-mono font-semibold text-foreground mt-1">
                   ₦{totalLoadingCost.toLocaleString()}
                 </p>
+                {useReceivedForTotals ? (
+                  <p className="text-[10px] text-muted-foreground mt-1">Based on received volume</p>
+                ) : null}
               </div>
               <div className="rounded-lg bg-primary/5 border border-primary/15 px-4 py-3 text-center sm:text-left">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -427,6 +480,11 @@ export function OrderDetailsManager({
                 <p className="font-mono font-bold text-primary mt-1">
                   ₦{totalProcurementCost.toLocaleString()}
                 </p>
+                {useReceivedForTotals ? (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Final amount on {receivedLiters.toLocaleString()} L received
+                  </p>
+                ) : null}
               </div>
             </div>
           </CardContent>

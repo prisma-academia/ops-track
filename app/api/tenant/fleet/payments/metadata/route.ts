@@ -46,9 +46,18 @@ export async function GET(request: Request) {
           litersOrdered: true,
           pricePerLitre: true,
           loadingCostPerLitre: true,
+          supplierShortageLiters: true,
           paymentPaid: true,
           paymentStatus: true,
           createdAt: true,
+          supplierRecord: { select: { supplierType: true } },
+          transports: {
+            select: {
+              deliveries: {
+                select: { litersReceived: true },
+              },
+            },
+          },
         },
       }),
       prisma.transport.findMany({

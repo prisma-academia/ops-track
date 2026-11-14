@@ -20,7 +20,7 @@ import {
 import { Landmark, Banknote, Wallet, TrendingDown } from "lucide-react";
 import { SupplierOrdersTable, type SupplierOrderRow } from "./supplier-orders-table";
 import { cn, formatShortCurrency } from "@/lib/utils";
-import { formatSupplierRow } from "@/lib/fleet/suppliers";
+import { formatSupplierRow, serializeOrderPayables } from "@/lib/fleet/suppliers";
 import { calculateOrderPnlSummary } from "@/lib/fleet/order-pnl-summary";
 import { loadOrderPnlOptionsForTenant } from "@/lib/fleet/pnl-context";
 import { mapSupplierListRow } from "@/lib/fleet/supplier-list";
@@ -32,22 +32,6 @@ import type { FleetPnlTableRow } from "../../fleet-pnl-report/fleet-pnl-columns"
 
 function formatNaira(value: number) {
   return `₦${value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function receivedOnOrder(order: {
-  transports: Array<{ deliveries: Array<{ litersReceived: unknown }> }>;
-}) {
-  let liters = 0;
-  let hasReceipt = false;
-  for (const transport of order.transports) {
-    for (const delivery of transport.deliveries) {
-      if (delivery.litersReceived !== null && delivery.litersReceived !== undefined) {
-        hasReceipt = true;
-        liters += Number(delivery.litersReceived);
-      }
-    }
-  }
-  return { liters, hasReceipt };
 }
 
 const orderPnlInclude = {
@@ -104,29 +88,24 @@ export default async function SupplierDetailPage({
 
   const orderPayableRows: SupplierOrderRow[] = supplier.orders.map((order) => {
     const litersOrdered = Number(order.litersOrdered);
-    const shortageLiters = Number(order.supplierShortageLiters ?? 0);
-    const rate = Number(order.pricePerLitre) + Number(order.loadingCostPerLitre);
-    const received = receivedOnOrder(order);
-    const billableLiters =
-      isLocalSupplier && received.hasReceipt
-        ? received.liters
-        : Math.max(0, litersOrdered - (isLocalSupplier ? shortageLiters : 0));
-    const shortageAmount = isLocalSupplier ? shortageLiters * rate : 0;
-    const totalPayable = rate * billableLiters;
-    const paymentPaid = Number(order.paymentPaid);
+    const payables = serializeOrderPayables({
+      ...order,
+      supplierType: supplier.supplierType,
+      paymentPaid: order.paymentPaid,
+    });
     return {
       id: order.id,
       reference: order.reference,
       productType: order.productType,
       pricePerLitre: Number(order.pricePerLitre),
       litersOrdered,
-      supplierShortageLiters: shortageLiters,
-      shortageAmount,
-      billableLiters,
-      totalPayable,
-      paymentPaid,
-      balance: Math.max(0, totalPayable - paymentPaid),
-      paymentStatus: order.paymentStatus,
+      supplierShortageLiters: payables.supplierShortageLiters,
+      shortageAmount: payables.shortageAmount,
+      billableLiters: payables.billableLiters,
+      totalPayable: payables.totalPayable,
+      paymentPaid: payables.paymentPaid,
+      balance: payables.balance,
+      paymentStatus: payables.paymentStatus,
       createdAt: order.createdAt.toISOString(),
     };
   });

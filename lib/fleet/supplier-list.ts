@@ -68,7 +68,8 @@ export async function mapSupplierListRow(
   const metrics = computeSupplierFinancialMetrics(
     (supplier.orders ?? []) as Parameters<typeof computeSupplierFinancialMetrics>[0],
     txPaid,
-    settings
+    settings,
+    "supplierType" in supplier ? supplier.supplierType : null,
   );
 
   return {

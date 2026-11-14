@@ -548,6 +548,31 @@ export default function OutgoingPaymentForm({
               PAYMENT_TYPE_OPTIONS.find((p) => p.value === formData.paymentType)?.label ||
               formData.paymentType,
           },
+          ...(selectedSupplierOrder
+            ? [
+                {
+                  label: "Billable volume",
+                  value: `${Number(
+                    selectedSupplierOrder.billableLiters ?? selectedSupplierOrder.litersOrdered,
+                  ).toLocaleString()} L`,
+                },
+                ...(Number(selectedSupplierOrder.supplierShortageLiters || 0) > 0
+                  ? [
+                      {
+                        label: "Shortage",
+                        value: `${Number(selectedSupplierOrder.supplierShortageLiters).toLocaleString()} L (−₦${Number(
+                          selectedSupplierOrder.shortageAmount || 0,
+                        ).toLocaleString()})`,
+                      },
+                    ]
+                  : []),
+                {
+                  label: "Outstanding",
+                  value: `₦${Number(selectedSupplierOrder.balance || 0).toLocaleString()}`,
+                  emphasis: true,
+                },
+              ]
+            : []),
         ]
       : []),
     ...(category === "TRANSPORT_FEE"
@@ -1503,6 +1528,51 @@ export default function OutgoingPaymentForm({
             }
           />
           <SummaryRow label="Destination" value={selectedTransport.destination || "Direct"} />
+        </>
+      ) : category === "SUPPLIER_PAYMENT" ? (
+        <>
+          <SummaryRow label="Supplier" value={selectedSupplier?.name || "—"} />
+          <SummaryRow
+            label="Order"
+            value={
+              selectedSupplierOrder
+                ? selectedSupplierOrder.reference || selectedSupplierOrder.id.slice(0, 8)
+                : "Advance / no order"
+            }
+          />
+          {selectedSupplierOrder ? (
+            <>
+              <SummaryRow
+                label="Billable volume"
+                value={`${Number(
+                  selectedSupplierOrder.billableLiters ?? selectedSupplierOrder.litersOrdered,
+                ).toLocaleString()} L`}
+              />
+              {Number(selectedSupplierOrder.hasReceipt ? selectedSupplierOrder.litersReceived : 0) > 0 ? (
+                <SummaryRow
+                  label="Received so far"
+                  value={`${Number(selectedSupplierOrder.litersReceived).toLocaleString()} L`}
+                />
+              ) : null}
+              {Number(selectedSupplierOrder.supplierShortageLiters || 0) > 0 ? (
+                <SummaryRow
+                  label="Shortage"
+                  value={`${Number(selectedSupplierOrder.supplierShortageLiters).toLocaleString()} L`}
+                />
+              ) : null}
+              <SummaryRow
+                label="Total payable"
+                value={`₦${Number(selectedSupplierOrder.totalPayable || 0).toLocaleString()}`}
+              />
+              <SummaryRow
+                label="Remaining"
+                value={`₦${Number(selectedSupplierOrder.balance || 0).toLocaleString()}`}
+                emphasis
+              />
+            </>
+          ) : (
+            <SummaryRow label="Deposit balance" value={`₦${Number(selectedSupplier?.depositBalance || 0).toLocaleString()}`} />
+          )}
         </>
       ) : category ? (
         <div className="px-4 py-6 text-center">

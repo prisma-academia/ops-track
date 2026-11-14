@@ -10,6 +10,10 @@ import {
   orderPaymentStatusFromPaid,
   orderTotalPayable,
 } from "@/lib/fleet/order-payables";
+import {
+  buildOrderPayableInput,
+  orderPayablePrismaInclude,
+} from "@/lib/fleet/suppliers";
 
 const MetadataSchema = z.object({
   description: z.string().optional().nullable(),
@@ -251,13 +255,22 @@ export async function DELETE(
           if (transaction.orderId) {
             const currentOrder = await tx.order.findUnique({
               where: { id: transaction.orderId },
+              include: orderPayablePrismaInclude,
             });
+            const paySupplier = transaction.supplierId
+              ? await tx.supplier.findUnique({
+                  where: { id: transaction.supplierId },
+                  select: { supplierType: true },
+                })
+              : null;
             if (currentOrder) {
               const newPaymentPaid = Math.max(
                 0,
                 Number(currentOrder.paymentPaid) - amount,
               );
-              const totalPayable = orderTotalPayable(currentOrder);
+              const totalPayable = orderTotalPayable(
+                buildOrderPayableInput(currentOrder, paySupplier?.supplierType),
+              );
               const paymentStatus = orderPaymentStatusFromPaid(
                 totalPayable,
                 newPaymentPaid,

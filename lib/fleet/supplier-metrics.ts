@@ -1,6 +1,7 @@
 import { calculateOrderPnlSummary, type OrderPnlOrder } from "@/lib/fleet/order-pnl-summary";
 import { orderTotalPayable } from "@/lib/fleet/order-payables";
 import { getOrderPnlOptions } from "@/lib/fleet/pnl-context";
+import type { SupplierType } from "@/lib/generated/prisma/client";
 import type { TenantSettings } from "@/lib/tenant/settings";
 
 type SupplierOrderSlice = {
@@ -42,7 +43,8 @@ type SupplierOrderSlice = {
 export function computeSupplierFinancialMetrics(
   orders: SupplierOrderSlice[],
   supplierTransactionsPaid: number,
-  settings: TenantSettings
+  settings: TenantSettings,
+  supplierType?: SupplierType | null,
 ) {
   const pnlOptions = getOrderPnlOptions(settings);
   let amountPaid = supplierTransactionsPaid;
@@ -58,6 +60,8 @@ export function computeSupplierFinancialMetrics(
       supplierShortageLiters: order.supplierShortageLiters != null
         ? Number(order.supplierShortageLiters)
         : null,
+      supplierType: supplierType ?? null,
+      transports: order.transports,
     });
     amountPaid += Number(order.paymentPaid);
 

@@ -10,7 +10,11 @@ import {
   orderPaymentStatusFromPaid,
   orderTotalPayable,
 } from "@/lib/fleet/order-payables";
-import { normalizeSupplierName } from "@/lib/fleet/suppliers";
+import {
+  buildOrderPayableInput,
+  normalizeSupplierName,
+  orderPayablePrismaInclude,
+} from "@/lib/fleet/suppliers";
 
 const OutflowSupplierSchema = z.object({
   supplierId: z.string(),
@@ -86,6 +90,7 @@ export async function POST(request: Request) {
       const order = orderId
         ? await tx.order.findFirst({
             where: { id: orderId, tenantId: actor.tenantId },
+            include: orderPayablePrismaInclude,
           })
         : null;
 
@@ -144,7 +149,9 @@ export async function POST(request: Request) {
 
       if (order) {
         const newPaymentPaid = Number(order.paymentPaid) + body.amount;
-        const totalPayable = orderTotalPayable(order);
+        const totalPayable = orderTotalPayable(
+          buildOrderPayableInput(order, supplier.supplierType),
+        );
         const paymentStatus = orderPaymentStatusFromPaid(
           totalPayable,
           newPaymentPaid,

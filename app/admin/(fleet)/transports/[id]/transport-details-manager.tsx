@@ -71,7 +71,7 @@ export function TransportDetailsManager({
   const [newStatus, setNewStatus] = useState(transport.status);
 
   // Incident form state
-  const [lossType, setLossType] = useState("THEFT");
+  const [lossType, setLossType] = useState("ACCIDENT");
   const [lostQuantity, setLostQuantity] = useState("");
   const [expensesIncurred, setExpensesIncurred] = useState("");
   const [lossComment, setLossComment] = useState("");
@@ -268,7 +268,7 @@ export function TransportDetailsManager({
       setError(res.error.message);
     } else {
       setOpenIncidentDialog(false);
-      setLossType("");
+      setLossType("ACCIDENT");
       setLostQuantity("");
       setExpensesIncurred("");
       setLossComment("");
@@ -933,7 +933,7 @@ export function TransportDetailsManager({
                 <div>
                   <h3 className="font-semibold text-lg">Loss Logs</h3>
                   <p className="text-sm text-muted-foreground">
-                    Product lost in transit — theft, accident, spill, leakage, or contamination. Truck repairs belong in Payments & Expenses.
+                    Product lost in transit. Log it as an accident and describe what happened in the note. Truck repairs belong in Payments & Expenses.
                   </p>
                 </div>
                 {canFinalize && (
@@ -971,11 +971,6 @@ export function TransportDetailsManager({
                           </td>
                           <td className="py-3 px-4">
                             <div className="font-medium text-foreground">{getLossTypeLabel(log.lossType)}</div>
-                            {getProductLossType(log.lossType)?.summary && (
-                              <div className="text-[10px] text-muted-foreground mt-0.5">
-                                {getProductLossType(log.lossType)?.summary}
-                              </div>
-                            )}
                           </td>
                           <td className="py-3 px-4 text-foreground/90 max-w-[280px] truncate" title={log.comment || ""}>
                             {log.comment || "—"}
@@ -1175,14 +1170,9 @@ export function TransportDetailsManager({
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent position="popper">
-                  {PRODUCT_LOSS_TYPES.filter((type) => type.value !== "SHORTAGE").map((type) => (
+                  {PRODUCT_LOSS_TYPES.filter((type) => type.value === "ACCIDENT").map((type) => (
                     <SelectItem key={type.value} value={type.value} textValue={type.label}>
-                      <span className="flex flex-col items-start gap-0.5 py-0.5">
-                        <span>{type.label}</span>
-                        <span className="text-xs text-muted-foreground font-normal whitespace-normal">
-                          {type.summary}
-                        </span>
-                      </span>
+                      {type.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1208,10 +1198,10 @@ export function TransportDetailsManager({
                 )}
               </div>
               <div className="space-y-2">
-                <Label>{selectedLossType?.expenseLabel ?? "Incident expenses (₦)"}</Label>
+                <Label>Incident expenses (₦)</Label>
                 <FormattedNumberInput min="0" value={expensesIncurred} onChange={(e) => setExpensesIncurred(e.target.value)} placeholder="0" prefixText="₦" />
                 <p className="text-[11px] text-muted-foreground">
-                  {selectedLossType?.expenseHint ?? "Costs tied to this product loss, not vehicle repairs."}
+                  Costs tied to this product loss, not vehicle repairs.
                 </p>
               </div>
             </div>
@@ -1223,7 +1213,7 @@ export function TransportDetailsManager({
               <Textarea
                 value={lossComment}
                 onChange={(e) => setLossComment(e.target.value)}
-                placeholder={selectedLossType?.notesPlaceholder ?? "Explain what happened..."}
+                placeholder="Describe what happened — cause, where, and what happened to the product…"
               />
             </div>
 

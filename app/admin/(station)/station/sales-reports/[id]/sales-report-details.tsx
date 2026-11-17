@@ -21,6 +21,8 @@ import {
   FileText,
   X,
   ExternalLink,
+  Tag,
+  type LucideIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -28,6 +30,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -648,43 +651,42 @@ export function SalesReportDetails({
   const receivedLabel = metrics.pendingApprovals > 0 ? "Received amount" : "Reconciled amount";
   const balanceTitle = isDebt ? "Debt" : "Balance";
   const balanceValue = metrics.outstanding === 0 ? "Settled" : fmtMoney(Math.abs(metrics.outstanding));
-  const settlementHint =
-    metrics.outstanding === 0
-      ? "Fully settled"
-      : isDebt
-        ? "Still outstanding"
-        : "Overpaid";
 
-  const settlementCards = [
+  const summaryCards: {
+    title: string;
+    value: React.ReactNode;
+    hint?: string;
+    icon: LucideIcon;
+    valueColor?: string;
+    iconColor: string;
+  }[] = [
+    {
+      title: "Selling price",
+      value: (
+        <span className="font-mono tabular-nums">
+          {fmtMoney(metrics.pricePerLiter)}
+          <span className="text-xs font-normal text-muted-foreground"> / L</span>
+        </span>
+      ),
+      icon: Tag,
+      iconColor: "text-indigo-600",
+    },
     {
       title: "Litres sold",
       value: `${metrics.litersSold.toLocaleString()} L`,
-      hint: `@ ${fmtMoney(metrics.pricePerLiter)} / L`,
+      hint: report.productType,
       icon: Droplets,
-      valueColor: "",
       iconColor: "text-sky-600",
     },
     {
       title: "Expected amount",
       value: fmtMoney(metrics.expected),
-      hint: `${metrics.litersSold.toLocaleString()} L × ${fmtMoney(metrics.pricePerLiter)}`,
       icon: CircleDollarSign,
-      valueColor: "",
       iconColor: "text-indigo-600",
     },
     {
       title: receivedLabel,
       value: fmtMoney(metrics.received),
-      hint:
-        [
-          `POS ${fmtMoney(metrics.pos)} · Transfer ${fmtMoney(metrics.transfer)}`,
-          metrics.repayments > 0
-            ? `${metrics.repayments} repayment${metrics.repayments === 1 ? "" : "s"}`
-            : null,
-          metrics.appliedCredit > 0 ? `Credit ${fmtMoney(metrics.appliedCredit)}` : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
       icon: Wallet,
       valueColor: "text-emerald-600",
       iconColor: "text-emerald-600",
@@ -692,7 +694,6 @@ export function SalesReportDetails({
     {
       title: balanceTitle,
       value: balanceValue,
-      hint: `${settlementHint}${metrics.pendingApprovals > 0 ? ` · ${metrics.pendingApprovals} pending` : ""}`,
       icon: Scale,
       valueColor: isDebt ? "text-rose-600" : isOverpaid ? "text-amber-600" : "text-emerald-600",
       iconColor: isDebt ? "text-rose-600" : isOverpaid ? "text-amber-600" : "text-emerald-600",
@@ -757,11 +758,10 @@ export function SalesReportDetails({
         <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold text-foreground">Daily Sales Submission</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {report.station.name} ({report.station.code}) · {report.productType} ·{" "}
-            {metrics.litersSold.toLocaleString()} L @ {fmtMoney(metrics.pricePerLiter)}/L ·{" "}
+            {report.station.name} ({report.station.code}) · {report.productType}
+            {report.isDebtRepayment ? " · Debt repayment" : ""} ·{" "}
             {formatHumanReadableDateOnly(report.logDate)}
             {effectiveReportTime ? ` at ${effectiveReportTime}` : ""}
-            {report.isDebtRepayment ? " · Debt repayment" : ""}
           </p>
         </div>
         {report.status === "APPROVED" ? (
@@ -847,55 +847,51 @@ export function SalesReportDetails({
         </Dialog>
       )}
 
-      <div>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Amounts sent</h2>
-        <DataTable
-          columns={columns}
-          data={paymentLines}
-          tableId="station-sales-report-payments"
-          emptyMessage="No POS or transfer amounts were sent for this sale."
-          hideToolbar
-          hidePagination
-          pageSize={50}
-          getRowClassName={(row) => (row.isCurrent ? "bg-primary/5" : undefined)}
-        />
-
-        <div className="border-x border-b border-border bg-muted/40">
-          <p className="px-4 pt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Settlement details
-          </p>
-          <div className="flex w-full flex-wrap items-stretch">
-            {settlementCards.map((item, index) => (
-              <div
-                key={item.title}
-                className={cn(
-                  "w-full border-border sm:w-1/2 lg:w-1/4",
-                  index < settlementCards.length - 1 && "border-b",
-                  index >= 2 && "sm:border-b-0",
-                  "lg:border-b-0",
-                  index % 2 === 0 && "sm:border-e",
-                  index < settlementCards.length - 1 && "lg:border-e"
-                )}
-              >
-                <div className="flex h-full items-start justify-between gap-3 p-4">
-                  <div className="min-w-0 flex flex-col gap-1.5">
-                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      {item.title}
-                    </p>
-                    <p className={cn("font-mono text-sm font-semibold text-card-foreground", item.valueColor)}>
-                      {item.value}
-                    </p>
+      <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
+        <p className="border-b border-border bg-background px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Sale summary
+        </p>
+        <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-5">
+          {summaryCards.map((item) => (
+            <div key={item.title} className="bg-background p-4">
+              <div className="flex h-full items-start justify-between gap-3">
+                <div className="min-w-0 flex flex-col gap-1.5">
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {item.title}
+                  </p>
+                  <p className={cn("text-sm font-semibold text-card-foreground", item.valueColor)}>
+                    {item.value}
+                  </p>
+                  {item.hint ? (
                     <p className="text-xs text-muted-foreground">{item.hint}</p>
-                  </div>
-                  <div className="rounded-full bg-background p-2.5 outline outline-1 outline-border/50">
-                    <item.icon size={14} className={item.iconColor} />
-                  </div>
+                  ) : null}
+                </div>
+                <div className="rounded-full bg-muted/60 p-2.5 outline outline-1 outline-border/50">
+                  <item.icon size={14} className={item.iconColor} />
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </div>
+
+      <Card className="border-border/60 py-0 shadow-xs">
+        <CardHeader className="border-b border-border px-5 py-4">
+          <CardTitle className="text-sm font-semibold">Amounts sent</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <DataTable
+            columns={columns}
+            data={paymentLines}
+            tableId="station-sales-report-payments"
+            emptyMessage="No POS or transfer amounts were sent for this sale."
+            hideToolbar
+            hidePagination
+            pageSize={50}
+            getRowClassName={(row) => (row.isCurrent ? "bg-primary/5" : undefined)}
+          />
+        </CardContent>
+      </Card>
 
       <Sheet open={!!detailsRow} onOpenChange={(open) => !open && setDetailsRow(null)}>
         <SheetContent side="right" className="flex w-[400px] flex-col sm:w-[540px]">

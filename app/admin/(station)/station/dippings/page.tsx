@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
 import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 import { expectedOpeningBeforeSessionFromRows } from "@/lib/dipping/session-context";
+import { intervalStartLitersForClosing } from "@/lib/dipping/closing-interval";
 import { DippingsManager, type DippingRow } from "./dippings-manager";
 
 export const metadata = { title: "Dippings" };
@@ -87,6 +88,30 @@ export default async function DippingsPage() {
     }),
   ]);
 
+  const closingIds = sessions.flatMap((s) => s.closings.map((c) => c.id));
+  const salesLogs =
+    closingIds.length > 0
+      ? await prisma.salesLog.findMany({
+          where: {
+            tenantId: actor.tenantId,
+            dippingClosingId: { in: closingIds },
+          },
+          select: {
+            id: true,
+            dippingClosingId: true,
+            pricePerLiter: true,
+            status: true,
+          },
+        })
+      : [];
+  const saleByClosingId = new Map(
+    salesLogs
+      .filter((log) => log.dippingClosingId)
+      .map((log) => [log.dippingClosingId!, log] as const),
+  );
+
+  const canCorrectDipping = hasPermission(actor, PERMISSIONS.TENANT_DIPPINGS_WRITE.key);
+
   const rows: DippingRow[] = [];
 
   for (const session of sessions) {
@@ -115,8 +140,12 @@ export default async function DippingsPage() {
     });
 
     for (const closing of session.closings) {
-      const before = Number(session.openingLiters);
+      const intervalStart = intervalStartLitersForClosing(session, closing.id);
       const after = Number(closing.closingLiters);
+      const linkedSale = saleByClosingId.get(closing.id);
+      const appliedPrice = Number(closing.appliedPrice);
+      const salePrice = linkedSale ? Number(linkedSale.pricePerLiter) : appliedPrice;
+
       rows.push({
         id: `session-close-${closing.id}`,
         source: "SESSION",
@@ -129,10 +158,29 @@ export default async function DippingsPage() {
         dippingType: "CLOSING",
         reason: closing.reason,
         dippingLiters: after,
-        beforeLiters: before,
+        beforeLiters: intervalStart,
         afterLiters: after,
-        variance: after - before,
+        variance: after - intervalStart,
         recordedAt: closing.recordedAt.toISOString(),
+        ...(canCorrectDipping &&
+        linkedSale &&
+        linkedSale.status !== "APPROVED"
+          ? {
+              correct: {
+                stationId: session.stationId,
+                stationName: session.station.name,
+                tankName: session.tank.name,
+                productType: session.tank.productType,
+                sessionId: session.id,
+                closingId: closing.id,
+                salesLogId: linkedSale.id,
+                openingLiters: intervalStart,
+                closingLiters: after,
+                pricePerLiter: salePrice || appliedPrice,
+                reason: closing.reason,
+              },
+            }
+          : {}),
       });
     }
   }
@@ -192,6 +240,7 @@ export default async function DippingsPage() {
   return (
     <DippingsManager
       initialRows={JSON.parse(JSON.stringify(rows))}
+      canCorrectDipping={canCorrectDipping}
       stations={JSON.parse(JSON.stringify(stations))}
       tanks={JSON.parse(
         JSON.stringify(

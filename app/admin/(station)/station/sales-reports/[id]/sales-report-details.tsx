@@ -790,22 +790,7 @@ export function SalesReportDetails({
         </div>
       )}
 
-      {canCorrectDipping && dipSession && dipForCorrect && (
-        <div className="flex flex-wrap items-center gap-3">
-          {dipCorrectionUiEnabled && (
-            <Button type="button" variant="outline" onClick={() => setCorrectOpen(true)}>
-              Correct this reading
-            </Button>
-          )}
-          <p className="text-sm text-muted-foreground">
-            Last closing was {dipForCorrect.expectedOpening.toLocaleString()} L. Opening was recorded as{" "}
-            {dipForCorrect.openingLiters.toLocaleString()} L. Tank shows{" "}
-            {dipForCorrect.closingLiters.toLocaleString()} L left.
-          </p>
-        </div>
-      )}
-
-      {dipCorrectionUiEnabled && (
+      {dipCorrectionUiEnabled && canCorrectDipping && dipSession && dipForCorrect && (
         <Dialog open={correctOpen} onOpenChange={setCorrectOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>

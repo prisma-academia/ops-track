@@ -33,6 +33,21 @@ import {
   type DataTableFilterField,
 } from "@/components/tables";
 import { cn, formatHumanReadableDate } from "@/lib/utils";
+import { DippingCorrectDialog } from "./dipping-correct-dialog";
+
+export type DippingCorrectContext = {
+  stationId: string;
+  stationName: string;
+  tankName: string;
+  productType: string;
+  sessionId: string;
+  closingId: string;
+  salesLogId: string | null;
+  openingLiters: number;
+  closingLiters: number;
+  pricePerLiter: number;
+  reason: string | null;
+};
 
 export type DippingRow = {
   id: string;
@@ -50,6 +65,7 @@ export type DippingRow = {
   afterLiters?: number | null;
   variance?: number | null;
   recordedAt: string;
+  correct?: DippingCorrectContext;
 };
 
 type Station = { id: string; name: string; code: string };
@@ -97,11 +113,16 @@ export function DippingsManager({
   initialRows,
   stations,
   tanks,
+  canCorrectDipping = false,
 }: {
   initialRows: DippingRow[];
   stations: Station[];
   tanks: TankOption[];
+  canCorrectDipping?: boolean;
 }) {
+  const [correctContext, setCorrectContext] = React.useState<DippingCorrectContext | null>(null);
+  const [correctOpen, setCorrectOpen] = React.useState(false);
+
   const [isOpen, setIsOpen] = React.useState(false);
   const [draftStationIds, setDraftStationIds] = React.useState<string[]>([]);
   const [draftTankIds, setDraftTankIds] = React.useState<string[]>([]);
@@ -311,8 +332,36 @@ export function DippingsManager({
           return value.includes(row.getValue(id));
         },
       },
+      ...(canCorrectDipping
+        ? [
+            {
+              id: "actions",
+              header: () => <span className="sr-only">Actions</span>,
+              enableHiding: false,
+              enableSorting: false,
+              cell: ({ row }: { row: { original: DippingRow } }) => {
+                const ctx = row.original.correct;
+                if (!ctx) return null;
+                return (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => {
+                      setCorrectContext(ctx);
+                      setCorrectOpen(true);
+                    }}
+                  >
+                    Correct
+                  </Button>
+                );
+              },
+            } satisfies ColumnDef<DippingRow>,
+          ]
+        : []),
     ],
-    []
+    [canCorrectDipping]
   );
 
   const filterFields = React.useMemo<DataTableFilterField<DippingRow>[]>(
@@ -557,6 +606,12 @@ export function DippingsManager({
         searchPlaceholder="Search station, tank, product..."
         toolbarActions={filterSheet}
         emptyMessage="No dipping records found for the selected filters."
+      />
+
+      <DippingCorrectDialog
+        context={correctContext}
+        open={correctOpen}
+        onOpenChange={setCorrectOpen}
       />
     </div>
   );

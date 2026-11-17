@@ -176,6 +176,21 @@ export function DippingCorrectDialog({
 
   const handleSubmit = async () => {
     if (!context || !preview) return;
+    if (preview.closeL > preview.openL + 0.001) {
+      toast.error(
+        `Litres left (${preview.closeL.toLocaleString()} L) cannot be more than opening for this period (${preview.openL.toLocaleString()} L).`,
+      );
+      return;
+    }
+    if (
+      context.expectedMinOpening != null &&
+      preview.openL + 0.001 < context.expectedMinOpening
+    ) {
+      toast.error(
+        `Opening cannot be less than the last closing (${context.expectedMinOpening.toLocaleString()} L).`,
+      );
+      return;
+    }
     if (fetchedPrice == null) {
       toast.error("Fetch the latest station price before saving.");
       return;
@@ -218,7 +233,8 @@ export function DippingCorrectDialog({
           <DialogTitle>Correct dipping</DialogTitle>
           <DialogDescription>
             {context.stationName} · {context.tankName} ({context.productType}) ·{" "}
-            {formatReason(context.reason)} · Unapproved sale only
+            {formatReason(context.reason)}
+            {context.salesLogId ? " · Linked sale (not approved)" : " · No sales report yet"}
           </DialogDescription>
         </DialogHeader>
 
@@ -344,10 +360,16 @@ export function DippingCorrectDialog({
             />
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            Linked sales report litres and price will be updated. Payments stay as recorded; a
-            mismatch may flag the sale for review.
-          </p>
+          {context.salesLogId ? (
+            <p className="text-xs text-muted-foreground">
+              Linked sales report litres and price will be updated. Payments stay as recorded; a
+              mismatch may flag the sale for review.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Only dipping volumes and applied price are updated. No sales report is linked yet.
+            </p>
+          )}
         </div>
 
         <div className="flex justify-end gap-2">

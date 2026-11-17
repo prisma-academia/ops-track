@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import { requireTenantPage } from "@/lib/auth/page-guards";
-import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { resolveActiveOrgId } from "@/lib/auth/org-scope";
 import { expectedOpeningBeforeSessionFromRows } from "@/lib/dipping/session-context";
 import { intervalStartLitersForClosing } from "@/lib/dipping/closing-interval";
@@ -110,7 +110,7 @@ export default async function DippingsPage() {
       .map((log) => [log.dippingClosingId!, log] as const),
   );
 
-  const canCorrectDipping = hasPermission(actor, PERMISSIONS.TENANT_DIPPINGS_WRITE.key);
+  const canCorrectDipping = actor.isOwner;
 
   const rows: DippingRow[] = [];
 
@@ -139,9 +139,17 @@ export default async function DippingsPage() {
       recordedAt: session.openedAt.toISOString(),
     });
 
+    const sortedClosings = [...session.closings].sort(
+      (a, b) => a.recordedAt.getTime() - b.recordedAt.getTime(),
+    );
+
     for (const closing of session.closings) {
       const intervalStart = intervalStartLitersForClosing(session, closing.id);
       const after = Number(closing.closingLiters);
+      const isFirstClosing = sortedClosings[0]?.id === closing.id;
+      const expectedMinOpening = isFirstClosing
+        ? expectedOpeningBeforeSessionFromRows(session, sessions, waybillDippings)
+        : null;
       const linkedSale = saleByClosingId.get(closing.id);
       const appliedPrice = Number(closing.appliedPrice);
       const salePrice = linkedSale ? Number(linkedSale.pricePerLiter) : appliedPrice;
@@ -163,8 +171,7 @@ export default async function DippingsPage() {
         variance: after - intervalStart,
         recordedAt: closing.recordedAt.toISOString(),
         ...(canCorrectDipping &&
-        linkedSale &&
-        linkedSale.status !== "APPROVED"
+        (!linkedSale || linkedSale.status !== "APPROVED")
           ? {
               correct: {
                 stationId: session.stationId,
@@ -173,11 +180,12 @@ export default async function DippingsPage() {
                 productType: session.tank.productType,
                 sessionId: session.id,
                 closingId: closing.id,
-                salesLogId: linkedSale.id,
+                salesLogId: linkedSale?.id ?? null,
                 openingLiters: intervalStart,
                 closingLiters: after,
                 pricePerLiter: salePrice || appliedPrice,
                 reason: closing.reason,
+                expectedMinOpening,
               },
             }
           : {}),

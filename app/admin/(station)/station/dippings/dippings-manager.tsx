@@ -47,6 +47,8 @@ export type DippingCorrectContext = {
   closingLiters: number;
   pricePerLiter: number;
   reason: string | null;
+  /** First closing only: last close + deliveries since (same as mobile open dip). */
+  expectedMinOpening?: number | null;
 };
 
 export type DippingRow = {

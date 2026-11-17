@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
-import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
+import { assertTenantOwner, requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
@@ -19,6 +19,10 @@ export async function POST(
     await requireCsrf(request);
     const { id: stationId, salesLogId } = await params;
     const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_WRITE.key, "STATION");
+    assertTenantOwner(
+      actor,
+      "Only the workspace owner can correct dipping price.",
+    );
     const body = CorrectPriceSchema.parse(await request.json());
     const meta = requestMeta(request);
 

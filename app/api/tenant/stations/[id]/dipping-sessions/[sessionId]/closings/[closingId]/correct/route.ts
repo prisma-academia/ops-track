@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
-import { requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
+import { assertTenantOwner, requireTenantActor, PERMISSIONS } from "@/lib/auth/guards";
 import { audit, requestMeta } from "@/lib/auth/audit";
 import { ok } from "@/lib/api/respond";
 import { handleError, DomainError } from "@/lib/api/errors";
 import { requireCsrf } from "@/lib/api/csrf-guard";
 import { soldLitersForClosingInterval } from "@/lib/dipping/expected-opening";
+import { assertDippingCorrectionVolumes } from "@/lib/dipping/validate-correction";
 import { reconcileTankCurrentLiters } from "@/lib/inventory/tank-balance";
 import { StockMovementService } from "@/lib/inventory/stock-movement-service";
 
@@ -26,6 +27,10 @@ export async function POST(
     await requireCsrf(request);
     const { id: stationId, sessionId, closingId } = await params;
     const actor = await requireTenantActor(PERMISSIONS.TENANT_DIPPINGS_WRITE.key, "STATION");
+    assertTenantOwner(
+      actor,
+      "Only the workspace owner can correct a published dipping.",
+    );
     const body = CorrectDippingSchema.parse(await request.json());
     const meta = requestMeta(request);
 
@@ -59,21 +64,21 @@ export async function POST(
       include: { payments: true },
     });
 
-    if (!salesLog) {
-      throw new DomainError(
-        400,
-        "no_sales",
-        "No sales report is linked to this dipping.",
-      );
-    }
-
-    if (salesLog.status === "APPROVED") {
+    if (salesLog?.status === "APPROVED") {
       throw new DomainError(
         400,
         "already_approved",
         "Cannot correct a dipping with an approved sales report.",
       );
     }
+
+    await assertDippingCorrectionVolumes(
+      prisma,
+      session,
+      closing.id,
+      body.openingLiters,
+      body.closingLiters,
+    );
 
     const newLitersSold = soldLitersForClosingInterval(
       body.openingLiters,

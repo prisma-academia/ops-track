@@ -55,6 +55,11 @@ export function fmtSignedMoney(n: number | null) {
   return `${n > 0 ? "+" : ""}${fmtMoney(n)}`;
 }
 
+/** Order list row: no litres sold and no revenue → not a P&L line. */
+export function isNoSalesPnlRow(row: Pick<FleetPnlTableRow, "totalAmountSoldQty" | "amountSoldRev">) {
+  return row.totalAmountSoldQty === 0 && row.amountSoldRev === 0;
+}
+
 export const PRODUCT_LABELS: Record<string, string> = {
   PMS: "PMS (Petrol)",
   AGO: "AGO (Diesel)",
@@ -138,6 +143,9 @@ function pnlColumn(): ColumnDef<FleetPnlTableRow> {
     header: ({ column }) => <DataTableColumnHeader column={column} title="Profit / Loss" />,
     meta: { label: "Profit / Loss" },
     cell: ({ row }) => {
+      if (isNoSalesPnlRow(row.original)) {
+        return <span className="text-muted-foreground">No sales</span>;
+      }
       const isProfit = row.original.pnl >= 0;
       return (
         <span className={cn("font-mono tabular-nums", isProfit ? "text-emerald-600" : "text-rose-600")}>

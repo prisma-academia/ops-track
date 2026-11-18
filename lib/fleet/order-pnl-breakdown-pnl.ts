@@ -51,13 +51,8 @@ export function sumOrderBreakdownPnl(
     if (transport.deliveries.length === 0) {
       if (lossPnls.length > 0) {
         total += lossPnls.reduce((sum, p) => sum + p, 0);
-      } else {
-        const tripCost =
-          transport.depotToPrimaryCost +
-          transport.deliveryTransportCost +
-          transport.fleetExpenses;
-        total += -tripCost;
       }
+      // No deliveries and no company loss logs: no sales — do not book empty-trip transport as P&L.
     } else {
       total += lossPnls.reduce((sum, p) => sum + p, 0);
     }

@@ -107,16 +107,21 @@ describe("order-pnl-summary", () => {
     assert.equal(summary.qtyBalance, 2000);
   });
 
-  it("an order with nothing sold is not a full purchase loss", () => {
+  it("an order with nothing sold contributes zero to profit", () => {
     const fleet = defaultFleetSettings();
     const order = {
       ...baseOrder,
       transports: [{ ...baseOrder.transports[0], deliveries: [] }],
     };
-    const { summary } = calculateOrderPnlSummary(order, { fleet });
+    const { summary, transports } = calculateOrderPnlSummary(order, { fleet });
+    const breakdownRows = buildFleetPnlDetailRows(summary, transports, fleet);
     assert.equal(summary.amountSoldRev, 0);
     assert.equal(summary.totalAmountSoldQty, 0);
-    assert.equal(summary.pnl, -(5 * 10000));
-    assert.ok(summary.pnl > summary.amountSoldRev - summary.totalCost);
+    assert.equal(summary.pnl, 0);
+    assert.equal(
+      sumOrderBreakdownPnl(transports, summary.priceBought, summary.loadingCostPerLitre, fleet, false),
+      0
+    );
+    assert.equal(breakdownRows.reduce((sum, row) => sum + row.pnl, 0), 0);
   });
 });

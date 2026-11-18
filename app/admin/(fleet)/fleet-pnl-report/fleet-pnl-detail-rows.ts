@@ -200,7 +200,7 @@ export function buildFleetPnlDetailRows(
           amountSoldRev: 0,
           amountPaid: 0,
           debtRemaining: 0,
-          pnl: -totalCost,
+          pnl: 0,
           truckIds,
           truckLabels,
         },

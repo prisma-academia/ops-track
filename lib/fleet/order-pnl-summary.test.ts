@@ -86,16 +86,15 @@ describe("order-pnl-summary", () => {
     assert.equal(summary.pnl, deliveryRow.pnl);
   });
 
-  it("default mode partial sale P&L matches breakdown footer not full-order cost", () => {
+  it("legacy mode partial sale P&L equals revenue minus full-order cost", () => {
     const fleet = defaultFleetSettings();
     const { summary, transports } = calculateOrderPnlSummary(baseOrder, { fleet });
     const breakdownRows = buildFleetPnlDetailRows(summary, transports, fleet);
     const footerTotal = breakdownRows.reduce((sum, row) => sum + row.pnl, 0);
+    assert.equal(summary.pnl, summary.amountSoldRev - summary.totalCost);
     assert.equal(summary.pnl, footerTotal);
-    assert.equal(
-      summary.pnl,
-      sumOrderBreakdownPnl(transports, summary.priceBought, summary.loadingCostPerLitre, fleet, false)
-    );
-    assert.notEqual(summary.pnl, summary.amountSoldRev - summary.totalCost);
+    const remainder = breakdownRows.find((row) => row.id.startsWith("remainder-"));
+    assert.ok(remainder);
+    assert.equal(summary.qtyBalance, 2000);
   });
 });

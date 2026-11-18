@@ -406,13 +406,15 @@ export function calculateOrderPnlSummary(
       totalDepotToPrimaryCost +
       totalDeliveryTransportCost +
       totalFleetExpenses;
-  const pnl = sumOrderBreakdownPnl(
-    transportsData,
-    pricePerLitre,
-    loadingCostPerLitre,
-    fleet,
-    useAttributionPnL
-  );
+  const pnl = useAttributionPnL
+    ? sumOrderBreakdownPnl(
+        transportsData,
+        pricePerLitre,
+        loadingCostPerLitre,
+        fleet,
+        true
+      )
+    : amountSoldRev - totalCost;
   const qtyBalance = litersOrdered - totalAmountSoldQty;
   const inventoryAtCost = useAttributionPnL
     ? qtyBalance * landedCostPerLiter(orderRates)

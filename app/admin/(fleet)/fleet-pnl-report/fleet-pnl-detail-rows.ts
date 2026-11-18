@@ -12,7 +12,17 @@ import { isCompanyPnlLossLog } from "@/lib/fleet/pnl-options";
 
 type SummaryContext = Pick<
   OrderPnlSummary,
-  "orderDate" | "depot" | "productType" | "priceBought" | "loadingCostPerLitre"
+  | "id"
+  | "orderDate"
+  | "depot"
+  | "productType"
+  | "priceBought"
+  | "loadingCostPerLitre"
+  | "litersOrdered"
+  | "totalAmountSoldQty"
+  | "amountSoldRev"
+  | "totalCost"
+  | "pnl"
 >;
 
 export function toFleetPnlDetailRow(
@@ -66,7 +76,7 @@ export function buildFleetPnlDetailRows(
     loadingCostPerLitre: summary.loadingCostPerLitre,
   };
 
-  return transports.flatMap((transport): FleetPnlTableRow[] => {
+  const rows = transports.flatMap((transport): FleetPnlTableRow[] => {
     const truckLabels =
       transport.truckNo && transport.truckNo !== "Unknown" ? [transport.truckNo] : [];
     const truckIds = transport.truckId ? [transport.truckId] : [];
@@ -199,4 +209,49 @@ export function buildFleetPnlDetailRows(
 
     return [...deliveryRows, ...lossRows];
   });
+
+  if (useAttribution) return rows;
+
+  const linePnl = rows.reduce((sum, row) => sum + row.pnl, 0);
+  const remainderPnl = summary.pnl - linePnl;
+  if (Math.abs(remainderPnl) < 0.005) return rows;
+
+  const qtyBalance = Math.max(0, summary.litersOrdered - summary.totalAmountSoldQty);
+  const purchaseCost = qtyBalance * summary.priceBought;
+  const loadingCost = qtyBalance * summary.loadingCostPerLitre;
+  const unsoldOrderCost = purchaseCost + loadingCost;
+  const remainderCost = Math.max(0, summary.totalCost - rows.reduce((s, r) => s + r.totalCost, 0));
+
+  return [
+    ...rows,
+    {
+      id: `remainder-${summary.id}`,
+      orderDate: summary.orderDate,
+      orderReference: "Remaining order cost",
+      depot: summary.depot,
+      productType: summary.productType,
+      litersOrdered: qtyBalance,
+      litersDespatched: qtyBalance,
+      litersReceived: null,
+      purchaseCost,
+      purchasePricePerLitre: summary.priceBought,
+      loadingCost,
+      loadingCostPerLitre: summary.loadingCostPerLitre,
+      sellingPrice: 0,
+      orderCost: unsoldOrderCost,
+      depotToPrimaryCost: 0,
+      deliveryTransportCost: 0,
+      totalTransportCost: 0,
+      totalFleetExpenses: 0,
+      totalLossDeduction: 0,
+      totalCost: remainderCost > 0 ? remainderCost : unsoldOrderCost,
+      totalAmountSoldQty: 0,
+      amountSoldRev: 0,
+      amountPaid: 0,
+      debtRemaining: 0,
+      pnl: remainderPnl,
+      truckIds: [],
+      truckLabels: [],
+    },
+  ];
 }

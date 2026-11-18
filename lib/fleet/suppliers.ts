@@ -104,7 +104,6 @@ export async function upsertSupplierByName(
 }
 
 export const orderPayablePrismaInclude = {
-  supplierShortageLiters: true,
   supplierRecord: { select: { supplierType: true } },
   transports: {
     select: {

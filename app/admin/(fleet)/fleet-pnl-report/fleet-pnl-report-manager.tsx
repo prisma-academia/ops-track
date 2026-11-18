@@ -1,13 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { Filter } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -31,6 +29,7 @@ import type { FilterFn } from "@tanstack/react-table";
 
 import {
   fmtMoney,
+  fmtSignedMoney,
   getFleetPnlColumns,
   PRODUCT_LABELS,
   type FleetPnlTableRow,
@@ -39,13 +38,6 @@ import {
 interface Truck {
   id: string;
   plateNumber: string;
-}
-
-function parseDateInput(value: string): Date | undefined {
-  if (!value) return undefined;
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return undefined;
-  return new Date(year, month - 1, day);
 }
 
 function matchesDateRange(iso: string, range: DateRange | undefined) {
@@ -62,19 +54,6 @@ function matchesDateRange(iso: string, range: DateRange | undefined) {
     if (created > end) return false;
   }
   return true;
-}
-
-/** `YYYY-MM` from order date ISO string. */
-function orderMonthKey(iso: string): string | null {
-  const created = new Date(iso);
-  if (Number.isNaN(created.getTime())) return null;
-  const month = String(created.getMonth() + 1).padStart(2, "0");
-  return `${created.getFullYear()}-${month}`;
-}
-
-function matchesMonthFilter(iso: string, monthKey: string | undefined) {
-  if (!monthKey) return true;
-  return orderMonthKey(iso) === monthKey;
 }
 
 const globalFilterFn: FilterFn<FleetPnlTableRow> = (row, _columnId, filterValue) => {
@@ -99,10 +78,6 @@ function FleetPnlFilterSheet({
   trucks,
   draftSelectedTruckIds,
   setDraftSelectedTruckIds,
-  draftDateRange,
-  setDraftDateRange,
-  draftMonth,
-  setDraftMonth,
   onApply,
   onClear,
 }: {
@@ -111,10 +86,6 @@ function FleetPnlFilterSheet({
   trucks: Truck[];
   draftSelectedTruckIds: string[];
   setDraftSelectedTruckIds: React.Dispatch<React.SetStateAction<string[]>>;
-  draftDateRange: DateRange | undefined;
-  setDraftDateRange: React.Dispatch<React.SetStateAction<DateRange | undefined>>;
-  draftMonth: string;
-  setDraftMonth: React.Dispatch<React.SetStateAction<string>>;
   onApply: () => void;
   onClear: () => void;
 }) {
@@ -186,56 +157,6 @@ function FleetPnlFilterSheet({
               </PopoverContent>
             </Popover>
           </div>
-          <div className="space-y-1.5 w-full">
-            <Label className="text-sm">Month</Label>
-            <Input
-              type="month"
-              value={draftMonth}
-              onChange={(e) => {
-                const value = e.target.value;
-                setDraftMonth(value);
-                if (value) setDraftDateRange(undefined);
-              }}
-            />
-            <p className="text-xs text-muted-foreground">
-              Filter by a full calendar month, or use a custom range below.
-            </p>
-          </div>
-          <div className="space-y-3 w-full">
-            <Label className="text-sm">Custom Date Range</Label>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className=" text-muted-foreground">From</Label>
-                <Input
-                  type="date"
-                  disabled={Boolean(draftMonth)}
-                  value={draftDateRange?.from ? format(draftDateRange.from, "yyyy-MM-dd") : ""}
-                  onChange={(e) => {
-                    setDraftMonth("");
-                    setDraftDateRange((prev) => ({
-                      from: parseDateInput(e.target.value),
-                      to: prev?.to,
-                    }));
-                  }}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className=" text-muted-foreground">To</Label>
-                <Input
-                  type="date"
-                  disabled={Boolean(draftMonth)}
-                  value={draftDateRange?.to ? format(draftDateRange.to, "yyyy-MM-dd") : ""}
-                  onChange={(e) => {
-                    setDraftMonth("");
-                    setDraftDateRange((prev) => ({
-                      from: prev?.from,
-                      to: parseDateInput(e.target.value),
-                    }));
-                  }}
-                />
-              </div>
-            </div>
-          </div>
           <div className="border-t pt-4">
             <DataTableFilterControls />
           </div>
@@ -261,33 +182,20 @@ export function FleetPnlReportManager({
   trucks: Truck[];
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [draftDateRange, setDraftDateRange] = React.useState<DateRange | undefined>(undefined);
   const [draftSelectedTruckIds, setDraftSelectedTruckIds] = React.useState<string[]>([]);
-  const [draftMonth, setDraftMonth] = React.useState("");
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
-  const [selectedMonth, setSelectedMonth] = React.useState("");
   const [selectedTruckIds, setSelectedTruckIds] = React.useState<string[]>([]);
 
   const [filtersResetKey, setFiltersResetKey] = React.useState(0);
 
   const applyFilters = React.useCallback(() => {
-    if (draftMonth) {
-      setSelectedMonth(draftMonth);
-      setDateRange(undefined);
-    } else {
-      setSelectedMonth("");
-      setDateRange(draftDateRange);
-    }
     setSelectedTruckIds(draftSelectedTruckIds);
     setIsOpen(false);
-  }, [draftDateRange, draftMonth, draftSelectedTruckIds]);
+  }, [draftSelectedTruckIds]);
 
   const clearFilters = React.useCallback(() => {
-    setDraftDateRange(undefined);
-    setDraftMonth("");
     setDraftSelectedTruckIds([]);
     setDateRange(undefined);
-    setSelectedMonth("");
     setSelectedTruckIds([]);
     setIsOpen(false);
     setFiltersResetKey((key) => key + 1);
@@ -295,10 +203,8 @@ export function FleetPnlReportManager({
 
   React.useEffect(() => {
     if (!isOpen) return;
-    setDraftDateRange(dateRange);
-    setDraftMonth(selectedMonth);
     setDraftSelectedTruckIds(selectedTruckIds);
-  }, [isOpen, dateRange, selectedMonth, selectedTruckIds]);
+  }, [isOpen, selectedTruckIds]);
 
   const filteredRows = React.useMemo(() => {
     return initialOrders.filter((row) => {
@@ -308,12 +214,9 @@ export function FleetPnlReportManager({
       ) {
         return false;
       }
-      if (selectedMonth) {
-        return matchesMonthFilter(row.orderDate, selectedMonth);
-      }
       return matchesDateRange(row.orderDate, dateRange);
     });
-  }, [initialOrders, selectedTruckIds, dateRange, selectedMonth]);
+  }, [initialOrders, selectedTruckIds, dateRange]);
 
   const [visibleRows, setVisibleRows] = React.useState<FleetPnlTableRow[]>(filteredRows);
 
@@ -377,7 +280,7 @@ export function FleetPnlReportManager({
           label: "Profit and Loss",
           value: metrics.profitAndLoss,
           color: metrics.profitAndLoss >= 0 ? "#059669" : "#e11d48",
-          format: (n) => fmtMoney(n),
+          format: (n) => fmtSignedMoney(n),
         },
       ]),
     [metrics]
@@ -419,9 +322,7 @@ export function FleetPnlReportManager({
   }, [initialOrders]);
 
   const hasExternalFilters =
-    selectedTruckIds.length > 0 ||
-    Boolean(selectedMonth) ||
-    Boolean(dateRange?.from || dateRange?.to);
+    selectedTruckIds.length > 0 || Boolean(dateRange?.from || dateRange?.to);
 
   return (
     <div className="space-y-6">
@@ -442,7 +343,8 @@ export function FleetPnlReportManager({
         filterFields={filterFields}
         searchPlaceholder="Search order, depot, product, truck..."
         globalFilterFn={globalFilterFn}
-        hideDateFilter
+        dateRange={dateRange}
+        onDateRangeChange={setDateRange}
         hasExternalFilters={hasExternalFilters}
         onFiltersReset={clearFilters}
         onFilteredRowsChange={setVisibleRows}
@@ -454,10 +356,6 @@ export function FleetPnlReportManager({
             trucks={trucks}
             draftSelectedTruckIds={draftSelectedTruckIds}
             setDraftSelectedTruckIds={setDraftSelectedTruckIds}
-            draftDateRange={draftDateRange}
-            setDraftDateRange={setDraftDateRange}
-            draftMonth={draftMonth}
-            setDraftMonth={setDraftMonth}
             onApply={applyFilters}
             onClear={clearFilters}
           />

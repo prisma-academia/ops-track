@@ -194,7 +194,9 @@ export function aggregateDeliveryPnlRows(rows: OrderPnlDeliveryRow[]) {
  *  fleet = (qty / liters carried) × maintenance (fallback: trip despatched qty)
  *
  * Total cost = purchase + loading + depot→primary + delivery transport + fleet.
- * Profit/Loss = sales revenue − total cost.
+ * Profit/Loss is the realized breakdown total: sold deliveries, company loss
+ * logs, and trips that never delivered. Unsold litres stay in inventory and
+ * are not booked as a loss.
  * Logged transport loss (incidents on the transport detail page) is shown
  * separately and is not subtracted again from total cost.
  */
@@ -406,15 +408,13 @@ export function calculateOrderPnlSummary(
       totalDepotToPrimaryCost +
       totalDeliveryTransportCost +
       totalFleetExpenses;
-  const pnl = useAttributionPnL
-    ? sumOrderBreakdownPnl(
-        transportsData,
-        pricePerLitre,
-        loadingCostPerLitre,
-        fleet,
-        true
-      )
-    : amountSoldRev - totalCost;
+  const pnl = sumOrderBreakdownPnl(
+    transportsData,
+    pricePerLitre,
+    loadingCostPerLitre,
+    fleet,
+    useAttributionPnL
+  );
   const qtyBalance = litersOrdered - totalAmountSoldQty;
   const inventoryAtCost = useAttributionPnL
     ? qtyBalance * landedCostPerLiter(orderRates)

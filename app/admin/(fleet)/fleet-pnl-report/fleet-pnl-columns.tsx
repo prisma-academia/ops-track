@@ -49,6 +49,12 @@ export function fmtMoney(n: number | null) {
   return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** Money with a leading + when the amount is a profit. */
+export function fmtSignedMoney(n: number | null) {
+  if (n === null || isNaN(n)) return "—";
+  return `${n > 0 ? "+" : ""}${fmtMoney(n)}`;
+}
+
 export const PRODUCT_LABELS: Record<string, string> = {
   PMS: "PMS (Petrol)",
   AGO: "AGO (Diesel)",
@@ -135,8 +141,7 @@ function pnlColumn(): ColumnDef<FleetPnlTableRow> {
       const isProfit = row.original.pnl >= 0;
       return (
         <span className={cn("font-mono tabular-nums", isProfit ? "text-emerald-600" : "text-rose-600")}>
-          {isProfit ? "+" : ""}
-          {fmtMoney(row.original.pnl)}
+          {fmtSignedMoney(row.original.pnl)}
         </span>
       );
     },
@@ -144,8 +149,7 @@ function pnlColumn(): ColumnDef<FleetPnlTableRow> {
       const total = table.getFilteredRowModel().rows.reduce((sum, row) => sum + row.original.pnl, 0);
       return (
         <span className={cn("font-mono tabular-nums", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
-          {total >= 0 ? "+" : ""}
-          {fmtMoney(total)}
+          {fmtSignedMoney(total)}
         </span>
       );
     },

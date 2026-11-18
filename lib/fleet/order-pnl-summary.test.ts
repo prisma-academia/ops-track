@@ -86,15 +86,37 @@ describe("order-pnl-summary", () => {
     assert.equal(summary.pnl, deliveryRow.pnl);
   });
 
-  it("legacy mode partial sale P&L equals revenue minus full-order cost", () => {
+  it("legacy mode P&L is realized sale profit, not unsold stock", () => {
     const fleet = defaultFleetSettings();
     const { summary, transports } = calculateOrderPnlSummary(baseOrder, { fleet });
     const breakdownRows = buildFleetPnlDetailRows(summary, transports, fleet);
     const footerTotal = breakdownRows.reduce((sum, row) => sum + row.pnl, 0);
-    assert.equal(summary.pnl, summary.amountSoldRev - summary.totalCost);
+    const soldProfit = 8000 * 150 - (8000 * 100 + 8000 * 10 + 8000 * 5);
+    assert.equal(summary.pnl, soldProfit);
+    assert.equal(
+      summary.pnl,
+      sumOrderBreakdownPnl(transports, summary.priceBought, summary.loadingCostPerLitre, fleet, false)
+    );
     assert.equal(summary.pnl, footerTotal);
-    const remainder = breakdownRows.find((row) => row.id.startsWith("remainder-"));
-    assert.ok(remainder);
+    assert.ok(summary.pnl > 0);
+    assert.notEqual(summary.pnl, summary.amountSoldRev - summary.totalCost);
+    assert.equal(
+      breakdownRows.some((row) => row.id.startsWith("remainder-")),
+      false
+    );
     assert.equal(summary.qtyBalance, 2000);
+  });
+
+  it("an order with nothing sold is not a full purchase loss", () => {
+    const fleet = defaultFleetSettings();
+    const order = {
+      ...baseOrder,
+      transports: [{ ...baseOrder.transports[0], deliveries: [] }],
+    };
+    const { summary } = calculateOrderPnlSummary(order, { fleet });
+    assert.equal(summary.amountSoldRev, 0);
+    assert.equal(summary.totalAmountSoldQty, 0);
+    assert.equal(summary.pnl, -(5 * 10000));
+    assert.ok(summary.pnl > summary.amountSoldRev - summary.totalCost);
   });
 });

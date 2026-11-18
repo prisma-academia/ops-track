@@ -19,6 +19,7 @@ import { DataTable } from "@/components/tables";
 import {
   fmtMoney,
   fmtQty,
+  fmtSignedMoney,
   getFleetPnlDetailsColumns,
   type FleetPnlTableRow,
 } from "../fleet-pnl-columns";
@@ -159,7 +160,7 @@ export function OrderPnlDetailsManager({
       item("Total Cost", fmtMoney(summary.totalCost)),
       item("Sales Revenue", fmtMoney(summary.amountSoldRev)),
       item("Sales Collected", fmtMoney(summary.amountPaid)),
-      item("Profit / Loss", fmtMoney(summary.pnl)),
+      item("Profit / Loss", fmtSignedMoney(summary.pnl)),
     ].join("");
     return `<div class="print-details">${items}</div>`;
   }, [summary]);
@@ -199,8 +200,8 @@ export function OrderPnlDetailsManager({
     },
     {
       title: "Profit and Loss",
-      value: fmtMoney(summary.pnl),
-      fullValue: fmtMoney(summary.pnl),
+      value: fmtSignedMoney(summary.pnl),
+      fullValue: fmtSignedMoney(summary.pnl),
       valueColor: summary.pnl >= 0 ? "text-emerald-600" : "text-rose-600",
       icon: summary.pnl >= 0 ? TrendingUp : TrendingDown,
       iconColor: summary.pnl >= 0 ? "text-emerald-600" : "text-rose-600",
